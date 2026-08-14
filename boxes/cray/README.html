@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual HPE Cray XD670 BMC — MegaRAC SP-X on QEMU</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 leading-relaxed">
+<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">HP</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">cray</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="index.html" style="color:#1d4ed8;text-decoration:none">xd670-virtual</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">README.html</span></nav>
+
+<div class="max-w-4xl mx-auto px-6 py-10">
+
+  <header class="mb-8 border-b border-slate-200 pb-6">
+    <h1 class="text-3xl font-bold text-slate-900">Virtual HPE Cray XD670 BMC</h1>
+    <p class="mt-2 text-lg text-slate-600">AMI <b>MegaRAC SP-X</b> (Linux 5.4.184-ami) on Aspeed <b>AST2600</b>, emulated with <code>qemu-system-arm -M ast2600-evb</code>.</p>
+    <p class="mt-1 text-sm text-slate-500">Firmware: <code>XD670_BMC_v1.27_signed.bin.hpm</code> · zoo box <code>vbmc cray</code> · 2026-07-28</p>
+  </header>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Why this box</h2>
+    <p>The HPE Cray XD670 (a Gigabyte <b>G593</b> platform, 8× NVIDIA HGX H100/H200) does <b>not</b> run iLO. Its BMC is AMI MegaRAC SP-X — the same stack Eclypsium hit in
+      <a class="text-sky-700 underline" href="https://eclypsium.com/blog/ami-megarac-vulnerabilities-bmc-part-3/">BMC&amp;C Part&nbsp;3</a> with
+      <b>CVE-2024-54085</b> (unauthenticated Redfish takeover via a crafted <code>X-Server-Addr</code> header). Eclypsium confirmed their work on the XD670 "+ Qemu" but published no emulation recipe; this box is that recipe, derived independently. First MegaRAC-on-Gigabyte entry in the vbmc zoo.</p>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Firmware anatomy (HPM → bootable pieces)</h2>
+    <p class="mb-3">The <code>.hpm</code> is a PICMGFWU (HPM.1) wrapper around AMI <b>FMH</b> modules — <b>not</b> a linear flash image, so you can't just <code>dd</code> a flash and boot it. <code>extract.sh</code> carves:</p>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Piece</th><th class="text-left px-3 py-2">File offset</th><th class="text-left px-3 py-2">Notes</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2">Kernel FIT (u-boot fitImage)</td><td class="px-3 py-2"><code>0x37502CF</code></td><td class="px-3 py-2">Linux 5.4.184-ami, load 0x80001000; <code>dumpimage -p 0</code> for the raw Image</td></tr>
+        <tr><td class="px-3 py-2">Rootfs (squashfs, xz)</td><td class="px-3 py-2"><code>0x56028F</code></td><td class="px-3 py-2">49.9 MiB; booted as a RAM disk (<code>root=/dev/ram0</code>)</td></tr>
+        <tr><td class="px-3 py-2">/conf, /bkupconf (JFFS2)</td><td class="px-3 py-2"><code>0x12028F</code>, <code>0x2C028F</code></td><td class="px-3 py-2">placed into a 64 MB NOR image with <b>named</b> mtd partitions</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Boot recipe &amp; gotchas</h2>
+    <ul class="list-disc pl-6 space-y-1">
+      <li>qemu <code>-kernel</code> cannot unpack a FIT — extract the raw kernel <code>Image</code> first.</li>
+      <li>Built-in <code>ram0</code> caps at 43008 KiB but the rootfs is 51108 KiB → must pass <code>ramdisk_size=131072</code>.</li>
+      <li>Console is <b>ttyS4</b> (AST2600 UART5), matching the firmware's baked-in bootargs.</li>
+      <li>Attaching the flash via <code>-drive if=mtd</code> needs it to be <b>exactly 64 MB</b> (FMC models a <code>w25q512jv</code>).</li>
+      <li><code>mountall.sh</code> finds <code>/conf</code> &amp; <code>/bkupconf</code> by <b>name</b> in <code>/proc/mtd</code>, so the <code>mtdparts=</code> partition names must match. Empty conf partitions are auto-populated from <code>/etc/defconfig</code>.</li>
+      <li>Console login: <b>sysadmin / superuser</b> (MegaRAC factory default; uid 0, restricted <code>defshell</code>). <code>init=/bin/sh</code> gives an unrestricted root shell.</li>
+    </ul>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Status</h2>
+    <div class="bg-emerald-50 border border-emerald-200 rounded p-4 mb-3">
+      <p class="font-semibold text-emerald-800">Working</p>
+      <p class="text-sm text-emerald-900">Full MegaRAC userland boots: real <code>/sbin/init</code>, <code>/conf</code> from JFFS2, config generated, eth0 gets DHCP, redis + event-service (luajit) + sync-agent + lighttpd + <b>IPMIMain</b> all up. Interactive console + root shell. <b>External Redfish ServiceRoot is reachable</b>: <code>curl -sk https://&lt;ip&gt;/redfish/v1/</code> → <em>AMI Redfish Server, Redfish 1.11.0</em>. The CVE-2024-54085 lua is present at <code>/usr/local/redfish/extensions/host-interface/host-interface-support-module.lua</code> (v1.27 is post-patch: the <code>X-Server-Addr</code> bypass is rejected).</p>
+    </div>
+    <div class="bg-sky-50 border border-sky-200 rounded p-4 mb-3">
+      <p class="font-semibold text-sky-800">The IPMIMain SIGSEGV fix (Ghidra RE)</p>
+      <p class="text-sm text-sky-900"><code>IPMIMain</code> used to SIGSEGV at startup, and after 15 crashes <code>procmgr</code> reboots the BMC (reboot loop). The reported PC <code>0x2c004</code> was a red herring — it's the signal handler; the real fault is <code>MsgHndlr</code> @<code>0x14864</code> in <code>libipmimsghndlr.so</code> dereferencing an <b>uninitialised field of the per-instance <code>g_BMCInfo[]</code> slot</b>. Two root causes, both emulation gaps:</p>
+      <ul class="text-sm text-sky-900 list-disc pl-6 mt-2 space-y-1">
+        <li><b>Missing <code>/conf/BMC</code> symlink.</b> <code>IPMIMain</code> opens the literal path <code>/conf/BMC/IPMI.conf</code> to build the interface table; nothing creates the <code>/conf/BMC → BMC1/ast2600evb_ami</code> symlink under qemu. Fix: seed <code>/conf</code> from <code>/etc/defconfig</code> + create the symlink before first launch (in <code>etc/init.d/ipmistack</code>, sentinel-gated so it survives respawns).</li>
+        <li><b>Interfaces with no qemu hardware.</b> <code>MsgHndlr</code> spawns one thread per enabled interface and faults on those whose hardware qemu doesn't model — SERIAL (<code>ttyS2</code>) + SOL (<code>ttyS3</code>) (kernel only brings up <code>ttyS0/ttyS4</code>), plus IPMB/SMBUS/SMM. Fix: disable them in the seeded <code>IPMI.conf</code>; keep LAN, UDS, KCS1-3, BT.</li>
+      </ul>
+      <p class="text-sm text-sky-900 mt-2">Both are applied by <code>qemu-patch-rootfs.sh</code> (invoked from <code>extract.sh</code>) — no binary patching. Result: <b>boots stable — no SIGSEGV, no reboot loop</b> — and external Redfish ServiceRoot is reachable.</p>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-200 rounded p-4">
+      <p class="font-semibold text-emerald-800">IPMI + auth now GREEN</p>
+      <p class="text-sm text-emerald-900">Two more RE passes made IPMIMain run stably and provision its user, so <b>IPMI 2.0 RMCP+ and authenticated Redfish both work</b>:</p>
+      <ul class="text-sm text-emerald-900 list-disc pl-6 mt-2 space-y-1">
+        <li><b>Node-Manager self-stop.</b> <code>IPMIConf.c</code> refuses to run if <code>NM_IPMB_BUS</code> ∈ {0,1,2} points at a disabled IPMB bus. Set <code>NM_IPMB_BUS=0xFF</code> (≥3 = disable). Also disable <b>BT</b> — the central MsgHndlr thread faults on it too. qemu ast2600-evb backs only LAN + UDS + KCS.</li>
+        <li><b>Empty user table.</b> Once stable, IPMIMain auto-provisions the MegaRAC default IPMI user <code>admin</code> / <code>superuser</code> (Administrator, LAN channel 1) into <code>/conf/BMC1/UserConfig.ini</code>. Redfish shares that table via <code>pam_ipmi.so</code>. (My earlier failures used <code>sysadmin</code> — the Linux/console account — not the IPMI user.)</li>
+      </ul>
+      <p class="text-sm text-emerald-900 mt-2">Verified: <code>ipmitool -I lanplus -U admin -P superuser mc info</code> → Gigabyte MfgID 15370, IPMI 2.0; <code>curl -u admin:superuser https://&lt;ip&gt;/redfish/v1/Managers</code> → real ManagerCollection JSON. SEGV=0, no reboot loop.</p>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-200 rounded p-4 mt-3">
+      <p class="font-semibold text-emerald-800">Reliable via warm snapshot (~4s restore)</p>
+      <p class="text-sm text-emerald-900">IPMIMain hits a nondeterministic message-handler race on cold boot (central-MsgHndlr NULL-deref on an early client message; <code>maxcpus=1</code>/unloaded host don't remove it) — a good roll is fully green, a bad roll crash-loops. Good boots are the minority, so we capture <b>one</b> green instance with a warm QMP snapshot and always restore it (x14 pattern): <code>snapshot-cray.sh</code> → <code>cray-snap.gz</code>+<code>cray-snap-flash.bin</code>; <code>restore-cray.sh</code> (used by <code>vbmc cray start</code>) brings it back <b>green in ~4s</b> — no reroll. <code>start-cray-green.sh</code> health-rerolls a cold boot to <em>build</em> the snapshot (or <code>VBMC_COLD=1</code> to force cold). Snapshot files (~180&nbsp;MB) live in the workdir, not git — regenerate with <code>vbmc cray snapshot</code> on a green boot.</p>
+      <p class="text-sm text-emerald-900 mt-2"><b>Address:</b> loopback <code>127.0.0.1</code> — IPMI <code>:5623</code>, Redfish <code>:5443</code>, ssh <code>:5022</code>. (Real-IP lo0-alias hostfwd serves Redfish/TCP fine, but qemu SLIRP mangles RMCP+'s multi-packet UDP on an alias, so IPMI-623 only stays reliable on loopback.) Verified: <code>ipmitool -I lanplus -H 127.0.0.1 -p 5623 -U admin -P superuser mc info</code> → Gigabyte MfgID 15370; <code>curl -sk -u admin:superuser https://127.0.0.1:5443/redfish/v1/Managers</code> → real JSON.</p>
+    </div>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Run it</h2>
+    <pre class="bg-slate-900 text-slate-100 text-sm rounded p-4 overflow-x-auto">cd /Volumes/yyy/phd/bmc/HP/cray/xd670-virtual
+./extract.sh                 # regenerate artifacts from the HPM (one-time)
+./boot-cray.sh               # raw root shell (init=/bin/sh)
+./boot-cray-svc.sh           # full init + networking (console login sysadmin/superuser)
+
+vbmc cray console            # via the zoo dispatcher</pre>
+  </section>
+
+  <footer class="text-xs text-slate-400 border-t border-slate-200 pt-4">
+    HPE Cray XD670 BMC · MegaRAC SP-X v1.27 · AST2600 · qemu ast2600-evb · part of the vbmc zoo.
+  </footer>
+
+</div>
+</body>
+</html>

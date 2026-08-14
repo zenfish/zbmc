@@ -1,0 +1,71 @@
+# vbmc.box — virtual-BMC descriptor for "gb200" (Nvidia GB200NVL BMC, OpenBMC on ASPEED AST2600).
+# Custom image built from source (bitbake MACHINE=gb200nvl-obmc; see reference_nvidia_oem_ipmi + the
+# build notes). Boots the full flash image (.static.mtd = u-boot+kernel+rootfs) on qemu -M gb200nvl-bmc.
+# NB: IPMI-over-LAN WORKS on a settled boot — net-ipmid comes up on its own (earlier "no net-ipmid" was
+# wrong; it just starts late, after eth0). CIPHER-17 ONLY: use `zipmi -C 17 -I lanplus`. The NVIDIA OEM
+# handlers (libnvidia_ipmi_oem.so, raw NetFn 0x3C) are reachable over LAN AND locally via busctl.
+VBMC_NAME=nvidia-obmc
+VBMC_DESC="Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl"
+VBMC_DIR=/Volumes/yyy/phd/bmc/gb200nvl-build
+
+VBMC_IP=10.0.7.20        # 10.0.7.* = OpenBMC BMCs (10.0.8.* reserved for Supermicro)
+VBMC_HOST=nvidia-obmc
+# copy-paste access hint shown by `vbmc status` (Phosphor default root:0penBmc;
+# ipmi-LAN works — cipher-17 ONLY, use zipmi -C 17; OEM 0x3C also via busctl `vbmc gb200 ipmi`)
+VBMC_HINT='ssh root@nvidia-obmc | zipmi -H nvidia-obmc -C 17 -I lanplus nvidia get-bios-password | vbmc nvidia-obmc ipmi 0x3c 0x37 0x01 | curl -k -u root:0penBmc https://nvidia-obmc/redfish/'
+
+# ssh/redfish creds (Phosphor default on this build)
+SSH_USER=root
+SSH_PASS=0penBmc
+SSH_PORT=22
+WEB_PORT=443
+IPMI_PORT=623   # IPMI-LAN via net-ipmid — CIPHER-17 ONLY (use zipmi -C 17 -I lanplus)
+
+PIDF=/tmp/vbmc-nvidia-obmc.pid
+LOG=/tmp/vbmc-nvidia-obmc-console.log
+SOCK=/tmp/vbmc-nvidia-obmc-serial.sock
+
+vbmc_boot() {
+  cd "$VBMC_DIR" || return 1
+  local MTD=obmc-phosphor-image-gb200nvl-obmc.static.mtd
+  [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$VBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${VBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$VBMC_IP $VBMC_HOST $VBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null
+  # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
+  $SUDO nohup qemu-system-arm -M gb200nvl-bmc -m 1G \
+    -drive file="$MTD",format=raw,if=mtd,snapshot=on \
+    -net nic -net user,"hostfwd=tcp:$VBMC_IP:22-:22,hostfwd=tcp:$VBMC_IP:443-:443,hostfwd=udp:$VBMC_IP:623-:623",hostname=qemu \
+    -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$VBMC_IP:22-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+vbmc_build() { echo "gb200 image is bitbake-built (MACHINE=gb200nvl-obmc) on dell; not a local rebuild. See reference_nvidia_oem_ipmi."; }
+
+# ssh: password auth (Phosphor root/0penBmc). Real Linux shell (busybox).
+vbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  exec sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=10 -p "$SSH_PORT" "$SSH_USER@$VBMC_IP" "$@"
+}
+# "ipmi": OEM 0x3C via ipmid D-Bus (busctl over ssh) — needs no creds/cipher and works independent of LAN.
+# IPMI-LAN also works: zipmi -H gb200 -C 17 -I lanplus ...   Usage: vbmc gb200 ipmi 0x3c 0x37 0x01
+vbmc_ipmi() {
+  [ $# -eq 0 ] && { echo "OEM 0x3C via ipmid D-Bus (also over LAN: zipmi -C 17 -I lanplus):"; echo "  vbmc gb200 ipmi <netfn> <cmd> [data-bytes...]   e.g. 0x3c 0x37 0x01 (Get BIOS Password)"; return 2; }
+  local nf="$1" cmd="$2"; shift 2; local data="$*"; local n=0; [ -n "$data" ] && n=$(echo $data | wc -w)
+  vbmc_ssh "busctl call xyz.openbmc_project.Ipmi.Host /xyz/openbmc_project/Ipmi xyz.openbmc_project.Ipmi.Server execute yyyaya{sv} $nf 0 $cmd $n $data 0"
+}
+vbmc_ipmi_health() {
+  command -v zipmi >/dev/null || { echo "IPMI-LAN: cipher-17 (zipmi not in PATH to probe)"; return 1; }
+  if timeout 12 zipmi -H "$VBMC_IP" -p "$IPMI_PORT" -U "$SSH_USER" -P "$SSH_PASS" -C 17 -I lanplus mc info 2>/dev/null | grep -q Manufacturer; then
+    echo "IPMI-LAN: OK (cipher-17 RMCP+; NVIDIA OEM 0x3C over LAN — zipmi -C 17)"; return 0
+  fi
+  echo "IPMI-LAN: no answer yet (cipher-17 only; net-ipmid starts late — retry once settled)"; return 1
+}
+vbmc_web() { echo "Redfish: curl -sk -u root:0penBmc https://$VBMC_IP/redfish/v1/"; command -v curl >/dev/null && curl -sk --max-time 8 -u root:0penBmc "https://$VBMC_IP/redfish/v1/" 2>/dev/null | head -c 200; echo; }
+# interactive console on the qemu serial socket (UART1; escape = Ctrl-]). Root shell on the box console.
+vbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+VBMC_READY_GREP='login:'

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — operating guide (run, boot timeline, IP knobs, readiness)</title>
+<link rel="stylesheet" href="../../../css/doc.css" />
+</head>
+<body>
+<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">dell</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="index.html" style="color:#1d4ed8;text-decoration:none">idrac9-virtual</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">operating</span></nav>
+
+<h1>Virtual iDRAC9 — operating guide</h1>
+<p><em>How to run the virtual iDRAC9, what the boot looks like (and how long), how to change its
+network identity, and how to tell when it's actually up. Companion to the
+<a href="index.html">design writeup</a>. Phase-4 (<code>mini.target</code>) is the working build.</em></p>
+
+<h2>0 · Where it runs</h2>
+<p>It runs <strong>on this Mac</strong> (Apple-silicon, <code>qemu-system-arm</code>) — <strong>not</strong> on
+the dell. The dell T710 is the real iDRAC6 box (<code>192.168.0.22/.23</code>) and is untouched. The
+virtual iDRAC9 is pure QEMU emulation of Dell's own ARM firmware on the <code>npcm750-evb</code> machine;
+it can be moved to any host with <code>qemu-system-arm</code>. The guest is NAT'd behind QEMU user-net —
+reachable only via the host-forwarded <code>127.0.0.1</code> ports below, not on the LAN.</p>
+
+<h2>1 · Run it</h2>
+<pre>cd ~/phd/bmc/dell/idrac9-virtual
+./build-p4.sh        # repack initramfs (init.p4.custom) + ship synthesized cfgdb defaults
+./run-p4.sh          # boot under QEMU; serial console to stdout (Ctrl-A X to quit)
+./ready.sh           # (separate terminal) poll the console log, report boot stage / readiness</pre>
+<p>Headless / background pattern (what the dev loop uses): <code>nohup ./run-p4.sh &gt; /tmp/p4.log 2&amp;1 &amp;</code>,
+then watch <code>/tmp/p4.log</code> with <code>./ready.sh /tmp/p4.log</code>.</p>
+
+<h2>2 · Boot timeline (measured, under emulation)</h2>
+<p>Emulation is ~0.4× real-time and the mesh comes up <em>slowly</em>; the populated cfgdb roughly
+doubles mesh time vs. an empty one. Representative wall-clock from a console log:</p>
+<table>
+<tr><th>t (≈)</th><th>Stage</th><th>Marker in the serial log</th></tr>
+<tr><td>0 s</td><td>initramfs <code>/init</code> runs; mounts rootfs, fakes persistence, injects cfgdb</td><td><code>######## VIRTUAL iDRAC9 Phase-4 ########</code></td></tr>
+<tr><td>~55 s</td><td>kernel done, switch_root → systemd <code>mini.target</code></td><td><code>Startup finished … (kernel)</code></td></tr>
+<tr><td>~60–90 s</td><td>dbus + <code>dfserver</code>/<code>aim</code>/<code>cfgmgr</code> up; <strong>racadm functional</strong></td><td>cfgmgr <code>active</code>; <code>Object value modified successfully</code></td></tr>
+<tr><td>~100–130 s</td><td><code>dsm-sa-datamgr</code> active → <strong>SMIL pipes</strong> open (instrumentation live)</td><td><code>/run/dm/.ipc/dcsmilpipea</code> exists; <code>dcsmilpipe wait: …present=yes</code></td></tr>
+<tr><td>~3–4 min</td><td>eventmgr + populators settled; full instrumentation</td><td>5 <code>dsm-sa-pop@*</code> units active</td></tr>
+</table>
+<p><strong>Caveats.</strong> (1) <code>multi-user.target</code> never settles — 182 hardware-less services thrash
+(dead end); the working build is the custom <code>mini.target</code> + a script that starts only the mesh.
+(2) The <code>~7 min</code> "Startup finished" figure systemd prints is inflated by the diagnostic service's
+deliberate waits, not real boot time. (3) Networking uses a USB-net gadget (<code>usb-nic-nvgpu</code>); the
+on-chip GMAC/EMC crash the kernel on link-up.</p>
+
+<h2>3 · Network identity — the IP/port knobs</h2>
+<p>Four layers, each independently settable:</p>
+<table>
+<tr><th>Layer</th><th>Edit here</th><th>Default</th></tr>
+<tr><td>QEMU slirp subnet</td><td><code>run-p4.sh</code> — <code>-netdev user,…</code> (add <code>net=</code>/<code>host=</code>/<code>dhcpstart=</code>)</td><td><code>10.0.2.0/24</code>, gw <code>.2</code>, guest <code>.15</code></td></tr>
+<tr><td>Guest kernel NIC IP</td><td><code>init.p4.custom</code> (dbg.sh): <code>ip addr add 10.0.2.15/24 dev $NIC</code></td><td><code>10.0.2.15</code></td></tr>
+<tr><td>Host → guest ports</td><td><code>run-p4.sh</code>: <code>hostfwd=tcp::2222-:22,udp::6623-:623</code></td><td>ssh <code>2222</code>, IPMI <code>6623</code></td></tr>
+<tr><td>iDRAC config IP (cfgdb)</td><td><code>scripts/build-cfgdb-defaults.py</code> → <code>_IP</code> (rebuild after)</td><td><code>10.0.2.15</code></td></tr>
+</table>
+<p>To lock to an arbitrary address: set <code>_IP</code> (+ the matching slirp subnet and the kernel
+<code>ip addr</code>), then <code>./build-p4.sh</code>. <strong>Known limit:</strong> the iDRAC's <em>operational</em>
+address (<code>CurrentIPv4</code>, what the IPMI/RMCP listener binds to) is read-only and derived by
+osinterface from the static config — and that derivation isn't firing on the faked NIC yet (it stays
+<code>0.0.0.0</code>). So the <em>static/config</em> IP is fully settable; the <em>operational</em> one is the
+open blocker for udp/623 — see §5 and the <a href="index.html#s7">design doc</a>.</p>
+
+<h2>4 · How to tell it's up</h2>
+<p>There is no single "ready" signal yet; readiness is observed from the serial console. <code>ready.sh</code>
+greps the log and reports the highest stage reached:</p>
+<pre>./ready.sh /tmp/p4.log
+# STAGE 5/6  racadm: UP   dbus: up   mesh: up   SMIL: up   udp623: DOWN</pre>
+<p>Manual checks (what <code>ready.sh</code> automates), in order of "more up":</p>
+<ul>
+<li><strong>booted</strong> — log has <code>VIRTUAL iDRAC9 Phase-4</code> then <code>switch_root</code>.</li>
+<li><strong>dbus</strong> — <code>dbus-broker.service</code> active.</li>
+<li><strong>racadm</strong> — <code>racadm get iDRAC.IPv4.Address</code> returns a value (cfgmgr up).</li>
+<li><strong>instrumentation</strong> — <code>/run/dm/.ipc/dcsmilpipea</code> socket exists (datamgr's SMIL).</li>
+<li><strong>IPMI/RAKP</strong> — udp/623 in <code>/proc/net/udp</code> (port <code>026F</code>) — <em>not yet; the §5 blocker.</em></li>
+</ul>
+<p>The diagnostic service (<code>virt-debug.service</code>) dumps a full state block between
+<code>==VIRTDBG==</code> / <code>==VIRTDBG-END==</code> markers near the end of boot.</p>
+
+<h2>5 · What works / what's open</h2>
+<table>
+<tr><th>Capability</th><th>State</th></tr>
+<tr><td>Boot Dell kernel + rootfs, SSH-able shell (Phase-3)</td><td>✅</td></tr>
+<tr><td>dbus + object mesh (dfserver/aim/cfgmgr) + DSM-SA instrumentation</td><td>✅</td></tr>
+<tr><td><strong>racadm — read & write real config</strong> (<code>get/set iDRAC.*</code>)</td><td>✅</td></tr>
+<tr><td>fullfw runs (sensors/SDR loaded, crash-free)</td><td>✅</td></tr>
+<tr><td>IPMI/RAKP on udp/623</td><td>⚠ blocked — <code>CurrentIPv4=0.0.0.0</code> ⇒ fullfw's <code>RMCPCreateSocketInstance</code> fails. Needs osinterface to apply the static IP (or a bind-patch).</td></tr>
+<tr><td>HTTPS / Redfish</td><td>— future</td></tr>
+</table>
+
+<hr />
+<p style="font-size:.8rem;color:#64748b"><em>Operating guide for the Phase-4 build. Design + RE detail in
+<a href="index.html">index.html</a> (§7 = the mesh/cfgdb/RAKP teardown). Written 2026-06-24.</em></p>
+</body>
+</html>

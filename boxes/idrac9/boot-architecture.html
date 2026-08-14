@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — boot architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#f5f4ed;color:#0b0d0b;font-family:'Geist',sans-serif;
+       -webkit-font-smoothing:antialiased;padding:2.5rem 1.5rem}
+  .wrap{max-width:60rem;margin:0 auto}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;
+           text-transform:uppercase;color:#52534e;margin:0 0 .4rem}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:2rem;margin:0 0 .3rem}
+  .sub{color:#52534e;font-size:.95rem;margin:0 0 1.6rem;max-width:42rem}
+  .frame{background:#efeee5;border:1px solid rgba(11,13,11,.12);border-radius:8px;overflow-x:auto}
+  svg{display:block;min-width:760px;width:100%}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:1rem;margin-top:1.4rem}
+  .card{background:#fff;border:1px solid rgba(11,13,11,.12);border-radius:6px;padding:1.1rem 1.2rem}
+  .card .eyebrow{font-size:8px;margin-bottom:.5rem}
+  .card h3{font-size:.95rem;margin:.1rem 0 .5rem;font-weight:600}
+  .card ul{margin:0;padding-left:1.05rem;color:#3c3c38;font-size:.82rem;line-height:1.5}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:.45rem;vertical-align:middle}
+  .dot.coral{background:#f7591f}.dot.ink{background:#0b0d0b}.dot.link{background:#1a70c7}
+  .colophon{font-family:'Geist Mono',monospace;font-size:10px;color:#8a8a82;
+            border-top:1px solid rgba(11,13,11,.1);margin-top:1.6rem;padding-top:.8rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">phd · bmc · dell · idrac9-virtual</p>
+  <h1>Virtual iDRAC9 — how the boot is wired</h1>
+  <p class="sub">One firmware file becomes a running Dell BMC under QEMU. The spine is the boot
+  data-flow; the two coral nodes are where the real engineering lives — a gdb-found kernel patch,
+  and the custom <code>/init</code> we substitute to control the whole machine.</p>
+
+  <div class="frame">
+  <svg viewBox="0 0 880 812" xmlns="http://www.w3.org/2000/svg" role="img"
+       aria-label="Virtual iDRAC9 boot architecture">
+    <defs>
+      <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+        <circle cx="1" cy="1" r="0.9" fill="rgba(11,13,11,0.10)"/>
+      </pattern>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#52534e"/></marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#f7591f"/></marker>
+    </defs>
+    <rect width="100%" height="100%" fill="#f5f4ed"/>
+    <rect width="100%" height="100%" fill="url(#dots)" opacity="0.6"/>
+
+    <!-- ===== arrows first (z-order) ===== -->
+    <!-- spine cx = 440 -->
+    <line x1="440" y1="128" x2="440" y2="160" stroke="#52534e" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <line x1="440" y1="224" x2="440" y2="256" stroke="#52534e" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <line x1="440" y1="320" x2="440" y2="352" stroke="#f7591f" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+    <line x1="440" y1="416" x2="440" y2="448" stroke="#f7591f" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+    <line x1="440" y1="512" x2="440" y2="544" stroke="#52534e" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <!-- branch from rootfs (bottom y=608, cx=440) to the two phases -->
+    <path d="M440 608 L440 632 L300 632 L300 660" fill="none" stroke="#52534e" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M440 608 L440 632 L580 632 L580 660" fill="none" stroke="#52534e" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- arrow labels (masked) -->
+    <rect x="452" y="132" width="56" height="12" rx="2" fill="#f5f4ed"/>
+    <text x="480" y="141" fill="#65655c" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".06em">UNPACK</text>
+    <rect x="452" y="228" width="44" height="12" rx="2" fill="#f5f4ed"/>
+    <text x="474" y="237" fill="#65655c" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".06em">LOAD</text>
+    <rect x="452" y="324" width="48" height="12" rx="2" fill="#f5f4ed"/>
+    <text x="476" y="333" fill="#a8431f" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".06em">JUMP</text>
+    <rect x="452" y="420" width="64" height="12" rx="2" fill="#f5f4ed"/>
+    <text x="484" y="429" fill="#a8431f" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".06em">init=/init</text>
+    <rect x="452" y="516" width="76" height="12" rx="2" fill="#f5f4ed"/>
+    <text x="490" y="525" fill="#65655c" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".06em">MOUNT SD</text>
+
+    <!-- ===== nodes ===== -->
+    <!-- 1 firmware (input) -->
+    <rect x="300" y="72" width="280" height="56" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="72" width="280" height="56" rx="6" fill="rgba(82,83,78,0.10)" stroke="#8a8a82"/>
+    <rect x="308" y="78" width="40" height="12" rx="2" fill="transparent" stroke="rgba(82,83,78,0.5)" stroke-width=".8"/>
+    <text x="328" y="87" fill="#6b6b63" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">INPUT</text>
+    <text x="440" y="104" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Dell firmware</text>
+    <text x="440" y="120" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">firmimgFIT.d9</text>
+
+    <!-- 2 extracted (store) -->
+    <rect x="300" y="160" width="280" height="64" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="160" width="280" height="64" rx="6" fill="rgba(11,13,11,0.05)" stroke="#52534e"/>
+    <rect x="308" y="166" width="44" height="12" rx="2" fill="transparent" stroke="rgba(82,83,78,0.5)" stroke-width=".8"/>
+    <text x="330" y="175" fill="#52534e" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">STORE</text>
+    <text x="440" y="194" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Extracted artifacts</text>
+    <text x="440" y="210" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">zImage · base.dtb · initramfs · rootfs.squashfs</text>
+
+    <!-- 3 qemu (external) -->
+    <rect x="300" y="256" width="280" height="64" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="256" width="280" height="64" rx="6" fill="rgba(11,13,11,0.03)" stroke="rgba(11,13,11,0.30)"/>
+    <rect x="308" y="262" width="56" height="12" rx="2" fill="transparent" stroke="rgba(11,13,11,0.3)" stroke-width=".8"/>
+    <text x="336" y="271" fill="#52534e" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">MACHINE</text>
+    <text x="440" y="290" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">QEMU · emulates the NPCM750 SoC</text>
+    <text x="440" y="306" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">qemu-system-arm -M npcm750-evb</text>
+
+    <!-- 4 kernel (FOCAL) -->
+    <rect x="300" y="352" width="280" height="64" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="352" width="280" height="64" rx="6" fill="rgba(247,89,31,0.07)" stroke="#f7591f"/>
+    <rect x="308" y="358" width="52" height="12" rx="2" fill="transparent" stroke="rgba(247,89,31,0.5)" stroke-width=".8"/>
+    <text x="334" y="367" fill="#a8431f" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">PATCHED</text>
+    <text x="440" y="386" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Dell kernel (Linux 5.4.80.idrac)</text>
+    <text x="440" y="402" fill="#a8431f" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">dm_bufio timer NOP'd · single-CPU DTB</text>
+
+    <!-- 5 our init (FOCAL) -->
+    <rect x="300" y="448" width="280" height="64" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="448" width="280" height="64" rx="6" fill="rgba(247,89,31,0.07)" stroke="#f7591f"/>
+    <rect x="308" y="454" width="40" height="12" rx="2" fill="transparent" stroke="rgba(247,89,31,0.5)" stroke-width=".8"/>
+    <text x="328" y="463" fill="#a8431f" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">OURS</text>
+    <text x="440" y="482" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Custom /init  (in initramfs)</text>
+    <text x="440" y="498" fill="#a8431f" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">the lever: mount rootfs · mask Dell watchdogs</text>
+
+    <!-- 6 rootfs (store) -->
+    <rect x="300" y="544" width="280" height="64" rx="6" fill="#f5f4ed"/>
+    <rect x="300" y="544" width="280" height="64" rx="6" fill="rgba(11,13,11,0.05)" stroke="#52534e"/>
+    <rect x="308" y="550" width="44" height="12" rx="2" fill="transparent" stroke="rgba(82,83,78,0.5)" stroke-width=".8"/>
+    <text x="330" y="559" fill="#52534e" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">STORE</text>
+    <text x="440" y="578" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Real iDRAC9 root filesystem</text>
+    <text x="440" y="594" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">squashfs as /dev/mmcblk0 · racadm · os · sshd · cfgdb</text>
+
+    <!-- 7 phase 1 -->
+    <rect x="180" y="660" width="240" height="72" rx="6" fill="#f5f4ed"/>
+    <rect x="180" y="660" width="240" height="72" rx="6" fill="#ffffff" stroke="#0b0d0b"/>
+    <rect x="188" y="666" width="56" height="12" rx="2" fill="transparent" stroke="rgba(11,13,11,0.4)" stroke-width=".8"/>
+    <text x="216" y="675" fill="#0b0d0b" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">PHASE 1</text>
+    <text x="300" y="696" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Shell + chroot</text>
+    <text x="300" y="712" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">explore FS, run ARM</text>
+    <text x="300" y="724" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">binaries · ./run.sh</text>
+
+    <!-- 8 phase 2 -->
+    <rect x="460" y="660" width="240" height="72" rx="6" fill="#f5f4ed"/>
+    <rect x="460" y="660" width="240" height="72" rx="6" fill="#ffffff" stroke="#0b0d0b"/>
+    <rect x="468" y="666" width="56" height="12" rx="2" fill="transparent" stroke="rgba(11,13,11,0.4)" stroke-width=".8"/>
+    <text x="496" y="675" fill="#0b0d0b" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing=".08em">PHASE 2</text>
+    <text x="580" y="696" fill="#0b0d0b" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">switch_root → systemd</text>
+    <text x="580" y="712" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">live daemons: cfgdb,</text>
+    <text x="580" y="724" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sshd, oauth · ./run-p2.sh</text>
+
+    <!-- editorial callout -->
+    <text x="624" y="384" fill="#52534e" font-size="14" font-style="italic" font-family="'Instrument Serif',serif">every panic here was</text>
+    <text x="624" y="402" fill="#52534e" font-size="14" font-style="italic" font-family="'Instrument Serif',serif">cracked with gdb on the</text>
+    <text x="624" y="420" fill="#52534e" font-size="14" font-style="italic" font-family="'Instrument Serif',serif">live gdbstub.</text>
+    <line x1="600" y1="380" x2="586" y2="384" stroke="#f7591f" stroke-width="1"/>
+
+    <!-- legend strip -->
+    <line x1="40" y1="760" x2="840" y2="760" stroke="rgba(11,13,11,0.10)" stroke-width="0.8"/>
+    <text x="40" y="778" fill="#52534e" font-size="8" font-family="'Geist Mono',monospace" letter-spacing=".14em">LEGEND</text>
+    <rect x="120" y="770" width="16" height="10" rx="2" fill="rgba(247,89,31,0.07)" stroke="#f7591f"/>
+    <text x="142" y="778" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace">our work / focal</text>
+    <rect x="300" y="770" width="16" height="10" rx="2" fill="rgba(11,13,11,0.05)" stroke="#52534e"/>
+    <text x="322" y="778" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace">data / filesystem</text>
+    <rect x="480" y="770" width="16" height="10" rx="2" fill="#ffffff" stroke="#0b0d0b"/>
+    <text x="502" y="778" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace">run target</text>
+    <rect x="620" y="770" width="16" height="10" rx="2" fill="rgba(11,13,11,0.03)" stroke="rgba(11,13,11,0.30)"/>
+    <text x="642" y="778" fill="#52534e" font-size="9" font-family="'Geist Mono',monospace">emulator</text>
+  </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <p class="eyebrow">THE LEVER</p>
+      <div class="card-header"><span class="dot coral"></span><h3 style="display:inline">Custom /init</h3></div>
+      <ul>
+        <li>Kernel cmdline is locked to <code>init=/init</code></li>
+        <li><code>/init</code> lives in the initramfs — which we own</li>
+        <li>So we never patch the boot path; we replace it</li>
+        <li>It mounts the rootfs &amp; masks Dell's watchdogs</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">THE GDB WORK</p>
+      <div class="card-header"><span class="dot coral"></span><h3 style="display:inline">Patched kernel</h3></div>
+      <ul>
+        <li>dm_bufio 30s timer panicked at ~31.8s</li>
+        <li>gdb read the live work_struct → found it</li>
+        <li>NOP'd 2 instructions, booted as uImage</li>
+        <li>Single-CPU DTB kills the per-cpu crashes</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">THREE WAYS TO RUN</p>
+      <div class="card-header"><span class="dot ink"></span><h3 style="display:inline">Phase 1 / 2 / 3</h3></div>
+      <ul>
+        <li><code>./run.sh</code> — shell, chroot, run binaries</li>
+        <li><code>./run-p2.sh</code> — full systemd + daemons</li>
+        <li><code>./run-p3.sh</code>+<code>ssh-in.sh</code> — SSH root login</li>
+        <li>next: daemon mesh → racadm + live RAKP</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="colophon">phd/bmc/dell/idrac9-virtual · boot-architecture.html · 2026-06-22</p>
+</div>
+</body>
+</html>

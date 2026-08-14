@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# =============================================================================
+# unpack-idrac -- one-command, fully-unpack a Dell iDRAC9/iDRAC10 firmware.
+# =============================================================================
+# WHAT  Takes a Dell iDRAC firmware DUP (.BIN/.EXE) OR a raw firmimg.dN and
+#       unpacks it all the way down -- DUP payload -> firmimg -> components ->
+#       squashfs filesystems -> FIT sub-images -- printing each step.
+#       Auto-detects iDRAC9 (FIT-wrapped) vs iDRAC10 (tar-wrapped).
+# WHY   We kept doing this by hand. This codifies the extraction "tricks" into a
+#       repeatable driver so a new firmware is one command.
+# SUCCESS  Output dir holds fw-filesystems/<name>/ trees + MANIFEST.txt with
+#          gen, version, and component hashes.
+# USAGE
+#   unpack-idrac <firmware.BIN | firmware.EXE | firmimg.dN> [OUTDIR]
+#       OUTDIR default: <input-dir>/<input-stem>.unpacked/
+#   unpack-idrac --help
+# LAYOUT (OUTDIR)
+#   fw-dup-payload/   files extracted from the DUP self-installer
+#                     (package.xml, Version.txt, firmimgFIT.d9, ...)
+#   fw-fit-blobs/     raw FIT sub-image blobs from dumpimage, named by FIT label
+#                     (rootfs.squashfs, platform-data.squashfs, u-boot, mbr.bin, ...)
+#                     iDRAC10: raw tar components (rootfs.squashfs, DSM.bin, ...)
+#   fw-filesystems/   extracted squashfs trees, one subdir per squashfs, named
+#                     by FIT label (rootfs/, platform-data/, kmipclient/, ...)
+#   fw-itb/           dumpimage listings of nested ITB sub-FIT images
+#                     (kernel, dtb, etc. -- empty for most iDRAC9 builds)
+#   MANIFEST.txt      gen, version, sha256s, rootfs paths
+# NEEDS  unzip tar unsquashfs dumpimage 7z shasum file
+#        brew: squashfs-tools u-boot-tools p7zip binwalk
+# RELATED  fileindex (find firmware files); ~/phd/bmc/dell/idrac*  prior extractions.
+# =============================================================================
+set -uo pipefail
+
+say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+sub()  { printf '    %s\n' "$*"; }
+warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31m[x]\033[0m %s\n' "$*" >&2; exit "${2:-1}"; }
+
+[ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] && { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+IN="${1:?usage: unpack-idrac <DUP.BIN|.EXE|firmimg.dN> [OUTDIR]  (--help)}"
+[ -f "$IN" ] || die "input not found: $IN"
+IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"   # absolutise
+
+for t in unzip tar unsquashfs dumpimage shasum; do
+  command -v "$t" >/dev/null || warn "missing tool: $t (some steps may skip) -- brew install squashfs-tools u-boot-tools"
+done
+
+STEM="$(basename "$IN")"; STEM="${STEM%.*}"
+OUT="${2:-$(dirname "$IN")/${STEM}.unpacked}"
+say "input : $IN"
+say "output: $OUT"
+mkdir -p "$OUT"/{fw-dup-payload,fw-fit-blobs,fw-filesystems,fw-itb}
+OUT="$(cd "$OUT" && pwd)"          # absolutise so subshell `cd`s don't break relative paths
+MAN="$OUT/MANIFEST.txt"; : > "$MAN"
+log() { echo "$*" >> "$MAN"; }
+log "unpack-idrac $(date) "; log "input: $IN"; log ""
+
+sha() { shasum -a256 "$1" 2>/dev/null | awk '{print $1}'; }
+
+# --- Stage 1: if input is a DUP (.BIN ELF / .EXE PE), extract the embedded payload ---
+# iDRAC10 DUPs: payload is an appended zip  -> unzip
+# iDRAC9  DUPs: payload is a tar inside a shell self-extractor -> 7z x -> tar xvf
+FIRMIMG=""
+kind="$(LC_CTYPE=C file -b "$IN")"
+if printf '%s' "$IN" | grep -qiE '\.bin$|\.exe$' || printf '%s' "$kind" | grep -qiE 'ELF|PE32|executable|shell script'; then
+  say "Stage 1 — Dell DUP detected ($kind)"
+
+  # --- try zip path first (iDRAC10 / newer DUPs) ---
+  say "Stage 1a — trying zip extraction (iDRAC10-style)"
+  _zip_ok=0
+  unzip -o -q "$IN" -d "$OUT/fw-dup-payload" 2>/dev/null && _zip_ok=1
+  if [ "$_zip_ok" -eq 0 ]; then
+    off=$(python3 - "$IN" <<'PY'
+import sys
+d=open(sys.argv[1],'rb').read()
+i=d.find(b'PK\x03\x04'); print(i)
+PY
+)
+    if [ "$off" -ge 0 ] 2>/dev/null; then
+      warn "direct unzip failed; carving zip at offset $off"
+      tail -c "+$((off+1))" "$IN" > "$OUT/fw-dup-payload/payload.zip"
+      ( cd "$OUT/fw-dup-payload" && unzip -o -q payload.zip 2>/dev/null ) && _zip_ok=1
+    fi
+  fi
+
+  # --- fallback: 7z + tar (iDRAC9 shell self-extractor) ---
+  if [ "$_zip_ok" -eq 0 ]; then
+    warn "zip extraction failed; trying 7z+tar (iDRAC9-style shell self-extractor)"
+    command -v 7z >/dev/null || die "7z not found (brew install p7zip)"
+    say "Stage 1a(alt) — 7z x DUP -> tar archive"
+    7z x "$IN" -o"$OUT/fw-dup-payload" -y >/dev/null 2>&1 || die "7z extraction failed"
+    _tar=$(find "$OUT/fw-dup-payload" -maxdepth 1 -type f ! -name '*.zip' | head -1)
+    if [ -n "$_tar" ] && LC_CTYPE=C file -b "$_tar" 2>/dev/null | grep -qi 'tar'; then
+      say "Stage 1b(alt) — tar xvf $(basename "$_tar") -> DUP payload"
+      mkdir -p "$OUT/fw-dup-payload/payload-tar"
+      tar -xf "$_tar" -C "$OUT/fw-dup-payload/payload-tar" 2>/dev/null
+      cp -rn "$OUT/fw-dup-payload/payload-tar/." "$OUT/fw-dup-payload/" 2>/dev/null || true
+    else
+      die "7z produced no tar archive; unknown DUP format: $(ls "$OUT/fw-dup-payload" | head -5)"
+    fi
+  fi
+
+  cp -f "$OUT/fw-dup-payload"/{package.xml,Version.txt} "$OUT/" 2>/dev/null || true
+  FIRMIMG="$(find "$OUT/fw-dup-payload" -name 'firmimg.d*' -o -name 'firmimgFIT.d*' 2>/dev/null | head -1)"
+  ver="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$OUT/fw-dup-payload/Version.txt" 2>/dev/null | head -1)"
+  sub "version: ${ver:-?}"; log "version: ${ver:-?}"
+else
+  say "Stage 1 — input is a raw firmimg (no DUP wrapper)"
+  FIRMIMG="$IN"
+fi
+[ -n "$FIRMIMG" ] && [ -f "$FIRMIMG" ] || die "could not locate a firmimg.dN to unpack"
+
+# --- Stage 2: firmimg -> components.  d10 = tar ; d9 = U-Boot FIT ---
+ext="${FIRMIMG##*.}"               # d9 / d10 / ...
+GEN="iDRAC?"; case "$ext" in d9) GEN="iDRAC9";; d10) GEN="iDRAC10";; d8) GEN="iDRAC8";; esac
+say "Stage 2 — unpacking firmimg ($GEN, .$ext): $(basename "$FIRMIMG")"
+log "gen: $GEN   firmimg: $(basename "$FIRMIMG")   sha256: $(sha "$FIRMIMG")"
+fkind="$(LC_CTYPE=C file -b "$FIRMIMG")"
+if printf '%s' "$fkind" | grep -qi 'tar archive'; then
+  sub "format: TAR (iDRAC10-style) -> untar"
+  tar -xf "$FIRMIMG" -C "$OUT/fw-fit-blobs"
+elif printf '%s' "$fkind" | grep -qiE 'Device Tree|FIT|u-boot|data'; then
+  sub "format: U-Boot FIT (iDRAC9-style) -> dumpimage"
+  dumpimage -l "$FIRMIMG" 2>/dev/null | tee "$OUT/fw-fit-blobs/FIT.listing.txt" | sed 's/^/      /' | head -40
+  # extract every sub-image by index into temp names; rename to FIT labels below
+  n=$(dumpimage -l "$FIRMIMG" 2>/dev/null | grep -c 'Image ' || echo 0)
+  i=0; while [ "$i" -lt "${n:-0}" ]; do
+    dumpimage -T flat_dt -p "$i" -o "$OUT/fw-fit-blobs/fit_img_$i.bin" "$FIRMIMG" 2>/dev/null \
+      && sub "extracted FIT sub-image $i" ; i=$((i+1))
+  done
+  # rename fit_img_N.bin -> FIT label (e.g. rootfs.squashfs, mbr.bin, u-boot, ...)
+  if [ -f "$OUT/fw-fit-blobs/FIT.listing.txt" ]; then
+    while IFS= read -r _line; do
+      _idx=$(printf '%s' "$_line" | grep -oE 'Image +[0-9]+' | grep -oE '[0-9]+')
+      _lbl=$(printf '%s' "$_line" | grep -oE '\([^)]+\)' | tr -d '()')
+      if [ -n "$_idx" ] && [ -n "$_lbl" ]; then
+        _lbl="${_lbl%@*}"      # strip @N version suffix
+        _lbl="${_lbl//_/-}"   # _ -> - for readability
+        _src="$OUT/fw-fit-blobs/fit_img_${_idx}.bin"
+        if [ -f "$_src" ]; then
+          mv "$_src" "$OUT/fw-fit-blobs/$_lbl" 2>/dev/null && sub "renamed fit_img_${_idx} -> $_lbl"
+        fi
+      fi
+    done < "$OUT/fw-fit-blobs/FIT.listing.txt"
+  fi
+  # fallback: binwalk carve if dumpimage yielded little
+  if [ "$(ls -1 "$OUT/fw-fit-blobs" | wc -l)" -lt 2 ] && command -v binwalk >/dev/null; then
+    sub "dumpimage thin -> binwalk -e fallback"
+    ( cd "$OUT/fw-fit-blobs" && binwalk -e -q "$FIRMIMG" >/dev/null 2>&1 || true )
+  fi
+else
+  warn "unknown firmimg format: $fkind -- trying binwalk -e"
+  ( cd "$OUT/fw-fit-blobs" && binwalk -e -q "$FIRMIMG" >/dev/null 2>&1 || true )
+fi
+log ""; log "fw-fit-blobs:"; ( cd "$OUT/fw-fit-blobs" && ls -la | sed 's/^/  /' >> "$MAN" )
+
+# --- Stage 3: unsquashfs every squashfs found in fw-fit-blobs ---
+say "Stage 3 — extracting squashfs filesystems"
+# Detect squashfs by file MAGIC, not filename (FIT blobs have arbitrary names).
+# -ignore-errors: continue past LZO/block decompression errors rather than silently
+# zeroing affected files. Without this, LZO squashfs on macOS drops ~10-30% of files.
+mapfile -t SQ < <(
+  find "$OUT/fw-fit-blobs" -type f 2>/dev/null | while read -r f; do
+    if LC_CTYPE=C file -b "$f" 2>/dev/null | grep -qi squashfs; then echo "$f"; fi
+  done )
+if [ "${#SQ[@]}" -eq 0 ]; then sub "(no squashfs filesystem found in fw-fit-blobs)"; fi
+for s in "${SQ[@]:-}"; do
+  [ -f "$s" ] || continue
+  # dir name: blob label minus .squashfs extension  (rootfs.squashfs -> rootfs)
+  b="$(basename "$s")"; b="${b%.squashfs}"; b="${b%.bin}"
+  d="$OUT/fw-filesystems/${b}"
+  sub "unsquashfs $(basename "$s") -> fw-filesystems/${b}/"
+  chmod -R u+w "$d" 2>/dev/null; rm -rf "$d"; mkdir -p "$d"
+  comp="$(unsquashfs -s "$s" 2>/dev/null | grep -i '^Compression' | awk '{print $2}')"
+  sub "  compression: ${comp:-?}"
+  ok=""
+  # -ignore-errors: keep going past block-level decompression failures instead of
+  # silently creating zero-length placeholder files for the affected inodes.
+  unsquashfs -ignore-errors -f -d "$d" "$s" >/dev/null 2>&1 || true
+  [ -n "$(ls -A "$d" 2>/dev/null)" ] && ok="unsquashfs"
+  if [ -z "$ok" ] && command -v 7z >/dev/null; then
+    chmod -R u+w "$d" 2>/dev/null; rm -rf "$d"; mkdir -p "$d"
+    7z x -y -o"$d" "$s" >/dev/null 2>&1 || true
+    [ -n "$(ls -A "$d" 2>/dev/null)" ] && ok="7z"
+  fi
+  if [ -n "$ok" ]; then
+    _nfiles=$(find "$d" -type f 2>/dev/null | wc -l | tr -d ' ')
+    _nzero=$(find "$d" -type f -size 0 2>/dev/null | wc -l | tr -d ' ')
+    sub "  -> $_nfiles files via $ok ($_nzero zero-length); root: $d"
+    log "filesystem: $d  (from $(basename "$s"), $comp, via $ok, sha256 $(sha "$s"), files: $_nfiles, zeros: $_nzero)"
+  else
+    warn "  all extractors failed on $(basename "$s") ($comp) -- try squashfs-tools with $comp support"
+  fi
+done
+
+# --- Stage 4: list any nested ITB sub-FIT images (kernel, dtb) ---
+say "Stage 4 — nested ITB sub-FIT images"
+mapfile -t ITB < <(find "$OUT/fw-fit-blobs" -name '*.itb' 2>/dev/null)
+for it in "${ITB[@]:-}"; do
+  [ -f "$it" ] || continue
+  b="$(basename "$it")"; sub "dumpimage -l $b"
+  dumpimage -l "$it" 2>/dev/null | sed 's/^/      /' | head -30 | tee "$OUT/fw-itb/${b}.listing.txt" >/dev/null
+  log "ITB: $b listed -> fw-itb/${b}.listing.txt"
+done
+[ "${#ITB[@]}" -eq 0 ] && sub "(none -- typical for iDRAC9; iDRAC10 may have kernel ITBs)"
+
+# --- README at output root ---
+_ver="$(grep '^version:' "$MAN" | head -1 | cut -d' ' -f2)"
+cat > "$OUT/README.txt" <<READMEEOF
+$GEN firmware — version ${_ver:-unknown}
+Unpacked by unpack-idrac on $(date)
+Source: $(basename "$IN")
+
+LAYOUT
+  fw-dup-payload/   Files extracted from the DUP self-installer.
+                    Version.txt and package.xml are the authoritative version source.
+  fw-fit-blobs/     Raw FIT sub-image blobs, named by FIT label.
+                    FIT.listing.txt maps every blob to its index, description, and hash.
+  fw-filesystems/   Extracted squashfs filesystem trees, one dir per squashfs image:
+$(find "$OUT/fw-filesystems" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | while read -r d; do
+  _n=$(find "$d" -type f 2>/dev/null | wc -l | tr -d ' ')
+  printf "                    %-20s  (%s files)\n" "$(basename "$d")/" "$_n"
+done)
+  fw-itb/           Listings of nested ITB sub-FIT images (kernel/dtb).
+                    Typically empty for iDRAC9; populated for iDRAC10.
+  MANIFEST.txt      Machine-readable log: sha256s, extractor used, file counts.
+
+IDENTIFYING THE iDRAC GENERATION
+  Dell does not embed a generation field in the DUP or Version.txt.
+  Generation is identified by:
+    1. firmimg extension (.d9 = iDRAC9, .d10 = iDRAC10, .d8 = iDRAC8)  [most reliable]
+    2. fw-filesystems/rootfs/etc/yocto-machine.env -> MACHINE=mach-idrac9 / mach-idrac10
+    3. Version.txt firmware version range (3.x-7.x = iDRAC9, 1.x = iDRAC10)
+    4. Supported system models in Version.txt (14G/15G/16G = iDRAC9, 17G+ = iDRAC10)
+  This firmware: $GEN (detected from firmimg extension .$ext)
+READMEEOF
+
+# --- Summary ---
+say "DONE."
+echo
+say "Summary:"
+sub "gen         : $GEN"
+sub "version     : ${_ver:-?}"
+sub "filesystems : $(find "$OUT/fw-filesystems" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -5 | tr '\n' ' ')"
+sub "manifest    : $MAN"
+sub "output      : $OUT"
+log ""; log "completed $(date)"

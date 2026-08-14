@@ -1,74 +1,68 @@
-# megarac-asmb787-lab
+# vbmc-lab — a zoo of virtual BMCs under QEMU
 
-Unpack an AMI **MegaRAC SP-X** BMC firmware image and boot it under **QEMU** as a virtual BMC — worked
-end to end on the Advantech **ASMB-787** (MegaRAC SP-X 4.0, ASPEED **AST2600**). Tools, the exact boot
-recipe, the firmware, and a full write-up of every wall we hit.
+Boot real vendor **BMC** (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher
+(`vbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
+RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
 
-For OOB/BMC security research: exercise the IPMI stack, Redfish, and the web UI without owning the board.
+This is the working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
+skill so others can reproduce it on their own images.
 
-## What works
+> **Private on purpose.** It aggregates vendor firmware and documents fleet-shared *default* credentials
+> that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
+> aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the
+> value here is *documenting the danger*. Still, no live/customer secrets, no private keys, and **no
+> extracted rootfs trees** are committed (they're huge and regenerable from firmware anyway).
 
-- Firmware → bootable artifacts in ~35s (`box/build.sh`).
-- Full MegaRAC userland under `qemu-system-arm -M ast2600-evb`: IPMIMain stable, redis, lighttpd,
-  Redfish, event/task services.
-- **Root console**: login `sysadmin` / `superuser` (uid 0).
+## The animals
 
-## What doesn't (yet)
+| Box | Vendor / stack | SoC → QEMU machine | Access that works | Console / creds |
+|-----|----------------|--------------------|-------------------|------------------|
+| **asmb787** | Advantech · AMI MegaRAC SP-X 4.0 | AST2600 → `ast2600-evb` | console (full stack) | ttyS4 · `sysadmin`/`superuser` · *ext net blocked, see writeup* |
+| **cray** | HPE Cray XD670 · MegaRAC SP-X | AST2600 → `ast2600-evb` | IPMI 2.0 RMCP+ ✓ · authed Redfish ✓ | ttyS4 · IPMI `admin`/`superuser`, console `sysadmin`/`superuser` |
+| **x14** | Supermicro · OpenBMC | AST2600 → `ast2600-evb` | ssh ✓ · remote Redfish ✓ · IPMI ◑ | socket · `ADMIN`/`ADMIN` (uid 10000+sudo), root `0penBmc` |
+| **idrac9** | Dell · iDRAC9 | NPCM750 → `npcm750-evb` | ssh root ✓ · IPMI RMCP+ ✓ · Redfish (local) ✓ | ttyS1 · root key + factory IPMIKey; racadm not ipmitool |
+| **idrac10** | Dell · iDRAC10 | NPCM845 → `npcm845-evb` | IPMI RMCP+ ✓ (`IPMI_T≥25`) · console (cold) ✓ | socat serial · factory IPMIKey (`-K`) |
+| **gb200** | NVIDIA GB200NVL · OpenBMC | AST2600 → `gb200nvl-bmc` | OEM IPMI (NetFn 0x3C) — BIOS-pwd leak | — |
+| **evb-openbmc** | vanilla OpenBMC (baseline) | AST2600 → `ast2600-evb` | ssh + Redfish + IPMI-LAN ✓ | Mfr 0 baseline for diffing OEM builds |
 
-External SSH/Redfish/IPMI over host ports. The firmware's older AMI kernel (5.4.11) has a customised
-NC-SI ftgmac driver that won't complete link-up against QEMU's built-in NC-SI responder. Fully
-diagnosed — see the write-up. Box ships **console-accessible** (same as its sibling Cray box).
+Live-measured; some interfaces are partial (◑) under emulation. Full per-box detail:
+[docs/zoo-lessons.md](docs/zoo-lessons.md).
 
-## Quickstart
+## Quickstart (asmb787, the fully-included example)
 
 ```bash
 # deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc && pipx install jefferson
-./box/build.sh                              # firmware -> work/{kernel.Image,dtb-a1.dtb,rootfs.sqfs,mtdflash.bin}
-WD=./work BG=1 ./box/boot-asmb787-svc.sh    # boot, backgrounded
-tail -f ./work/svc.log                      # ~2 min to 'login:'  ->  sysadmin / superuser
+./boxes/asmb787/build.sh                       # firmware -> kernel/dtb/rootfs/mtdflash  (~35s)
+WD=./work BG=1 ./boxes/asmb787/boot-asmb787-svc.sh
+tail -f ./work/svc.log                          # ~2 min -> login: sysadmin / superuser (uid 0)
 ```
 
-Or wire it into the `vbmc` "zoo" dispatcher (`tools/vbmc`) and use `vbmc asmb787 start|console|status`.
+Other boxes ship their **boot/build/restore/snapshot recipes** + findings docs under `boxes/<name>/`.
+Firmware for the big/proprietary ones (iDRAC DUPs, x14 128 MB image) is not bundled by default (GitHub's
+100 MB/file limit; add via `git-lfs` or drop your own copy in) — the recipes regenerate everything from
+whatever image you supply.
 
 ## Layout
 
 ```
-docs/from-firmware-to-bare-metal.md   the field report: format, unpacking, boot, and every wall
-skill/megarac-virtualize/SKILL.md     an agent skill (Claude/AI) that reproduces this on any MegaRAC image
-tools/unpack-ami                      one-command AMI MegaRAC unpacker (FMH + SquashFS + JFFS2 + FIT)
-tools/vbmc                            the zoo dispatcher (start/stop/console/status per box)
-box/build.sh                          regenerate artifacts from the firmware
-box/boot-asmb787-svc.sh               the exact QEMU invocation (mtdparts, ttyS4, hostfwd)
-box/qemu-patch-rootfs.sh              the two IPMIMain fixes (/conf/BMC symlink + IPMI.conf trim)
-box/vbmc.box                          box descriptor (creds, ports, verbs)
-box/ncsi-sniff.py                     diagnostic: prove QEMU handles NC-SI internally (sees 0 frames)
-firmware/…ima_enc                     the source of truth (Advantech ASMB-787, 2022-09-12)
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), vbmc (the dispatcher)
+boxes/<name>/ per-box vbmc.box + boot/build/restore/snapshot scripts + findings docs
+docs/         from-firmware-to-bare-metal.md (asmb787 deep-dive) · zoo-lessons.md (cross-box patterns)
+skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
+firmware/     source images that fit (asmb787); big/proprietary ones via git-lfs or bring-your-own
 ```
 
-## The short version of the hard parts
+## What you'll learn from the docs
 
-1. **"Encrypted" is a filename.** The `.ima_enc` is plain XZ-SquashFS + JFFS2 behind an AMI FMH table.
-   Entropy ~8.0 = compressed *or* encrypted; only magic bytes tell them apart.
-2. **binwalk silently skips SquashFS** on a stale sig DB — scan `hsqs`/`0x1985`/`d00dfeed`/`$MODULE$`
-   yourself. `jefferson` mis-detects JFFS2 endianness on a whole image — isolate the region first.
-3. **IPMIMain SIGSEGVs** without the `/conf/BMC → BMC1/<platform>` symlink and an `IPMI.conf` trimmed to
-   the interfaces QEMU actually models. Both fixes in `box/qemu-patch-rootfs.sh`.
-4. **Boot exactness**: flash truncated to *precisely* 64 MiB, console on `ttyS4`, `maxcpus=1`, and
-   `mtdparts` ordered to match the firmware's `/etc/dupfstab` (mounts by mtdblock number).
-5. **The network wall is the guest kernel, not the emulator** — QEMU already answers NC-SI; the AMI
-   5.4.11 driver rejects it. Diagnose frame-traversal (`ping` the gateway) before touching the DTB.
+- **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)** — one box end to end:
+  the "encrypted" misnomer, AMI FMH / SquashFS / JFFS2 / FIT unpacking (and the binwalk & jefferson
+  traps), the exact QEMU flags and why, the IPMIMain SIGSEGV fixes, and the NC-SI networking wall in full.
+- **[docs/zoo-lessons.md](docs/zoo-lessons.md)** — the cross-box patterns: QEMU machine per SoC,
+  direct-kernel vs FIT vs raw-flash boot, flash sizing traps, cold-boot-flaky → warm-snapshot (QMP
+  migrate), the network last-mile per SoC (usb-net on NPCM vs the AST2600 NC-SI wall), and the OpenBMC /
+  MegaRAC / iDRAC userland fixes.
 
-Full detail, exact bytes, and the wrong turns: **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)**.
+## License / use
 
-## Firmware
-
-`firmware/encrypted_ASMB-787_20220912.ima_enc` is Advantech's publicly-distributed BMC firmware,
-included so this is a one-stop reproducible reference. It is redistributed for interoperability and
-security-research purposes; all trademarks and copyright belong to Advantech / AMI. If the vendor
-objects, open an issue and it will be removed.
-
-## License
-
-Scripts and docs: MIT (`LICENSE`). The firmware image is the vendor's and is not covered by that license.
-
+Scripts + docs: MIT (`LICENSE`). Firmware images are the respective vendors' and are not covered by it.
 Use only on hardware/firmware you're authorized to test.
