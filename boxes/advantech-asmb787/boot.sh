@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# boot-asmb787-svc.sh — boot the Advantech ASMB-787 MegaRAC SP-X 4.0 BMC under qemu ast2600-evb
+# boot.sh — boot the Advantech ASMB-787 MegaRAC SP-X 4.0 BMC under qemu ast2600-evb
 # with REAL init (/sbin/init) + networking. Sibling of the Cray XD670 box (same AMI SP-X platform).
 #
 # WHAT : full MegaRAC userland from the patched rootfs (RAM disk). /conf, /usr/local/www and /dre
@@ -10,11 +10,11 @@
 # KEY  : the firmware's /etc/dupfstab mounts by /dev/mtdblockN (by NUMBER, not name), so mtdparts
 #        ORDER is what matters: uboot(0), conf(1)@0xd0000, bkupconf(2)@0x2d0000, www(3)@0x2810000,
 #        dre(4)@0x2e10000 — each @offset lands exactly on the real jffs2/squashfs magic in the image.
-# RUN  : BG=1 ./boot-asmb787-svc.sh   (background; console -> $WD/svc.log ; drive via $WD/cin)
+# RUN  : BG=1 ./boot.sh   (background; console -> $WD/svc.log ; drive via $WD/cin)
 # RELATED: qemu-patch-rootfs.sh (IPMIMain fixes), extract.sh, vbmc.box.
 set -u
 _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
-WD="${WD:-$_REPO/work}"          # artifacts + console log + fifo (build.sh writes here)
+WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo (build.sh writes here)
 IP="${IP:-127.0.0.1}"
 HTTPS_PORT="${HTTPS_PORT:-6443}"; SSH_PORT="${SSH_PORT:-6022}"; IPMI_PORT="${IPMI_PORT:-6623}"
 
