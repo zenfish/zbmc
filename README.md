@@ -38,9 +38,16 @@ tail -f ./work/svc.log                          # ~2 min -> login: sysadmin / su
 ```
 
 Other boxes ship their **boot/build/restore/snapshot recipes** + findings docs under `boxes/<name>/`.
-Firmware for the big/proprietary ones (iDRAC DUPs, x14 128 MB image) is not bundled by default (GitHub's
-100 MB/file limit; add via `git-lfs` or drop your own copy in) — the recipes regenerate everything from
-whatever image you supply.
+The big/proprietary firmware (iDRAC DUPs, x14 128 MB image) exceeds GitHub's 100 MB/file limit, so it's
+**fetched from the vendors** rather than committed:
+
+```bash
+./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh idrac9
+```
+
+iDRAC9 pulls directly + checksum-verifies from `dl.dell.com`; iDRAC10 / x14 are JS/EULA-gated so the
+script prints the exact vendor page, filename, and expected SHA-256 to drop in and verify. All of it is
+firmware the vendors distribute publicly and anonymously — the script just automates it and pins hashes.
 
 ## Layout
 
@@ -49,7 +56,7 @@ tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), vbmc (the dispa
 boxes/<name>/ per-box vbmc.box + boot/build/restore/snapshot scripts + findings docs
 docs/         from-firmware-to-bare-metal.md (asmb787 deep-dive) · zoo-lessons.md (cross-box patterns)
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
-firmware/     source images that fit (asmb787); big/proprietary ones via git-lfs or bring-your-own
+firmware/     asmb787 image (fits) + download-fw.sh to fetch the big Dell/Supermicro ones from the vendors
 ```
 
 ## What you'll learn from the docs
