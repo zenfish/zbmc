@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>idrac10-virtual — index</title>
+<link rel="stylesheet" href="../../../css/doc.css" />
+<style>
+.lead{border:1px solid var(--line);border-radius:9px;padding:12px 15px;margin:.8em 0;background:#fff}
+.lead h3{margin:.1em 0} .lead .d{color:var(--mut);font-size:.9rem;margin:.2em 0 0}
+.lead .alt{font-size:.8rem;color:var(--mut);margin-top:.3em}
+.tag{display:inline-block;background:#1e293b;color:#fff;border-radius:5px;padding:0 .4em;font-size:.68rem;font-weight:700;vertical-align:middle}
+</style>
+</head>
+<body>
+<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">dell</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">idrac10-virtual</span></nav>
+
+<h1>idrac10-virtual/</h1>
+<p>Virtual iDRAC10 (NPCM845/AArch64 under QEMU) + the reverse-engineered OEM IPMI command corpus.
+Full path: <code>/Volumes/yyy/phd/bmc/dell/idrac10-virtual/</code></p>
+
+<h2>Reference &amp; analysis</h2>
+
+<div class="lead">
+  <h3><a href="idrac10-oem-reference.html">📖 iDRAC10 OEM IPMI Command Reference</a> <span class="tag">START HERE</span></h3>
+  <div class="d">446 reverse-engineered Dell OEM commands: numbered TOC, fixed sections, per-command byte tables,
+  4-tier impact (Critical/High/Medium/Low), and the spec Table G-1 privilege table. Type in the filter bar to search.
+  <b>Live-verified</b>: 402/443 handlers confirmed real on a running QEMU iDRAC10 (live ✓/gated/absent badge per command).</div>
+  <div class="alt">Shareable copy (self-contained, opens anywhere): <a href="idrac10-oem-reference.standalone.html">idrac10-oem-reference.standalone.html</a></div>
+</div>
+
+<div class="lead">
+  <h3><a href="idrac9-vs-idrac10-oem-diff.html">⇄ iDRAC9 vs iDRAC10 — OEM Command Diff</a></h3>
+  <div class="d">Per-command cross-generation comparison: 154 shared capabilities, 78 that changed slot/priv/in-band gate,
+  plus scope-caveated added/removed.</div>
+  <div class="alt">Shareable copy: <a href="idrac9-vs-idrac10-oem-diff.standalone.html">idrac9-vs-idrac10-oem-diff.standalone.html</a></div>
+</div>
+
+<div class="lead">
+  <h3><a href="idrac10-ipmi-commands.html">iDRAC10 IPMI Commands (raw table)</a></h3>
+  <div class="d">Flat 446-command table (the reference above is the readable, categorized view of this data).</div>
+</div>
+
+<h2>Data &amp; project state</h2>
+<ul>
+<li><a href="idrac10-commands.json">idrac10-commands.json</a> — machine-readable catalog (446 commands + <code>live</code> axis, feeds zipmi + the docs above)</li>
+<li><a href="idrac10-live-sweep-results.jsonl">idrac10-live-sweep-results.jsonl</a> — raw live-sweep evidence (completion code + response bytes per command, 10.0.9.10:623)</li>
+<li><a href="idrac10-dispatch-tables.md">idrac10-dispatch-tables.md</a> — static dispatch-table extraction (429 tuples)</li>
+<li><a href="RESUME-STATE.md">RESUME-STATE.md</a> — project state &amp; how to resume cold (QEMU phases + the OEM-RE track)</li>
+<li><a href="tasks/todo-idrac10-cmds.md">tasks/todo-idrac10-cmds.md</a> — task log</li>
+</ul>
+
+<h2>Emulation harness</h2>
+<p>QEMU boot/run scripts (see RESUME-STATE.md for the phase map):
+<a href="run-p1-shell.sh">run-p1-shell.sh</a> · <a href="run-p2-apache.sh">run-p2-apache.sh</a> ·
+<a href="boot-apache-guest.sh">boot-apache-guest.sh</a> · <a href="setup-apache.sh">setup-apache.sh</a> ·
+sub-dirs <a href="boot/">boot/</a>, <a href="img/">img/</a>.</p>
+</body>
+</html>

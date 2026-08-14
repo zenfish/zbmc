@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — booting Dell's BMC firmware under QEMU (NPCM750)</title>
+<link rel="stylesheet" href="../../../css/doc.css" />
+</head>
+<body>
+<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">dell</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">idrac9-virtual</span></nav>
+
+<h1>Virtual iDRAC9 — Dell's BMC firmware under QEMU</h1>
+<p><em>Goal: a working, explorable iDRAC9 in software — boot Dell's own kernel + rootfs on
+QEMU's Nuvoton <code>npcm750-evb</code> machine, climb from a shell up toward a live appliance
+(racadm / RAKP / web). SoC: Nuvoton <strong>NPCM750</strong> (Poleg, ARMv7 dual Cortex-A9).
+Firmware: <code>firmimgFIT.d9</code> 7.20.30.50, kernel <code>Linux 5.4.80.idrac</code>.</em></p>
+
+<div style="border-left:4px solid #16a34a;background:#f0fdf4;padding:.6em 1em;margin:1em 0">
+<strong>Status — SSH ROOT LOGIN WORKS (2026-06-22).</strong> Three boot modes, all working:
+<code>./run.sh</code> = Phase-1 shell + chroot; <code>./run-p2.sh</code> = Phase-2 full systemd boot of
+the real daemon stack; <code>./run-p3.sh</code> + <code>./ssh-in.sh</code> = Phase-3 minimal bring-up
+you can <strong>SSH into as root</strong> (uid=0, real <code>racadm</code> binary); <code>./run-p4.sh</code>
+= Phase-4, the daemon mesh up under systemd with <strong>LIVE racadm</strong> (full command pipeline:
+object-model + instrumentation + auth — §7). The kernel/driver walls (a dm_bufio panic, a phylink NIC
+crash) were cracked with gdb on the live gdbstub. Remaining: attribute <em>values</em> (cfgdb seed) and
+RAKP/<code>fullfw</code> (needs an NPCM hardware shim).</div>
+
+<h2>1 · What works now</h2>
+<pre>$ ./run.sh
+######## VIRTUAL iDRAC9 — initramfs ALIVE ########
+uname: Linux (PolegDRB) 5.4.80.idrac #1 SMP ... armv7l GNU/Linux
+rootfs mounted from /dev/mmcblk0
+=== PROOF: run a real rootfs binary via chroot ===
+  in-rootfs uname: armv7l
+  racadm bin: -rwsr-sr-x 2 root root 6704 /usr/bin/racadm
+  os bin:     -rwxr-xr-x 1 root root 231096 /usr/bin/os
+/ # chroot /newroot /bin/sh      # &larr; explore the real iDRAC9 userspace</pre>
+
+<h2>2 · The recipe (and the four traps that cost the most)</h2>
+<ol>
+<li><strong>Artifacts</strong> come from the FIT kernel image <code>md.itb</code>: <code>zImage</code>
+(ARM, XZ piggy, entry 0x8000), the <em>base</em> device tree (<code>model="iDRAC"</code>,
+<code>compatible="nuvoton,npcm750"</code>), and the first-stage initramfs. Extract with
+<code>dumpimage -T flat_dt -p N -o … md.itb</code>. See <code>build.sh</code>.</li>
+<li><strong>Trap 1 — the console UART is on serial@1000.</strong> QEMU models NPCM750 UARTs at
+<code>0xf0001000…0xf0004000</code>; the <em>first</em> <code>-serial</code> maps to
+<code>0xf0001000</code> = Dell's <code>ttyS0</code>. (<code>-nographic</code> silently steals
+serial-0 to stdio and bumps your <code>-serial</code> to UART1 — don't use it; use
+<code>-display none -serial stdio</code>.)</li>
+<li><strong>Trap 2 — <code>CONFIG_CMDLINE_FORCE</code>.</strong> The kernel ignores
+<code>-append</code> entirely and uses its built-in cmdline:
+<code>console=ttyS0,115200n8 … <strong>quiet loglevel=0</strong> … <strong>init=/init</strong> rdinit=/init blkdevparts=mmcblk0:…</code>.
+So <em>(a)</em> kernel boot messages are suppressed (<code>quiet</code>) — silence is not a hang;
+<em>(b)</em> you cannot change the console or init via the command line.</li>
+<li><strong>The lever:</strong> <code>init=/init</code> runs the <em>initramfs</em> <code>/init</code>,
+which we fully control (it's the <code>-initrd</code>). We replace it (see <code>init.custom</code>)
+to skip the eMMC + dm-verity dance, mount the rootfs squashfs, and drop to a shell. No kernel
+patching, no signed-FIT rebuild.</li>
+<li><strong>Trap 3 — the rootfs must be a block device.</strong> Attach the squashfs to the SDHCI
+<code>sd-bus</code>: <code>-drive id=rootsd,if=none,file=…,snapshot=on -device sd-card,drive=rootsd,bus=sd-bus</code>.
+It appears as <code>/dev/mmcblk0</code>. (Generic <code>if=sd</code>/<code>-sd</code> are rejected by
+this machine.)</li>
+<li><strong>Trap 4 — SD size must be a power of two.</strong> Pad the 177&nbsp;MiB squashfs to
+256&nbsp;MiB (<code>truncate -s 256M</code>); squashfs ignores the trailing bytes. dm-verity is
+bypassed simply by mounting the raw squashfs read-only (verity only adds integrity checking).</li>
+</ol>
+
+<h2>3 · Files</h2>
+<ul>
+<li><code>run.sh</code> — boot to an interactive shell (Phase 1). <code>build.sh</code> — rebuild all
+artifacts from the firmware (idempotent).</li>
+<li><code>init.custom</code> — the replacement initramfs <code>/init</code>.</li>
+<li><code>boot/</code> — <code>zImage</code>, <code>base.dtb</code>/<code>.dts</code>,
+<code>initramfs.custom.xz</code> (regenerable; git-ignored binaries). <code>img/sd256.img</code> —
+padded rootfs SD image (git-ignored, 256&nbsp;MiB).</li>
+<li><code>scripts/trim-dtb.py</code> — disable DT nodes QEMU doesn't model (used while diagnosing;
+not needed for Phase 1 since the kernel reaches userspace on the unmodified base DT).</li>
+</ul>
+
+<h2>4 · Roadmap to a full appliance</h2>
+<table>
+<tr><th>Phase</th><th>Milestone</th><th>Key work / bypass</th><th>State</th></tr>
+<tr><td>1</td><td>Kernel boots → shell; explore + run real binaries</td><td>custom initramfs <code>/init</code>; squashfs on <code>sd-bus</code>; raw-mount (no verity)</td><td><strong>done</strong></td></tr>
+<tr><td>2</td><td>Real <code>switch_root</code> → systemd → real daemon stack</td><td><code>run-p2.sh</code>: patched kernel (dm_bufio NOP) + single-CPU DTB + masked Dell crash/reboot watchdogs (§5)</td><td><strong>done — boots cfgdb/sshd/oauth/iptables/net stably</strong></td></tr>
+<tr><td>3</td><td>Networking + <strong>SSH root login</strong></td><td><code>run-p3.sh</code>: minimal init; EMC NIC (not the crashing GMAC, §6); sshd + host keys; files-only nsswitch → pubkey login. <code>ssh-in.sh</code></td><td><strong>done ✅</strong></td></tr>
+<tr><td>4</td><td><strong>LIVE <code>racadm</code></strong></td><td>mesh as systemd services (datamgr→populators→SMIL) + cfgmgr Type=simple + /flash-writable + <code>RACADM_ACCESS=0x1FF</code> auth (§7). Command pipeline works end-to-end; attribute <em>values</em> still need a cfgdb factory seed.</td><td><strong>done ✅</strong></td></tr>
+<tr><td>5</td><td>Live RAKP / IPMI</td><td>NPCM hw is modeled (msgbox/KCS/LPC/OTP present). <code>sensord</code> fixed (stage <code>bmcsetting</code>) → fullfw reads 350 SDR recs + monitor thread, then a <strong>timing-race SEGV</strong> in IPMI-channel setup; then <code>zipmi -K</code> vs <code>915F32…</code></td><td>next (fullfw race)</td></tr>
+<tr><td>6</td><td>HTTPS web UI / Redfish</td><td>apache <code>httpd -D SSL</code>, fcgi-racadm, dellwsmand, oauthd; fleet TLS host.key + oauth shared.key from <code>/flash/data0</code></td><td>—</td></tr>
+</table>
+
+<h3>Known hard blockers past Phase 1 (from QEMU source + boot dissection)</h3>
+<ul>
+<li><strong>No KCS/LPC host interface, no TPM, no eMMC-RPMB-as-secure-store, no Dell msgbox/SRAM</strong>
+in QEMU's npcm model — these gate the host-side IPMI channel and some daemons; they must be
+stubbed or their consumers neutered.</li>
+<li><strong>A9 has no generic timer</strong> — the kernel pokes <code>CNTVCT</code> (QEMU flags it
+"unsupported AArch32 64-bit sysreg"); harmless so far (it fell through to a working timer, since
+the kernel reaches userspace), watch if scheduling misbehaves under full load.</li>
+<li>Sensors/PECI/PWM/video unmodeled → thermal &amp; sensor daemons will read zeros once up.</li>
+</ul>
+
+<h2>5 · Phase 2 — full systemd boot (SOLVED with gdb)</h2>
+<p><code>run-p2.sh</code> <code>switch_root</code>s into the rootfs and lets <strong>systemd</strong> run the
+real stack (cfgdb, sshd keygen, oauth, iptables, network, power driver). Three walls, three fixes:</p>
+<ol>
+<li><strong>dm_bufio 30-s timer panic (~31.8&nbsp;s).</strong> A deterministic
+<code>__queue_work</code> oops on a corrupt per-CPU pointer. gdb on the live gdbstub read the static
+<code>work_struct</code> → <code>work.func = dm_bufio</code>'s cleanup worker (its 30-s
+<code>DM_BUFIO_WORK_TIMER_SECS</code> timer). <strong>Fix:</strong> NOP both
+<code>queue_delayed_work_on</code> schedule sites in the decompressed kernel
+(<code>scripts/patch-kernel.py</code>), boot it as a <code>uImage</code> (<code>-C none</code>, no zImage
+rebuild). dm_bufio is pulled in once a dm-verity client exists.</li>
+<li><strong>Systemic per-CPU workqueue corruption</strong> (dm_bufio, srcu, …all crash the same way) is
+<strong>CPU1-specific</strong> under qemu npcm750 → boot <strong>single-CPU</strong> (<code>boot/p2uni.dtb</code>,
+<code>cpu@1</code> removed). Clears all of them.</li>
+<li><strong>Dell bail/reboot watchdogs</strong> — <code>idrac-final</code> literally
+<code>echo c &gt; /proc/sysrq-trigger</code>; <code>imon</code>/<code>*_recovery</code> reboot-loop when their
+SPI/eMMC checks fail off a real chassis. Mask the set (via <code>/run/systemd</code>) + set
+<code>panic_on_oops=0</code>. → <strong>0 crashes, 0 reboots.</strong></li>
+</ol>
+<p>Hardware gaps (KCS/TPM/RPMB/msgbox/sensors) are tolerated via guards/timeouts — they are not the
+wall. The walls were the dm_bufio timer and the per-CPU/SMP issue, both now handled.</p>
+
+<h2>6 · Phase 3 — minimal init + SSH root login (the usable box)</h2>
+<p><code>run-p3.sh</code> skips systemd entirely. The custom <code>/init</code> (<code>init.p3.custom</code>)
+mounts the rootfs, fabricates the eMMC/SPI persistence layer with tmpfs (the real cause of the earlier
+<em>cfgdb</em> failure was dangling <code>/mnt/persistent_data</code> + <code>/flash/data1</code>
+symlinks, <strong>not</strong> hardware), seeds <code>/etc/machine-id</code>, then brings up only what we
+want. Results: <code>CfgDBInit completed successfully</code>; <strong>sshd listens on :22</strong>.</p>
+<p><strong>Networking — the GMAC trap (found with gdb).</strong> <code>ip link set eth0 up</code> silently
+killed the kernel. gdb caught it: kernel <code>die</code>, <code>saved_pc=0</code> (jumped to NULL),
+<code>saved_lr = phylink_validate+0x18</code> — the npcm <strong>GMAC</strong> driver hands phylink a
+<strong>NULL validate callback</strong>. The npcm <strong>EMC</strong> interface uses old phylib (no
+phylink) <em>and</em> is the one qemu's <code>-nic</code> peers to slirp → bring up <code>eth2</code>
+(EMC): <code>ping gw 0%% loss</code>, full SSH KEX, <code>OpenSSH_9.9</code> banner.</p>
+<p><strong>Login — the avct trap.</strong> iDRAC's <code>nss_avct</code> (nsswitch <code>passwd: avct files</code>)
+hijacks the root lookup → forces the racadm shell + mesh-coupled auth, rejecting a valid key. Bind a
+<strong>files-only <code>/etc/nsswitch.conf</code></strong> over the read-only one → root = <code>/bin/sh</code>,
+plain pubkey auth (key in <code>/run/authkeys/root</code>, <code>UsePAM=no</code>, <code>StrictModes=no</code>).</p>
+<pre>$ ./run-p3.sh          # boot (one terminal)
+$ ./ssh-in.sh          # root shell (another)
+uid=0(root) gid=0(root) groups=0(root)   Linux 5.4.80.idrac armv7l</pre>
+
+<h2>7 · Phase 4 — the daemon mesh: <strong>LIVE racadm</strong> (SOLVED)</h2>
+<p>racadm is a client of Dell's D-Bus + ZeroMQ object model plus the DSM-SA instrumentation layer.
+The working approach: boot a custom <code>mini.target</code> (<code>DefaultDependencies=no</code>, no
+200-service storm), get dbus serving, then <strong>start the mesh as systemd <em>services</em></strong>
+via <code>systemctl --no-block start dsm-sa-datamgr.service</code> (pulls just the dep closure
+cfgmgr→dfserver/aim). <code>init.p4.custom</code> + <code>run-p4.sh</code> / <code>build-p4.sh</code>,
+<code>boot/p4.dts</code> (GMAC-off / EMC-only / single-CPU). Each blocker was found by stracing the
+failing daemon to the console; the box stayed stable throughout (24 s–5 min boots).</p>
+<p><strong>The chain, in the order it was cracked:</strong></p>
+<ol>
+<li><strong>dbus-broker <code>-131</code></strong> = <code>error_fold()</code> folding a positive high-level
+error into <code>-ENOTRECOVERABLE</code> — <em>not</em> the broker spawn (earlier theory). The config
+parser <code>readdir</code>s <code>/etc/dbus-1/system.d</code>; two entries (<code>apphandler.conf</code>,
+<code>legacydfsfp.conf</code>) are symlinks into <code>/run/etc/…</code> that <code>systemd-tmpfiles</code>
+normally materializes from <code>/usr/share/factory</code> — <code>mini.target</code> skipped tmpfiles →
+dangling → ENOENT → exit 1. <strong>Fix for this and nearly every later missing-dir blocker: run
+<code>systemd-tmpfiles --create</code> in prep</strong> (one call makes the <code>/run/etc</code> dbus
+confs, <code>/run/fm</code> [dfserver ipc], <code>/run/dm/.ipc</code> [datamgr], …). Pinpointed by
+stracing <code>dbus-broker-launch</code> under <code>systemd-socket-activate</code> (SELinux permissive
+lets ptrace through): it died right after <code>openat(apphandler.conf)=ENOENT</code> with no
+<code>execve</code> of the broker at all.</li>
+<li><strong>dfserver</strong> crashed at a <code>zloop_poller_end</code> assert — it binds
+<code>ipc:///var/run/fm/dfs_{client,control,notify,pub}.ipc</code> and <code>/run/fm</code> was absent
+(now made by tmpfiles).</li>
+<li><strong>Populators died instantly</strong> (the "Stopping Populator …" churn): <code>dsm-sa-pop@.service</code>
+has <code>BindsTo=dsm-sa-datamgr.service</code> — when datamgr is launched <em>manually</em> the unit is
+inactive, so systemd kills every populator it spawns. <strong>Run the mesh as systemd services, not by
+hand.</strong></li>
+<li><strong>cfgmgr stuck "activating"</strong> (Type=notify, never sends <code>READY=1</code> — its
+dfserver func-provider attach handshake stalls under emulation) → blocked <code>dsm-sa-datamgr</code>
+(<code>After=</code>). cfgmgrd <em>does</em> run and own <code>com.dell.idrac.CfgMgr</code>, so a drop-in
+<code>Type=simple</code> + <code>WatchdogSec=0</code> marks it active → datamgr starts → 5 populators
+active → datamgr opens the SMIL pipes <code>/run/dm/.ipc/dcsmilpipe{a,p,u}</code> (racadm connects here;
+absent = <strong>RAC1135</strong> "instrumentation has stopped").</li>
+<li><strong>SWC0242 "Required License"</strong>: the eMMC-persistence services
+(<code>early-mount</code>, <code>setup-flash</code>) the cascade pulls mount <code>/flash/data0</code>
+<em>read-only</em> over our tmpfs, so <code>lmcfg.txt</code> was unreadable. Neutralize them with a drop-in
+<code>ExecStart=/bin/true</code> (keeps dependents' ordering satisfied, no clobber) → <code>/flash</code>
+stays a writable tmpfs.</li>
+<li><strong>"current user privilege is not valid"</strong>: local racadm reads its authenticated-user
+context from env that <code>racadmACShell</code> sets after SSH login. Reproduce it:
+<code>RACADM_ACCESS=0x1FF</code> (all 9 iDRAC privilege bits) + <code>USER</code>/<code>LC_USERNAME</code>/
+<code>REMOTE_USERNAME=root</code>.</li>
+</ol>
+<p><strong>Result — racadm is live:</strong> it parses FQDDs and resolves object-model keys
+(<code>iDRAC.Users.2</code> → <code>iDRAC.Embedded.1#Users.2</code>; <code>Info.1</code>, <code>NIC.1</code>,
+<code>IPMILan.1</code>), enforces version policy (<code>getconfig</code> → <code>RAC1281</code> "use
+<code>racadm get</code>"), and returns proper RAC error codes — the full command pipeline
+(parse → auth → object model → instrumentation → cfgdb) works end-to-end.</p>
+<p><strong>Still open:</strong> (1) racadm returns no attribute <em>values</em> — <code>CfgCurrentValues.db</code>
+is a 12 KB skeleton (<code>cfgdbinit</code> seeds the 3.4 MB <em>metadata</em> schema, not factory values);
+needs the provider/populator data flow + a factory seed. (2) <strong>RAKP / <code>fullfw</code></strong>
+(udp/623) — the "NPCM hardware shim" idea is <strong>disproven</strong>: qemu npcm750 models the msgbox
+(<code>c0008000</code>), KCS, LPC, PCI-mailbox and OTP — fullfw hits zero device errors. The real chain
+is software: fullfw blocks <em>"waiting for sensor shm"</em> → <code>sensord</code> must create the SDR
+shm, and sensord NULL-segfaulted on a missing per-platform <code>bmcsetting</code> file (staged from
+<code>/flash/pd0/ipmi/evb</code> in prep, like lmcfg). With that, sensord stays up (7 MB SDR shm),
+fullfw reads 350 SDR records + opens its function table + spawns its monitor thread — then SEGVs
+<em>post-init, only without strace</em> = a timing-dependent race in IPMI-channel setup. That race is
+the live RAKP blocker; <code>zipmi -K &lt;915F32…&gt;</code> still pending. <strong>Dead-end:</strong> full
+<code>multi-user.target</code> (<code>init.p5</code>/<code>init.p6</code>) — 182 services thrash without
+hardware (<code>usbmap</code> restart-looped 1753×) and never reach the target; the
+<code>mini.target</code> + targeted <code>systemctl start</code> is the correct path.</p>
+
+<h3>Files map</h3>
+<ul>
+<li><strong>Phase 1</strong>: <code>run.sh</code>, <code>build.sh</code>, <code>init.custom</code>.</li>
+<li><strong>Phase 2</strong>: <code>run-p2.sh</code>, <code>build-p2.sh</code>, <code>init.p2.custom</code>,
+<code>scripts/patch-kernel.py</code> (kernel NOP), <code>boot/p2.dts</code>/<code>p2uni.dts</code>.</li>
+<li><strong>Phase 3</strong>: <code>run-p3.sh</code>, <code>ssh-in.sh</code>, <code>init.p3.custom</code>,
+<code>boot/p3.dts</code>, <code>img/vmkey</code> (VM keypair, git-ignored).</li>
+<li><strong>gdb</strong>: <code>scripts/catch*.gdb</code> (dm_bufio), <code>scripts/ethcrash*.gdb</code>
+(the GMAC phylink crash). <code>boot/vmlinux.elf</code> = symbolized kernel (from kallsyms).</li>
+</ul>
+
+<hr />
+<p style="font-size:.8rem;color:#64748b"><em>Sibling work: the credential math this box exercises is
+proven on the real binary in <a href="../idrac10/ipmikey-re/">idrac10/ipmikey-re</a> (Unicorn
+emulation of <code>generateHashes</code>); cold-start brief in
+<a href="../idrac-binary-emulation-HANDOFF.html">idrac-binary-emulation-HANDOFF.html</a>.
+Written 2026-06-22.</em></p>
+</body>
+</html>

@@ -1,0 +1,42 @@
+#!/usr/bin/expect -f
+# boot-idrac10.exp — minimal iDRAC10 (npcm845) Phase-5 IPMI bring-up, driven over the QEMU serial
+# socket. Mounts filesystems, brings up eth0 (slirp 10.0.2.15), fetches+runs boot-fullfw-guest.sh
+# (the fullfw/RAKP daemon bring-up with the shm-shim), waits for IPMI_READY, then detaches leaving
+# QEMU + fullfw running. This is the stripped bring-up from run-p5-ipmi.sh (no debug diagnostics).
+# Called by vbmc.box vbmc_boot. Arg: <serial-unix-sock>.  Guest fetches binaries from the host's
+# python http.server on 10.0.2.2:8091 (slirp gateway).
+set sock [lindex $argv 0]
+match_max 2000000
+set timeout 60
+spawn socat - UNIX-CONNECT:$sock
+expect { "sh-5.2#" {} timeout { puts "BOOT_TIMEOUT (no shell)"; exit 1 } }
+puts "\[exp] shell ready"
+send "mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t devtmpfs devtmpfs /dev; mkdir -p /dev/pts; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /tmp; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /var/volatile; mount -t tmpfs tmpfs /mnt\r"
+expect -timeout 15 "sh-5.2#"
+puts "\[exp] fs mounted"
+send "ip link set eth0 up; ip addr add 10.0.2.15/24 dev eth0; ip route add default via 10.0.2.2\r"
+expect -timeout 210 "sh-5.2#"
+puts "\[exp] NET_UP"
+send "wget -q --timeout=15 http://10.0.2.2:8091/boot-fullfw-guest.sh -O /tmp/fw.sh && sh /tmp/fw.sh 2>&1\r"
+expect {
+    -timeout 600
+    "IPMI_READY" { puts "\[exp] IPMI_READY (env ready)" }
+    timeout      { puts "\[exp] TIMEOUT waiting IPMI_READY"; exit 1 }
+    eof          { puts "\[exp] EOF before IPMI_READY"; exit 1 }
+}
+expect "sh-5.2#"
+# CRITICAL: reload fullfw under the shm-shim (LD_PRELOAD) so its interposes take effect — this is
+# what makes RAKP auth work (shim2 UserInfoGetUserHashPWD=FKM HMAC-key gate + 16B username table).
+# boot-fullfw-guest.sh's own fullfw launch does NOT carry the shim; without this reload -> 0x0d.
+# (Exactly what live-iterate.sh does on the live box.)
+send "wget -q --timeout=15 http://10.0.2.2:8091/shm-shim.so -O /tmp/shm-shim.so && echo GOT_SHIM\r"
+expect { "GOT_SHIM" {} timeout { puts "\[exp] shim wget FAILED"; exit 1 } }
+expect "sh-5.2#"
+send "pkill -9 -f /bin/fullfw; sleep 2; rm -f /tmp/shim-calls.log /tmp/shm-shim-loaded /tmp/crash.log; export LD_PRELOAD=/tmp/shm-shim.so; setsid env HOME=/flash/data0 /tmp/prebind /bin/fullfw > /tmp/fullfw.log 2>&1 &\r"
+expect "sh-5.2#"
+send "sleep 3; echo SHIM_RELOADED shim=\$(\[ -f /tmp/shm-shim-loaded ] && echo YES || echo NO) pid=\$(pgrep -f /bin/fullfw|head -1)\r"
+expect { -re {SHIM_RELOADED[^\r\n]*} { puts "\[exp] $expect_out(0,string)" } timeout { puts "\[exp] shim reload marker timeout" } }
+expect "sh-5.2#"
+# fullfw (with shim) is now a running daemon independent of this serial shell. Detach; QEMU keeps running.
+puts "IDRAC10_UP"
+exit 0
