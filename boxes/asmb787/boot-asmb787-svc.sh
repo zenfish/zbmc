@@ -13,7 +13,8 @@
 # RUN  : BG=1 ./boot-asmb787-svc.sh   (background; console -> $WD/svc.log ; drive via $WD/cin)
 # RELATED: qemu-patch-rootfs.sh (IPMIMain fixes), extract.sh, vbmc.box.
 set -u
-WD="${WD:-/Users/zen/phd/tmp/asmb787}"
+_HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
+WD="${WD:-$_REPO/work}"          # artifacts + console log + fifo (build.sh writes here)
 IP="${IP:-127.0.0.1}"
 HTTPS_PORT="${HTTPS_PORT:-6443}"; SSH_PORT="${SSH_PORT:-6022}"; IPMI_PORT="${IPMI_PORT:-6623}"
 

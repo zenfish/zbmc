@@ -25,8 +25,9 @@
 VBMC_NAME=asmb787
 VBMC_DESC="Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP (NC-SI responder)"
 
-VBMC_DIR=/Users/zen/phd/tmp/asmb787                          # scratch: artifacts + console log + fifo
-PROJ_DIR=/Volumes/yyy/phd/bmc/advantech/asmb787-virtual      # scripts + docs (git-tracked)
+# paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"      # boxes/asmb787/ (scripts live here)
+VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work}"   # artifacts + console log + fifo (build.sh writes here)
 
 # Loopback + high ports (5xxx is cray's; asmb787 uses 6xxx to avoid collision).
 VBMC_IP=127.0.0.1
@@ -44,8 +45,8 @@ IPMI_PORT=6623
 WEB_PORT=6443
 
 PIDF=/tmp/vbmc-asmb787.pid
-LOG=/Users/zen/phd/tmp/asmb787/svc.log
-SOCK=/Users/zen/phd/tmp/asmb787/cin        # fifo: echo 'cmd' > "$SOCK" drives the console
+LOG="$VBMC_DIR/svc.log"
+SOCK="$VBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
 # boot: background the service boot (real init). ~2 min cold boot to login.
 vbmc_boot() {
