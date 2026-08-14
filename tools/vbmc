@@ -71,7 +71,7 @@ VERB="${1:-status}"; [ $# -gt 0 ] && shift
 
 running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's IPMI port
   local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
-  p=$(pgrep -f "hostfwd=udp:${VBMC_IP}:623-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+  p=$(pgrep -f "hostfwd=udp:${VBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
   return 1; }
 # IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
 # A box may override by defining vbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
@@ -158,7 +158,7 @@ case "$VERB" in
     # can misleadingly show "IDRAC10_UP" etc. long after the box is gone).
     if ! running >/dev/null 2>&1; then
       echo "${CR}$VBMC_NAME is DOWN${CZ} — no live console. Start it:  vbmc $VBMC_NAME start"; exit 1; fi
-    if declare -F vbmc_console >/dev/null; then vbmc_console
+    if declare -F vbmc_console >/dev/null; then vbmc_console "$@"
     elif [ -f "$LOG" ]; then tail -f "$LOG"
     else echo "$VBMC_NAME is up, but its console log is missing ($LOG) — try 'ssh' or restart"; fi ;;
   build) vbmc_build ;;

@@ -22,12 +22,12 @@
 #             vbmc asmb787 console '<cmd>'    (run one command over the console fifo)
 #   Redfish : WIP (needs NC-SI responder)     https://127.0.0.1:6443/redfish/v1/  (admin/superuser)
 #   IPMI    : WIP (needs NC-SI responder)     zipmi -H 127.0.0.1 -p 6623 -U admin -P superuser mc info
-VBMC_NAME=asmb787
+VBMC_NAME=advantech-asmb787
 VBMC_DESC="Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP (NC-SI responder)"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
-PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"      # boxes/asmb787/ (scripts live here)
-VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work}"   # artifacts + console log + fifo (build.sh writes here)
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
+VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"   # work/advantech-asmb787/
 
 # Loopback + high ports (5xxx is cray's; asmb787 uses 6xxx to avoid collision).
 VBMC_IP=127.0.0.1
@@ -44,35 +44,43 @@ SSH_PORT=6022
 IPMI_PORT=6623
 WEB_PORT=6443
 
-PIDF=/tmp/vbmc-asmb787.pid
+PIDF=/tmp/vbmc-advantech-asmb787.pid
 LOG="$VBMC_DIR/svc.log"
 SOCK="$VBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
-# boot: background the service boot (real init). ~2 min cold boot to login.
+# boot: build artifacts if missing, then background the service boot (real init). ~2 min to login.
 vbmc_boot() {
+  [ -f "$VBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$VBMC_DIR" >/dev/null 2>&1
+  rm -f "$VBMC_DIR/.loggedin"                          # fresh boot = at the login prompt
   BG=1 IP="$VBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" WD="$VBMC_DIR" \
-    bash "$PROJ_DIR/boot-asmb787-svc.sh" >/dev/null 2>&1
+    bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
   local n=0 qp=; while [ $n -lt 40 ]; do
-    qp=$(pgrep -f 'asmb787/mtdflash-run.bin' | head -1); [ -n "$qp" ] && break
+    qp=$(pgrep -f "hostfwd=udp:$VBMC_IP:$IPMI_PORT" | head -1); [ -n "$qp" ] && break
     sleep 0.3; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
-vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
+vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/build.sh" "$VBMC_DIR"; }
 
-# console: tail the serial log; pass a string arg to send it to the getty/shell over the fifo.
+# console: no args = live tail. With a command, AUTO-LOGIN once (getty at 'login:'), then run it.
+# Waits for each prompt (login:/Password:/shell) rather than fixed sleeps — robust under emulation load.
+_c_seen() { tail -n 8 "$LOG" 2>/dev/null | grep -q "$1"; }           # is $1 near the end of the console log?
+_c_wait() { local t=0; until _c_seen "$1" || [ $t -ge "${2:-20}" ]; do sleep 1; t=$((t+1)); done; _c_seen "$1"; }
 vbmc_console() {
-  if [ $# -gt 0 ]; then printf '%s\n' "$*" > "$SOCK"; sleep 1; tail -20 "$LOG"; else tail -f "$LOG"; fi
-}
-# web/ipmi: WIP until the NC-SI responder lands; report honestly rather than hang.
-vbmc_web() {
-  if curl -sk --max-time 6 "https://$VBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"v1"'; then
-    echo "asmb787 Redfish: UP (https://$VBMC_IP:$WEB_PORT/redfish/v1/)"
-  else
-    echo "asmb787 Redfish: WIP — ext net needs the NC-SI responder (fake NIC). Use: vbmc asmb787 console"
+  if [ $# -eq 0 ]; then tail -f "$LOG"; return; fi
+  if [ ! -f "$VBMC_DIR/.loggedin" ]; then
+    printf '\n' > "$SOCK"                                             # nudge a fresh login: prompt
+    if _c_wait 'login:' 30; then
+      printf '%s\n' "$SSH_USER" > "$SOCK"
+      _c_wait 'Password:' 15 && printf '%s\n' "$SSH_PW" > "$SOCK"
+    fi
+    _c_wait '# ' 15 && touch "$VBMC_DIR/.loggedin" || { echo "console: login didn't settle — retry the command"; return 1; }
   fi
+  printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$LOG"
 }
-vbmc_ipmi()        { echo "asmb787 IPMI: WIP — ext RMCP+ needs the NC-SI responder. Use: vbmc asmb787 console"; return 1; }
-vbmc_ipmi_health() { echo "no answer (ext net WIP — NC-SI responder pending; console works)"; return 1; }
-vbmc_ssh()         { echo "asmb787 ssh: use the console — vbmc asmb787 console (login sysadmin/superuser)"; return 1; }
+# web/ipmi/ssh: this box is CONSOLE-ONLY (older AMI kernel can't complete NC-SI link-up under qemu).
+vbmc_web()         { echo "$VBMC_NAME: console-only box — no external Redfish. Use:  vbmc $VBMC_NAME console"; return 1; }
+vbmc_ipmi()        { echo "$VBMC_NAME: console-only box — no external IPMI.    Use:  vbmc $VBMC_NAME console"; return 1; }
+vbmc_ipmi_health() { echo "console-only (no external IPMI — NC-SI kernel wall); the console works"; return 1; }
+vbmc_ssh()         { echo "$VBMC_NAME: console-only box — no sshd reachable.   Use:  vbmc $VBMC_NAME console"; return 1; }
 
 VBMC_READY_GREP='login:'

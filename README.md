@@ -18,26 +18,31 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-| Box | Vendor / stack | SoC → QEMU machine | Access that works | Console / creds |
-|-----|----------------|--------------------|-------------------|------------------|
-| **asmb787** | Advantech · AMI MegaRAC SP-X 4.0 | AST2600 → `ast2600-evb` | console (full stack) | ttyS4 · `sysadmin`/`superuser` · *ext net blocked, see writeup* |
-| **cray** | HPE Cray XD670 · MegaRAC SP-X | AST2600 → `ast2600-evb` | IPMI 2.0 RMCP+ ✓ · authed Redfish ✓ | ttyS4 · IPMI `admin`/`superuser`, console `sysadmin`/`superuser` |
-| **x14** | Supermicro · OpenBMC | AST2600 → `ast2600-evb` | ssh ✓ · remote Redfish ✓ · IPMI ◑ | socket · `ADMIN`/`ADMIN` (uid 10000+sudo), root `0penBmc` |
-| **idrac9** | Dell · iDRAC9 | NPCM750 → `npcm750-evb` | ssh root ✓ · IPMI RMCP+ ✓ · Redfish (local) ✓ | ttyS1 · root key + factory IPMIKey; racadm not ipmitool |
-| **idrac10** | Dell · iDRAC10 | NPCM845 → `npcm845-evb` | IPMI RMCP+ ✓ (`IPMI_T≥25`) · console (cold) ✓ | socat serial · factory IPMIKey (`-K`) |
-| **gb200** | NVIDIA GB200NVL · OpenBMC | AST2600 → `gb200nvl-bmc` | OEM IPMI (NetFn 0x3C) — BIOS-pwd leak | — |
-| **evb-openbmc** | vanilla OpenBMC (baseline) | AST2600 → `ast2600-evb` | ssh + Redfish + IPMI-LAN ✓ | Mfr 0 baseline for diffing OEM builds |
+`vbmc list` shows these; run any with `vbmc <name> start`. Only **advantech-asmb787** is turnkey from a
+clone (its firmware ships here); the rest are reference recipes (bring firmware via `download-fw.sh`).
 
-Live-measured; some interfaces are partial (◑) under emulation. Full per-box detail:
-[docs/zoo-lessons.md](docs/zoo-lessons.md).
+| `vbmc` name | Description | From a clone? |
+|-------------|-------------|:-------------:|
+| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey |
+| **megarac-hpe** | HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser) | recipe |
+| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot | recipe |
+| **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
+| **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes | recipe |
+| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | recipe |
+| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | recipe |
 
-## Quickstart (asmb787, the fully-included example)
+Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
+
+## Quickstart
+
+Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**. The short version:
 
 ```bash
 # deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc && pipx install jefferson
-./boxes/asmb787/build.sh                       # firmware -> kernel/dtb/rootfs/mtdflash  (~35s)
-WD=./work BG=1 ./boxes/asmb787/boot-asmb787-svc.sh
-tail -f ./work/svc.log                          # ~2 min -> login: sysadmin / superuser (uid 0)
+export PATH="$PWD/tools:$PATH"
+./build.sh                                  # build every ready box (~35s) -> work/<box>/
+vbmc advantech-asmb787 start                # boot it (~2 min)
+vbmc advantech-asmb787 console 'uname -a; id'   # auto-logs-in (sysadmin/superuser = root), runs the cmd
 ```
 
 Other boxes ship their **boot/build/restore/snapshot recipes** + findings docs under `boxes/<name>/`.
@@ -55,9 +60,10 @@ firmware the vendors distribute publicly and anonymously — the script just aut
 ## Layout
 
 ```
+build.sh      build every ready box's boot artifacts into work/<box>/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), vbmc (the dispatcher)
 boxes/<name>/ per-box vbmc.box + boot/build/restore/snapshot scripts + findings docs
-docs/         from-firmware-to-bare-metal.md (asmb787 deep-dive) · zoo-lessons.md (cross-box patterns)
+docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box)
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     asmb787 image (fits) + download-fw.sh to fetch the big Dell/Supermicro ones from the vendors
 ```
