@@ -1,0 +1,77 @@
+# vbmc.box — virtual-BMC descriptor for "asmb787" (Advantech ASMB-787 = AMI MegaRAC SP-X 4.0 / AST2600).
+#
+# WHAT: `vbmc asmb787 <verb>` drives the virtual Advantech ASMB-787 BMC. qemu ast2600-evb (armv7l),
+#       Linux 5.4.11-ami MegaRAC SP-X 4.0. Rootfs (squashfs) boots as a RAM disk; /conf, /usr/local/www,
+#       /dre mount from the ORIGINAL 64MB NOR image via mtdparts whose mtdblock NUMBERS match the
+#       firmware's /etc/dupfstab. Console on ttyS4.
+# WHY:  first Advantech box in the zoo; sibling of the HPE Cray XD670 (same AMI SP-X / ast2600evb_ami
+#       platform). Unpacked from encrypted_ASMB-787_20220912.ima_enc ("encrypted" is a misnomer — it
+#       is plain XZ-SquashFS; see ~/phd/bin/unpack-ami).
+#
+# STATUS (2026-08-14): CONSOLE-GREEN. Full MegaRAC userland boots (IPMIMain stable, redis, lighttpd,
+#   Redfish, event/task services). Root console login works. The cray IPMIMain fixes ported clean
+#   (qemu-patch-rootfs.sh: /conf/BMC symlink + IPMI.conf hw-trim -> no MsgHndlr SIGSEGV/reboot loop).
+#   EXTERNAL NET = WIP: the 5.4.11-ami ftgmac won't enable its qemu TX/RX path without completing the
+#   NC-SI enable sequence (qemu ast2600 slirp has no NC-SI responder; cray's newer 5.4.184 kernel forces
+#   the MAC up regardless, this older one does not). Confirmed: fixed-link brings carrier up but ping to
+#   the slirp gateway = 100% loss / TX errors. Fix pending = a socket-netdev NC-SI responder ("fake NIC").
+#   So Redfish/IPMI over host ports are NOT reachable yet — use the console.
+#
+# ACCESS:
+#   Console : vbmc asmb787 console            (serial ttyS4; login sysadmin / superuser -> uid 0 root)
+#             vbmc asmb787 console '<cmd>'    (run one command over the console fifo)
+#   Redfish : WIP (needs NC-SI responder)     https://127.0.0.1:6443/redfish/v1/  (admin/superuser)
+#   IPMI    : WIP (needs NC-SI responder)     zipmi -H 127.0.0.1 -p 6623 -U admin -P superuser mc info
+VBMC_NAME=asmb787
+VBMC_DESC="Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP (NC-SI responder)"
+
+VBMC_DIR=/Users/zen/phd/tmp/asmb787                          # scratch: artifacts + console log + fifo
+PROJ_DIR=/Volumes/yyy/phd/bmc/advantech/asmb787-virtual      # scripts + docs (git-tracked)
+
+# Loopback + high ports (5xxx is cray's; asmb787 uses 6xxx to avoid collision).
+VBMC_IP=127.0.0.1
+VBMC_HOST=asmb787bmc
+VBMC_HINT='vbmc asmb787 console   (login sysadmin/superuser; ext Redfish/IPMI WIP — NC-SI responder)'
+IPMI_USER=admin
+IPMI_PW=superuser
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=20
+SSH_USER=sysadmin
+SSH_PW=superuser
+SSH_PORT=6022
+IPMI_PORT=6623
+WEB_PORT=6443
+
+PIDF=/tmp/vbmc-asmb787.pid
+LOG=/Users/zen/phd/tmp/asmb787/svc.log
+SOCK=/Users/zen/phd/tmp/asmb787/cin        # fifo: echo 'cmd' > "$SOCK" drives the console
+
+# boot: background the service boot (real init). ~2 min cold boot to login.
+vbmc_boot() {
+  BG=1 IP="$VBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" WD="$VBMC_DIR" \
+    bash "$PROJ_DIR/boot-asmb787-svc.sh" >/dev/null 2>&1
+  local n=0 qp=; while [ $n -lt 40 ]; do
+    qp=$(pgrep -f 'asmb787/mtdflash-run.bin' | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
+}
+vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
+
+# console: tail the serial log; pass a string arg to send it to the getty/shell over the fifo.
+vbmc_console() {
+  if [ $# -gt 0 ]; then printf '%s\n' "$*" > "$SOCK"; sleep 1; tail -20 "$LOG"; else tail -f "$LOG"; fi
+}
+# web/ipmi: WIP until the NC-SI responder lands; report honestly rather than hang.
+vbmc_web() {
+  if curl -sk --max-time 6 "https://$VBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"v1"'; then
+    echo "asmb787 Redfish: UP (https://$VBMC_IP:$WEB_PORT/redfish/v1/)"
+  else
+    echo "asmb787 Redfish: WIP — ext net needs the NC-SI responder (fake NIC). Use: vbmc asmb787 console"
+  fi
+}
+vbmc_ipmi()        { echo "asmb787 IPMI: WIP — ext RMCP+ needs the NC-SI responder. Use: vbmc asmb787 console"; return 1; }
+vbmc_ipmi_health() { echo "no answer (ext net WIP — NC-SI responder pending; console works)"; return 1; }
+vbmc_ssh()         { echo "asmb787 ssh: use the console — vbmc asmb787 console (login sysadmin/superuser)"; return 1; }
+
+VBMC_READY_GREP='login:'

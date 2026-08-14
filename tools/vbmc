@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# vbmc — virtual-BMC control (init.d-style). One tool for every emulated BMC.
+#   vbmc                         list boxes + verbs (help)
+#   vbmc <box>                   status of that box
+#   vbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|build|net
+# Boxes are described by vbmc.box files (register their paths in REGISTRY below).
+set -u
+ZIPMI="$HOME/phd/src/zipmi-git"
+
+# --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
+# CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
+if [ -t 1 ]; then
+  CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CZ=$'\e[0m'
+else CG=; CR=; CP=; CC=; CZ=; fi
+
+# --- registry: add a vbmc.box path per virtual BMC -----------------------------------------
+REGISTRY=(
+  /Volumes/yyy/phd/bmc/dell/idrac9-virtual/vbmc.box
+  /Volumes/yyy/phd/bmc/dell/idrac10-virtual/vbmc.box
+  /Volumes/yyy/phd/bmc/supermicro/x14sbsc/vbmc.box
+  /Volumes/yyy/phd/bmc/gb200nvl-build/vbmc.box
+  /Volumes/yyy/phd/bmc/evb-ast2600-build/vbmc.box
+  /Volumes/yyy/phd/bmc/HP/cray/xd670-virtual/vbmc.box
+  /Volumes/yyy/phd/bmc/advantech/asmb787-virtual/vbmc.box
+  # /Volumes/yyy/phd/bmc/HP/ilo5/.../vbmc.box
+)
+
+boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${VBMC_NAME:-}" ); }
+find_box(){ local want="$1" f; for f in "${REGISTRY[@]}"; do [ -f "$f" ] && [ "$(boxname_of "$f")" = "$want" ] && { echo "$f"; return 0; }; done; return 1; }
+
+usage(){
+  echo "vbmc — virtual-BMC control"
+  echo "usage: vbmc <box> <verb> [args]"
+  echo
+  echo "boxes:"
+  local f n d; for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
+    ( . "$f" 2>/dev/null; printf "  %-10s %s\n" "$VBMC_NAME" "${VBMC_DESC:-}" ); done
+  echo
+  echo "  (use 'all' as the box to run a verb across every box:  vbmc all status)"
+  echo "  (just the names:  vbmc list   |   vbmc -l)"
+  echo
+  echo "verbs:"
+  echo "  start [--build][--no-web]   boot (detached); binds the real IP:{22,443,623}; web auto-starts"
+  echo "  stop              kill the QEMU process"
+  echo "  restart           stop then start"
+  echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
+  echo "  ssh [cmd]         root shell into the box"
+  echo "  ipmi <cmd...>     authenticated zipmi (e.g. vbmc idrac9 ipmi mc info)"
+  echo "  web               bring up httpd + Redfish"
+  echo "  console           live console (box must be up): interactive serial login on"
+  echo "                    boxes with a console (megarac-hpe, nvidia-obmc); else tail -f the log"
+  echo "  build             rebuild the boot image"
+  echo "  rename <newname>  rename the box (dispatch name + host alias; qemu machine/image untouched)"
+}
+
+[ $# -eq 0 ] && { usage; exit 0; }
+BOX="$1"; shift
+# `vbmc list` / `vbmc -l` — just the box names, one per line (no status). For scripting/quick recall.
+if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
+  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] && echo "$n"; done
+  exit 0
+fi
+# `vbmc all [verb]` / `vbmc ls` — run the verb (default status) across every registered box.
+if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
+  allverb="${1:-status}"
+  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
+    n="$(boxname_of "$f")"; [ -n "$n" ] || continue
+    echo "===== ${CC}$n${CZ} ====="; "$0" "$n" "$allverb" 2>&1; echo
+  done
+  exit 0
+fi
+BF="$(find_box "$BOX")" || { echo "vbmc: unknown box '$BOX'"; echo; usage; exit 2; }
+# shellcheck disable=SC1090
+. "$BF"
+VERB="${1:-status}"; [ $# -gt 0 ] && shift
+
+running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's IPMI port
+  local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
+  p=$(pgrep -f "hostfwd=udp:${VBMC_IP}:623-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+  return 1; }
+# IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
+# A box may override by defining vbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
+Z(){ if declare -F vbmc_ipmi >/dev/null; then vbmc_ipmi "$@"; else
+  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$VBMC_IP" -p 623 -U "$IPMI_USER" -K "$IPMI_KEY" $IPMI_OPTS -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
+
+case "$VERB" in
+  start)
+    if p=$(running); then echo "$VBMC_NAME already running (qemu $p)"; exit 0; fi
+    do_web=1
+    for a in "$@"; do case "$a" in
+      --build)  vbmc_build || exit 1;;
+      --no-web) do_web=0;;
+    esac; done
+    # vbmc_boot self-elevates (sudo), sets the lo0 alias + /etc/hosts, and binds $VBMC_IP:{22,443,623}
+    # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
+    qp=$(vbmc_boot) || { echo "boot failed"; exit 1; }
+    echo "$qp" > "$PIDF"
+    echo "$VBMC_NAME started: qemu pid $qp  →  $VBMC_HOST ($VBMC_IP)   console -> $LOG"
+    # auto-bring-up web once SSH is reachable (box needs ~6-15 min to boot). --no-web skips.
+    if [ "$do_web" = 1 ]; then
+      nohup bash -c '. "'"$BF"'"; qp="'"$qp"'"
+        for i in $(seq 1 240); do
+          ps -p "$qp" >/dev/null 2>&1 || exit
+          if vbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; vbmc_web; exit; fi
+          sleep 8
+        done' >/tmp/vbmc-$VBMC_NAME-web.log 2>&1 &
+    fi
+    echo "  watch:  vbmc $VBMC_NAME status -f   (follow until READY; --build rebuild, --no-web skip)" ;;
+  stop)
+    if p=$(running); then { sudo kill "$p" 2>/dev/null || kill "$p"; } && echo "$VBMC_NAME stopped (killed qemu $p)"; else echo "$VBMC_NAME not running"; fi ;;
+  restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
+  status)
+    _follow=0; [ "${1:-}" = "-f" ] && _follow=1
+    while :; do
+      if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
+      else echo "QEMU      : ${CR}DOWN${CZ} — vbmc $VBMC_NAME start"; exit 1; fi
+      for pr in "22:ssh" "443:web"; do
+        nc -z -G1 "$VBMC_IP" "${pr%%:*}" 2>/dev/null && s="${CG}open${CZ}" || s="${CR}closed${CZ}"
+        echo "port ${pr%%:*} (${pr##*:}) : $s"; done
+      echo "port 623 (ipmi): udp (no tcp probe)"
+      _sshok=0; printf "SSH       : "; if timeout -s KILL 18 bash -c '. "'"$BF"'"; vbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then echo "${CG}OK${CZ} (vbmc $VBMC_NAME ssh)"; _sshok=1; else echo "${CR}no${CZ} (booting? ~6-15min)"; fi
+      _rakpok=0; printf "RAKP/IPMI : "
+      if declare -F vbmc_ipmi_health >/dev/null; then
+        if vbmc_ipmi_health; then _rakpok=1; fi   # box prints its own line + returns 0 on OK
+      else
+        r=$(Z mc info); if echo "$r"|grep -q Manufacturer; then echo "${CG}AUTH OK${CZ} ($(echo "$r"|grep -i 'Firmware Rev'|tr -s ' '))"; _rakpok=1; elif echo "$r"|grep -q 0x0d; then echo "${CR}listening, 0x0d${CZ} (fresh boot needed)"; else echo "${CR}no answer${CZ} (fullfw warming/down)"; fi
+      fi
+      printf "Redfish   : "; timeout -s KILL 8 curl -sk https://$VBMC_IP/redfish/ 2>/dev/null | grep -q '"v1"' && echo "${CG}HTTPS serving${CZ} (https://$VBMC_HOST/redfish/)" || echo "${CR}down${CZ} (vbmc $VBMC_NAME web)"
+      # NC-SI: is the sideband stack built in, and is a channel live? (config + dmesg over the console)
+      # Empty dmesg != "no stack": CONFIG_NET_NCSI=y means the stack exists but no netdev registered a
+      # channel (qemu user-net has no NC-SI responder). Probe the kernel config to tell those apart.
+      printf "NC-SI     : "
+      if [ "$_sshok" = 1 ]; then
+        _ncsi=$(timeout -s KILL 12 bash -c '. "'"$BF"'"; vbmc_ssh '\''echo "CFG=$(zcat /proc/config.gz 2>/dev/null | grep -c "^CONFIG_NET_NCSI=y")"; dmesg 2>/dev/null | grep -i ncsi | tail -4'\''' 2>/dev/null)
+        _cfg=$(echo "$_ncsi" | sed -n 's/^CFG=//p'); _dm=$(echo "$_ncsi" | grep -iv '^CFG=')
+        if echo "$_dm" | grep -qiE 'interface up|channel.*(registered|found)|configured'; then echo "${CG}LIVE${CZ} ($(echo "$_dm" | grep -oiE 'eth[0-9]' | tail -1))"
+        elif echo "$_dm" | grep -qi 'No channel found'; then echo "${CG}stack up${CZ}, NO channel (no responder — ncsi-slirp closes this)"
+        elif [ "${_cfg:-0}" != 0 ]; then echo "${CG}built-in${CZ}, idle — no channel (qemu has no NC-SI responder)"
+        else echo "${CR}n/a${CZ} (no NC-SI stack)"; fi
+      else echo "${CR}n/a${CZ} (ssh down)"; fi
+      printf "Net (IP)  : "; if ifconfig lo0 2>/dev/null | grep -q "\b${VBMC_IP}\b"; then
+        # copy-paste access hint. Each box declares VBMC_HINT with its own working creds
+        # (all boxes ship factory-default creds by design — this is a local research lab).
+        _hint="${VBMC_HINT:-ssh root@$VBMC_HOST | zipmi -H $VBMC_HOST | curl -k https://$VBMC_HOST/redfish/}"
+        if [ -n "$CP" ]; then   # purple the creds (values after -p/-P/-U/-K/-u, and user@); cyan the host
+          _hint=$(printf '%s' "$_hint" | sed -E \
+            -e "s/(-[pPUKu] )([^ ]+)/\1${CP}\2${CZ}/g" \
+            -e "s/([A-Za-z0-9_]+)@/${CP}\1${CZ}@/g" \
+            -e "s/${VBMC_HOST}/${CC}${VBMC_HOST}${CZ}/g")
+        fi
+        echo "${CC}$VBMC_HOST${CZ} = ${CP}$VBMC_IP${CZ}  [ $_hint ]"
+      else echo "not mapped (box is down — 'vbmc $VBMC_NAME start' binds the IP+ports)"; fi
+      [ "$_follow" = 0 ] && break
+      { [ "$_sshok" = 1 ] && [ "$_rakpok" = 1 ]; } && { echo "==== READY:  ssh root@$VBMC_HOST  |  zipmi -H $VBMC_HOST ===="; break; }
+      sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
+    done ;;
+  ssh)   vbmc_ssh "$@" ;;
+  ipmi)  [ $# -eq 0 ] && { echo "usage: vbmc $VBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
+  web)   vbmc_web ;;
+  console)
+    # console = a window on the LIVE console. If the box is DOWN, say so — do NOT
+    # replay the stale $LOG from the last run (which is bring-up/restore output and
+    # can misleadingly show "IDRAC10_UP" etc. long after the box is gone).
+    if ! running >/dev/null 2>&1; then
+      echo "${CR}$VBMC_NAME is DOWN${CZ} — no live console. Start it:  vbmc $VBMC_NAME start"; exit 1; fi
+    if declare -F vbmc_console >/dev/null; then vbmc_console
+    elif [ -f "$LOG" ]; then tail -f "$LOG"
+    else echo "$VBMC_NAME is up, but its console log is missing ($LOG) — try 'ssh' or restart"; fi ;;
+  build) vbmc_build ;;
+  snapshot) declare -F vbmc_snapshot >/dev/null && vbmc_snapshot "$@" || { echo "vbmc: '$VBMC_NAME' has no snapshot support"; exit 2; } ;;
+  restore)  declare -F vbmc_restore  >/dev/null && vbmc_restore  "$@" || { echo "vbmc: '$VBMC_NAME' has no restore support"; exit 2; } ;;
+  rename)
+    new="${1:-}"; old="$VBMC_NAME"
+    [ -n "$new" ] || { echo "usage: vbmc $old rename <newname>"; exit 2; }
+    [[ "$new" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "vbmc: bad name '$new' (allowed: A-Za-z0-9_-)"; exit 2; }
+    [ "$new" = "$old" ] && { echo "vbmc: already named '$old'"; exit 0; }
+    find_box "$new" >/dev/null && { echo "vbmc: a box named '$new' already exists"; exit 2; }
+    # Surgical: only identity fields. NEVER the qemu machine (ast2600-evb) or image (evb-ast2600.static.mtd),
+    # which also contain the name substring — perl \Q..\E + line anchors keep those untouched.
+    perl -i -pe "
+      s/^VBMC_NAME=.*/VBMC_NAME=$new/;
+      s/^VBMC_HOST=\Q$old\E\$/VBMC_HOST=$new/;
+      if (/^(PIDF|LOG|SOCK)=/) { s/vbmc-\Q$old\E/vbmc-$new/ }
+      if (/^VBMC_HINT=/)       { s/\b\Q$old\E\b/$new/g }
+    " "$BF" || { echo "vbmc: rename edit failed"; exit 1; }
+    # Swap the /etc/hosts alias if it used the old name (box re-adds the new one on next start).
+    [ "${VBMC_HOST:-}" = "$old" ] && sudo perl -i -pe "s/\b\Q$old\E\b/$new/g if /^\Q$VBMC_IP\E\s/" /etc/hosts 2>/dev/null
+    echo "renamed '$old' -> '$new'  ($BF)"
+    running >/dev/null 2>&1 && echo "  box is running — 'vbmc $new restart' to refresh its scratch paths/hosts"
+    echo "  try:  vbmc $new status" ;;
+  *) echo "vbmc: unknown verb '$VERB'"; echo; usage; exit 2 ;;
+esac
