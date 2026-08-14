@@ -13,17 +13,12 @@ if [ -t 1 ]; then
   CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CZ=$'\e[0m'
 else CG=; CR=; CP=; CC=; CZ=; fi
 
-# --- registry: add a vbmc.box path per virtual BMC -----------------------------------------
-REGISTRY=(
-  /Volumes/yyy/phd/bmc/dell/idrac9-virtual/vbmc.box
-  /Volumes/yyy/phd/bmc/dell/idrac10-virtual/vbmc.box
-  /Volumes/yyy/phd/bmc/supermicro/x14sbsc/vbmc.box
-  /Volumes/yyy/phd/bmc/gb200nvl-build/vbmc.box
-  /Volumes/yyy/phd/bmc/evb-ast2600-build/vbmc.box
-  /Volumes/yyy/phd/bmc/HP/cray/xd670-virtual/vbmc.box
-  /Volumes/yyy/phd/bmc/advantech/asmb787-virtual/vbmc.box
-  # /Volumes/yyy/phd/bmc/HP/ilo5/.../vbmc.box
-)
+# --- registry: every boxes/<name>/vbmc.box in this repo (relative to this script) ----------
+# In this public repo, only 'asmb787' is fully runnable (its firmware + relocatable paths ship
+# here); the other box descriptors are reference recipes that point at the author's artifacts.
+_SELF="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_REPO="$(cd "$_SELF/.." && pwd)"
+REGISTRY=( "$_REPO"/boxes/*/vbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${VBMC_NAME:-}" ); }
 find_box(){ local want="$1" f; for f in "${REGISTRY[@]}"; do [ -f "$f" ] && [ "$(boxname_of "$f")" = "$want" ] && { echo "$f"; return 0; }; done; return 1; }

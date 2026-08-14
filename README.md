@@ -7,6 +7,9 @@ RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical se
 This is the working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
 skill so others can reproduce it on their own images.
 
+> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → build → run the `asmb787` box in
+> three commands.
+
 > **Private on purpose.** It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
 > aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the

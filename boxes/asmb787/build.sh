@@ -13,7 +13,7 @@
 #        python3, dtc (optional). tools/unpack-ami must be on PATH or alongside.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"          # boxes/asmb787 -> repo root
 FW="$ROOT/firmware/encrypted_ASMB-787_20220912.ima_enc"
 WD="${1:-${WD:-$ROOT/work}}"
 UNPACK="$ROOT/tools/unpack-ami"
