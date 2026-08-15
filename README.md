@@ -18,18 +18,19 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-`vbmc list` shows these; run any with `vbmc <name> start`. Only **advantech-asmb787** is turnkey from a
-clone (its firmware ships here); the rest are reference recipes (bring firmware via `download-fw.sh`).
+`vbmc list` shows these; run any with `vbmc <name> start`. **Two are turnkey from a clone**; the rest are
+reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
+(**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
 
 | `vbmc` name | Description | From a clone? |
 |-------------|-------------|:-------------:|
-| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey |
+| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) |
+| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) |
 | **megarac-hpe** | HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser) | recipe |
 | **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot | recipe |
 | **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
 | **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes | recipe |
 | **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | recipe |
-| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | recipe |
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 
@@ -38,11 +39,13 @@ Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs
 Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**. The short version:
 
 ```bash
-# deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc && pipx install jefferson
+# deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc sshpass && pipx install jefferson
 export PATH="$PWD/tools:$PATH"
-./build.sh                                  # build every ready box (~35s) -> work/<box>/
-vbmc advantech-asmb787 start                # boot it (~2 min)
-vbmc advantech-asmb787 console 'uname -a; id'   # auto-logs-in (sysadmin/superuser = root), runs the cmd
+./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
+vbmc openbmc start             # boot vanilla OpenBMC (~2 min)
+vbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
+vbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
+vbmc openbmc web               # Redfish ServiceRoot
 ```
 
 Other boxes ship their **boot/build/restore/snapshot recipes** + findings docs under `boxes/<name>/`.
