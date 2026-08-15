@@ -5,7 +5,7 @@
 #   vbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|build|net
 # Boxes are described by vbmc.box files (register their paths in REGISTRY below).
 set -u
-ZIPMI="$HOME/phd/src/zipmi-git"
+ZIPMI="$HOME/phd/src/zipmi"
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
 # CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
