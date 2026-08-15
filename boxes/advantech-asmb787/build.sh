@@ -19,7 +19,8 @@ FW="$ROOT/firmware/encrypted_ASMB-787_20220912.ima_enc"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"       # -> work/advantech-asmb787/
 UNPACK="$ROOT/tools/unpack-ami"
 
-[ -f "$FW" ] || { echo "firmware not found: $FW" >&2; exit 1; }
+[ -f "$FW" ] || bash "$ROOT/firmware/download-fw.sh" advantech-asmb787   # fetch (vendor/mirror) if missing
+[ -f "$FW" ] || { echo "firmware not found and fetch failed: $FW" >&2; exit 1; }
 command -v unsquashfs >/dev/null || { echo "need squashfs-tools (unsquashfs/mksquashfs)"; exit 1; }
 command -v dumpimage  >/dev/null || { echo "need u-boot-tools (dumpimage)"; exit 1; }
 mkdir -p "$WD"; echo "[*] work dir: $WD"
