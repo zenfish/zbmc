@@ -33,7 +33,9 @@ R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 
 # --- FIX 1: seed /conf + /conf/BMC symlink, injected before each IPMIMain launch in ipmistack ------
 IPMISTACK="$R/etc/init.d/ipmistack"
-SEED='    mkdir -p /conf /var/tmp\n    if [ ! -f /conf/AMI ]; then\n        cp -a /etc/defconfig/* /conf/ 2>/dev/null\n        ln -sfn BMC1/ast2600evb_ami /conf/BMC\n        touch /conf/AMI\n    fi\n    { [ -f /tmp/devmap.xml ] || cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; }\n'
+# ALWAYS ensure the /conf/BMC symlink (NOT gated on /conf/AMI): the HPM's carved /conf already ships the
+# AMI sentinel, so a gated create is skipped -> IPMIMain SIGSEGVs. Seed defconfig once; ensure symlink always.
+SEED='    mkdir -p /conf /var/tmp\n    [ -f /conf/AMI ] || { cp -a /etc/defconfig/* /conf/ 2>/dev/null; touch /conf/AMI; }\n    [ -L /conf/BMC ] || ln -sfn BMC1/ast2600evb_ami /conf/BMC\n'
 # insert the seed block immediately before every "/usr/local/bin/IPMIMain --daemonize" line
 perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)}{${SEED}\$1\$2}g" "$IPMISTACK"
 
