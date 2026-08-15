@@ -55,10 +55,33 @@ overlay + 71 MB RAM state) fetched from the mirror, and `vbmc idrac10 start` doe
 
 ## iDRAC9 — one notch easier, one notch worse
 
-ARMv7 (NPCM750), so no aarch64 tax. But its on-chip GMAC/EMC **NULL-crashes** the kernel on link-up, so it
-falls back to **`-device usb-net`** — which works, but **does not re-enumerate after `-incoming`** (EHCI
-async URBs don't resume). So iDRAC9's warm restore comes back **network-dead**: the snapshot gives you the
-box for console/inspection, but external IPMI/ssh need a (flaky) cold boot. It's the awkward middle child.
+ARMv7 (NPCM750), so no aarch64 tax, and it **boots and networks fine cold** — you can ssh straight in.
+Its curse is narrow and specific: **the only NIC that works is the one that can't survive a warm restore.**
+The npcm750 offers three NICs and every one fails a different way (all live-verified, qemu 11.0.0):
+
+| NIC | binds in guest? | works cold? | survives `-incoming`? | how it fails |
+|-----|-----------------|-------------|-----------------------|--------------|
+| `usb-net` (cdc_ether → `usb0`) | yes | **yes** (ssh up in ~117 s) | **no** | EHCI async RX URBs don't resume; stock qemu marks it `.unmigratable=1`. A `net-selfheal` service in the initramfs bounces the iface on RX-stall — that loop exists *because* this path is fragile. |
+| on-chip EMC (`npcm7xx-emc` → `eth2`) | **yes** (probes clean, Generic PHY) | **no** | — | binds DOWN; the instant you bring it up and pass a packet: `BUG: spinlock bad magic … PC is at 0x0 … Kernel panic — Fatal exception in interrupt`. Dies in `ksoftirqd`, takes `usb0` down with it. |
+| on-chip GMAC (`npcm-gmac`) | no | — | — | driver hands phylink a NULL `validate` cb → `phylink_validate+0x18` PrefetchAbort, kernel jumps to 0 on link-up. |
+
+So iDRAC9's warm restore comes back **network-dead**: the snapshot is captured on `usb-net` (the only cold-
+working NIC), and `usb-net` is exactly the one that doesn't re-enumerate on resume. The on-chip NICs that
+*would* migrate cleanly (like iDRAC10's gmac does) either panic on traffic (EMC) or crash on link-up (GMAC).
+The snapshot gives you the box for console/inspection; external IPMI/ssh need a (flaky) cold boot. Awkward
+middle child.
+
+### Tested and ruled out: "was it a qemu regression? try qemu 9/10"
+
+A reasonable hunch — maybe an older qemu modelled the NPCM NICs differently and one of them survived
+migration. **It isn't a version regression.** I have qemu `9.1.1`, `10.0.2`, `10.0.3`, and `11.0.0` side by
+side; `-M npcm750-evb` attaches the **same four on-chip NICs on every one** (2× `npcm7xx-emc` + 2×
+`npcm-gmac`), and the EMC `spinlock bad magic → PC 0x0` panic reproduces regardless of qemu version. The
+`usb-net` `.unmigratable=1` flag has been a standing property across releases, not something that regressed.
+Downgrading qemu changes nothing — 10.0.3 and 11.0.0 present iDRAC9 identical hardware and the guest reacts
+identically. **The wall is guest-side** (kernel driver + DTB + an initramfs hardwired to the USB-CDC iface),
+so the real fix lives there, not in the qemu version: make an on-chip NIC pass traffic without panicking,
+then capture the snapshot on *that* NIC. Same effort on any qemu.
 
 ## Why `ipmitool` fails and only `zipmi -K` works
 
