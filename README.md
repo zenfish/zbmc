@@ -18,19 +18,19 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-`vbmc list` shows these; run any with `vbmc <name> start`. **Two are turnkey from a clone**; the rest are
+`vbmc list` shows these; run any with `vbmc <name> start`. **Three are turnkey from a clone**; the rest are
 reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
 (**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
 
 | `vbmc` name | Description | From a clone? |
 |-------------|-------------|:-------------:|
 | **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) |
+| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) |
 | **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) |
 | **megarac-hpe** | HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser) | recipe |
 | **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot | recipe |
 | **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
 | **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes | recipe |
-| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | recipe |
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 
