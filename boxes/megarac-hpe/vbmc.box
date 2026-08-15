@@ -10,7 +10,7 @@
 #   redfish : vbmc megarac-hpe web                    (curl -u admin:superuser https://127.0.0.1:5443/redfish/v1/Managers)
 #   console : vbmc megarac-hpe console 'id'           (serial ttyS4; auto-login sysadmin/superuser = root)
 VBMC_NAME=megarac-hpe
-VBMC_DESC="HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — console-green (sysadmin/superuser); IPMI/Redfish come up but cold-boot has an IPMIMain race (retry a start or two)"
+VBMC_DESC="HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — warm-snapshot restore; IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser)"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
@@ -31,15 +31,19 @@ PIDF=/tmp/vbmc-megarac-hpe.pid
 LOG="$VBMC_DIR/svc.log"
 SOCK="$VBMC_DIR/cin"
 
+# boot: restore the warm snapshot, verify IPMI answers; re-restore up to 3x. One qemu at a time.
 vbmc_boot() {
-  [ -f "$VBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$VBMC_DIR" >/dev/null 2>&1
+  [ -f "$VBMC_DIR/cray-snap.gz" ] || bash "$PROJ_DIR/build.sh" "$VBMC_DIR" >/dev/null 2>&1
   rm -f "$VBMC_DIR/.loggedin"
-  BG=1 IP="$VBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$VBMC_DIR" \
-    bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
-  local n=0 qp=; while [ $n -lt 40 ]; do
-    qp=$(pgrep -f "hostfwd=udp:$VBMC_IP:$IPMI_PORT" | head -1); [ -n "$qp" ] && break
-    sleep 0.3; n=$((n+1)); done
-  [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
+  local try qp
+  for try in 1 2 3; do
+    pkill -9 -f "$VBMC_DIR/cray-snap-flash.bin" 2>/dev/null; sleep 1
+    qp=$(BG=1 IP="$VBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$VBMC_DIR" \
+         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
+    sleep 6
+    if vbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then break; fi
+  done
+  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
 }
 vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/build.sh" "$VBMC_DIR"; }
 
