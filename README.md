@@ -7,8 +7,7 @@ RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical se
 This is the working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
 skill so others can reproduce it on their own images.
 
-> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → build → run the `asmb787` box in
-> three commands.
+> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `vbmc openbmc start`.
 
 > **Private on purpose.** It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
@@ -48,17 +47,16 @@ vbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
 vbmc openbmc web               # Redfish ServiceRoot
 ```
 
-Other boxes ship their **boot/build/restore/snapshot recipes** + findings docs under `boxes/<name>/`.
-The big/proprietary firmware (iDRAC DUPs, x14 128 MB image) exceeds GitHub's 100 MB/file limit, so it's
-**fetched from the vendors** rather than committed:
+No firmware is committed — `build.sh` fetches what a box needs via `firmware/download-fw.sh`:
 
 ```bash
-./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh idrac9
+./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh openbmc
 ```
 
-iDRAC9 pulls directly + checksum-verifies from `dl.dell.com`; iDRAC10 / x14 are JS/EULA-gated so the
-script prints the exact vendor page, filename, and expected SHA-256 to drop in and verify. All of it is
-firmware the vendors distribute publicly and anonymously — the script just automates it and pins hashes.
+Each image is tried at the **vendor's public download first** (iDRAC9 pulls direct + checksum-verifies
+from `dl.dell.com`), then falls back to the **project mirror at git.trouble.org**, and is **SHA-256
+verified** either way. The reference (non-turnkey) boxes under `boxes/<name>/` also ship their
+boot/restore/snapshot recipes + findings docs.
 
 ## Layout
 
@@ -68,7 +66,7 @@ tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), vbmc (the dispa
 boxes/<name>/ per-box vbmc.box + boot/build/restore/snapshot scripts + findings docs
 docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box)
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
-firmware/     asmb787 image (fits) + download-fw.sh to fetch the big Dell/Supermicro ones from the vendors
+firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
 ```
 
 ## What you'll learn from the docs
