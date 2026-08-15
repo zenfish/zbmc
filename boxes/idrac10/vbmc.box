@@ -1,119 +1,83 @@
-# vbmc.box — virtual-BMC descriptor for "idrac10" (Dell iDRAC10, Nuvoton NPCM845 / aarch64).
-# Sourced by the `vbmc` dispatcher (~/phd/bin/vbmc). Root-direct model: qemu runs as root and binds
-# the box's real IP + standard IPMI port (10.0.9.10:623) directly — no socat/high-port hop.
+# vbmc.box — Dell iDRAC10 (Nuvoton NPCM845 / aarch64), warm-snapshot restore box.
+#
+# WHAT: `vbmc idrac10 <verb>` restores a known-good iDRAC10 RAM snapshot (qemu -incoming) rather than
+#       cold-booting (which is a dbus-broker socket lottery — see docs/why-dell-is-hard.md). The NPCM845
+#       gmac migrates cleanly, so IPMI + ssh + Redfish survive the restore.
+# TURNKEY: the snapshot bundle is fetched by build.sh from the mirror; pinned to qemu-system-aarch64 11.x.
+#
+# ACCESS:
+#   ipmi    : vbmc idrac10 ipmi mc info      (RMCP+ with the factory IPMIKey via zipmi -K — NOT a password)
+#   ssh     : vbmc idrac10 ssh 'racadm getsysinfo'   (root, key baked into the snapshot)
+#   racadm  : vbmc idrac10 racadm getsysinfo         (Dell CLI; remote uses the web password calvin)
 VBMC_NAME=idrac10
-VBMC_DESC="Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes"
-VBMC_DIR=/Volumes/yyy/phd/bmc/dell/idrac10-virtual
+VBMC_DESC="Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; IPMI (zipmi -K factory key) + ssh + Redfish"
 
-# Real IP + /etc/hosts name (idrac10 = 10.0.9.10 in the 10.0.9.x scheme). Ports are bound directly.
-VBMC_IP=10.0.9.10
-VBMC_HOST=drac10
-# copy-paste access hint shown by `vbmc status` (factory-default creds by design;
-# IPMI auth is the factory IPMIKey via -K, NOT a password; calvin is the ssh/redfish pw)
-VBMC_HINT='ssh root@drac10 | zipmi -H drac10 -U root -K 915F32F49A97456D0D6D66EEE5ED84C894B414AF (or -P calvin) | curl -k -u root:calvin https://drac10/redfish/'
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
 
-# IPMI/RAKP (zipmi). idrac10 RAKP uses cipher default; give it a longer per-op timeout (aarch64 is slow).
+VBMC_IP=127.0.0.1
+VBMC_HOST=idrac10
+SSH_USER=root
+SSH_PW=calvin
+SSH_PORT=7022
+WEB_PORT=7443
+IPMI_PORT=7623
 IPMI_USER=root
-IPMI_KEY=915F32F49A97456D0D6D66EEE5ED84C894B414AF   # first 20 bytes of the factory IPMIKey
-IPMI_OPTS=""
-IPMI_T=25   # aarch64 emulation is slow; <25 intermittently times out the RAKP handshake (measured 2026-07-15)
-
-# port vars (kept for the dispatcher; the box binds standard ports directly on VBMC_IP)
-SSH_PORT=22
-IPMI_PORT=623
-WEB_PORT=443
+IPMI_KEY=915F32F49A97456D0D6D66EEE5ED84C894B414AF   # 20-byte factory IPMIKey (fleet-shared; from the DUP)
+IPMI_T=30                                             # RMCP+ RAKP is slow under aarch64 emulation
+VBMC_HINT='vbmc idrac10 ipmi mc info  |  vbmc idrac10 ssh "racadm getsysinfo"  |  vbmc idrac10 racadm getsysinfo'
 
 PIDF=/tmp/vbmc-idrac10.pid
-LOG=/tmp/vbmc-idrac10-console.log
-SOCK=/tmp/vbmc-idrac10-serial.sock
-WORK="$HOME/phd/tmp/idrac10-virtual"; SERVE="$WORK/serve"
+LOG="$VBMC_DIR/svc.log"
 
-# boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
-# real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
+# zipmi resolver (iDRAC RMCP+ needs a raw 20-byte key via -K; ipmitool -P password can't do that).
+_zipmi() {
+  if python3 -c 'import zipmi' 2>/dev/null; then python3 -m zipmi.cli.zipmi "$@"
+  elif [ -d "$HOME/phd/src/zipmi" ]; then PYTHONPATH="$HOME/phd/src/zipmi" python3 -m zipmi.cli.zipmi "$@"
+  else echo "zipmi not found — iDRAC -K auth needs it (github.com/zenfish/... ). ssh/racadm still work."; return 127; fi
+}
+
+# boot: restore the snapshot, then verify IPMI answers; re-restore up to 3x (a migrated UDP socket can
+# resume silent). One qemu at a time — kill the prior before each attempt.
 vbmc_boot() {
-  cd "$VBMC_DIR" || return 1
-  for f in boot/Image.boot-patched boot/qemu-gmac.dtb img/sd.img shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
-    [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
+  [ -f "$VBMC_DIR/state.gz" ] || bash "$PROJ_DIR/build.sh" "$VBMC_DIR" >/dev/null 2>&1
+  local try qp
+  for try in 1 2 3; do
+    pkill -9 -f "$VBMC_DIR/overlay-frozen.qcow2" 2>/dev/null; sleep 1
+    qp=$(BG=1 IP="$VBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$VBMC_DIR" \
+         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
+    sleep 6
+    if _zipmi -H "$VBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -K "$IPMI_KEY" -t "$IPMI_T" mc info 2>/dev/null | grep -qi 'Manufacturer'; then break; fi
   done
-  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  $SUDO ifconfig lo0 alias "$VBMC_IP" up 2>/dev/null
-  grep -qE "[[:space:]]${VBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
-    echo "$VBMC_IP $VBMC_HOST $VBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  # FAST PATH: a warm snapshot exists -> restore it on the real IP:623 in ~seconds (skips the
-  # ~7min cold boot + dbus lottery + fullfw warm-up). Make one with: vbmc idrac10 snapshot.
-  if [ -z "${VBMC_COLD:-}" ] && [ -f "$WORK/ckpt/state.gz" ]; then
-    : > "$LOG"
-    # ponytail: restore+verify can take minutes (5 IPMI probes x up to 3 re-restores). Run it
-    # DETACHED like the cold path so `start` returns at once; `vbmc status -f` follows to READY.
-    # Redirect wraps the whole subshell so it can't hold the $(vbmc_boot) pipe open (bash gotcha).
-    ( set +x   # keep the caller's xtrace/PS4 out of the console log
-      bash "$VBMC_DIR/restore-idrac10.sh" "$IPMI_PORT" "$VBMC_IP"
-      grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
-    # report the qemu pid the moment it's up (restore launches it before verifying), then detach
-    local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$VBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
-    echo "$qp"
-    return 0
-  fi
-  mkdir -p "$WORK" "$SERVE"
-  # rebuild shm-shim + sync guest payloads
-  zig cc -shared -fPIC -o "$SERVE/shm-shim.so" shm-shim.c -target aarch64-linux-gnu -ldl -lpthread -O2 || return 1
-  cp shm-shim.so "$VBMC_DIR/shm-shim.so" 2>/dev/null || cp "$SERVE/shm-shim.so" shm-shim.so
-  cp boot-fullfw-guest.sh fake-journal udp-echo cfgdb-defaults.sql "$SERVE/" 2>/dev/null
-  cp prebind-v2 "$SERVE/prebind"
-  pkill -f "http.server 8091" 2>/dev/null
-  python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
-  : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
-  $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
-    -drive "id=rootsd,if=none,file=img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
-    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$VBMC_IP:623-:623,hostfwd=tcp:$VBMC_IP:22-:22,hostfwd=tcp:$VBMC_IP:443-:443,hostfwd=tcp:$VBMC_IP:5200-:5200,hostfwd=tcp:$VBMC_IP:5201-:5201" \
-    -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
-  # drive the bring-up in the background (needs root: the serial sock is root-owned)
-  ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1; $SUDO expect boot-idrac10.exp "$SOCK" ) >>"$LOG" 2>&1 &
-  # UDP-echo prime: boot-fullfw-guest.sh prints UDP_ECHO_READY then waits for a test packet on :623 to
-  # verify the UDP RX path (via the shm-shim) before starting fullfw. Send it, else fw.sh -> UDP_ECHO_TIMEOUT.
-  ( until grep -q UDP_ECHO_READY "$LOG" 2>/dev/null; do sleep 0.5; done
-    python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'HELLO_UDP_TEST',('$VBMC_IP',623))" 2>/dev/null || true ) >/dev/null 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$VBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
-  echo "$qp"
+  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
 }
-vbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
-# snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
-# Pays the dbus lottery ONCE; afterwards `vbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.
-vbmc_snapshot() { bash "$VBMC_DIR/boot-live-ckpt.sh" "${1:-4}"; }
-# restore: bring the warm snapshot up on the real IP:623 (what `start` does automatically when a snap exists).
-vbmc_restore()  { bash "$VBMC_DIR/restore-idrac10.sh" "$IPMI_PORT" "$VBMC_IP"; }
-# Serial console works on BOTH warm-restore and cold boot (the old "vmstate gap" was a wrong socket path:
-# the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
-# $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the
-# running box. qemu runs as root so the socket is root-owned -> sudo.
-#   vbmc idrac10 ssh          -> interactive root shell on the console
-#   vbmc idrac10 ssh <cmd...> -> run <cmd> on the console, print its stdout, propagate its exit code
-_vbmc_sock(){ local s; for s in $(ls -t "$WORK/ckpt/rserial.sock" "$SOCK" 2>/dev/null); do [ -S "$s" ] && { echo "$s"; return; }; done; }
+vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/build.sh" "$VBMC_DIR"; }
+
+vbmc_ipmi() { timeout -s KILL "$((IPMI_T+8))" _zipmi -H "$VBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -K "$IPMI_KEY" -t "$IPMI_T" "$@"; }
+vbmc_ipmi_health() {
+  if vbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then echo "AUTH OK (RMCP+ zipmi -K factory IPMIKey)"; return 0
+  else echo "no answer (restore still resuming? IPMI_T=$IPMI_T)"; return 1; fi
+}
 vbmc_ssh() {
-  command -v socat >/dev/null || { echo "socat missing"; return 1; }
-  local sk; sk="$(_vbmc_sock)"; [ -n "$sk" ] || { echo "no serial console — box up? (vbmc idrac10 status)"; return 1; }
-  local SUDO=; { [ -r "$sk" ] && [ -w "$sk" ]; } || { [ "$(id -u)" = 0 ] || SUDO="sudo -n"; }
-  [ $# -eq 0 ] && exec $SUDO socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$sk"   # interactive shell
-  $SUDO python3 - "$sk" "$*" <<'PY'
-import socket,sys,time,select,re
-sk,cmd=sys.argv[1],sys.argv[2]
-s=socket.socket(socket.AF_UNIX);s.connect(sk);s.setblocking(False)
-def send(b): s.send(b);time.sleep(0.2)
-send(b'\r\n'); send(("%s; echo __RC_$?__\r\n"%cmd).encode())
-buf=b'';end=time.time()+12
-while time.time()<end:
-    r,_,_=select.select([s],[],[],0.3)
-    if r:
-        try:d=s.recv(4096)
-        except BlockingIOError:continue
-        if d:buf+=d
-        if re.search(rb'__RC_\d+__',buf):break
-t=buf.decode('utf-8','replace'); m=re.search(r'__RC_(\d+)__',t)
-body=re.sub(r'^.*?echo __RC_\$\?__\r?\n','',t,count=1,flags=re.S)
-sys.stdout.write(re.split(r'__RC_\d+__',body)[0]); sys.exit(int(m.group(1)) if m else 1)
-PY
+  local o=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=25 -p "$SSH_PORT")
+  if command -v sshpass >/dev/null; then sshpass -p "$SSH_PW" ssh "${o[@]}" "$SSH_USER@$VBMC_IP" "$@"
+  else ssh "${o[@]}" "$SSH_USER@$VBMC_IP" "$@"; fi
 }
-vbmc_web()   { echo "idrac10 Redfish: P3 (run-p3-redfish.sh) — not wired into vbmc yet"; }
-# readiness marker in the console log (vbmc status greps IDRAC10_UP / IPMI_READY)
-VBMC_READY_GREP='IDRAC10_UP'
+# racadm: Dell's native CLI (web password 'calvin', NOT the IPMIKey). Prefer a local binary; else a
+# docker image (Colima: run `d-start` first); else the guest's own racadm over ssh (needs the full iDRAC
+# instrumentation up in the restored snapshot — this IPMI-focused ckpt may return RAC1135).
+vbmc_racadm() {
+  if command -v racadm >/dev/null; then racadm -r "$VBMC_IP:$WEB_PORT" -u "$SSH_USER" -p "$SSH_PW" "$@"
+  elif command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+    docker run --rm --network host "${RACADM_IMAGE:-idrac/racadm}" \
+      -r "$VBMC_IP:$WEB_PORT" -u "$SSH_USER" -p "$SSH_PW" "$@"
+  else vbmc_ssh "racadm $*"; fi
+}
+vbmc_web() {
+  if curl -sk --max-time 8 "https://$VBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then
+    echo "idrac10 Redfish: UP  (curl -sk https://$VBMC_IP:$WEB_PORT/redfish/v1/)"
+  else echo "idrac10 Redfish: not answering (this snapshot may be an IPMI/ssh state, not P3-redfish)"; fi
+}
+vbmc_console() { tail -f "$LOG"; }
+
+VBMC_READY_GREP='login'
