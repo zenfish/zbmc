@@ -1,0 +1,68 @@
+# vbmc.box — Supermicro X14 BMC (Phosphor OpenBMC / AST2600-ROT), warm-snapshot restore box.
+#
+# WHAT: `vbmc supermicro-x14 <verb>` restores a known-good X14 snapshot (qemu -incoming) captured in
+#       qemu-x14-svc mode (scripted daemons, no systemd), whose network survives the restore.
+# TURNKEY: snapshot bundle fetched by build.sh from the mirror; pinned to qemu-system-arm 11.x.
+#
+# ACCESS (creds = ADMIN / ADMIN):
+#   ssh     : vbmc supermicro-x14 ssh 'uname -a'      (uid 10000 + sudo; slow KEX, ConnectTimeout high)
+#   redfish : vbmc supermicro-x14 web                 (remote Redfish works; loopback is fine here)
+#   ipmi    : vbmc supermicro-x14 ipmi channel info 1 (RAKP auth OK; note mc/chassis often return 0xff)
+VBMC_NAME=supermicro-x14
+VBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — warm-snapshot restore — Redfish (full) + IPMI cipher-17 auth WORK (ADMIN:ADMIN); ssh KEX-resets over slirp (host-allow); mc info 0xff"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VBMC_DIR="${VBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
+
+VBMC_IP=127.0.0.1
+VBMC_HOST=x14
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+SSH_PORT=4022
+WEB_PORT=4443
+IPMI_PORT=4623
+IPMI_USER=ADMIN
+IPMI_PW=ADMIN
+IPMI_T=25
+VBMC_HINT='vbmc supermicro-x14 ssh "uname -a"  |  vbmc supermicro-x14 web  |  vbmc supermicro-x14 ipmi channel info 1   (ADMIN:ADMIN)'
+
+PIDF=/tmp/vbmc-supermicro-x14.pid
+LOG="$VBMC_DIR/svc.log"
+
+vbmc_boot() {
+  [ -f "$VBMC_DIR/svc-snap-full-working.gz" ] || bash "$PROJ_DIR/build.sh" "$VBMC_DIR" >/dev/null 2>&1
+  local try qp
+  for try in 1 2 3; do
+    pkill -9 -f "$VBMC_DIR/x14-ce0-64m.img" 2>/dev/null; sleep 1
+    qp=$(BG=1 IP="$VBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$VBMC_DIR" \
+         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
+    sleep 8
+    if curl -sk --max-time 6 "https://$VBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q "@odata"; then break; fi
+  done
+  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
+}
+vbmc_build() { WD="$VBMC_DIR" bash "$PROJ_DIR/build.sh" "$VBMC_DIR"; }
+
+# ssh: X14 password auth (ADMIN:ADMIN). Slow post-quantum KEX under emulation -> long ConnectTimeout.
+vbmc_ssh() {
+  local o=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -p "$SSH_PORT")
+  if command -v sshpass >/dev/null; then sshpass -p "$SSH_PW" ssh "${o[@]}" "$SSH_USER@$VBMC_IP" "$@"
+  else ssh "${o[@]}" "$SSH_USER@$VBMC_IP" "$@"; fi
+}
+# ipmi: X14 is cipher-17; RAKP auth works but mc/chassis/sensor often return 0xff (partial under emu).
+vbmc_ipmi() {
+  timeout -s KILL "$((IPMI_T+8))" ipmitool -I lanplus -C 17 -H "$VBMC_IP" -p "$IPMI_PORT" \
+    -U "$IPMI_USER" -P "$IPMI_PW" "$@" 2>&1
+}
+vbmc_ipmi_health() {   # channel info answers even when mc info = 0xff
+  if vbmc_ipmi channel info 1 2>/dev/null | grep -qiE 'Channel|Medium'; then echo "AUTH OK (RMCP+ cipher17 ADMIN:ADMIN; mc info may be 0xff)"; return 0
+  else echo "no answer (restore still resuming?)"; return 1; fi
+}
+vbmc_web() {
+  if curl -sk --max-time 8 "https://$VBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then
+    echo "supermicro-x14 Redfish: UP  (curl -sk https://$VBMC_IP:$WEB_PORT/redfish/v1/)"
+  else echo "supermicro-x14 Redfish: not answering yet (still resuming? ~10s)"; fi
+}
+vbmc_console() { tail -f "$LOG"; }
+
+VBMC_READY_GREP='login'
