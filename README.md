@@ -17,7 +17,7 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-`vbmc list` shows these; run any with `vbmc <name> start`. **Four are turnkey from a clone**; the rest are
+`vbmc list` shows these; run any with `vbmc <name> start`. **Five are turnkey from a clone**; the rest are
 reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
 (**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
 
@@ -28,7 +28,7 @@ reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmw
 | **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) |
 | **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) |
 | **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — builds+boots+console; IPMIMain cold-boot race (warm-snap next) | builds |
-| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot | recipe |
+| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN); ssh resets over slirp | ✅ turnkey (snap) |
 | **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
