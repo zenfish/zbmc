@@ -66,6 +66,7 @@ ref     – idrac9   (reference recipe — supply firmware + adapt boxes/idrac9/
 vbmc advantech-asmb787 start
 ```
 Boots the box in the background (builds first if needed). Takes ~2 minutes under emulation.
+(Cold boxes take ~2 min to services; warm-snapshot boxes like idrac10 / supermicro-x14 resume in ~15–30 s. A loaded host is slower.)
 
 ```bash
 vbmc advantech-asmb787 console 'uname -a; id'
