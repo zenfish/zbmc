@@ -105,49 +105,40 @@ case "$VERB" in
     if p=$(running); then { sudo kill "$p" 2>/dev/null || kill "$p"; } && echo "$VBMC_NAME stopped (killed qemu $p)"; else echo "$VBMC_NAME not running"; fi ;;
   restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
   status)
+    # -f follows until the box is READY, or BAILS on: qemu died, kernel panic in the log, or timeout.
+    # Uses the box's OWN ports (SSH_PORT/WEB_PORT/IPMI_PORT), not hardcoded 22/443/623.
     _follow=0; [ "${1:-}" = "-f" ] && _follow=1
+    _sp="${SSH_PORT:-22}"; _wp="${WEB_PORT:-443}"; _ip="${IPMI_PORT:-623}"
+    _t0=$(date +%s); _max="${VBMC_MAXWAIT:-300}"      # -f gives up after this many seconds
+    # panic/fail markers in the console log that mean "stop waiting, this boot is dead"
+    _panic() { [ -f "$LOG" ] && tail -n 400 "$LOG" 2>/dev/null | grep -qiE 'Kernel panic|Fatal exception|Cannot open root device|Attempted to kill init|Missing section footer'; }
     while :; do
       if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
       else echo "QEMU      : ${CR}DOWN${CZ} — vbmc $VBMC_NAME start"; exit 1; fi
-      for pr in "22:ssh" "443:web"; do
+      for pr in "$_sp:ssh" "$_wp:web"; do
         nc -z -G1 "$VBMC_IP" "${pr%%:*}" 2>/dev/null && s="${CG}open${CZ}" || s="${CR}closed${CZ}"
         echo "port ${pr%%:*} (${pr##*:}) : $s"; done
-      echo "port 623 (ipmi): udp (no tcp probe)"
-      _sshok=0; printf "SSH       : "; if timeout -s KILL 18 bash -c '. "'"$BF"'"; vbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then echo "${CG}OK${CZ} (vbmc $VBMC_NAME ssh)"; _sshok=1; else echo "${CR}no${CZ} (booting? ~6-15min)"; fi
-      _rakpok=0; printf "RAKP/IPMI : "
-      if declare -F vbmc_ipmi_health >/dev/null; then
-        if vbmc_ipmi_health; then _rakpok=1; fi   # box prints its own line + returns 0 on OK
-      else
-        r=$(Z mc info); if echo "$r"|grep -q Manufacturer; then echo "${CG}AUTH OK${CZ} ($(echo "$r"|grep -i 'Firmware Rev'|tr -s ' '))"; _rakpok=1; elif echo "$r"|grep -q 0x0d; then echo "${CR}listening, 0x0d${CZ} (fresh boot needed)"; else echo "${CR}no answer${CZ} (fullfw warming/down)"; fi
-      fi
-      printf "Redfish   : "; timeout -s KILL 8 curl -sk https://$VBMC_IP/redfish/ 2>/dev/null | grep -q '"v1"' && echo "${CG}HTTPS serving${CZ} (https://$VBMC_HOST/redfish/)" || echo "${CR}down${CZ} (vbmc $VBMC_NAME web)"
-      # NC-SI: is the sideband stack built in, and is a channel live? (config + dmesg over the console)
-      # Empty dmesg != "no stack": CONFIG_NET_NCSI=y means the stack exists but no netdev registered a
-      # channel (qemu user-net has no NC-SI responder). Probe the kernel config to tell those apart.
-      printf "NC-SI     : "
-      if [ "$_sshok" = 1 ]; then
-        _ncsi=$(timeout -s KILL 12 bash -c '. "'"$BF"'"; vbmc_ssh '\''echo "CFG=$(zcat /proc/config.gz 2>/dev/null | grep -c "^CONFIG_NET_NCSI=y")"; dmesg 2>/dev/null | grep -i ncsi | tail -4'\''' 2>/dev/null)
-        _cfg=$(echo "$_ncsi" | sed -n 's/^CFG=//p'); _dm=$(echo "$_ncsi" | grep -iv '^CFG=')
-        if echo "$_dm" | grep -qiE 'interface up|channel.*(registered|found)|configured'; then echo "${CG}LIVE${CZ} ($(echo "$_dm" | grep -oiE 'eth[0-9]' | tail -1))"
-        elif echo "$_dm" | grep -qi 'No channel found'; then echo "${CG}stack up${CZ}, NO channel (no responder — ncsi-slirp closes this)"
-        elif [ "${_cfg:-0}" != 0 ]; then echo "${CG}built-in${CZ}, idle — no channel (qemu has no NC-SI responder)"
-        else echo "${CR}n/a${CZ} (no NC-SI stack)"; fi
-      else echo "${CR}n/a${CZ} (ssh down)"; fi
-      printf "Net (IP)  : "; if ifconfig lo0 2>/dev/null | grep -q "\b${VBMC_IP}\b"; then
-        # copy-paste access hint. Each box declares VBMC_HINT with its own working creds
-        # (all boxes ship factory-default creds by design — this is a local research lab).
-        _hint="${VBMC_HINT:-ssh root@$VBMC_HOST | zipmi -H $VBMC_HOST | curl -k https://$VBMC_HOST/redfish/}"
-        if [ -n "$CP" ]; then   # purple the creds (values after -p/-P/-U/-K/-u, and user@); cyan the host
-          _hint=$(printf '%s' "$_hint" | sed -E \
-            -e "s/(-[pPUKu] )([^ ]+)/\1${CP}\2${CZ}/g" \
-            -e "s/([A-Za-z0-9_]+)@/${CP}\1${CZ}@/g" \
-            -e "s/${VBMC_HOST}/${CC}${VBMC_HOST}${CZ}/g")
-        fi
-        echo "${CC}$VBMC_HOST${CZ} = ${CP}$VBMC_IP${CZ}  [ $_hint ]"
-      else echo "not mapped (box is down — 'vbmc $VBMC_NAME start' binds the IP+ports)"; fi
+      echo "port $_ip (ipmi): udp (no tcp probe)"
+      _sshok=0; printf "SSH       : "
+      if timeout -s KILL 30 bash -c '. "'"$BF"'"; vbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then echo "${CG}OK${CZ}"; _sshok=1; else echo "${CR}no${CZ}"; fi
+      _rakpok=0; printf "IPMI      : "
+      if declare -F vbmc_ipmi_health >/dev/null; then vbmc_ipmi_health && _rakpok=1
+      else r=$(Z mc info 2>/dev/null); if echo "$r"|grep -qi Manufacturer; then echo "${CG}AUTH OK${CZ}"; _rakpok=1; else echo "${CR}no answer${CZ}"; fi; fi
+      _webok=0; printf "Redfish   : "
+      if timeout -s KILL 8 curl -sk "https://$VBMC_IP:$_wp/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then echo "${CG}UP${CZ} (https://$VBMC_IP:$_wp/redfish/v1/)"; _webok=1; else echo "${CR}down${CZ}"; fi
+      printf "Access    : "
+      _hint="${VBMC_HINT:-vbmc $VBMC_NAME ssh | vbmc $VBMC_NAME ipmi mc info}"
+      [ -n "$CP" ] && _hint=$(printf '%s' "$_hint" | sed -E -e "s/(-[pPUKu] )([^ ]+)/\1${CP}\2${CZ}/g" -e "s/${VBMC_HOST}/${CC}${VBMC_HOST}${CZ}/g")
+      echo "$_hint"
       [ "$_follow" = 0 ] && break
-      { [ "$_sshok" = 1 ] && [ "$_rakpok" = 1 ]; } && { echo "==== READY:  ssh root@$VBMC_HOST  |  zipmi -H $VBMC_HOST ===="; break; }
-      sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
+      # READY = any working interface, or the box's console ready-marker in the log.
+      if [ "$_sshok" = 1 ] || [ "$_rakpok" = 1 ] || [ "$_webok" = 1 ] || { [ -n "${VBMC_READY_GREP:-}" ] && [ -f "$LOG" ] && grep -qiE "$VBMC_READY_GREP" "$LOG"; }; then
+        echo "==== ${CG}READY${CZ}:  $_hint ===="; break; fi
+      # BAIL conditions
+      if _panic; then echo "==== ${CR}BOOT FAILED${CZ}: kernel panic / fatal in $LOG — 'vbmc $VBMC_NAME stop' + check the log ===="; exit 1; fi
+      _el=$(( $(date +%s) - _t0 ))
+      if [ "$_el" -ge "$_max" ]; then echo "==== ${CR}GAVE UP${CZ} after ${_el}s (VBMC_MAXWAIT=$_max) — not ready; check $LOG ===="; exit 1; fi
+      sleep 10; echo "---- $(date +%H:%M:%S)  waiting (${_el}s/${_max}s; Ctrl-C to stop) ----"
     done ;;
   ssh)   vbmc_ssh "$@" ;;
   ipmi)  [ $# -eq 0 ] && { echo "usage: vbmc $VBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
