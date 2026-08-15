@@ -27,7 +27,7 @@ reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmw
 | **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) |
 | **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) |
 | **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) |
-| **megarac-hpe** | HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser) | recipe |
+| **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — builds+boots+console; IPMIMain cold-boot race (warm-snap next) | builds |
 | **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot | recipe |
 | **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
 
