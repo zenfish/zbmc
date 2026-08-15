@@ -21,15 +21,17 @@ skill so others can reproduce it on their own images.
 reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
 (**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
 
-| `vbmc` name | Description | From a clone? |
-|-------------|-------------|:-------------:|
-| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) |
-| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) |
-| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) |
-| **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) |
-| **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — builds+boots+console; IPMIMain cold-boot race (warm-snap next) | builds |
-| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN); ssh resets over slirp | ✅ turnkey (snap) |
-| **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe |
+| `vbmc` name | Description | Turnkey? · boot |
+|-------------|-------------|:----------------:|
+| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) · ~2 min |
+| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) · ~2 min |
+| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) · ~2 min |
+| **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) · ~20 s |
+| **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — builds+boots+console; IPMIMain cold-boot race (warm-snap next) | builds · ~2–3 min |
+| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN); ssh resets over slirp | ✅ turnkey (snap) · ~20 s |
+| **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe · — |
+
+**Boot times** are approximate on an unloaded host — a busy machine (or a dozen stray qemus) is much slower. Two classes: **cold** boxes build/boot the firmware fresh (~2 min to services); **warm-snapshot** boxes (idrac10, supermicro-x14) resume a captured RAM state (~15–30 s).
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 
