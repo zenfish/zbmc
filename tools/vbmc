@@ -152,6 +152,7 @@ case "$VERB" in
   ssh)   vbmc_ssh "$@" ;;
   ipmi)  [ $# -eq 0 ] && { echo "usage: vbmc $VBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
   web)   vbmc_web ;;
+  racadm) declare -F vbmc_racadm >/dev/null && vbmc_racadm "$@" || { echo "no racadm for $VBMC_NAME"; exit 2; } ;;
   console)
     # console = a window on the LIVE console. If the box is DOWN, say so — do NOT
     # replay the stale $LOG from the last run (which is bring-up/restore output and
