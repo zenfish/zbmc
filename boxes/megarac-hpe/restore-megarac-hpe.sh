@@ -26,7 +26,8 @@ $SUDO qemu-system-arm -M ast2600-evb -m 1024 -display none -no-reboot \
   -incoming "exec:gunzip -c < $SNAP" \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -drive "file=$WD/cray-restore-flash.bin,format=raw,if=mtd" \
-  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=udp:$IP:$IPMI_PORT-:623,hostname=megarac-hpe" \
-  -append "$APPEND" > "$WD/restore-console.log" 2>&1 &
-echo "restore launched (pid $!); IPMI/Redfish live in ~10s. Drive console: socat - UNIX-CONNECT:$WD/cray.sock"
-disown 2>/dev/null || true
+  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=udp:$IP:$IPMI_PORT-:623,hostfwd=tcp:$IP:${ASD_PORT:-5123}-:5123,hostname=megarac-hpe" \
+  -append "$APPEND" >> "$WD/restore-console.log" 2>&1 &
+QP=$!
+disown $QP 2>/dev/null || true
+echo "restore launched (pid $QP); IPMI/Redfish live in ~10s. Drive console: socat - UNIX-CONNECT:$WD/cray.sock"
