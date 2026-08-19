@@ -2,7 +2,11 @@
 # To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
 ZBMC_NAME=idrac9
 ZBMC_DESC="Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish"
-ZBMC_DIR=/Volumes/yyy/phd/bmc/dell/idrac9-virtual
+# Portable (clone-and-run for the cold P4 boot): scripts ship in THIS box dir; boot/img
+# artifacts in work/idrac9 (build-p4.sh rebuilds them from the iDRAC9 DUP — that build still
+# needs the firmware-extraction tree, so on a fresh clone fetch the prebuilt artifacts).
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac9}"
 
 # host port-forwards (QEMU SLIRP)         # standard guest port
 SSH_PORT=22       # root-direct boot binds real-IP:22. (ckpt snapshot boots override to 2222 themselves.)
@@ -41,7 +45,7 @@ zbmc_boot() {
   # Default `zbmc idrac9 start` = the WORKING cold P4 boot below. See project_idrac9_virtual_qemu memory.
   if [ -n "${ZBMC_WARM:-}" ] && [ -s "$HOME/phd/tmp/idrac9-virtual/ckpt/state-p4.gz" ] && [ -x "$ZBMC_DIR/qemu-system-arm-patched" ]; then
     : > "$LOG"
-    bash "$ZBMC_DIR/restore-idrac9.sh" "$ZBMC_IP" >>"$LOG" 2>&1
+    WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP" >>"$LOG" 2>&1
     grep -q 'RESTORE OK' "$LOG" && echo "pre-fullfw gate (restored P4)" >>"$LOG"
     pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1
     return 0
@@ -57,12 +61,12 @@ zbmc_boot() {
   local n=0 qp=; while [ $n -lt 30 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
-zbmc_build() { cd "$ZBMC_DIR" && IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
+zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
 # snapshot: cold-boot P6 + Redfish bring-up, then freeze to img/ckpt/redfish-200-ready-net.gz (patched
 # qemu, migratable usb-net). Pays the ~15min bring-up ONCE; afterwards `zbmc idrac9 start` restores it.
-zbmc_snapshot() { bash "$ZBMC_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
-zbmc_restore()  { bash "$ZBMC_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
-zbmc_ssh()   { "$ZBMC_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)
-zbmc_web()   { "$ZBMC_DIR/start-web.sh"; }              # bring up httpd + Redfish (only needed on a cold P4 box)
+zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
+zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
+zbmc_ssh()   { WD="$ZBMC_DIR" "$PROJ_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)
+zbmc_web()   { WD="$ZBMC_DIR" "$PROJ_DIR/start-web.sh"; }              # bring up httpd + Redfish (only needed on a cold P4 box)
 # readiness markers in the serial log (zbmc status greps these)
 ZBMC_READY_GREP='pre-fullfw gate'

@@ -1,0 +1,358 @@
+#!/bin/sh
+# Phase-4 init: minimal systemd (custom mini.target, DefaultDependencies=no -> no Dell cascade)
+# bringing up DELL'S OWN dbus units (correctly configured: Sockets=, NotifyAccess) with drop-ins
+# (no default deps, no reboot-on-crash). All 4 dbus fixes baked in: journald dev-log (/dev/log),
+# missing policy users in passwd, SELinux permissive, no networking (EMC link NULL-crashes kernel).
+# Goal: get dbus serving -> then the mesh -> racadm + RAKP.
+BB=/bin/busybox
+$BB mkdir -p /proc /sys /dev /newroot
+$BB mount -t proc proc /proc 2>/dev/null
+$BB mount -t sysfs sys /sys 2>/dev/null
+$BB mount -t devtmpfs dev /dev 2>/dev/null
+echo ""; echo "######## VIRTUAL iDRAC9 Phase-4 — minimal systemd (Dell dbus) ########"
+n=0; while [ ! -b /dev/mmcblk0 ] && [ $n -lt 60 ]; do $BB usleep 200000; n=$((n+1)); done
+$BB mount -t squashfs -o ro /dev/mmcblk0 /newroot 2>/dev/null || { echo FATAL; exec $BB sh; }
+for d in proc sys dev; do $BB mkdir -p /newroot/$d; $BB mount --bind /$d /newroot/$d; done
+$BB mount -t tmpfs tmpfs /newroot/run
+$BB mount -t tmpfs tmpfs /newroot/tmp
+[ -d /newroot/var/volatile ] && $BB mount -t tmpfs tmpfs /newroot/var/volatile
+$BB mount -t tmpfs tmpfs /newroot/mnt/persistent_data
+$BB mount -t tmpfs tmpfs /newroot/flash/data1
+# files-only nsswitch (root->/bin/sh for ssh); +missing dbus-policy users; machine-id; SELinux permissive
+printf 'passwd: files\ngroup: files\nshadow: files\nhosts: files dns\n' > /newroot/run/nsswitch.conf
+$BB mount --bind /newroot/run/nsswitch.conf /newroot/etc/nsswitch.conf
+$BB cat /newroot/etc/passwd > /newroot/run/passwd
+printf 'access:x:9001:9001:access:/:/bin/false\npldmpop:x:9002:9002:pldmpop:/:/bin/false\nredfish:x:9003:9003:redfish:/:/bin/false\n' >> /newroot/run/passwd
+$BB chmod 644 /newroot/run/passwd
+$BB mount --bind /newroot/run/passwd /newroot/etc/passwd
+$BB cat /proc/sys/kernel/random/uuid | $BB tr -d '-' > /newroot/run/machine-id
+$BB mount --bind /newroot/run/machine-id /newroot/etc/machine-id
+$BB sed 's/^SELINUX=.*/SELINUX=permissive/' /newroot/etc/selinux/config > /newroot/run/selinux-config 2>/dev/null
+[ -s /newroot/run/selinux-config ] && $BB mount --bind /newroot/run/selinux-config /newroot/etc/selinux/config
+
+$BB cat > /newroot/run/prep.sh <<'EOS'
+#!/bin/sh
+export PATH=/usr/bin:/usr/sbin:/bin:/sbin
+mkdir -p /mnt/persistent_data/data0/var/lib /mnt/persistent_data/data0/home/root/.ssh \
+  /mnt/persistent_data/data0/cv /mnt/persistent_data/data0/BMC_Data /run/sshd /run/authkeys \
+  /var/lib/cfgdb/EMMC /var/lib/cfgdb/CV /var/lib/cfgdb/cfgdb /flash/data1/var/lib/cfgdb/SPI
+ln -sf /flash/data1/var/lib/cfgdb/SPI /var/lib/cfgdb/SPI 2>/dev/null
+chown -R cfgdb:cfgdb /var/lib/cfgdb 2>/dev/null
+# Materialize ALL runtime dirs/files the Dell daemons expect — exactly what systemd-tmpfiles
+# does at basic.target, which mini.target skips. This single call covers what we previously
+# hand-created: the dbus /run/etc confs (dangling symlinks -> dbus-broker -131), dfserver's
+# /run/fm ipc dir (-> zloop assert), datamgr's /run/dm/.ipc (-> bind ENOENT), and the rest.
+systemd-tmpfiles --create >/tmp/tmpfiles.log 2>&1
+# racadm reads platform license config from /flash/data0/config/lmcfg.txt (platform-detect copies
+# it on a real box). Seed the EVB/default profile so racadm's backend init doesn't choke.
+mkdir -p /flash/data0/config
+cp /flash/pd0/ipmi/evb/lmcfg.txt /flash/data0/config/lmcfg.txt 2>/dev/null \
+  || cp /flash/pd0/ipmi/default/lmcfg.txt /flash/data0/config/lmcfg.txt 2>/dev/null \
+  || cp /etc/default/ipmi/default/lmcfg.txt /flash/data0/config/lmcfg.txt 2>/dev/null
+[ -e /flash/data0/cv/avctpasswd ] || cp /etc/avctpasswd /flash/data0/cv/avctpasswd 2>/dev/null
+# BMC_Data platform files that setup-flash normally links (we neutralized it). Missing
+# bmcsetting NULL-segfaults sensord -> no SDR shm -> fullfw blocks pre-udp/623. Stage from evb
+# (fallback default), like setup-flash.sh's BMC_Data block.
+BMCDIR=/flash/data0/BMC_Data; mkdir -p $BMCDIR
+for f in bmcsetting NVRAM_SDR00.dat ThermalData.txt svfpt.txt drvsetting.dat \
+         NVRAM_PrivateStorage00.dat NVRAM_FRU00.dat NVRAM_Storage00.dat ID_devid.bin; do
+  cp /flash/pd0/ipmi/evb/$f $BMCDIR/$f 2>/dev/null || cp /etc/default/ipmi/default/$f $BMCDIR/$f 2>/dev/null
+done
+for b in /flash/pd0/ipmi/evb/*.bin /etc/default/ipmi/default/*.bin; do [ -e "$b" ] && cp "$b" "$BMCDIR/" 2>/dev/null; done
+# evb lacks config_details.bin -> libi2c-mp BMC_Parse_Configfile NULL-derefs in trim_string when
+# fullfw's monitor thread parses the I2C config (=fullfw SEGV post-init). Stage the I2C config
+# pair from a platform that ships both (Logan). /usr/share/platform -> BMC_Data, so this also
+# provides I2CTopology.bin there.
+cp /flash/pd0/ipmi/Logan/config_details.bin "$BMCDIR/config_details.bin" 2>/dev/null
+cp /flash/pd0/ipmi/Logan/I2CTopology.bin "$BMCDIR/I2CTopology.bin" 2>/dev/null
+chown -R fullfw:fullfw $BMCDIR 2>/dev/null; chmod -R 775 $BMCDIR 2>/dev/null
+ssh-keygen -A >/dev/null 2>&1
+echo "__PUBKEY__" > /run/authkeys/root; chmod 600 /run/authkeys/root
+# start sshd (host 2222 -> guest 22 once usb-net is up in dbg.sh) for LIVE iteration on cfgdb/CV
+SCFG=/usr/share/factory/etc/ssh/sshd_config_readonly; [ -f "$SCFG" ] || SCFG=/etc/ssh/sshd_config
+/usr/sbin/sshd -f "$SCFG" -o StrictModes=no -o UsePAM=no -o PasswordAuthentication=no \
+  -o PubkeyAuthentication=yes -o AuthorizedKeysFile=/run/authkeys/%u -E /tmp/sshd.log 2>&1 | sed 's/^/  sshd: /'
+# Initialize cfgdb = the data-abstraction backing store racadm reads
+# (/var/run/cfgdb/Cfg{CurrentValues,AttributeMetadata}.db). cfgdb-setup.sh installs the
+# metadata template then runs cfgdbinit to generate CurrentValues. Direct install first as a
+# fallback (the script uses bashisms that may trip a non-bash /bin/sh).
+install -D -m664 -o cfgdb -g cfgdb /usr/share/cfgdb/CfgAttributeMetadata.db /var/run/cfgdb/CfgAttributeMetadata.db 2>/dev/null
+sh /usr/sbin/cfgdb-setup.sh >/tmp/cfgdbsetup.log 2>&1
+# Inject synthesized factory-default values into the PERSISTENT stores (CfgValueTable schema,
+# built from CfgAttributeMetadata defaults by scripts/build-cfgdb-defaults.py; ships in the
+# initramfs as /cfgdb-defaults.db). The real factory values live in SPI/eMMC flash we don't have;
+# cfgdbinit makes an empty store -> racadm returns no values + fullfw blocks on missing net/IPMI
+# config. cfgmgr loads CfgValueTable from these stores -> builds the runtime + datacache shm.
+if [ -f /run/cfgdb-defaults.db ]; then
+  # tmpfiles.d/cfgdb.conf force-symlinks /var/lib/cfgdb/CV -> /mnt/cv/cfgdb (the dm-crypt vault
+  # mount), which doesn't exist here -> dangling symlink -> CopyPasswordFromEMMCToCV fails ->
+  # Users.UserName/Password (DBLocation=3, served ONLY from CV) stay empty -> RAKP 0x0d. Replace
+  # the dangling symlink with a real writable dir so cfgmgr's CfgDBInit can populate CV from EMMC.
+  rm -f /var/lib/cfgdb/CV
+  mkdir -p /var/lib/cfgdb/EMMC /var/lib/cfgdb/SPI /var/lib/cfgdb/CV
+  chown cfgdb:cfgdb /var/lib/cfgdb/CV 2>/dev/null
+  # cfgmgr builds the runtime tmpfs DB by INSERT..SELECT from these flash stores, filtered by the
+  # metadata DBLocation: SPI=loc1, EMMC=loc2 -> tmpfs. CV=loc3 (UserName/Password) is NOT copied
+  # to tmpfs; instead CfgDBInit copies loc3 from EMMC/SPI into CV, and reads resolve there. Seed
+  # all three stores so EMMC carries Users.2 (incl UserName=root) for the EMMC->CV copy.
+  for d in /var/lib/cfgdb/EMMC/CfgCurrentValues.db /var/lib/cfgdb/SPI/CfgCurrentValues.db \
+           /var/lib/cfgdb/CV/CfgCurrentValues.db; do
+    cp -f /run/cfgdb-defaults.db "$d" 2>/dev/null && chown cfgdb:cfgdb "$d" 2>/dev/null
+  done
+  echo "cfgdb-defaults injected ($(wc -c < /run/cfgdb-defaults.db) bytes)" > /tmp/cfgdbinject.log
+fi
+EOS
+$BB chmod +x /newroot/run/prep.sh
+# the synthesized cfgdb defaults ship in the initramfs root (/cfgdb-defaults.db); prep runs in
+# chroot /newroot and can't see it -> stage it into the rootfs first.
+[ -f /cfgdb-defaults.db ] && $BB cp /cfgdb-defaults.db /newroot/run/cfgdb-defaults.db
+echo "## INJECT-DBG: src=$([ -f /cfgdb-defaults.db ] && $BB wc -c < /cfgdb-defaults.db || echo NO) dst=$([ -f /newroot/run/cfgdb-defaults.db ] && $BB wc -c < /newroot/run/cfgdb-defaults.db || echo NO)"
+# patched metadata (CurrentIPv4 writable + IP default) bind-mounted over the squashfs original,
+# BEFORE prep's cfgdb-setup installs metadata -> cfgmgr loads CurrentIPv4 as writable=10.0.2.15
+# (read-only was why the injected CurrentIPv4 reset to 0.0.0.0 -> fullfw RMCP socket fail).
+if [ -f /cfgmeta.db ]; then
+  $BB cp /cfgmeta.db /newroot/run/cfgmeta.db
+  $BB mount --bind /newroot/run/cfgmeta.db /newroot/usr/share/cfgdb/CfgAttributeMetadata.db
+  echo "## cfgmeta bind: $([ -f /newroot/usr/share/cfgdb/CfgAttributeMetadata.db ] && $BB wc -c < /newroot/usr/share/cfgdb/CfgAttributeMetadata.db)"
+fi
+$BB chroot /newroot /bin/sh /run/prep.sh
+echo "## prep done; units ##"
+
+# strace experiment: reproduce the dbus-broker -131 in isolation, full syscall trace.
+# systemd-socket-activate provides a listener fd (LISTEN_FDS) exactly like dbus.socket does,
+# so the launcher takes the socket-activation path (the one that -131s), but now under strace.
+$BB cat > /newroot/run/dbg.sh <<'EOS'
+#!/bin/sh
+# dbus is up (systemd). Now hand-launch the Dell object-model mesh in dependency order
+# and probe racadm. Each daemon -> its own /tmp log; dump tails to console.
+export PATH=/usr/bin:/usr/sbin:/bin:/sbin
+sleep 10
+chmod -R 777 /flash/data0/aim/persistent 2>/dev/null
+# Start the mesh as SYSTEMD SERVICES (NOT manual launch). dsm-sa-pop@.service populators have
+# BindsTo=dsm-sa-datamgr.service -> if datamgr isn't the ACTIVE systemd unit, systemd kills every
+# populator it spawns (that was the "Stopping Populator..." we saw) -> no SMIL pipes -> RAC1135.
+# systemctl start pulls the dep closure (cfgmgr->dfserver/aim, cfgdb, setup-flash[neutralized])
+# WITHOUT the full 182-service multi-user storm.
+systemctl --no-block start dsm-sa-datamgr.service 2>&1 | head -2 > /dev/console
+sleep 25
+systemctl --no-block start dsm-sa-eventmgr.service fmgr.service 2>&1 | head -2 > /dev/console
+# wait up to ~90s for datamgr+populators to open the SMIL client pipes racadm connects to
+# SMIL pipes may be gated on eventmgr, which is slow (~2-3min) under the populated cfgdb.
+# Wait up to ~4min, logging datamgr/eventmgr state as we go.
+n=0; while [ ! -S /run/dm/.ipc/dcsmilpipea ] && [ $n -lt 120 ]; do
+  sleep 2; n=$((n+1))
+  [ $((n % 20)) -eq 0 ] && echo "  smil-wait ${n}x2s: dm=$(systemctl is-active dsm-sa-datamgr.service 2>&1) ev=$(systemctl is-active dsm-sa-eventmgr.service 2>&1) pipe=$([ -S /run/dm/.ipc/dcsmilpipea ] && echo Y || echo N)" > /dev/console
+done
+echo "dcsmilpipe wait: ${n}x2s, present=$([ -S /run/dm/.ipc/dcsmilpipea ] && echo yes || echo NO)" > /dev/console
+sleep 2
+{
+  echo "==VIRTDBG=="
+  echo "enforce: $(getenforce 2>&1)  dbus=$(systemctl is-active dbus-broker.service 2>&1)"
+  echo "  cfgdb inject: $(cat /tmp/cfgdbinject.log 2>/dev/null)"
+  echo "  cfgdb sizes post-cfgmgr: EMMC=$(wc -c </var/lib/cfgdb/EMMC/CfgCurrentValues.db 2>/dev/null) SPI=$(wc -c </var/lib/cfgdb/SPI/CfgCurrentValues.db 2>/dev/null) runtime=$(wc -c </var/run/cfgdb/CfgCurrentValues.db 2>/dev/null)"
+  echo "  cfgmgr/datamgr cfgdb opens: $(ls -la /var/lib/cfgdb/EMMC/ 2>&1 | tr '\n' '|')"
+  echo "-- cfgdb files --"
+  ls -la /var/run/cfgdb/ 2>&1 | head
+  echo "shm: $(ls -la /dev/shm/data_abstraction_key_map 2>&1)"
+  echo "cfgdbsetup.log tail:"; tail -4 /tmp/cfgdbsetup.log 2>/dev/null
+  echo "-- mesh unit states --"
+  for u in dfserver aim cfgmgr dsm-sa-datamgr dsm-sa-eventmgr fmgr; do
+    echo "  $u: $(systemctl is-active $u.service 2>&1)"
+  done
+  echo "-- populator procs (BindsTo datamgr) --"
+  ps -e 2>/dev/null | grep -E "dsm_sa_popproc|dsm_sa_datamgr|dfserver|aim |cfgmgr" | grep -v grep | head -20
+  echo "  popproc units active: $(systemctl list-units 'dsm-sa-pop@*' --state=active --no-legend 2>/dev/null | wc -l)"
+  echo "  popproccrash: $(tail -2 /tmp/dmlog/popproccrash.log 2>/dev/null)"
+  echo "-- datamgr strace: last 14 + fails --"
+  tail -14 /tmp/dmtrace 2>/dev/null | sed 's/^/    /'
+  echo "  datamgr fails(=-1):"; grep -E "= -1 " /tmp/dmtrace 2>/dev/null | grep -ivE '\.so|/lib/|gconv|locale|EAGAIN|EINPROGRESS' | sort | uniq -c | sort -rn | head -8 | sed 's/^/    /'
+  echo "-- busctl names (com.dell/dell) --"
+  timeout 8 busctl --system --no-pager list 2>&1 | grep -iE "dell|dmtf|df|aim|cfg" | head
+  echo "-- /run/dm/.ipc (dcsmilpipe?) --"
+  ls -la /run/dm/.ipc/ 2>&1 | grep -E "dcsmilpipe|dmmainproc|total"
+  echo "-- /flash/data0 mount + lmcfg (re-seed after setup-flash clobber) --"
+  mount 2>/dev/null | grep -E "flash/data0|persistent_data" | head
+  mkdir -p /flash/data0/config; cp /flash/pd0/ipmi/evb/lmcfg.txt /flash/data0/config/lmcfg.txt 2>&1
+  ls -la /flash/data0/config/lmcfg.txt 2>&1
+  # local racadm reads the authenticated-user context from env (set by racadmACShell after SSH
+  # auth on a real box); run bare it's unset -> "current user privilege is not valid".
+  # 0x1FF = all 9 iDRAC privilege bits (admin). Fake the context.
+  export USER=root LC_USERNAME=root REMOTE_USERNAME=root RACADM_ACCESS=0x1FF
+  echo "## racadm get iDRAC.Users.2 ##"; timeout 25 racadm get iDRAC.Users.2 2>&1 | grep -ivE "^$" | head -8
+  # ---- racadm SET: enable IPMI-over-LAN + give the iDRAC an IP so RMCP can bind ----
+  echo "## racadm set (IPMI-LAN + IPv4) ##"
+  for kv in "iDRAC.NIC.Enable Enabled" "iDRAC.IPv4.Enable Enabled" "iDRAC.IPv4.DHCPEnable Disabled" \
+            "iDRAC.IPv4.Address 10.0.2.15" "iDRAC.IPv4.Netmask 255.255.255.0" \
+            "iDRAC.IPv4.Gateway 10.0.2.2" "iDRAC.IPMILan.Enable Enabled"; do
+    echo "  set $kv -> $(timeout 25 racadm set $kv 2>&1 | grep -ivE '^$|^\[Key' | head -1)"
+  done
+  # IPMI user Users.2 (root, enabled, LAN-admin, factory IPMIKey) is INJECTED into the cfgdb store
+  # at build time (racadm can't set the password w/o the CIAM backend). Just verify it loaded.
+  echo "  verify Users.2.UserName -> $(timeout 20 racadm get iDRAC.Users.2.UserName 2>&1|grep -iE 'UserName=|root'|head -1)"
+  echo "  verify Users.2.IpmiLanPrivilege -> $(timeout 20 racadm get iDRAC.Users.2.IpmiLanPrivilege 2>&1|grep -iE 'Priv|='|head -1)"
+  echo "  verify IPMILan.Enable -> $(timeout 20 racadm get iDRAC.IPMILan.Enable 2>&1 | grep -ivE '^$|^\[Key' | head -1)"
+  echo "  verify IPv4.Address -> $(timeout 20 racadm get iDRAC.IPv4.Address 2>&1 | grep -ivE '^$|^\[Key' | head -1)"
+  # fullfw/libtcpi reads the CurrentIPv4 group (applied state), NOT IPv4 (static). Check it +
+  # try to set it directly (osinterface normally derives Current from static; no apply here).
+  echo "  CurrentIPv4.Address -> $(timeout 20 racadm get iDRAC.CurrentIPv4.Address 2>&1 | grep -ivE '^$|^\[Key' | head -1)"
+  echo "  set CurrentIPv4.Address -> $(timeout 20 racadm set iDRAC.CurrentIPv4.Address 10.0.2.15 2>&1 | head -1)"
+  echo "  set CurrentIPv4.Enable -> $(timeout 20 racadm set iDRAC.CurrentIPv4.Enable Enabled 2>&1 | head -1)"
+  # ---- networking (usb-net) so fullfw's RMCP/LAN listener can bind udp/623 ----
+  echo "## net (usb-net for IPMI LAN) ##"
+  ip link set lo up 2>/dev/null
+  NIC=""
+  for i in /sys/class/net/eth* /sys/class/net/usb* /sys/class/net/en*; do
+    [ -e "$i" ] || continue
+    drv=$(basename "$(readlink "$i/device/driver" 2>/dev/null)" 2>/dev/null)
+    case "$drv" in cdc_ether|usbnet|cdc_ncm|cdc_subset|cdc_eem) NIC=$(basename "$i"); break;; esac
+  done
+  [ -z "$NIC" ] && NIC=eth2
+  ip link set "$NIC" up 2>/dev/null; sleep 2
+  ip addr add 10.0.2.15/24 dev "$NIC" 2>/dev/null
+  ip route add default via 10.0.2.2 2>/dev/null
+  echo "  NIC=$NIC carrier=$(cat /sys/class/net/$NIC/carrier 2>/dev/null) ip=$(ip -o -4 addr show $NIC 2>/dev/null|awk '{print $4}')"
+  # ---- sensord (SDR shm) + fullfw (IPMI/RAKP) -> udp/623 ----
+  echo "## fullfw / RAKP ##"
+  echo 2 > /proc/cpu/alignment 2>/dev/null; echo 0x0 | shmwrite -s41 -o4 -l1 2>/dev/null
+  systemctl --no-block start osinterface.service osinet.service sensord.service 2>&1 | head -3 > /dev/console
+  sleep 25
+  echo "  osinterface=$(systemctl is-active osinterface.service 2>&1) osinet=$(systemctl is-active osinet.service 2>&1) sensord=$(systemctl is-active sensord.service 2>&1)"
+  # fullfw's udp/623 is SOCKET-ACTIVATED (fullfw.socket ListenDatagram=623); libtcpi gets the fd
+  # via sd_listen_fds. Manual launch had no fd -> RMCP fail. systemd-socket-activate binds 623 +
+  # sets LISTEN_FDS + execs fullfw with the fd (same as the .socket unit, but works in mini.target).
+  # MEASURE (1): did the injected Users.2 (IPMIKey 915F32, UserName root) survive in each store?
+  echo "  915F32 survives: SPI=$(grep -ac 915F32 /var/lib/cfgdb/SPI/CfgCurrentValues.db 2>/dev/null) EMMC=$(grep -ac 915F32 /var/lib/cfgdb/EMMC/CfgCurrentValues.db 2>/dev/null) runtime=$(grep -ac 915F32 /var/run/cfgdb/CfgCurrentValues.db 2>/dev/null)"
+  echo "  Users.2#UserName in runtime: $(grep -aoE 'Users.2#UserName[^|]*' /var/run/cfgdb/CfgCurrentValues.db 2>/dev/null | head -1 | tr -dc 'a-zA-Z0-9#.=' )"
+  echo "  avctpasswd: $(ls -la /flash/data0/cv/avctpasswd /etc/avctpasswd 2>&1 | tr '\n' '|')"
+  cd /flash/data0/BMC_Data 2>/dev/null
+  # GATE: wait until cfgmgr has Users.2.UserName=root live in the datacache. fullfw loads its
+  # in-RAM IPMI user table (G_aPSUserInfoTable) ONCE at startup; if it starts before UserName
+  # has propagated (metadata DBLocation=2 -> EMMC -> tmpfs -> shm), it caches an empty table and
+  # every RAKP1 -> 0x0d "unauthorized name", even though racadm later shows root. Gating fullfw
+  # on a live root read makes RAKP-accept-root reproducible on a clean boot.
+  for w in $(seq 1 30); do
+    [ "$(timeout 8 racadm get iDRAC.Users.2.UserName 2>/dev/null | grep -i 'UserName=' | cut -d= -f2 | tr -d '\r')" = "root" ] && break
+    sleep 2
+  done
+  echo "  pre-fullfw gate: $(timeout 8 racadm get iDRAC.Users.2.UserName 2>/dev/null | grep -i 'UserName=')"
+  # MEASURE (2): strace fullfw startup -> what does it OPEN to read the IPMI user table?
+  # bind [::]:623 = IPv6 DUAL-STACK (NOT 0.0.0.0). fullfw's UDPCreateInstance does an unconditional
+  # setsockopt(IPV6_RECVPKTINFO) that returns -1 on an AF_INET socket -> RMCPCreateSocketInstance
+  # fail -> fullfw exits, never services udp/623. Stock fullfw.socket uses BindIPv6Only=both for the
+  # same reason. bindv6only=0 means this v6 socket still receives the SLIRP v4 hostfwd
+  # (udp:6623->623) as v4-mapped, so the host RAKP client reaches it. (Earlier 0.0.0.0:623 was the
+  # cold-boot-listen regression — fullfw listens cold with [::]:623.)
+  # sensor-shm/job-event gate SAFETY + diagnostic (RE: libdelldaemon job-event framework).
+  # fullfw's IPMIPreInit calls WaitForAJobEvent(job=4, event=2, 0xffffffff) = INFINITE busy-poll
+  # (usleep 10ms) on Dell shm region 0x29 (=41), 4-byte slot at offset job<<2 = 16, until state>=2.
+  # The sensor-init daemon signals it via CompleteAJobEvent(4,2) (writes 2 there). On a FRESH p4
+  # boot the mesh already drives that to 2 before fullfw starts (pre= reads 2, measured 2026-08-15),
+  # so this poke is a NO-OP here. It matters for two paths: (a) a checkpoint/restore or stripped
+  # init that freezes fullfw AT this gate (the state the Ghidra RE explained), (b) any future build
+  # regressing the slot to 0. Level, not edge -> writing before fullfw polls passes iteration 1.
+  # The pre/post log makes the slot state visible every boot (regression canary). shmwrite calls the
+  # same Dell_shm_memwrite(41,{2},16,1) API the real producer uses.
+  echo "  jobevt(4,2) poke: pre=$(shmread -s41 -o16 -l1 2>/dev/null); $(echo 0x2 | shmwrite -s41 -o16 -l1 2>&1); post=$(shmread -s41 -o16 -l1 2>/dev/null)"
+  setsid sh -c 'cd /flash/data0/BMC_Data; USER=root exec strace -f -e trace=openat -o /tmp/ffu systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' </dev/null >/tmp/ff.out 2>&1 &
+  sleep 40
+  FFPID=$(pgrep -f '/bin/fullfw' | head -1)
+  echo "  fullfw procs:$(pgrep -fc '/bin/fullfw') mainpid=$FFPID  ssa:$(pgrep -fc 'systemd-socket-activate')"
+  echo "  -- fullfw opens (user-table sources) --"
+  grep -aE 'avctpasswd|userdb|Users|datacache_Config_CfgStr|/var/lib/cfgdb|/flash/data0/cv|passwd' /tmp/ffu 2>/dev/null | grep -avE '\.so|/lib/|/usr/share/factory' | sort -u | head -15 | sed 's/^/    /'
+  # 623 = 0x026F. Check BOTH IPv4 and IPv6 udp tables (socket-activate may bind v6).
+  echo "  ★ /proc/net/udp  026F: [$(grep -iE ':026F ' /proc/net/udp 2>/dev/null|head -1)]"
+  echo "  ★ /proc/net/udp6 026F: [$(grep -iE ':026F ' /proc/net/udp6 2>/dev/null|head -1)]"
+  echo "  ss -uln: $(ss -uln 2>/dev/null | grep -E ':623|:62' | tr '\n' '|')"
+  echo "  all v4 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp 2>/dev/null|sort -u|tr '\n' ' ')"
+  echo "  all v6 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp6 2>/dev/null|sort -u|tr '\n' ' ')"
+  # what is fullfw doing live? attach strace for 10s -> bind attempts / what it loops on
+  timeout 11 strace -f -p "$FFPID" -e trace=socket,bind,connect,recvfrom,sendto,poll,nanosleep,openat -o /tmp/ffp 2>/dev/null
+  echo "  fullfw live socket/bind/connect:"; grep -E 'bind\(|socket\(|connect\(' /tmp/ffp 2>/dev/null | grep -ivE '\.so|/lib' | sort -u | head -12 | sed 's/^/    /'
+  echo "  fullfw live loop (last 10):"; tail -10 /tmp/ffp 2>/dev/null | sed 's/^/    /'
+  echo "  ff.out tail:"; tail -12 /tmp/ff.out 2>/dev/null | sed 's/^/    /'
+  echo "  -- journal LAN/ipv4 errors (libtcpi LANIPConfig) --"
+  journalctl -b --no-pager 2>/dev/null | grep -iE 'ipv4|LANIP|tcpi|Failed to read|not expecting NIC|RMCP|VLANLinkUp' | tail -10 | sed 's/^/    /'
+  # ---- REDFISH bring-up (coexists with IPMI on this P4 boot) ----
+  # RE (2026-08-15): the redfish 500 was NEVER fcgiodata load-fragility (prior verdict) — it was the
+  # MISSING fcgi-auth AUTHORIZER on :4300. httpd's mod_authnz_fcgi proxies the Basic-auth check to
+  # fcgi://127.0.0.1:4300 BEFORE the :4200 odata DATA responder; nothing on 4300 -> AH02495 connect
+  # refused -> 500. Start BOTH (fcgiodata@4200 + fcgi-auth@4300), seed DBs/cert, provision the PAM
+  # password -> stable 200 (verified 12/12). fcgiodata does NOT crash (pid stable across requests).
+  echo "## REDFISH ##"
+  cp -f /etc/unifieddatabase/HMC.db /var/run/unifieddatabase/ 2>/dev/null
+  chown hmcclient:udbm-writer /var/run/unifieddatabase/HMC.db 2>/dev/null; chmod 744 /var/run/unifieddatabase/HMC.db 2>/dev/null
+  mkdir -p /var/lib/odatalite
+  [ -f /var/lib/odatalite/RedfishIdMappings.db ] || { cp -f /usr/share/redfish/RedfishIdMappings.db /var/lib/odatalite/ 2>/dev/null && chown odatalite:odatalite /var/lib/odatalite/RedfishIdMappings.db 2>/dev/null && chmod 770 /var/lib/odatalite/RedfishIdMappings.db 2>/dev/null; }
+  mkdir -p /flash/data0/etc/certs/CA/certs /flash/data0/cv/private
+  [ -s /flash/data0/etc/certs/CA/certs/host.crt ] || openssl req -x509 -newkey rsa:2048 -keyout /flash/data0/cv/private/host.key -out /flash/data0/etc/certs/CA/certs/host.crt -days 3650 -nodes -subj /CN=idrac9-virtual >/dev/null 2>&1
+  # Redfish fcgi backends (all --no-block; Type=notify may never signal READY under emu -> plain
+  # `systemctl start` wedges the single core). Ports: 4200=odata DATA responder, 4300=fcgi-auth
+  # AUTHORIZER (fixes the 500, prior sessions missed it), 4202=fcgi-rfsql OpenAPI/SQL responder
+  # (fixes /redfish/v1/Systems collection 503), 4204=hasses SSE/metrics. NOTE: /Systems/System.Embedded.1
+  # + TelemetryService stay 503 (SYS518 "data sources unavailable") — fundamental: no x86 host/BIOS/
+  # sensor hardware behind the emulated BMC, so host inventory + metrics are empty. BMC-self resources
+  # (Managers, AccountService, SessionService, UpdateService, EventService, Registries) all serve 200.
+  systemctl start --no-block --job-mode=ignore-dependencies unified-database-model.service fcgiodata@4200.socket fcgiodata@4200.service fcgi-auth.socket fcgi-auth.service fcgi-rfsql.socket fcgi-rfsql.service hasses.service 2>/dev/null
+  sleep 15
+  # PAM password for redfish Basic-auth (P4 cfgdb seed sets UserName+IPMIKey, not the CV/PAM password)
+  export RACADM_ACCESS=0x1FF USER=root LOGNAME=root LC_USERNAME=root REMOTE_USERNAME=root
+  r=0; while [ $r -lt 6 ]; do racadm set iDRAC.Users.2.Password 'Calvin123#' >/dev/null 2>&1; sleep 3
+    racadm get iDRAC.Users.2.SHA256Password 2>/dev/null | grep -qi sha && break; r=$((r+1)); done
+  cd / && /etc/sysapps_script/base_httpd.sh >/dev/null 2>&1; cd / && env RF_RESPONDER=4200 httpd -d / -D SSL -k start 2>/dev/null
+  sleep 8
+  echo "  backends: fcgiodata@4200=$(systemctl is-active fcgiodata@4200.service) fcgi-auth=$(pgrep -fc /usr/bin/fcgi-auth) fcgi-rfsql=$(pgrep -fc /usr/bin/fcgi-rfsql) hasses=$(pgrep -fc /usr/bin/hasses) httpd=$(pgrep -fc httpd)"
+  RF() { curl -sk -o /dev/null -w '%{http_code}' -u root:Calvin123# https://127.0.0.1/redfish/v1/$1 2>/dev/null; }
+  echo "  surface: /=$(RF '') Managers=$(RF Managers) Systems=$(RF Systems) AccountService=$(RF AccountService) UpdateService=$(RF UpdateService) SessionService=$(RF SessionService)"
+  echo "  (host-data 503 expected: Systems/System.Embedded.1=$(RF Systems/System.Embedded.1) TelemetryService=$(RF TelemetryService) — no x86 host behind emulated BMC)"
+  echo "  REDFISH stability(5 hits)=$(ok=0; for i in 1 2 3 4 5; do [ "$(curl -sk -o /dev/null -w %{http_code} -u root:Calvin123# https://127.0.0.1/redfish/v1/Managers/iDRAC.Embedded.1 2>/dev/null)" = 200 ] && ok=$((ok+1)); done; echo $ok/5)"
+  echo "  (host: curl -sk -H 'Host: 10.0.2.15' -u root:Calvin123# https://127.0.0.1:6443/redfish/v1/Managers)"
+  echo "==VIRTDBG-END=="
+} > /dev/console 2>&1
+EOS
+$BB chmod +x /newroot/run/dbg.sh
+
+U=/newroot/run/systemd/system
+$BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/dbus.socket.d
+printf '[Manager]\nLogLevel=info\n' > $U/system.conf.d/zz.conf
+# The datamgr->populator chain starts populators via systemd, pulling in the eMMC-persistence
+# services (early-mount, setup-flash) which mount /flash/data0 READ-ONLY over our tmpfs -> lmcfg
+# unreadable -> racadm SWC0242. Drop-in no-op (not mask) keeps dependents' ordering satisfied
+# while preventing the clobber. Also mask the crash/reboot watchdogs that fire w/o real hardware.
+for s in early-mount setup-flash; do
+  $BB mkdir -p $U/$s.service.d
+  printf '[Service]\nExecStart=\nExecStart=/bin/true\nExecStartPre=\nExecStartPost=\n' > $U/$s.service.d/noop.conf
+done
+# cfgmgr is Type=notify but never sends READY=1 under emulation (func-provider attach to dfserver
+# doesn't complete its handshake) -> stuck "activating" forever -> blocks dsm-sa-datamgr (After=).
+# cfgmgrd IS running and owns com.dell.idrac.CfgMgr, so treat it active-on-fork (Type=simple) and
+# drop the 60s watchdog (which would SIGABRT it without notify pings).
+$BB mkdir -p $U/cfgmgr.service.d
+printf '[Service]\nType=simple\nWatchdogSec=0\nNotifyAccess=all\n' > $U/cfgmgr.service.d/notify.conf
+for m in enable-kernel-panic.service idrac-final.service spi_failure.service notify-reboot.service; do
+  $BB ln -sf /dev/null $U/$m
+done
+$BB cat > $U/mini.target <<'EOS'
+[Unit]
+Description=Minimal iDRAC mesh target
+DefaultDependencies=no
+EOS
+# Dell dbus drop-ins: no default deps (skip Dell cascade), no reboot-on-crash
+printf '[Unit]\nDefaultDependencies=no\n[Service]\nExecStopPost=\nProtectSystem=no\nPrivateTmp=no\nPrivateDevices=no\nProtectHome=no\nReadOnlyPaths=\nInaccessiblePaths=\nExecStart=\nExecStart=/usr/bin/dbus-broker-launch --scope system --verbose\nStandardError=file:/tmp/dbe\n' > $U/dbus-broker.service.d/override.conf
+printf '[Unit]\nDefaultDependencies=no\n' > $U/dbus.socket.d/override.conf
+$BB cat > $U/virt-debug.service <<'EOS'
+[Unit]
+Description=virt debug
+DefaultDependencies=no
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /run/dbg.sh
+[Install]
+WantedBy=mini.target
+EOS
+for j in systemd-journald.socket systemd-journald-dev-log.socket systemd-journald-audit.socket dbus.socket dbus-broker.service; do
+  $BB ln -sf /lib/systemd/system/$j $U/mini.target.wants/$j
+done
+$BB ln -sf /run/systemd/system/virt-debug.service $U/mini.target.wants/virt-debug.service
+echo "## switch_root -> systemd --unit=mini.target ##"; echo ""
+exec $BB switch_root /newroot /sbin/init --unit=mini.target --log-target=console --log-level=info --show-status=yes
