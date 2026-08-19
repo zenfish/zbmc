@@ -19,7 +19,11 @@
 # memory reference_evb_ast2600_vanilla_openbmc.
 ZBMC_NAME=openbmc
 ZBMC_DESC="Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live"
-ZBMC_DIR=/Volumes/yyy/phd/bmc/evb-ast2600-build
+# Portable (clone-and-run): the .static.mtd firmware ships via firmware/download-fw.sh
+# and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="$_XREPO/firmware"
 
 ZBMC_IP=10.0.7.10        # 10.0.7.* = OpenBMC BMCs (10.0.8.* Supermicro, 10.0.9.* Dell)
 ZBMC_HOST=openbmc

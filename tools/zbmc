@@ -64,17 +64,17 @@ usage(){
 # _ipmi_invocation is PURE (no network) so the shown command == the probed command.
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
   if [ "$1" = pw ]; then
-    echo "zipmi -H $ZBMC_HOST -U $IPMI_USER -P ${IPMI_PW:-}${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_HOST -U ${IPMI_USER:-} -P ${IPMI_PW:-}${IPMI_OPTS:+ $IPMI_OPTS}"
   else
-    echo "zipmi -H $ZBMC_HOST -U $IPMI_USER -K $IPMI_KEY${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_HOST -U ${IPMI_USER:-} -K ${IPMI_KEY:-}${IPMI_OPTS:+ $IPMI_OPTS}"
   fi; }
 
 _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
   local r
   if [ "$1" = pw ]; then
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "$IPMI_USER" -P "${IPMI_PW:-}" $IPMI_OPTS -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
   else
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "$IPMI_USER" -K "$IPMI_KEY" $IPMI_OPTS -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
   fi
   # authfail patterns checked FIRST — "BMC error" could otherwise match a 0x0d reply
   echo "$r" | grep -qiE "0x0d|auth code mismatch|unauthorized" && return 2
@@ -102,8 +102,8 @@ _probe_ssh(){
 _probe_redfish(){
   local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
-  if timeout -s KILL 4 curl -sk --max-time 3 -u "$IPMI_USER:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi "ManagerCollection\|Members"; then
-    echo "ok|curl -sk -u $IPMI_USER:${IPMI_PW:-} https://$ZBMC_HOST:${WEB_PORT:-443}/redfish/v1/Managers|"
+  if timeout -s KILL 4 curl -sk --max-time 3 -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi "ManagerCollection\|Members"; then
+    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_HOST:${WEB_PORT:-443}/redfish/v1/Managers|"
   else echo "fail||down"; fi; }
 
 _probe_console(){
@@ -145,7 +145,7 @@ running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's
 # IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
 # A box may override by defining zbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
 Z(){ if declare -F zbmc_ipmi >/dev/null; then zbmc_ipmi "$@"; else
-  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "$IPMI_USER" -K "$IPMI_KEY" $IPMI_OPTS -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
+  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
 
 case "$VERB" in
   start)
