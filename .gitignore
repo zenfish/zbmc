@@ -1,0 +1,15 @@
+work/
+*.sqfs
+mtdflash*.bin
+kernel.Image
+dtb-*.dtb
+*.unpacked/
+svc*.log
+cin*
+
+# firmware is fetched (firmware/download-fw.sh), never committed
+firmware/*
+!firmware/download-fw.sh
+!firmware/.gitkeep
+__pycache__/
+*.pyc
