@@ -1,0 +1,89 @@
+# zbmc.box — virtual-BMC descriptor for "x10" (Supermicro X10 BMC = ASPEED AST2400, FW 3.93).
+#
+# WHAT: `zbmc x10 <verb>` drives a virtual Supermicro X10 BMC. qemu -M supermicrox11-bmc
+#       (AST2400, ARMv5) boots the 32MB flash; a pexpect driver fixes guest networking
+#       (firmware zeroes its MAC + fails eth0->bond0, so no DHCP) per trouble.org's
+#       python-shim recipe, then holds qemu alive with hostfwd udp $ZBMC_IP:623.
+# WHY:  THE WEAK-CIPHER ORACLE. Unlike the modern zoo (idrac9/10/x14 offer only 3+17),
+#       X10-era firmware advertises the FULL IPMI 2.0 cipher set 0-14 — including the
+#       RC4/MD5 suites 4,5,9,10,11,12,13,14 that ipmitool never implemented and modern
+#       BMCs dropped. This is the authorized local target for verifying zipmi's MD5-128
+#       (integrity alg 3) and xRC4-128/40 (conf alg 2/3) against real firmware.
+# BOOT: cold only (~60s to network-ready). No snapshot machinery — the flat flash boots
+#       clean first try; start-x10.sh nohup's the driver and waits for NET_CONFIGURED.
+#
+# ACCESS (Supermicro factory default — password auth, NOT the zipmi -K factory key):
+#   IPMI : zipmi -H 10.0.8.10 -U ADMIN -P ADMIN <cmd>   (RMCP+; offers cipher 0-14)
+#          e.g.  zipmi -H 10.0.8.10 -U ADMIN -P ADMIN -C 11 mc info
+#   scan : zipmi -H 10.0.8.10 -U ADMIN -P ADMIN scan cipher-suites   -> [0..14]
+#
+# NET: zoo-standard model (like x14). qemu runs under sudo, binds the lo0 alias
+#      10.0.8.10 on the standard privileged port 623/udp directly. zbmc_boot
+#      aliases lo0 + primes sudo before launching the pexpect driver.
+#
+# Sourced by ~/phd/bin/zbmc. Reproducible from ipmi.old/fw/BMC_X10AST2400-32M_20210528_03.93_STD.bin.
+ZBMC_NAME=supermicro-x10
+ZBMC_DESC="Supermicro X10 BMC (ASPEED AST2400, FW 3.93) — weak-cipher ORACLE: offers IPMI 2.0 suites 0-14 (RC4/MD5); ADMIN:ADMIN"
+
+ZBMC_DIR=/Users/zen/phd/bmc/sm/x10-virtual
+
+# Zoo subnet target: qemu user-net forwards udp 10.0.8.10:623 -> guest 623, bound
+# on a lo0 alias (qemu under sudo, like x14). zbmc_boot aliases lo0 + primes sudo,
+# then the pexpect driver spawns `sudo -n qemu`. running() greps $PIDF / the 623
+# hostfwd, both now on 10.0.8.10.
+ZBMC_IP=10.0.8.10
+ZBMC_HOSTPORT=623
+ZBMC_HOST=x10bmc
+
+IPMI_USER=ADMIN
+IPMI_PW=ADMIN
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=6
+
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-supermicro-x10.pid
+LOG=/Users/zen/phd/bmc/sm/x10-virtual/x10-start.log
+
+# boot: alias lo0 + prime sudo (so start-x10.sh's `sudo -n qemu` never prompts),
+# then launch the detached driver; it prints the qemu pid on NET_CONFIGURED.
+# Write that pid to PIDF as the reliable handle for the dispatcher's running().
+zbmc_boot() {
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null   # also primes the sudo timestamp for start-x10.sh's `sudo -n qemu`
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  bash "$ZBMC_DIR/start-x10.sh" >/dev/null 2>&1
+  local qp; qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1)
+  [ -n "$qp" ] && echo "$qp" > "$PIDF"
+  echo "$qp"
+}
+
+zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $ZBMC_DIR/x10-master.flash (from ipmi.old/fw/BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
+
+# ipmi: zipmi password-auth on 10.0.8.10:623 (we WANT zipmi's cipher stack
+# exercised, not ipmitool). Generous timeout — scan probes ~20 suites.
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 30 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$ZBMC_HOSTPORT" -U "$IPMI_USER" -P "$IPMI_PW" -t "$IPMI_T" "$@" 2>&1
+}
+
+# status health: mc info over RMCP+ (default cipher). Prints its own line; 0 on OK.
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -qi "Manufacturer Name"; then
+    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN; $(echo "$r" | grep -i 'Firmware Rev' | tr -s ' '))"; return 0
+  else
+    echo "no answer (booting ~60s / down)"; return 1
+  fi
+}
+
+zbmc_web() { echo "x10 Redfish/web not wired (oracle box — IPMI only)"; }
+
+ZBMC_READY_GREP='NET_CONFIGURED'

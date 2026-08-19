@@ -6,18 +6,16 @@ ZBMC_DIR=/Volumes/yyy/phd/bmc/dell/idrac9-virtual
 
 # host port-forwards (QEMU SLIRP)         # standard guest port
 SSH_PORT=22       # root-direct boot binds real-IP:22. (ckpt snapshot boots override to 2222 themselves.)
-IPMI_PORT=6623    # -> 623  (udp)
+IPMI_PORT=623     # root-direct boot binds ZBMC_IP:623 (udp). legacy `net up` remapped to 6623.
 WEB_PORT=6443     # -> 443
 
 # `zbmc idrac9 net up` maps standard ports to this loopback IP + /etc/hosts name
 ZBMC_IP=10.0.9.9
 ZBMC_HOST=drac9
-# copy-paste access hint shown by `zbmc status` (factory-default creds by design;
-# IPMI auth is the factory IPMIKey via -K, NOT a password; calvin is the ssh/redfish pw)
-ZBMC_HINT='zbmc idrac9 ssh (vmkey only — password SSH rejected by Dell PAM stack, not shadow) | zipmi -H drac9 -U root -K 915f32f49a97456d0d6d66eee5ed84c894b414af (or -P calvin) | curl -k -u root:calvin https://drac9/redfish/'
 
-# IPMI/RAKP auth (zipmi-git client)
+# IPMI/RAKP auth (zipmi client). Primary auth = IPMIKey (-K); calvin is the ssh/redfish pw.
 IPMI_USER=root
+IPMI_PW=calvin                                       # Redfish/SSH password (zipmi -P fallback)
 IPMI_KEY=915f32f49a97456d0d6d66eee5ed84c894b414af   # first 20 bytes of the factory IPMIKey
 IPMI_OPTS="-C 17 -I lanplus"                          # cipher 17, lanplus
 

@@ -1,82 +1,145 @@
-# zbmc.box — HPE XD670 BMC (AMI MegaRAC SP-X / AST2600), the network-green MegaRAC box.
+# zbmc.box — virtual-BMC descriptor for "megarac-hpe" (HPE Cray XD670 BMC = AMI MegaRAC SP-X / AST2600).
 #
-# WHAT: `zbmc megarac-hpe <verb>` boots the XD670 MegaRAC SP-X firmware on qemu ast2600-evb (direct-kernel,
-#       rootfs as RAM disk, /conf from a NAMED-partition NOR image). Unlike advantech-asmb787, this build's
-#       newer kernel brings the network up under qemu, so IPMI 2.0 RMCP+ and authenticated Redfish work.
-# TURNKEY: firmware (BMC HPM) fetched by download-fw.sh (mirror); build.sh carves+patches it.
+# WHAT: makes `zbmc megarac-hpe <verb>` drive the virtual HPE Cray XD670 BMC. qemu is ast2600-evb (armv7l);
+#       Linux 5.4.184-ami MegaRAC SP-X. Rootfs (squashfs) boots as a RAM disk; /conf & /bkupconf mount
+#       from a 64 MB NOR image (mtdflash.bin) with NAMED mtd partitions. Console on ttyS4.
+# WHY:  the Cray XD670 does NOT run iLO — it runs AMI MegaRAC (same stack Eclypsium BMC&C Part 3 hit,
+#       CVE-2024-54085 in the Redfish host-interface lua). First MegaRAC-on-Gigabyte box in the zoo.
+# BOOT: boot-megarac-hpe-svc.sh (real /sbin/init + qemu user-net). Artifacts regenerate from the HPM via
+#       extract.sh. There is no warm snapshot yet (cold boot ~2 min).
+#
+# STATUS (2026-07-28): GREEN — IPMI 2.0 RMCP+ + authenticated Redfish both work. extract.sh ->
+#   qemu-patch-rootfs.sh applies the Ghidra-RE'd fixes that let IPMIMain run stably under qemu:
+#     (1) seed /conf + create /conf/BMC -> BMC1/ast2600evb_ami symlink (IPMIMain opens the literal
+#         /conf/BMC/IPMI.conf to build g_BMCInfo[]); (2) IPMI.conf consistent with qemu hardware —
+#         keep LAN/UDS/KCS, disable serial/sol/bt/smm/smbus/ipmb (absent hw crash the central MsgHndlr),
+#         set NM_IPMB_BUS=0xFF (Node-Manager validation self-stop otherwise). IPMIMain then completes
+#         init, binds /var/UDSocket1, and auto-provisions the default admin/superuser (Admin, chan 1).
+#   Verified: ipmitool -I lanplus -U admin -P superuser mc info -> Gigabyte MfgID 15370, IPMI 2.0;
+#     user2=admin=ADMINISTRATOR; curl -u admin:superuser https://IP/redfish/v1/Managers -> real JSON.
 #
 # ACCESS:
-#   ipmi    : zbmc megarac-hpe ipmi mc info          (RMCP+ lanplus, admin/superuser)
-#   redfish : zbmc megarac-hpe web                    (curl -u admin:superuser https://127.0.0.1:5443/redfish/v1/Managers)
-#   console : zbmc megarac-hpe console 'id'           (serial ttyS4; auto-login sysadmin/superuser = root)
+#   IPMI    : zipmi -H 10.0.6.66 -U admin -P superuser mc info   (zbmc megarac-hpe ipmi …)
+#   Redfish : curl -sk -u admin:superuser https://10.0.6.66/redfish/v1/Managers   (zbmc megarac-hpe web)
+#   Console : zbmc megarac-hpe console   (serial ttyS4; getty login = sysadmin/<pw> — pw UNKNOWN, NOT
+#             'superuser' which is the IPMI user; getty only drops into the restricted defshell anyway)
+#   Shell   : zbmc megarac-hpe shell   (boots init=/bin/sh — UNRESTRICTED ROOT, no net/IPMI; RE mode,
+#             separate qemu from the service box. quit qemu: Ctrl-A x). THE way to get a real shell.
+#   SSH     : BROKEN — guest sshd resets at kex under emulation (binds guest-loopback). Use `shell`.
+#             Fix pending: sshd ListenAddress 0.0.0.0 + host keys via qemu-patch-rootfs.sh, then re-snapshot.
+#   Raw sh  : WD=... boot-megarac-hpe.sh  (init=/bin/sh, unrestricted root — for RE)
 ZBMC_NAME=megarac-hpe
-ZBMC_DESC="HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — warm-snapshot restore; IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser)"
+ZBMC_DESC="HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser)"
 
-PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
+ZBMC_DIR=/Users/zen/phd/tmp/cray-xd670         # scratch workdir: artifacts + console log + fifo
+PROJ_DIR=/Volumes/yyy/phd/bmc/HP/megarac-hpe/xd670-virtual   # scripts + docs (git-tracked)
 
-ZBMC_IP=127.0.0.1
+# IP scheme: one 3rd-octet per vendor — HPE/Cray = 10.0.6.x (its own; 7=OpenBMC 8=Supermicro 9=Dell
+# 10=Advantech). 66 = the box's host id. Real-IP (lo0 alias) + standard ports 623/443/22, qemu under
+# sudo — the x14/x10 root-direct model. The old "SLIRP mangles RMCP+ on an alias" note was WRONG:
+# measured 2026-08-18, RMCP+ mc info + Redfish both work fine on 10.0.6.66 (same as x14/x10). (ssh is a
+# separate guest-sshd bug, not a slirp issue — see header.)
+ZBMC_IP=10.0.6.66
 ZBMC_HOST=megarac-hpe
+
+# IPMI/Redfish auth = the MegaRAC default IPMI user 'admin'/'superuser' (auto-provisioned by IPMIMain
+# into /conf/BMC1/UserConfig.ini once it runs; verified: RMCP+ mc info + user2=ADMINISTRATOR). NOTE the
+# Linux/console login is a DIFFERENT account: sysadmin/superuser (see SSH_USER below).
 IPMI_USER=admin
 IPMI_PW=superuser
-IPMI_T=20
-SSH_USER=sysadmin        # console/Linux account (different from the IPMI user)
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=20        # RMCP+ RAKP under armv7 emulation is slow; short timeouts look dead
+SSH_USER=sysadmin
 SSH_PW=superuser
-SSH_PORT=5022
-WEB_PORT=5443
-IPMI_PORT=5623
-ZBMC_HINT='zbmc megarac-hpe ipmi mc info  |  zbmc megarac-hpe web  |  zbmc megarac-hpe console "id"   (admin/superuser)'
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
 
 PIDF=/tmp/zbmc-megarac-hpe.pid
-LOG="$ZBMC_DIR/svc.log"
-SOCK="$ZBMC_DIR/cin"
+LOG=/Users/zen/phd/tmp/cray-xd670/svc.log
+SOCK=/Users/zen/phd/tmp/cray-xd670/cin        # fifo: echo 'cmd' > "$SOCK" drives the console
 
-# boot: restore the warm snapshot, verify IPMI answers; re-restore up to 3x. One qemu at a time.
+# boot: background the service boot (real init + net) bound to the box's real IP on standard ports
+# (qemu needs root for 443/623 -> sudo + lo0 alias, same root-direct model as the x14 box). Console
+# -> $LOG, driven via the $SOCK fifo. ~2 min cold boot to Redfish-ready.
+# boot: FAST PATH restores the warm snapshot (~4s to green — sidesteps the IPMIMain cold-boot race).
+# Falls back to the health-gated cold retry (start-megarac-hpe-green.sh) if no snapshot exists or ZBMC_COLD=1.
 zbmc_boot() {
-  [ -f "$ZBMC_DIR/cray-snap.gz" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
-  rm -f "$ZBMC_DIR/.loggedin"
-  local try qp
-  for try in 1 2 3; do
-    pkill -9 -f "$ZBMC_DIR/cray-snap-flash.bin" 2>/dev/null; sleep 1
-    qp=$(BG=1 IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$ZBMC_DIR" \
-         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
-    sleep 6
-    if zbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then break; fi
-  done
-  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  local PENV="IP=$ZBMC_IP HTTPS_PORT=$WEB_PORT IPMI_PORT=$IPMI_PORT SSH_PORT=$SSH_PORT WD=$ZBMC_DIR"
+  if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/cray-snap.gz" ] && [ -f "$ZBMC_DIR/cray-snap-flash.bin" ]; then
+    env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
+  else
+    [ -f "$ZBMC_DIR/cray-snap.gz" ] || echo "no snapshot — cold retry (flaky; ~minutes)" >&2
+    env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1
+  fi
+  local n=0 qp=; while [ $n -lt 40 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break
+    qp=$(pgrep -f 'qemu-system-arm -M ast2600-evb' | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
-zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+# snapshot/restore verbs (build a warm base from a green boot, then always restore it)
+zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-megarac-hpe.sh" "$@"; }
+zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
 
-# ipmi: RMCP+ lanplus with the MegaRAC default admin/superuser.
-zbmc_ipmi() {
-  timeout -s KILL "$((IPMI_T+8))" ipmitool -I lanplus -H "$ZBMC_IP" -p "$IPMI_PORT" \
-    -U "$IPMI_USER" -P "$IPMI_PW" "$@" 2>&1
+zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
+
+# console: attach to the LIVE serial. The restore path (default) puts the getty on a ROOT-OWNED unix
+# socket (cray.sock) — must attach with `sudo socat`, NOT tail the log (svc.log is only written by the
+# green/cold path and goes stale under restore — tailing it shows old defshell noise then hangs).
+# Login = sysadmin / <unknown> (NOT superuser — that's the IPMI user; the Linux pw isn't cracked yet).
+# Reaching the getty just drops you in the restricted 'defshell' (spews AMIGetServiceConf/ROT errors —
+# missing emulated hw). For an unrestricted ROOT shell, boot init=/bin/sh: bash boot-megarac-hpe.sh.
+# Falls back to the fifo+log tail for the green/cold boot (no live socket).
+zbmc_console() {
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  local SER="$ZBMC_DIR/cray.sock"
+  if [ -S "$SER" ]; then
+    if [ $# -gt 0 ]; then printf '%s\n' "$*" | $SUDO socat - UNIX-CONNECT:"$SER"
+    else echo "megarac-hpe console (ttyS4) — 'BMC login:' getty (sysadmin/<pw>). exit: Ctrl-]"; \
+         $SUDO socat -,raw,echo=0,escape=0x1d UNIX-CONNECT:"$SER"; fi
+  elif [ $# -gt 0 ]; then printf '%s\n' "$*" > "$SOCK"; sleep 1; tail -20 "$LOG"
+  else tail -f "$LOG"; fi
 }
-zbmc_ipmi_health() {
-  if zbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then echo "AUTH OK (RMCP+ lanplus admin/superuser)"; return 0
-  else echo "no answer (still booting? RMCP+ slow under emulation — IPMI_T=$IPMI_T)"; return 1; fi
+
+# shell: boot init=/bin/sh — UNRESTRICTED ROOT, no login, no network/IPMI (RE mode). A separate qemu
+# from the running service instance (no hostfwd, no port clash), interactive on this terminal.
+# Quit qemu with Ctrl-A then x. Use for poking the firmware; use `start` for live IPMI/Redfish.
+zbmc_shell() {
+  echo "megarac-hpe: booting init=/bin/sh — root shell, NO net/IPMI (separate from the service box). quit qemu: Ctrl-A x"
+  WD="$ZBMC_DIR" exec bash "$PROJ_DIR/boot-megarac-hpe.sh"
 }
+
+# web: external Redfish ServiceRoot is UP (public). Health-check it.
 zbmc_web() {
   if curl -sk --max-time 8 -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP:$WEB_PORT/redfish/v1/Managers" 2>/dev/null | grep -q ManagerCollection; then
     echo "megarac-hpe Redfish: UP  (curl -sk -u admin:superuser https://$ZBMC_IP:$WEB_PORT/redfish/v1/Managers)"
-  else echo "megarac-hpe Redfish: not answering yet (still booting? ~2 min)"; fi
-}
-# ssh is loopback-only under emulation; use the console.
-zbmc_ssh() { echo "megarac-hpe: use the console — zbmc megarac-hpe console (login sysadmin/superuser)"; return 1; }
-
-# console: no args = live tail. With a command, AUTO-LOGIN once (waits for prompts), then run it.
-_c_seen() { tail -n 8 "$LOG" 2>/dev/null | grep -q "$1"; }
-_c_wait() { local t=0; until _c_seen "$1" || [ $t -ge "${2:-20}" ]; do sleep 1; t=$((t+1)); done; _c_seen "$1"; }
-zbmc_console() {
-  if [ $# -eq 0 ]; then tail -f "$LOG"; return; fi
-  if [ ! -f "$ZBMC_DIR/.loggedin" ]; then
-    printf '\n' > "$SOCK"
-    if _c_wait 'login:' 30; then
-      printf '%s\n' "$SSH_USER" > "$SOCK"; _c_wait 'Password:' 15 && printf '%s\n' "$SSH_PW" > "$SOCK"
-    fi
-    _c_wait '# ' 15 && touch "$ZBMC_DIR/.loggedin" || { echo "console: login didn't settle — retry"; return 1; }
+  else
+    echo "megarac-hpe Redfish: down — restore not up? (zbmc megarac-hpe start)"
   fi
-  printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$LOG"
+}
+# ipmi: zipmi RMCP+ with the MegaRAC default admin/superuser (WORKS — Gigabyte MfgID 15370).
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 8 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-20}" "$@" 2>&1
+}
+zbmc_ipmi_health() {
+  if zbmc_ipmi mc info | grep -q 'GIGA-BYTE\|Manufacturer'; then
+    echo "AUTH OK (zipmi RMCP+ admin/superuser; Gigabyte MfgID 15370)"; return 0
+  else echo "no answer (still booting? RMCP+ is slow under emulation — IPMI_T=$IPMI_T)"; return 1; fi
+}
+# ssh: try the real sshd, fall back to console. Guest sshd currently resets at kex (binds guest-loopback
+# under emulation) — this WILL work once qemu-patch-rootfs.sh sets ListenAddress 0.0.0.0 + host keys.
+zbmc_ssh() {
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@" 2>&1 && return 0
+  echo "megarac-hpe ssh unavailable (rootfs has no ssh host keys -> sshd resets at kex). For a root shell: zbmc megarac-hpe shell"; return 1
 }
 
-ZBMC_READY_GREP='login:'
+ZBMC_READY_GREP='Redfish Server ready'

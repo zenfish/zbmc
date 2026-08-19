@@ -1,68 +1,114 @@
-# zbmc.box — Supermicro X14 BMC (Phosphor OpenBMC / AST2600-ROT), warm-snapshot restore box.
+# zbmc.box — virtual-BMC descriptor for "x14" (Supermicro X14 BMC = Phosphor OpenBMC / AST2600-ROT).
 #
-# WHAT: `zbmc supermicro-x14 <verb>` restores a known-good X14 snapshot (qemu -incoming) captured in
-#       qemu-x14-svc mode (scripted daemons, no systemd), whose network survives the restore.
-# TURNKEY: snapshot bundle fetched by build.sh from the mirror; pinned to qemu-system-arm 11.x.
+# WHAT: makes `zbmc x14 <verb>` drive the virtual Supermicro X14 BMC, exactly like `zbmc idrac10`.
+#       qemu is ast2600-evb (armv7l), bound to the real IP 10.0.8.14 (lo0 alias) with hostfwd
+#       tcp 22/443 + udp 623. Serial console is the unix socket /tmp/x14.sock; QMP /tmp/x14-qmp.sock.
+# WHY:  X14 is the OpenBMC counterpart to the Dell iDRAC boxes in this framework — one control tool.
+# BOOT: FAST PATH restores a warm QMP snapshot (svc-snap-shell.gz: IPMI + Redfish + SSH shell all
+#       working) in ~10s with a LIVE network (-incoming keeps 623/443/22 up). ZBMC_COLD=1 (or a
+#       missing snapshot) falls back to a full cold boot to an interactive shell (shell-x14.sh).
 #
-# ACCESS (creds = ADMIN / ADMIN):
-#   ssh     : zbmc supermicro-x14 ssh 'uname -a'      (uid 10000 + sudo; slow KEX, ConnectTimeout high)
-#   redfish : zbmc supermicro-x14 web                 (remote Redfish works; loopback is fine here)
-#   ipmi    : zbmc supermicro-x14 ipmi channel info 1 (RAKP auth OK; note mc/chassis often return 0xff)
+# ACCESS (unlike the iDRAC boxes, X14 is PASSWORD auth — NOT the zipmi factory IPMIKey):
+#   SSH     : ssh ADMIN@10.0.8.14  pw ADMIN  -> real Linux /bin/sh (SMASH_ENABLE=0 baked in);
+#             sudo -i (pw ADMIN) -> root.   [we use sshpass -p ADMIN, StrictHostKeyChecking=no]
+#   IPMI    : zipmi -H 10.0.8.14 -U ADMIN -P ADMIN <cmd>   (user/channel/etc. work;
+#             `mc info` returns 0xff — one-handler quirk — so status probes `channel info 1`).
+#   Redfish : curl -sk -u ADMIN:ADMIN https://10.0.8.14/redfish/v1/...   (served by the restore).
+#
+# Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). Root-direct model: qemu runs as root and binds
+# the box's real IP + standard ports directly. The wrapped scripts live in the X14 scratch workdir.
 ZBMC_NAME=supermicro-x14
-ZBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — warm-snapshot restore — Redfish (full) + IPMI cipher-17 auth WORK (ADMIN:ADMIN); ssh KEX-resets over slirp (host-allow); mc info 0xff"
+ZBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot"
 
-PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
+# Scripts + snapshots live in the X14 scratch workdir (restore/snapshot/shell scripts cd there).
+ZBMC_DIR=/Users/zen/phd/tmp/x14-virtual
+SNAP=svc-snap-shell.gz   # canonical warm snapshot: IPMI + Redfish + interactive SSH shell
 
-ZBMC_IP=127.0.0.1
-ZBMC_HOST=x14
-SSH_USER=ADMIN
-SSH_PW=ADMIN
-SSH_PORT=4022
-WEB_PORT=4443
-IPMI_PORT=4623
+# Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
+ZBMC_IP=10.0.8.14
+ZBMC_HOST=x14bmc
+
+# IPMI: password auth via zipmi (ADMIN:ADMIN). IPMI_KEY unused but kept for the
+# dispatcher's key-fallback signature.
 IPMI_USER=ADMIN
 IPMI_PW=ADMIN
-IPMI_T=25
-ZBMC_HINT='zbmc supermicro-x14 ssh "uname -a"  |  zbmc supermicro-x14 web  |  zbmc supermicro-x14 ipmi channel info 1   (ADMIN:ADMIN)'
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=6
+
+# SSH: password auth via sshpass, NOT the iDRAC serial-socat path.
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+
+# port vars (kept for the dispatcher; qemu binds the standard ports directly on ZBMC_IP)
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
 
 PIDF=/tmp/zbmc-supermicro-x14.pid
-LOG="$ZBMC_DIR/svc.log"
+LOG=/tmp/x14-restore-console.log     # restore-svc-x14.sh writes qemu console here
+SOCK=/tmp/x14.sock                   # root-owned serial console unix socket
 
+# boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback (shell-x14.sh,
+# interactive /bin/sh as PID1) when ZBMC_COLD=1 or the snapshot is missing. Prints the qemu pid.
 zbmc_boot() {
-  [ -f "$ZBMC_DIR/svc-snap-full-working.gz" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
-  local try qp
-  for try in 1 2 3; do
-    pkill -9 -f "$ZBMC_DIR/x14-ce0-64m.img" 2>/dev/null; sleep 1
-    qp=$(BG=1 IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$ZBMC_DIR" \
-         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
-    sleep 8
-    if curl -sk --max-time 6 "https://$ZBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q "@odata"; then break; fi
-  done
-  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
+  cd "$ZBMC_DIR" || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
+    bash "$ZBMC_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
+  else
+    [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (shell)" >&2
+    : > "$LOG"
+    nohup bash "$ZBMC_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
+  fi
+  # wait for the qemu whose hostfwd matches this box's IPMI port to appear, print its pid
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
 }
-zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 
-# ssh: X14 password auth (ADMIN:ADMIN). Slow post-quantum KEX under emulation -> long ConnectTimeout.
+zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bin/initramfs-patched.bin + the .gz snapshots are prebuilt. Cold shell: ZBMC_COLD=1 zbmc x14 start"; }
+
+# snapshot: QMP-checkpoint the running instance to a gz (pauses the VM — restore to resume).
+zbmc_snapshot() { bash "$ZBMC_DIR/snapshot-x14.sh" "${1:-$SNAP}"; }
+# restore: bring a warm snapshot up on the real IP (what `start` does automatically).
+zbmc_restore()  { bash "$ZBMC_DIR/restore-svc-x14.sh" "${1:-$SNAP}"; }
+
+# ssh: password auth (sshpass). Real Linux shell; `sudo -i` for root. Args = remote command.
 zbmc_ssh() {
-  local o=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -p "$SSH_PORT")
-  if command -v sshpass >/dev/null; then sshpass -p "$SSH_PW" ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"
-  else ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"; fi
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
 }
-# ipmi: X14 is cipher-17; RAKP auth works but mc/chassis/sensor often return 0xff (partial under emu).
-zbmc_ipmi() {
-  timeout -s KILL "$((IPMI_T+8))" ipmitool -I lanplus -C 17 -H "$ZBMC_IP" -p "$IPMI_PORT" \
-    -U "$IPMI_USER" -P "$IPMI_PW" "$@" 2>&1
-}
-zbmc_ipmi_health() {   # channel info answers even when mc info = 0xff
-  if zbmc_ipmi channel info 1 2>/dev/null | grep -qiE 'Channel|Medium'; then echo "AUTH OK (RMCP+ cipher17 ADMIN:ADMIN; mc info may be 0xff)"; return 0
-  else echo "no answer (restore still resuming?)"; return 1; fi
-}
-zbmc_web() {
-  if curl -sk --max-time 8 "https://$ZBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then
-    echo "supermicro-x14 Redfish: UP  (curl -sk https://$ZBMC_IP:$WEB_PORT/redfish/v1/)"
-  else echo "supermicro-x14 Redfish: not answering yet (still resuming? ~10s)"; fi
-}
-zbmc_console() { tail -f "$LOG"; }
 
-ZBMC_READY_GREP='login'
+# ipmi: zipmi RMCP+ password auth (ADMIN:ADMIN). mc info returns 0xff on X14, so health uses channel info 1.
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-6}" "$@" 2>&1
+}
+
+# ipmi health for `status`: `mc info` returns 0xff on X14 (one-handler quirk), so probe channel info.
+# Prints its own status line; returns 0 when the RMCP+ session authenticates.
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi channel info 1)
+  if echo "$r" | grep -q "Channel Medium Type"; then
+    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN — mc info=0xff quirk)"; return 0
+  else
+    echo "no answer (restore warming/down)"; return 1
+  fi
+}
+
+# web: X14 Redfish is served by the restored instance already — verify it (health check, no bring-up).
+zbmc_web() {
+  if curl -sk -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP/redfish/v1/" 2>/dev/null | grep -q ServiceRoot; then
+    echo "x14 Redfish: UP  (curl -sk -u $IPMI_USER:$IPMI_PW https://$ZBMC_HOST/redfish/v1/)"
+  else
+    echo "x14 Redfish: down — restore not up? (zbmc x14 start)"
+  fi
+}
+
+ZBMC_READY_GREP='network live'
