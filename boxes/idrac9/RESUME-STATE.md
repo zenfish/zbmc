@@ -8,7 +8,7 @@ companion docs cited below; this is the map + how-to-resume.
   (HMC.db seed → fcgiodata@4200 → manual httpd → racadm creds) → **authenticated redfish-LOCAL 200**
   (`no-auth/badpw→401, valid→200`). Codifies the 2026-07-05 recipe; drive the box from inside via
   `./console.sh`. Confirmed live this session.
-- **TWO IMAGES (single-core can't do both):** `vbmc idrac9 start` = P4 = **IPMI** (fullfw). `./redfish-up.sh`
+- **TWO IMAGES (single-core can't do both):** `zbmc idrac9 start` = P4 = **IPMI** (fullfw). `./redfish-up.sh`
   = P6 = **Redfish** (fullfw masked). Pick one per boot. The zoo matrix marks idrac9 cells P4/P6.
 - **ipmi-LOCAL works via `racadm`** (getsysinfo → FW 7.20.30.50) — Dell's on-box mgmt tool, NOT ipmitool.
 - **redfish-REMOTE (from the Mac / slirp hostfwd) = STILL 400** `Base.1.8.QueryNotSupported`. NOT a
@@ -94,7 +94,7 @@ fcgiodata@4200 active, root provisioned, HMC.db seeded), saved with the **patche
 (`qemu-system-arm-patched`). Restore in ~15s vs ~15min boot:
 ```
 QEMU_BIN=./qemu-system-arm-patched ./run-p6-restore.sh img/ckpt/golden-200-ready.gz   # loads PAUSED (bg it)
-QEMU_NO_UNPLUG=1 python3 ckpt.py restore-finish /tmp/vbmc-idrac9-qmp.sock             # cont
+QEMU_NO_UNPLUG=1 python3 ckpt.py restore-finish /tmp/zbmc-idrac9-qmp.sock             # cont
 ./console.sh    # attach to the ttyS1 root shell -> drive the restored box
 ```
 PROVEN on the restored box (via ttyS1 shell): uptime continues from the frozen point; all daemons
@@ -113,7 +113,7 @@ checkpoint don't resume after `-incoming` (EHCI async schedule doesn't re-issue 
 That's a deeper host-controller migration layer below usb-net. NEXT (if pursued): EHCI async-URB
 resumption, OR a clean USB device-reset-on-restore to force the guest to drop stale URBs + re-enumerate.
 WORKAROUND (works today): the **console-shell.service** puts a root /bin/sh on ttyS1 (2nd -serial ->
-`/tmp/vbmc-idrac9-ttyS1.sock`, attach via `./console.sh`), so the restored box is fully drivable from
+`/tmp/zbmc-idrac9-ttyS1.sock`, attach via `./console.sh`), so the restored box is fully drivable from
 INSIDE (racadm, curl-localhost redfish=200, IPMI) without host network. `net-selfheal.service` is
 present but log-only (config-restore made its link-bounce unnecessary; a bounce also hangs on the EHCI
 issue). Time/entropy non-issues (`clock=vm` + frozen state). GOLDEN BUNDLE (gz + boot artifacts +
@@ -142,27 +142,27 @@ ARMv7 dual-Cortex-A9 = the real iDRAC9 Nuvoton NPCM750 SoC), booting Dell's **re
 So the virtual iDRAC9 does **SSH + authenticated IPMI/RAKP + Redfish HTTPS** — a real management
 plane to attack/study.
 
-## THE CONTROL TOOL — `vbmc` (use this)
-`vbmc` (in `~/phd/bin`, init.d-style) is the single entry point for every virtual BMC.
+## THE CONTROL TOOL — `zbmc` (use this)
+`zbmc` (in `~/phd/bin`, init.d-style) is the single entry point for every virtual BMC.
 ```
-vbmc                       # help: lists boxes + verbs
-vbmc idrac9 status         # qemu / ports / ssh / rakp / redfish health
-vbmc idrac9 start [--build]   # boot detached (+ auto-bring-up web once SSH is up). --no-web to skip
-vbmc idrac9 stop | restart
-vbmc idrac9 ssh [cmd]      # root shell (high port; use THIS not `ssh root@drac9` if macOS Remote Login is on)
-vbmc idrac9 ipmi mc info   # authenticated zipmi — key/cipher/port baked in (no flags to remember)
-vbmc idrac9 web            # bring up httpd + Redfish
-vbmc idrac9 console        # tail serial log
-vbmc idrac9 build          # repack the Phase-4 initramfs (init.p4 + cfgdb seeds) — see build-p4.sh
-vbmc idrac9 net up|down    # map standard ports 623/443/22 -> loopback 10.0.9.9 + /etc/hosts (sudo)
+zbmc                       # help: lists boxes + verbs
+zbmc idrac9 status         # qemu / ports / ssh / rakp / redfish health
+zbmc idrac9 start [--build]   # boot detached (+ auto-bring-up web once SSH is up). --no-web to skip
+zbmc idrac9 stop | restart
+zbmc idrac9 ssh [cmd]      # root shell (high port; use THIS not `ssh root@drac9` if macOS Remote Login is on)
+zbmc idrac9 ipmi mc info   # authenticated zipmi — key/cipher/port baked in (no flags to remember)
+zbmc idrac9 web            # bring up httpd + Redfish
+zbmc idrac9 console        # tail serial log
+zbmc idrac9 build          # repack the Phase-4 initramfs (init.p4 + cfgdb seeds) — see build-p4.sh
+zbmc idrac9 net up|down    # map standard ports 623/443/22 -> loopback 10.0.9.9 + /etc/hosts (sudo)
 ```
-Per-box descriptor = `vbmc.box` (ports, IPMIKey, `vbmc_boot`); add a box by dropping a `vbmc.box`
-in its dir + registering its path in `~/phd/bin/vbmc` REGISTRY. The `net up` verb (vbmc-net.sh,
+Per-box descriptor = `zbmc.box` (ports, IPMIKey, `zbmc_boot`); add a box by dropping a `zbmc.box`
+in its dir + registering its path in `~/phd/bin/zbmc` REGISTRY. The `net up` verb (zbmc-net.sh,
 self-sudo) gives `zipmi -H drac9 …`, `curl -k https://drac9/redfish/`, and `ssh root@drac9`
 (verified to reach the BMC even with macOS Remote Login ON — socat's specific reuseaddr bind on
 10.0.9.9:22 wins over the wildcard sshd via most-specific match).
 
-## HOW TO RESUME (cold start — the raw scripts under vbmc)
+## HOW TO RESUME (cold start — the raw scripts under zbmc)
 1. **Build + boot** the Phase-4 box:
    ```
    cd /Volumes/yyy/phd/bmc/dell/idrac9-virtual
@@ -426,7 +426,7 @@ responders WITHOUT `systemctl start` (which pulls the cascade): use socket-activ
 for fcgiodata@4200 + fcgi-auth, `systemctl start` UDB only (needed backend), manual `httpd -d /
 RF_RESPONDER=4200`. Mask the cascade pull-ins (oauthd, redfish-eventservice, cmcServer, xmlconfig,
 dsm-sa-*) first if they still get dragged in. (3) THEN test → expect authenticated 200.
-TOOLING NOTE: vbmc ssh wedges for 1hr under high load; the shell `timeout N` (SIGTERM) does NOT
+TOOLING NOTE: zbmc ssh wedges for 1hr under high load; the shell `timeout N` (SIGTERM) does NOT
 kill it — MUST use `timeout -s KILL N` + a short Bash-tool timeout to bound each call.
 STATUS: authenticated-200 not yet demonstrated live (box thrashed before the racadm step); every
 prerequisite proven present on p6.

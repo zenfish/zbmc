@@ -36,9 +36,9 @@ If a command prints its version/help, you're good. If it says "command not found
 ## 1. Clone
 
 ```bash
-git clone git@github.com:zenfish/vbmc-lab.git
-cd vbmc-lab
-export PATH="$PWD/tools:$PATH"     # so you can type 'vbmc' instead of './tools/vbmc'
+git clone git@github.com:zenfish/zbmc-lab.git
+cd zbmc-lab
+export PATH="$PWD/tools:$PATH"     # so you can type 'zbmc' instead of './tools/zbmc'
 ```
 
 ## 2. Build the boot image
@@ -58,35 +58,35 @@ ref     – idrac9   (reference recipe — supply firmware + adapt boxes/idrac9/
 ...
 ```
 
-## 3. Run it — with `vbmc`
+## 3. Run it — with `zbmc`
 
-`vbmc` is the one control tool for every box: start, log in, check status, stop. This is the easy path.
+`zbmc` is the one control tool for every box: start, log in, check status, stop. This is the easy path.
 
 ```bash
-vbmc advantech-asmb787 start
+zbmc advantech-asmb787 start
 ```
 Boots the box in the background (builds first if needed). Takes ~2 minutes under emulation.
 (Cold boxes take ~2 min to services; warm-snapshot boxes like idrac10 / supermicro-x14 resume in ~15–30 s. A loaded host is slower.)
 
 ```bash
-vbmc advantech-asmb787 console 'uname -a; id'
+zbmc advantech-asmb787 console 'uname -a; id'
 ```
 Runs a command on the box's serial console and prints the output. **It logs you in automatically** the
 first time (as `sysadmin` / `superuser`, which is uid 0 — root). Run it again with any command.
 
 ```bash
-vbmc advantech-asmb787 console
+zbmc advantech-asmb787 console
 ```
 With no command, this attaches to the **live console** (a `tail -f`). Press Ctrl-C to detach — the box
 keeps running.
 
 ```bash
-vbmc advantech-asmb787 status      # is QEMU up? which ports?
-vbmc advantech-asmb787 stop        # shut it down
-vbmc list                          # every box in this repo
+zbmc advantech-asmb787 status      # is QEMU up? which ports?
+zbmc advantech-asmb787 stop        # shut it down
+zbmc list                          # every box in this repo
 ```
 
-That's it. `vbmc <box> start` → `vbmc <box> console` is the whole loop.
+That's it. `zbmc <box> start` → `zbmc <box> console` is the whole loop.
 
 ---
 
@@ -107,7 +107,7 @@ have working network access — see below.
 
 ## 5. Under the hood (optional)
 
-`vbmc` is a thin wrapper. If you'd rather drive QEMU yourself, the box's own scripts do the same thing:
+`zbmc` is a thin wrapper. If you'd rather drive QEMU yourself, the box's own scripts do the same thing:
 
 ```bash
 WD=./work/advantech-asmb787 BG=1 ./boxes/advantech-asmb787/boot.sh   # boot in background
@@ -120,7 +120,7 @@ tail ./work/advantech-asmb787/svc.log
 pkill -f 'mtdflash-run'                                              # stop
 ```
 
-Use `vbmc` unless you're debugging the boot itself.
+Use `zbmc` unless you're debugging the boot itself.
 
 ---
 
@@ -147,7 +147,7 @@ gotchas. `advantech-asmb787` is the fully worked, runnable example to learn the 
 | **Redfish** | The modern REST/JSON management API that's replacing IPMI. |
 | **NC-SI** | Network Controller Sideband Interface — lets the BMC share the host server's physical network port. The reason `advantech-asmb787` is console-only under QEMU. |
 | **AST2600 / NPCM750** | The actual chips (SoCs) BMCs run on — ASPEED AST2500/2600 and Nuvoton NPCM750/845. QEMU emulates them (`ast2600-evb`, `npcm750-evb`, …). |
-| **`vbmc`** | The control tool in this repo — `vbmc <box> start|console|status|stop` for every box. |
+| **`zbmc`** | The control tool in this repo — `zbmc <box> start|console|status|stop` for every box. |
 
 ## Troubleshooting
 
@@ -156,6 +156,6 @@ gotchas. `advantech-asmb787` is the fully worked, runnable example to learn the 
 - **`login:` never appears** — give it the full ~2 min under emulation; check the box's `svc.log` for a
   kernel panic. A heavily-loaded host boots slower.
 - **`console` prints nothing** — the box was still booting; wait for `login:` in `status`/`svc.log`, then
-  re-run. `vbmc` logs in for you once the prompt is up.
+  re-run. `zbmc` logs in for you once the prompt is up.
 - **`firmware not found`** — run from the repo root; `firmware/…ima_enc` must be present (it's a normal
   committed file — this repo does not use git-lfs).

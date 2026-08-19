@@ -230,7 +230,7 @@ mtdparts=1e620000.spi:832k@0(uboot),1984k@0xd0000(conf),1984k@0x2d0000(bkupconf)
 `mtdblock1`=conf lands on the JFFS2 at `0xD0000`, `mtdblock3`=www on the SquashFS at `0x2810000`, and so
 on — matching `dupfstab` exactly. `/conf` mounts read-write, the seed runs, IPMIMain provisions its user.
 
-At this point: **`vbmc asmb787 console` → login `sysadmin`/`superuser` → uid 0 root shell.** Everything
+At this point: **`zbmc asmb787 console` → login `sysadmin`/`superuser` → uid 0 root shell.** Everything
 local works.
 
 ---
@@ -321,11 +321,11 @@ DMA-serial open in ASMB-787's init) are documented as a parked, multi-session su
 
 ```
 tools/unpack-ami            one-command AMI MegaRAC unpacker (the gotchas above, codified)
-tools/vbmc                  the "zoo" dispatcher: vbmc <box> start|console|status|...
+tools/zbmc                  the "zoo" dispatcher: zbmc <box> start|console|status|...
 box/qemu-patch-rootfs.sh    the two IPMIMain fixes (conf/BMC symlink + IPMI.conf trim)
 box/boot-asmb787-svc.sh     the exact QEMU invocation (mtdparts, ttyS4, hostfwd)
 box/build.sh                firmware -> {kernel.Image, dtb, rootfs.sqfs, mtdflash.bin} in ~35s
-box/vbmc.box               the box descriptor (creds, ports, verbs)
+box/zbmc.box               the box descriptor (creds, ports, verbs)
 firmware/…ima_enc           the source of truth
 ```
 

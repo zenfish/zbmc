@@ -6,7 +6,7 @@
 # base diverges and kills the guest, which is what broke the earlier P6 attempt).
 # USAGE: ./restore-idrac9.sh [bind_ip]
 #   bind_ip empty -> wildcard 2222/6623/6443 on 127.0.0.1 (test, non-root)
-#   bind_ip set   -> hostfwd on BIND:{623} as root for vbmc (10.0.9.9). NB: :22 collides with the Mac's
+#   bind_ip set   -> hostfwd on BIND:{623} as root for zbmc (10.0.9.9). NB: :22 collides with the Mac's
 #                    own sshd, so the real-IP path forwards IPMI(623) only; use ttyS1/2222 for a shell.
 # SUCCESS: prints "RESTORE OK: ipmi=N/5" with N>0. RELATED: boot-p4-ckpt.sh, ckpt.py.
 set -euo pipefail
@@ -15,7 +15,7 @@ QB=./qemu-system-arm-patched
 K=915f32f49a97456d0d6d66eee5ed84c894b414af
 W="${HOME}/phd/tmp/idrac9-virtual/ckpt"
 STATE="${STATE:-$W/state-p4.gz}"; FROZEN="$W/overlay-frozen.qcow2"
-QMP=/tmp/vbmc-idrac9-rqmp.sock
+QMP=/tmp/zbmc-idrac9-rqmp.sock
 [ -s "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -s "$FROZEN" ] || { echo "no frozen overlay at $FROZEN — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -x "$QB" ] || { echo "patched qemu missing ($QB) — build-qemu-patched.sh" >&2; exit 1; }
@@ -32,11 +32,11 @@ $SUDO nohup "$QB" -M npcm750-evb -m 1G -display none \
   -drive "id=rootsd,if=none,file=$FROZEN,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
   -netdev "user,id=n1,$HF" -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
-  -qmp unix:"$QMP",server,nowait -serial file:/tmp/vbmc-idrac9-console.log \
-  -incoming "exec:gzip -dc < $STATE" >/tmp/vbmc-idrac9-rqemu.log 2>&1 &
+  -qmp unix:"$QMP",server,nowait -serial file:/tmp/zbmc-idrac9-console.log \
+  -incoming "exec:gzip -dc < $STATE" >/tmp/zbmc-idrac9-rqemu.log 2>&1 &
 QPID=$!
 for i in $(seq 1 30); do $SUDO test -S "$QMP" && break; sleep 0.5; done
-$SUDO test -S "$QMP" || { echo "QMP never appeared:"; $SUDO tail -3 /tmp/vbmc-idrac9-rqemu.log; exit 1; }
+$SUDO test -S "$QMP" || { echo "QMP never appeared:"; $SUDO tail -3 /tmp/zbmc-idrac9-rqemu.log; exit 1; }
 QEMU_NO_UNPLUG=1 $SUDO python3 ckpt.py restore-finish "$QMP" 2>&1 | sed 's/^/[restore] /'
 # usb-net re-enumeration after resume is slower than gmac — poll up to ~90s
 ip=0
@@ -46,4 +46,4 @@ for t in $(seq 1 18); do
   [ "$ip" -ge 1 ] && break
 done
 echo "RESTORE OK: ipmi=$ip ($VIP:$SP; pid $QPID; kill: $SUDO kill $QPID)"
-[ "$ip" -ge 1 ] || echo "  (IPMI 0 — usb-net may need longer, or vmstate/overlay drift; check /tmp/vbmc-idrac9-rqemu.log)"
+[ "$ip" -ge 1 ] || echo "  (IPMI 0 — usb-net may need longer, or vmstate/overlay drift; check /tmp/zbmc-idrac9-rqemu.log)"

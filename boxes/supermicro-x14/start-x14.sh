@@ -9,7 +9,7 @@
 #         vendor kernel+rootfs directly. Stage-1 "direct-kernel" approach; the full
 #         ROT-chain boot is a separate research stretch.
 # TARGET: BMC_X14AST2600-ROT-E601MS_20260306_01.01.06.07 (MBD-X14SBSC).
-# NET:    10.0.8.14  (Dell iDRAC vbmc owns 10.0.9.x; X14 uses 10.0.8.x). Privileged
+# NET:    10.0.8.14  (Dell iDRAC zbmc owns 10.0.9.x; X14 uses 10.0.8.x). Privileged
 #         ports 22/443/623 need root -> qemu runs under sudo.
 # STATUS: boots to `localhost login:` with all daemons. KNOWN GAP: guest eth0 gets
 #         no IPv4 under qemu user-net (phosphor-network-manager vs ephemeral overlay),

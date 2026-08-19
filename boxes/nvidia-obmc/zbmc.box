@@ -1,0 +1,69 @@
+# zbmc.box — NVIDIA GB200NVL BMC (OpenBMC / AST2600), with the NVIDIA OEM IPMI handlers.
+#
+# WHAT: `zbmc nvidia-obmc <verb>` boots the GB200NVL OpenBMC flash image on qemu -M gb200nvl-bmc.
+#       Same Phosphor stack as the vanilla `openbmc` box, plus NVIDIA's OEM IPMI (raw NetFn 0x3C, e.g.
+#       get-bios-password) reachable over LAN and via busctl.
+# TURNKEY: firmware fetched by download-fw.sh (mirror); ssh + Redfish + IPMI-LAN all live. Loopback + high
+#          ports (no root/sudo).
+#
+# ACCESS (creds = Phosphor default root / 0penBmc):
+#   ssh     : zbmc nvidia-obmc ssh 'uname -a'
+#   ipmi    : zbmc nvidia-obmc ipmi mc info            (RMCP+ lanplus, cipher 17)
+#   OEM     : zbmc nvidia-obmc ipmi raw 0x3c 0x37 0x01 (NVIDIA get-bios-password handler)
+#   redfish : zbmc nvidia-obmc web
+ZBMC_NAME=nvidia-obmc
+ZBMC_DESC="Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
+
+ZBMC_IP=127.0.0.1
+ZBMC_HOST=nvidia-obmc
+SSH_USER=root
+SSH_PW=0penBmc
+SSH_PORT=8022
+WEB_PORT=8443
+IPMI_PORT=8623
+IPMI_USER=root
+IPMI_PW=0penBmc
+IPMI_T=20
+ZBMC_HINT='zbmc nvidia-obmc ssh "uname -a"  |  zbmc nvidia-obmc ipmi raw 0x3c 0x37 0x01  |  web   (root/0penBmc)'
+
+PIDF=/tmp/zbmc-nvidia-obmc.pid
+LOG="$ZBMC_DIR/svc.log"
+SOCK="$ZBMC_DIR/cin"
+
+zbmc_boot() {
+  [ -f "$ZBMC_DIR/flash.mtd" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
+  BG=1 IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$ZBMC_DIR" \
+    bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
+  local n=0 qp=; while [ $n -lt 40 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
+}
+zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+
+zbmc_ssh() {
+  local o=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no
+           -o ConnectTimeout=25 -p "$SSH_PORT")
+  if command -v sshpass >/dev/null; then sshpass -p "$SSH_PW" ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"
+  else ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"; fi
+}
+zbmc_ipmi() {
+  timeout -s KILL "$((IPMI_T+8))" ipmitool -I lanplus -C 17 -H "$ZBMC_IP" -p "$IPMI_PORT" \
+    -U "$IPMI_USER" -P "$IPMI_PW" "$@" 2>&1
+}
+zbmc_ipmi_health() {
+  if zbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then echo "AUTH OK (RMCP+ cipher17 root/0penBmc)"; return 0
+  else echo "no answer (still booting? RMCP+ slow under emulation — IPMI_T=$IPMI_T)"; return 1; fi
+}
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"@odata'; then
+    echo "nvidia-obmc Redfish: UP  (curl -sk https://$ZBMC_IP:$WEB_PORT/redfish/v1/)"
+  else echo "nvidia-obmc Redfish: not answering yet (still booting? ~2 min)"; fi
+}
+# console is a read-only boot log here; use ssh to run commands.
+zbmc_console() { if [ $# -gt 0 ]; then echo "console is read-only for this box — use:  zbmc $ZBMC_NAME ssh '$*'"; else tail -f "$LOG"; fi; }
+
+ZBMC_READY_GREP='login:'

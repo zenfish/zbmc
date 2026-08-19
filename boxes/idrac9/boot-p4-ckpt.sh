@@ -11,9 +11,9 @@ QB=./qemu-system-arm-patched
 K=915f32f49a97456d0d6d66eee5ed84c894b414af
 W="${HOME}/phd/tmp/idrac9-virtual/ckpt"; mkdir -p "$W"
 OVL="$W/overlay.qcow2"; STATE="$W/state-p4.gz"; FROZEN="$W/overlay-frozen.qcow2"
-QMP=/tmp/vbmc-idrac9-ckpt-qmp.sock
+QMP=/tmp/zbmc-idrac9-ckpt-qmp.sock
 [ -x "$QB" ] || { echo "patched qemu missing — build-qemu-patched.sh" >&2; exit 1; }
-[ -f boot/initramfs.p4.xz ] || { echo "no initramfs.p4.xz — vbmc idrac9 build" >&2; exit 1; }
+[ -f boot/initramfs.p4.xz ] || { echo "no initramfs.p4.xz — zbmc idrac9 build" >&2; exit 1; }
 DTB=boot/p4.dtb; [ -f "$DTB" ] || DTB=boot/p2uni.dtb
 
 pkill -9 -f 'qemu-system-arm.*ckpt-qmp' 2>/dev/null || true; sleep 1
@@ -29,7 +29,7 @@ nohup "$QB" -M npcm750-evb -m 1G -display none \
   -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
   -qmp unix:"$QMP",server,nowait -serial file:/tmp/idrac9-p4boot.log \
-  -serial unix:/tmp/vbmc-idrac9-ttyS1.sock,server,nowait >/tmp/idrac9-p4qemu.log 2>&1 &
+  -serial unix:/tmp/zbmc-idrac9-ttyS1.sock,server,nowait >/tmp/idrac9-p4qemu.log 2>&1 &
 QPID=$!
 for i in $(seq 1 30); do [ -S "$QMP" ] && break; sleep 0.5; done
 

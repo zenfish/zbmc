@@ -23,7 +23,7 @@ for boxdir in "$HERE"/boxes/*/; do
   fi
   # a box is turnkey (clone-buildable) only if its build.sh carries the marker; the others
   # carry the author's session build scripts, kept as reference recipes.
-  if ! grep -q 'vbmc-lab:turnkey' "$boxdir/build.sh" 2>/dev/null; then
+  if ! grep -q 'zbmc-lab:turnkey' "$boxdir/build.sh" 2>/dev/null; then
     skipped+=("$box  (reference recipe — supply firmware + adapt boxes/$box/; see docs/zoo-lessons.md)")
     continue
   fi
@@ -40,4 +40,4 @@ for b in "${built[@]:-}";   do [ -n "$b" ] && echo "BUILT   ✓ $b   -> work/$b/
 for b in "${failed[@]:-}";  do [ -n "$b" ] && echo "FAILED  ✗ $b   (firmware missing? run ./firmware/download-fw.sh $b)"; done
 for b in "${skipped[@]:-}"; do [ -n "$b" ] && echo "ref     – $b"; done
 echo
-echo "run a built box:   ./tools/vbmc <box> start   (then: ./tools/vbmc <box> console)"
+echo "run a built box:   ./tools/zbmc <box> start   (then: ./tools/zbmc <box> console)"

@@ -14,16 +14,16 @@ cd "$(dirname "$0")"
 QB=./qemu-system-arm-patched
 K=915f32f49a97456d0d6d66eee5ed84c894b414af
 STATE=img/ckpt/redfish-200-ready-net.gz
-QMP=/tmp/vbmc-idrac9-qmp.sock
+QMP=/tmp/zbmc-idrac9-qmp.sock
 # Wildcard hostfwd (2222/6623/6443) for the snapshot boot: binding real-IP :22 would collide with the
 # Mac's own sshd on *:22. ssh-in.sh is pointed at 127.0.0.1:2222 via SSH_HOST/SSH_PORT so it (and
-# start-web.sh) reach the GUEST, not the host. The saved state is IP-agnostic — restore/vbmc rebind
+# start-web.sh) reach the GUEST, not the host. The saved state is IP-agnostic — restore/zbmc rebind
 # the real IP later (only :22 collides with the Mac; IPMI 623 + Redfish 443 are fine on 10.0.9.9).
 export SSH_HOST=127.0.0.1 SSH_PORT=2222
 [ -x "$QB" ] || { echo "patched qemu missing — build-qemu-patched.sh" >&2; exit 1; }
 DTB=boot/p4.dtb; [ -f "$DTB" ] || DTB=boot/p2uni.dtb
 pkill -9 -f 'qemu-system-arm' 2>/dev/null || true; sleep 1
-rm -f "$QMP" /tmp/vbmc-idrac9-ttyS1.sock /tmp/idrac9-p6boot.log 2>/dev/null || true
+rm -f "$QMP" /tmp/zbmc-idrac9-ttyS1.sock /tmp/idrac9-p6boot.log 2>/dev/null || true
 
 echo "[1] cold-boot P6 (patched qemu, wildcard 2222/6623/6443)"
 nohup "$QB" -M npcm750-evb -m 1G -display none \
@@ -34,7 +34,7 @@ nohup "$QB" -M npcm750-evb -m 1G -display none \
   -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
   -qmp unix:"$QMP",server,nowait -serial file:/tmp/idrac9-p6boot.log \
-  -serial unix:/tmp/vbmc-idrac9-ttyS1.sock,server,nowait >/tmp/idrac9-qemu-err.log 2>&1 &
+  -serial unix:/tmp/zbmc-idrac9-ttyS1.sock,server,nowait >/tmp/idrac9-qemu-err.log 2>&1 &
 for i in $(seq 1 30); do [ -S "$QMP" ] && break; sleep 0.5; done
 
 echo "[2] wait for ssh (up to ~15min)"

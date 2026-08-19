@@ -6,7 +6,7 @@
 # WHY a persistent qcow2 overlay (not snapshot=on): migrate saves RAM+CPU+devices; the disk must
 #   be consistent with that RAM on restore. The overlay holds all boot-time writes (/flash,/etc)
 #   and is frozen at snapshot; restore re-attaches it with snapshot=on so every restore is identical.
-# NOTE: the restored guest's console is LIVE at ckpt/rserial.sock (reach it via `vbmc idrac10 ssh`);
+# NOTE: the restored guest's console is LIVE at ckpt/rserial.sock (reach it via `zbmc idrac10 ssh`);
 #   this script drives the box over IPMI/UDP regardless.
 # USAGE: ./boot-live-ckpt.sh [max_boot_attempts]   (default 4)
 # SUCCESS: prints "SNAPSHOT SAVED <file>" after a verified 623 answer. Retries bad (dbus-hung) boots.
@@ -42,7 +42,7 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
     >"$W/qemu.log" 2>&1 &
   QPID=$!
   for i in $(seq 1 30); do [ -S "$SOCK" ] && break; sleep 0.5; done
-  # drive bring-up; feed the UDP-echo prime like vbmc.box does
+  # drive bring-up; feed the UDP-echo prime like zbmc.box does
   ( for i in $(seq 1 240); do grep -q UDP_ECHO_READY "$W/boot.log" 2>/dev/null && { \
       python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.sendto(b'HELLO_UDP_TEST',('127.0.0.1',$PORT))" 2>/dev/null; break; }; sleep 0.5; done ) &
   set +e

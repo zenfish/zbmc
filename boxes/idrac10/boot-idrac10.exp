@@ -3,7 +3,7 @@
 # socket. Mounts filesystems, brings up eth0 (slirp 10.0.2.15), fetches+runs boot-fullfw-guest.sh
 # (the fullfw/RAKP daemon bring-up with the shm-shim), waits for IPMI_READY, then detaches leaving
 # QEMU + fullfw running. This is the stripped bring-up from run-p5-ipmi.sh (no debug diagnostics).
-# Called by vbmc.box vbmc_boot. Arg: <serial-unix-sock>.  Guest fetches binaries from the host's
+# Called by zbmc.box zbmc_boot. Arg: <serial-unix-sock>.  Guest fetches binaries from the host's
 # python http.server on 10.0.2.2:8091 (slirp gateway).
 set sock [lindex $argv 0]
 match_max 2000000

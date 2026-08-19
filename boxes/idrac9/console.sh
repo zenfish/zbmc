@@ -5,7 +5,7 @@
 # (200 from inside), poke IPMI, etc. Also works on a live box. Press Enter for a prompt. Detach: Ctrl-] .
 # RUN: ./console.sh
 set -euo pipefail
-SOCK=/tmp/vbmc-idrac9-ttyS1.sock
+SOCK=/tmp/zbmc-idrac9-ttyS1.sock
 [ -S "$SOCK" ] || { echo "no ttyS1 socket ($SOCK) — is the box running (run-p6*.sh)?"; exit 1; }
 if command -v socat >/dev/null; then
   exec socat -,raw,echo=0,escape=0x1d "unix-connect:$SOCK"     # Ctrl-] detaches

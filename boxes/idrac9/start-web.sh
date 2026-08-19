@@ -108,4 +108,4 @@ for i in 1 2 3 4 5 6; do
 done
 g=$(timeout -s KILL 8 curl -sk --compressed -o /dev/null -w '%{http_code}' https://localhost:6443/restgui/start.html 2>/dev/null)
 echo "GUI login page (/restgui/start.html): HTTP $g  -> browser: https://drac9/restgui/start.html"
-echo "  host: curl -k https://localhost:6443/redfish/   (or https://drac9/redfish/ after: vbmc idrac9 net up)"
+echo "  host: curl -k https://localhost:6443/redfish/   (or https://drac9/redfish/ after: zbmc idrac9 net up)"

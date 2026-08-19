@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bake-ssh-into-ckpt.sh — re-snapshot the *currently running* warm idrac10 into state.gz so the
 # live guest state (root sshd + host keys + world-readable authorized_keys + the files-first
-# nsswitch bind — all in tmpfs/RAM) survives every future `vbmc idrac10 start`.
+# nsswitch bind — all in tmpfs/RAM) survives every future `zbmc idrac10 start`.
 #
 # WHY this works without a cold reboot: the ssh bring-up wrote only tmpfs paths (/mnt,/run,/tmp),
 # so the frozen overlay (overlay-frozen.qcow2) is still byte-consistent with the new RAM image.
@@ -15,7 +15,7 @@
 set -euo pipefail
 W="${HOME}/phd/tmp/idrac10-virtual/ckpt"
 STATE="$W/state.gz"; QMP="$W/rqmp.sock"
-[ -S "$QMP" ] || { echo "no live QMP at $QMP — is the warm idrac10 running? (vbmc idrac10 start)" >&2; exit 1; }
+[ -S "$QMP" ] || { echo "no live QMP at $QMP — is the warm idrac10 running? (zbmc idrac10 start)" >&2; exit 1; }
 [ -f "$STATE" ] || { echo "no $STATE to back up" >&2; exit 1; }
 
 BAK="$STATE.prebake-$(date +%Y%m%d-%H%M%S).bak"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vbmc-lab:turnkey   <- vanilla OpenBMC flash image ships in this repo; boots on stock qemu ast2600-evb.
+# zbmc-lab:turnkey   <- vanilla OpenBMC flash image ships in this repo; boots on stock qemu ast2600-evb.
 #
 # build.sh — stage the OpenBMC flash image into the box's work dir. This is a "flash-boot" box: the
 # .mtd already contains u-boot + kernel + rootfs, so there's nothing to unpack — build just copies the
@@ -16,6 +16,6 @@ mkdir -p "$WD"
 cp -f "$FW" "$WD/flash.mtd"
 echo "[*] staged $WD/flash.mtd ($(stat -f '%z' "$WD/flash.mtd" 2>/dev/null || stat -c '%s' "$WD/flash.mtd") bytes)"
 echo
-echo "next:  ./tools/vbmc openbmc start"
-echo "       ./tools/vbmc openbmc ssh 'uname -a'      # root / 0penBmc"
-echo "       ./tools/vbmc openbmc web                  # Redfish ServiceRoot"
+echo "next:  ./tools/zbmc openbmc start"
+echo "       ./tools/zbmc openbmc ssh 'uname -a'      # root / 0penBmc"
+echo "       ./tools/zbmc openbmc web                  # Redfish ServiceRoot"

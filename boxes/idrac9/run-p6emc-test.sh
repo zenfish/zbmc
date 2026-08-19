@@ -18,5 +18,5 @@ exec qemu-system-arm -M npcm750-evb -m 1G -display none \
   -netdev user,id=n2,net=10.0.3.0/24,host=10.0.3.2 \
   -net nic,netdev=n2,model=npcm7xx-emc \
   -rtc base=2020-09-20T05:00:00,clock=vm \
-  -qmp unix:/tmp/vbmc-idrac9-qmp.sock,server,nowait \
+  -qmp unix:/tmp/zbmc-idrac9-qmp.sock,server,nowait \
   -serial mon:stdio

@@ -3,7 +3,7 @@
 #
 # WHAT : takes firmware/encrypted_ASMB-787_20220912.ima_enc and produces, in the work dir:
 #          kernel.Image  dtb-a1.dtb  rootfs.sqfs  mtdflash.bin
-#        These are what box/boot.sh (and vbmc.box) run. Kept OUT of git — regenerate here.
+#        These are what box/boot.sh (and zbmc.box) run. Kept OUT of git — regenerate here.
 # WHY  : the firmware is the single source of truth; artifacts are ~104MB and fully derivable.
 # HOW  : unpack-ami carves the FMH modules -> dumpimage pulls kernel+dtb from the FIT ->
 #        the root squashfs is unsquashed, patched for qemu (qemu-patch-rootfs.sh), repacked ->
@@ -11,7 +11,7 @@
 # RUN  : ./box/build.sh [WORKDIR]   (default WORKDIR = ~/phd/tmp/asmb787 or ./work)
 # NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage (u-boot-tools), jefferson (pip),
 #        python3, dtc (optional). tools/unpack-ami must be on PATH or alongside.
-# vbmc-lab:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
+# zbmc-lab:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"          # boxes/advantech-asmb787 -> repo root
@@ -60,5 +60,5 @@ for f in kernel.Image dtb-a1.dtb rootfs.sqfs mtdflash.bin; do
   printf '    %-14s %s bytes\n' "$f" "$(stat -f '%z' "$WD/$f" 2>/dev/null || stat -c '%s' "$WD/$f")"
 done
 echo
-echo "next:  ./tools/vbmc advantech-asmb787 start     # boot it"
-echo "       ./tools/vbmc advantech-asmb787 console   # log in (auto sysadmin/superuser)"
+echo "next:  ./tools/zbmc advantech-asmb787 start     # boot it"
+echo "       ./tools/zbmc advantech-asmb787 console   # log in (auto sysadmin/superuser)"

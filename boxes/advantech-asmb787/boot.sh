@@ -11,7 +11,7 @@
 #        ORDER is what matters: uboot(0), conf(1)@0xd0000, bkupconf(2)@0x2d0000, www(3)@0x2810000,
 #        dre(4)@0x2e10000 — each @offset lands exactly on the real jffs2/squashfs magic in the image.
 # RUN  : BG=1 ./boot.sh   (background; console -> $WD/svc.log ; drive via $WD/cin)
-# RELATED: qemu-patch-rootfs.sh (IPMIMain fixes), extract.sh, vbmc.box.
+# RELATED: qemu-patch-rootfs.sh (IPMIMain fixes), extract.sh, zbmc.box.
 set -u
 _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
 WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo (build.sh writes here)

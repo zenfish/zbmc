@@ -2,7 +2,7 @@
 # download-fw.sh — fetch the BMC firmware images (none are committed to git; all are fetched here).
 #
 # For each image: try the VENDOR's public download first (stays current, from the source), and if that
-# fails or has no direct URL, fall back to the project MIRROR at https://git.trouble.org/vbmc-lab/.
+# fails or has no direct URL, fall back to the project MIRROR at https://git.trouble.org/zbmc-lab/.
 # Every image is verified against a pinned SHA-256 either way. The images are firmware the vendors
 # distribute publicly and anonymously; the mirror just makes the big/JS-gated ones fetchable.
 #
@@ -11,7 +11,7 @@
 # NEEDS:  curl, shasum (or sha256sum).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MIRROR="https://git.trouble.org/vbmc-lab"
+MIRROR="https://git.trouble.org/zbmc-lab"
 UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Safari/605.1'
 
 # box | filename | sha256 | vendor-direct-URL (empty = mirror only) | vendor landing page (for reference)
