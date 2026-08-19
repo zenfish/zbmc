@@ -6,7 +6,11 @@
 # handlers (libnvidia_ipmi_oem.so, raw NetFn 0x3C) are reachable over LAN AND locally via busctl.
 ZBMC_NAME=nvidia-obmc
 ZBMC_DESC="Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl"
-ZBMC_DIR=/Volumes/yyy/phd/bmc/gb200nvl-build
+# Portable (clone-and-run): the .static.mtd firmware ships via firmware/download-fw.sh
+# and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="$_XREPO/firmware"
 
 ZBMC_IP=10.0.7.20        # 10.0.7.* = OpenBMC BMCs (10.0.8.* reserved for Supermicro)
 ZBMC_HOST=nvidia-obmc
@@ -14,6 +18,10 @@ ZBMC_HOST=nvidia-obmc
 # ssh/redfish creds (Phosphor default on this build)
 SSH_USER=root
 SSH_PASS=0penBmc
+IPMI_USER=root
+IPMI_PW=0penBmc
+IPMI_KEY=00
+IPMI_OPTS="-C 17"   # gb200 net-ipmid offers cipher-17 only
 SSH_PORT=22
 WEB_PORT=443
 IPMI_PORT=623   # IPMI-LAN via net-ipmid — CIPHER-17 ONLY (use zipmi -C 17 -I lanplus)
