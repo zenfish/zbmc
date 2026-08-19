@@ -11,9 +11,9 @@
 # RELIABILITY: fullfw's migrated UDP socket resumes ~most restores but occasionally comes up silent
 # (~1 in 4). So this VERIFIES IPMI and RE-RESTORES (up to $TRIES) until the box actually answers.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "${WD:-$(dirname "$0")}"
 K=915F32F49A97456D0D6D66EEE5ED84C894B414AF
-W="${HOME}/phd/tmp/idrac10-virtual/ckpt"
+W="${CKPT:-$PWD/ckpt}"
 STATE="$W/state.gz"; OVL="$W/overlay-frozen.qcow2"
 SOCK="$W/rserial.sock"; QMP="$W/rqmp.sock"
 TRIES="${RESTORE_TRIES:-3}"

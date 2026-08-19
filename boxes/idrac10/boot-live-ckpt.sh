@@ -12,10 +12,10 @@
 # SUCCESS: prints "SNAPSHOT SAVED <file>" after a verified 623 answer. Retries bad (dbus-hung) boots.
 # RELATED: restore-idrac10.sh, probe-migrate.sh, boot-live.sh, ckpt (idrac9-virtual/ckpt.py).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "${WD:-$(dirname "$0")}"
 ATTEMPTS="${1:-4}"
 K=915F32F49A97456D0D6D66EEE5ED84C894B414AF
-W="${HOME}/phd/tmp/idrac10-virtual/ckpt"; mkdir -p "$W"
+W="${CKPT:-$PWD/ckpt}"; mkdir -p "$W"
 SERVE="${HOME}/phd/tmp/idrac10-virtual/serve"; mkdir -p "$SERVE"
 OVL="$W/overlay.qcow2"; STATE="$W/state.gz"
 SOCK="$W/serial.sock"; QMP="$W/qmp.sock"

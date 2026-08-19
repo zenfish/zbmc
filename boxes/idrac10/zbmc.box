@@ -3,7 +3,11 @@
 # the box's real IP + standard IPMI port (10.0.9.10:623) directly — no socat/high-port hop.
 ZBMC_NAME=idrac10
 ZBMC_DESC="Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes"
-ZBMC_DIR=/Volumes/yyy/phd/bmc/dell/idrac10-virtual
+# Portable (clone-and-run): scripts+payloads ship in THIS box dir; boot/img artifacts + the warm
+# ckpt live in work/idrac10 (symlinked here for dogfood; a clone fetches/rebuilds them). Build deps:
+# zig (shm-shim), expect, socat, python.
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac10}"
 
 # Real IP + /etc/hosts name (idrac10 = 10.0.9.10 in the 10.0.9.x scheme). Ports are bound directly.
 ZBMC_IP=10.0.9.10
@@ -25,13 +29,13 @@ WEB_PORT=443
 PIDF=/tmp/zbmc-idrac10.pid
 LOG=/tmp/zbmc-idrac10-console.log
 SOCK=/tmp/zbmc-idrac10-serial.sock
-WORK="$HOME/phd/tmp/idrac10-virtual"; SERVE="$WORK/serve"
+WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
 zbmc_boot() {
-  cd "$ZBMC_DIR" || return 1
-  for f in boot/Image.boot-patched boot/qemu-gmac.dtb img/sd.img shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
+  mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
+  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
     [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
   done
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -46,7 +50,7 @@ zbmc_boot() {
     # DETACHED like the cold path so `start` returns at once; `zbmc status -f` follows to READY.
     # Redirect wraps the whole subshell so it can't hold the $(zbmc_boot) pipe open (bash gotcha).
     ( set +x   # keep the caller's xtrace/PS4 out of the console log
-      bash "$ZBMC_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
+      WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
       grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
     # report the qemu pid the moment it's up (restore launches it before verifying), then detach
     local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
@@ -63,8 +67,8 @@ zbmc_boot() {
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
-    -drive "id=rootsd,if=none,file=img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
+    -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
+    -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
     -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
@@ -79,9 +83,9 @@ zbmc_boot() {
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
 # snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.
-zbmc_snapshot() { bash "$ZBMC_DIR/boot-live-ckpt.sh" "${1:-4}"; }
+zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-live-ckpt.sh" "${1:-4}"; }
 # restore: bring the warm snapshot up on the real IP:623 (what `start` does automatically when a snap exists).
-zbmc_restore()  { bash "$ZBMC_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"; }
+zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"; }
 # Serial console works on BOTH warm-restore and cold boot (the old "vmstate gap" was a wrong socket path:
 # the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
 # $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the
