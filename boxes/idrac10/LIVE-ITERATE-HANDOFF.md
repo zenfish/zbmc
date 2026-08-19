@@ -12,7 +12,7 @@ iteration instead of a full rebuild+reboot.
 ```
 iterate.sh -b idrac10 <local-script.sh> <console-log>
 ```
-- `-b idrac10` → uses `vbmc idrac10 ssh` for the push (must work).
+- `-b idrac10` → uses `zbmc idrac10 ssh` for the push (must work).
 - `<console-log>` → the file your run script's `-serial` output is captured to. Make sure your
   launcher does `-serial ... > logs/idrac10-live.log` (nohup redirect) so there's a file to read.
 - The script's stdout is bracketed `==ITER-START==`/`==ITER-END==` on the guest console; iterate

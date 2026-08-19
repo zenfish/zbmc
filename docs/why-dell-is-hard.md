@@ -51,7 +51,7 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
   must be 16-byte `MemCmp`-padded, the privilege nibble lives at a raw offset, the HMAC key at entry+0x11).
 
 That's why `boxes/idrac10` ships a **snapshot bundle** (kernel + gmac DTB + 256 MB SD image + frozen
-overlay + 71 MB RAM state) fetched from the mirror, and `vbmc idrac10 start` does restore-not-build.
+overlay + 71 MB RAM state) fetched from the mirror, and `zbmc idrac10 start` does restore-not-build.
 
 ## iDRAC9 — one notch easier, one notch worse
 

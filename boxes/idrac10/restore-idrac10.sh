@@ -3,11 +3,11 @@
 # Loads RAM+CPU+device state via -incoming; the frozen overlay (snapshot=on) keeps disk consistent
 # with that RAM and makes every restore identical. fullfw is already running in the restored RAM, so
 # IPMI on UDP 623 answers immediately — no boot, no dbus lottery.
-# NOTE: restored console is LIVE at $W/rserial.sock (root-owned); reach it with `vbmc idrac10 ssh`.
+# NOTE: restored console is LIVE at $W/rserial.sock (root-owned); reach it with `zbmc idrac10 ssh`.
 # USAGE: ./restore-idrac10.sh [udp_port] [bind_ip]
 #   bind_ip empty  -> hostfwd=udp::PORT-:623  (wildcard, non-root, for testing on 127.0.0.1)
-#   bind_ip set    -> hostfwd=udp:BIND:PORT-:623 as root (vbmc real-IP path: 10.0.9.10:623)
-# SUCCESS: prints "RESTORE OK: IPMI N/5" with N>0. RELATED: boot-live-ckpt.sh, vbmc.box.
+#   bind_ip set    -> hostfwd=udp:BIND:PORT-:623 as root (zbmc real-IP path: 10.0.9.10:623)
+# SUCCESS: prints "RESTORE OK: IPMI N/5" with N>0. RELATED: boot-live-ckpt.sh, zbmc.box.
 # RELIABILITY: fullfw's migrated UDP socket resumes ~most restores but occasionally comes up silent
 # (~1 in 4). So this VERIFIES IPMI and RE-RESTORES (up to $TRIES) until the box actually answers.
 set -euo pipefail
@@ -22,7 +22,7 @@ PORT="${1:-7623}"; BIND="${2:-}"
 # real-IP (root) path also forwards tcp:22 -> guest sshd (baked into state.gz); the guest sshd
 # binds :22 on $BIND, coexisting with the Mac's wildcard *:22 (specific-IP bind wins for that IP).
 if [ -n "$BIND" ]; then HOSTFWD="hostfwd=udp:${BIND}:${PORT}-:623,hostfwd=tcp:${BIND}:22-:22"; VIP="$BIND"; else HOSTFWD="hostfwd=udp::${PORT}-:623"; VIP=127.0.0.1; fi
-# privileged port (<1024) or explicit bind IP -> need root (matches vbmc root-direct model)
+# privileged port (<1024) or explicit bind IP -> need root (matches zbmc root-direct model)
 SUDO=""; { [ "$PORT" -lt 1024 ] || [ -n "$BIND" ]; } && [ "$(id -u)" -ne 0 ] && SUDO="sudo -n"
 set +x 2>/dev/null   # keep any inherited xtrace/PS4 out of the console log
 

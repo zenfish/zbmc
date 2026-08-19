@@ -58,4 +58,4 @@ for f in kernel.Image dtb-a1.dtb rootfs.sqfs mtdflash.bin; do
   printf '    %-14s %s bytes\n' "$f" "$(stat -f '%z' "$WD/$f" 2>/dev/null || stat -c '%s' "$WD/$f")"
 done
 echo
-echo "next:  ./tools/vbmc megarac-hpe start ; ./tools/vbmc megarac-hpe ipmi mc info   (admin/superuser)"
+echo "next:  ./tools/zbmc megarac-hpe start ; ./tools/zbmc megarac-hpe ipmi mc info   (admin/superuser)"

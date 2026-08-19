@@ -1,13 +1,13 @@
-# vbmc-lab — a zoo of virtual BMCs under QEMU
+# zbmc-lab — a zoo of virtual BMCs under QEMU
 
 Boot real vendor **BMC** (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher
-(`vbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
+(`zbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
 RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
 
 This is the working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
 skill so others can reproduce it on their own images.
 
-> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `vbmc openbmc start`.
+> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `zbmc openbmc start`.
 
 > **Private on purpose.** It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
@@ -17,11 +17,11 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-`vbmc list` shows these; run any with `vbmc <name> start`. **Six are turnkey from a clone**; the rest are
+`zbmc list` shows these; run any with `zbmc <name> start`. **Six are turnkey from a clone**; the rest are
 reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
 (**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
 
-| `vbmc` name | Description | Turnkey? · boot |
+| `zbmc` name | Description | Turnkey? · boot |
 |-------------|-------------|:----------------:|
 | **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) · ~2 min |
 | **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) · ~2 min |
@@ -43,10 +43,10 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 # deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc sshpass && pipx install jefferson
 export PATH="$PWD/tools:$PATH"
 ./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
-vbmc openbmc start             # boot vanilla OpenBMC (~2 min)
-vbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
-vbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
-vbmc openbmc web               # Redfish ServiceRoot
+zbmc openbmc start             # boot vanilla OpenBMC (~2 min)
+zbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
+zbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
+zbmc openbmc web               # Redfish ServiceRoot
 ```
 
 No firmware is committed — `build.sh` fetches what a box needs via `firmware/download-fw.sh`:
@@ -64,8 +64,8 @@ boot/restore/snapshot recipes + findings docs.
 
 ```
 build.sh      build every ready box's boot artifacts into work/<box>/  (./build.sh --list to preview)
-tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), vbmc (the dispatcher)
-boxes/<name>/ per-box vbmc.box + boot/build/restore/snapshot scripts + findings docs
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
+boxes/<name>/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
 docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box)
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)

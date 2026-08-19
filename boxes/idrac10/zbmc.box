@@ -1,0 +1,83 @@
+# zbmc.box — Dell iDRAC10 (Nuvoton NPCM845 / aarch64), warm-snapshot restore box.
+#
+# WHAT: `zbmc idrac10 <verb>` restores a known-good iDRAC10 RAM snapshot (qemu -incoming) rather than
+#       cold-booting (which is a dbus-broker socket lottery — see docs/why-dell-is-hard.md). The NPCM845
+#       gmac migrates cleanly, so IPMI + ssh + Redfish survive the restore.
+# TURNKEY: the snapshot bundle is fetched by build.sh from the mirror; pinned to qemu-system-aarch64 11.x.
+#
+# ACCESS:
+#   ipmi    : zbmc idrac10 ipmi mc info      (RMCP+ with the factory IPMIKey via zipmi -K — NOT a password)
+#   ssh     : zbmc idrac10 ssh 'racadm getsysinfo'   (root, key baked into the snapshot)
+#   racadm  : zbmc idrac10 racadm getsysinfo         (Dell CLI; remote uses the web password calvin)
+ZBMC_NAME=idrac10
+ZBMC_DESC="Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; IPMI (zipmi -K factory key) + ssh + Redfish"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"
+
+ZBMC_IP=127.0.0.1
+ZBMC_HOST=idrac10
+SSH_USER=root
+SSH_PW=calvin
+SSH_PORT=7022
+WEB_PORT=7443
+IPMI_PORT=7623
+IPMI_USER=root
+IPMI_KEY=915F32F49A97456D0D6D66EEE5ED84C894B414AF   # 20-byte factory IPMIKey (fleet-shared; from the DUP)
+IPMI_T=30                                             # RMCP+ RAKP is slow under aarch64 emulation
+ZBMC_HINT='zbmc idrac10 ipmi mc info  |  zbmc idrac10 ssh "racadm getsysinfo"  |  zbmc idrac10 racadm getsysinfo'
+
+PIDF=/tmp/zbmc-idrac10.pid
+LOG="$ZBMC_DIR/svc.log"
+
+# zipmi resolver (iDRAC RMCP+ needs a raw 20-byte key via -K; ipmitool -P password can't do that).
+_zipmi() {
+  if python3 -c 'import zipmi' 2>/dev/null; then python3 -m zipmi.cli.zipmi "$@"
+  elif [ -d "$HOME/phd/src/zipmi" ]; then PYTHONPATH="$HOME/phd/src/zipmi" python3 -m zipmi.cli.zipmi "$@"
+  else echo "zipmi not found — iDRAC -K auth needs it (github.com/zenfish/... ). ssh/racadm still work."; return 127; fi
+}
+
+# boot: restore the snapshot, then verify IPMI answers; re-restore up to 3x (a migrated UDP socket can
+# resume silent). One qemu at a time — kill the prior before each attempt.
+zbmc_boot() {
+  [ -f "$ZBMC_DIR/state.gz" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
+  local try qp
+  for try in 1 2 3; do
+    pkill -9 -f "$ZBMC_DIR/overlay-frozen.qcow2" 2>/dev/null; sleep 1
+    qp=$(BG=1 IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" WD="$ZBMC_DIR" \
+         bash "$PROJ_DIR/boot.sh" 2>/dev/null)
+    sleep 6
+    if _zipmi -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -K "$IPMI_KEY" -t "$IPMI_T" mc info 2>/dev/null | grep -qi 'Manufacturer'; then break; fi
+  done
+  [ -n "${qp:-}" ] && echo "$qp" > "$PIDF"; echo "${qp:-}"
+}
+zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+
+zbmc_ipmi() { timeout -s KILL "$((IPMI_T+8))" _zipmi -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -K "$IPMI_KEY" -t "$IPMI_T" "$@"; }
+zbmc_ipmi_health() {
+  if zbmc_ipmi mc info 2>/dev/null | grep -qi 'Manufacturer'; then echo "AUTH OK (RMCP+ zipmi -K factory IPMIKey)"; return 0
+  else echo "no answer (restore still resuming? IPMI_T=$IPMI_T)"; return 1; fi
+}
+zbmc_ssh() {
+  local o=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=25 -p "$SSH_PORT")
+  if command -v sshpass >/dev/null; then sshpass -p "$SSH_PW" ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"
+  else ssh "${o[@]}" "$SSH_USER@$ZBMC_IP" "$@"; fi
+}
+# racadm: Dell's native CLI (web password 'calvin', NOT the IPMIKey). Prefer a local binary; else a
+# docker image (Colima: run `d-start` first); else the guest's own racadm over ssh (needs the full iDRAC
+# instrumentation up in the restored snapshot — this IPMI-focused ckpt may return RAC1135).
+zbmc_racadm() {
+  if command -v racadm >/dev/null; then racadm -r "$ZBMC_IP:$WEB_PORT" -u "$SSH_USER" -p "$SSH_PW" "$@"
+  elif command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+    docker run --rm --network host "${RACADM_IMAGE:-idrac/racadm}" \
+      -r "$ZBMC_IP:$WEB_PORT" -u "$SSH_USER" -p "$SSH_PW" "$@"
+  else zbmc_ssh "racadm $*"; fi
+}
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then
+    echo "idrac10 Redfish: UP  (curl -sk https://$ZBMC_IP:$WEB_PORT/redfish/v1/)"
+  else echo "idrac10 Redfish: not answering (this snapshot may be an IPMI/ssh state, not P3-redfish)"; fi
+}
+zbmc_console() { tail -f "$LOG"; }
+
+ZBMC_READY_GREP='login'

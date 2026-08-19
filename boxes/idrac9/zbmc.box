@@ -1,0 +1,70 @@
+# zbmc.box — virtual-BMC descriptor for "idrac9". Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc).
+# To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
+ZBMC_NAME=idrac9
+ZBMC_DESC="Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish"
+ZBMC_DIR=/Volumes/yyy/phd/bmc/dell/idrac9-virtual
+
+# host port-forwards (QEMU SLIRP)         # standard guest port
+SSH_PORT=22       # root-direct boot binds real-IP:22. (ckpt snapshot boots override to 2222 themselves.)
+IPMI_PORT=6623    # -> 623  (udp)
+WEB_PORT=6443     # -> 443
+
+# `zbmc idrac9 net up` maps standard ports to this loopback IP + /etc/hosts name
+ZBMC_IP=10.0.9.9
+ZBMC_HOST=drac9
+# copy-paste access hint shown by `zbmc status` (factory-default creds by design;
+# IPMI auth is the factory IPMIKey via -K, NOT a password; calvin is the ssh/redfish pw)
+ZBMC_HINT='zbmc idrac9 ssh (vmkey only — password SSH rejected by Dell PAM stack, not shadow) | zipmi -H drac9 -U root -K 915f32f49a97456d0d6d66eee5ed84c894b414af (or -P calvin) | curl -k -u root:calvin https://drac9/redfish/'
+
+# IPMI/RAKP auth (zipmi-git client)
+IPMI_USER=root
+IPMI_KEY=915f32f49a97456d0d6d66eee5ed84c894b414af   # first 20 bytes of the factory IPMIKey
+IPMI_OPTS="-C 17 -I lanplus"                          # cipher 17, lanplus
+
+PIDF=/tmp/zbmc-idrac9.pid
+LOG=/tmp/zbmc-idrac9-console.log
+
+# boot QEMU detached; echo the pid. (zbmc sets PIDF/LOG and handles the pidfile + web waiter.)
+zbmc_boot() {
+  cd "$ZBMC_DIR" || return 1
+  [ -f boot/initramfs.p4.xz ] || { echo "no boot/initramfs.p4.xz — run: zbmc idrac9 build" >&2; return 1; }
+  local dtb=boot/p4.dtb; [ -f "$dtb" ] || dtb=boot/p2uni.dtb
+  : > "$LOG"
+  # Bind the box's REAL IP + STANDARD ports (22/443/623) directly. macOS needs root to bind privileged
+  # ports, so run qemu as root (self-elevate). This is a local research VM -> root is fine, and it kills
+  # the whole socat/high-port/6623 indirection. euid test -> sudo if not already root.
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  # WARM RESTORE (OPT-IN, currently BROKEN): `ZBMC_WARM=1 zbmc idrac9 start` restores the P4 snapshot.
+  # DISABLED by default because idrac9's usb-net does NOT re-enumerate after -incoming -> the restored
+  # box comes up NETWORK-DEAD (no IPMI/ssh). Kept for when the QEMU npcm750 USB-migration fix lands.
+  # Default `zbmc idrac9 start` = the WORKING cold P4 boot below. See project_idrac9_virtual_qemu memory.
+  if [ -n "${ZBMC_WARM:-}" ] && [ -s "$HOME/phd/tmp/idrac9-virtual/ckpt/state-p4.gz" ] && [ -x "$ZBMC_DIR/qemu-system-arm-patched" ]; then
+    : > "$LOG"
+    bash "$ZBMC_DIR/restore-idrac9.sh" "$ZBMC_IP" >>"$LOG" 2>&1
+    grep -q 'RESTORE OK' "$LOG" && echo "pre-fullfw gate (restored P4)" >>"$LOG"
+    pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1
+    return 0
+  fi
+  $SUDO nohup qemu-system-arm -M npcm750-evb -m 1G -display none \
+    -kernel boot/uImage.patched -dtb "$dtb" -initrd boot/initramfs.p4.xz \
+    -drive id=rootsd,if=none,file=img/sd256.img,format=raw,snapshot=on \
+    -device sd-card,drive=rootsd,bus=sd-bus \
+    -netdev user,id=n1,hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:443-:443 \
+    -device usb-net,netdev=n1,bus=usb-bus.0 \
+    -serial "file:$LOG" >/dev/null 2>&1 &
+  # qemu is a root child of sudo; find its real pid by the hostfwd signature (not $!)
+  local n=0 qp=; while [ $n -lt 30 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+zbmc_build() { cd "$ZBMC_DIR" && IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
+# snapshot: cold-boot P6 + Redfish bring-up, then freeze to img/ckpt/redfish-200-ready-net.gz (patched
+# qemu, migratable usb-net). Pays the ~15min bring-up ONCE; afterwards `zbmc idrac9 start` restores it.
+zbmc_snapshot() { bash "$ZBMC_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
+zbmc_restore()  { bash "$ZBMC_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
+zbmc_ssh()   { "$ZBMC_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)
+zbmc_web()   { "$ZBMC_DIR/start-web.sh"; }              # bring up httpd + Redfish (only needed on a cold P4 box)
+# readiness markers in the serial log (zbmc status greps these)
+ZBMC_READY_GREP='pre-fullfw gate'

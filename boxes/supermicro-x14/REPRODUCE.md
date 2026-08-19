@@ -105,4 +105,4 @@ Creds `ADMIN:ADMIN` + `root:0penBmc` were recovered from `/etc/ipmi_pass` with t
 `OPENBMC=` — see `bmc/supermicro/x14sbsc/teardown/openbmc-ipmi-pass.py`.
 
 ## Once built, drive it from the framework
-`vbmc x14 start | status | ssh | ipmi <cmd> | web | snapshot`  (see ../index.html for the whole zoo).
+`zbmc x14 start | status | ssh | ipmi <cmd> | web | snapshot`  (see ../index.html for the whole zoo).

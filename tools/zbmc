@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# zbmc — virtual-BMC control (init.d-style). One tool for every emulated BMC.
+#   zbmc                         list boxes + verbs (help)
+#   zbmc <box>                   status of that box
+#   zbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|build|net
+# Boxes are described by zbmc.box files (register their paths in REGISTRY below).
+set -u
+ZIPMI="$HOME/phd/src/zipmi"
+
+# --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
+# CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
+if [ -t 1 ]; then
+  CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CZ=$'\e[0m'
+else CG=; CR=; CP=; CC=; CZ=; fi
+
+# --- registry: every boxes/<name>/zbmc.box in this repo (relative to this script) ----------
+# In this public repo, only 'asmb787' is fully runnable (its firmware + relocatable paths ship
+# here); the other box descriptors are reference recipes that point at the author's artifacts.
+_SELF="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_REPO="$(cd "$_SELF/.." && pwd)"
+REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
+
+boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
+find_box(){ local want="$1" f; for f in "${REGISTRY[@]}"; do [ -f "$f" ] && [ "$(boxname_of "$f")" = "$want" ] && { echo "$f"; return 0; }; done; return 1; }
+
+usage(){
+  echo "zbmc — virtual-BMC control"
+  echo "usage: zbmc <box> <verb> [args]"
+  echo
+  echo "boxes:"
+  local f n d; for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
+    ( . "$f" 2>/dev/null; printf "  %-10s %s\n" "$ZBMC_NAME" "${ZBMC_DESC:-}" ); done
+  echo
+  echo "  (use 'all' as the box to run a verb across every box:  zbmc all status)"
+  echo "  (just the names:  zbmc list   |   zbmc -l)"
+  echo
+  echo "verbs:"
+  echo "  start [--build][--no-web]   boot (detached); binds the real IP:{22,443,623}; web auto-starts"
+  echo "  stop              kill the QEMU process"
+  echo "  restart           stop then start"
+  echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
+  echo "  ssh [cmd]         root shell into the box"
+  echo "  ipmi <cmd...>     authenticated zipmi (e.g. zbmc idrac9 ipmi mc info)"
+  echo "  web               bring up httpd + Redfish"
+  echo "  console           live console (box must be up): interactive serial login on"
+  echo "                    boxes with a console (megarac-hpe, nvidia-obmc); else tail -f the log"
+  echo "  build             rebuild the boot image"
+  echo "  rename <newname>  rename the box (dispatch name + host alias; qemu machine/image untouched)"
+}
+
+[ $# -eq 0 ] && { usage; exit 0; }
+BOX="$1"; shift
+# `zbmc list` / `zbmc -l` — just the box names, one per line (no status). For scripting/quick recall.
+if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
+  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] && echo "$n"; done
+  exit 0
+fi
+# `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
+if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
+  allverb="${1:-status}"
+  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
+    n="$(boxname_of "$f")"; [ -n "$n" ] || continue
+    echo "===== ${CC}$n${CZ} ====="; "$0" "$n" "$allverb" 2>&1; echo
+  done
+  exit 0
+fi
+BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 2; }
+# shellcheck disable=SC1090
+. "$BF"
+VERB="${1:-status}"; [ $# -gt 0 ] && shift
+
+running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's IPMI port
+  local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
+  p=$(pgrep -f "hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+  return 1; }
+# IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
+# A box may override by defining zbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
+Z(){ if declare -F zbmc_ipmi >/dev/null; then zbmc_ipmi "$@"; else
+  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "$IPMI_USER" -K "$IPMI_KEY" $IPMI_OPTS -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
+
+case "$VERB" in
+  start)
+    if p=$(running); then echo "$ZBMC_NAME already running (qemu $p)"; exit 0; fi
+    do_web=1
+    for a in "$@"; do case "$a" in
+      --build)  zbmc_build || exit 1;;
+      --no-web) do_web=0;;
+    esac; done
+    # zbmc_boot self-elevates (sudo), sets the lo0 alias + /etc/hosts, and binds $ZBMC_IP:{22,443,623}
+    # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
+    qp=$(zbmc_boot) || { echo "boot failed"; exit 1; }
+    echo "$qp" > "$PIDF"
+    echo "$ZBMC_NAME started: qemu pid $qp  →  $ZBMC_HOST ($ZBMC_IP)   console -> $LOG"
+    # auto-bring-up web once SSH is reachable (box needs ~6-15 min to boot). --no-web skips.
+    if [ "$do_web" = 1 ]; then
+      nohup bash -c '. "'"$BF"'"; qp="'"$qp"'"
+        for i in $(seq 1 240); do
+          ps -p "$qp" >/dev/null 2>&1 || exit
+          if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; zbmc_web; exit; fi
+          sleep 8
+        done' >/tmp/zbmc-$ZBMC_NAME-web.log 2>&1 &
+    fi
+    echo "  watch:  zbmc $ZBMC_NAME status -f   (follow until READY; --build rebuild, --no-web skip)" ;;
+  stop)
+    if p=$(running); then { sudo kill "$p" 2>/dev/null || kill "$p"; } && echo "$ZBMC_NAME stopped (killed qemu $p)"; else echo "$ZBMC_NAME not running"; fi ;;
+  restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
+  status)
+    # -f follows until the box is READY, or BAILS on: qemu died, kernel panic in the log, or timeout.
+    # Uses the box's OWN ports (SSH_PORT/WEB_PORT/IPMI_PORT), not hardcoded 22/443/623.
+    _follow=0; [ "${1:-}" = "-f" ] && _follow=1
+    _sp="${SSH_PORT:-22}"; _wp="${WEB_PORT:-443}"; _ip="${IPMI_PORT:-623}"
+    _t0=$(date +%s); _max="${ZBMC_MAXWAIT:-300}"      # -f gives up after this many seconds
+    # panic/fail markers in the console log that mean "stop waiting, this boot is dead"
+    _panic() { [ -f "$LOG" ] && tail -n 400 "$LOG" 2>/dev/null | grep -qiE 'Kernel panic|Fatal exception|Cannot open root device|Attempted to kill init|Missing section footer'; }
+    while :; do
+      if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
+      else echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"; exit 1; fi
+      for pr in "$_sp:ssh" "$_wp:web"; do
+        nc -z -G1 "$ZBMC_IP" "${pr%%:*}" 2>/dev/null && s="${CG}open${CZ}" || s="${CR}closed${CZ}"
+        echo "port ${pr%%:*} (${pr##*:}) : $s"; done
+      echo "port $_ip (ipmi): udp (no tcp probe)"
+      _sshok=0; printf "SSH       : "
+      if timeout -s KILL 30 bash -c '. "'"$BF"'"; zbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then echo "${CG}OK${CZ}"; _sshok=1; else echo "${CR}no${CZ}"; fi
+      _rakpok=0; printf "IPMI      : "
+      if declare -F zbmc_ipmi_health >/dev/null; then zbmc_ipmi_health && _rakpok=1
+      else r=$(Z mc info 2>/dev/null); if echo "$r"|grep -qi Manufacturer; then echo "${CG}AUTH OK${CZ}"; _rakpok=1; else echo "${CR}no answer${CZ}"; fi; fi
+      _webok=0; printf "Redfish   : "
+      if timeout -s KILL 8 curl -sk "https://$ZBMC_IP:$_wp/redfish/v1/" 2>/dev/null | grep -q '"@odata\|"v1"'; then echo "${CG}UP${CZ} (https://$ZBMC_IP:$_wp/redfish/v1/)"; _webok=1; else echo "${CR}down${CZ}"; fi
+      printf "Access    : "
+      _hint="${ZBMC_HINT:-zbmc $ZBMC_NAME ssh | zbmc $ZBMC_NAME ipmi mc info}"
+      [ -n "$CP" ] && _hint=$(printf '%s' "$_hint" | sed -E -e "s/(-[pPUKu] )([^ ]+)/\1${CP}\2${CZ}/g" -e "s/${ZBMC_HOST}/${CC}${ZBMC_HOST}${CZ}/g")
+      echo "$_hint"
+      [ "$_follow" = 0 ] && break
+      # READY = any working interface, or the box's console ready-marker in the log.
+      if [ "$_sshok" = 1 ] || [ "$_rakpok" = 1 ] || [ "$_webok" = 1 ] || { [ -n "${ZBMC_READY_GREP:-}" ] && [ -f "$LOG" ] && grep -qiE "$ZBMC_READY_GREP" "$LOG"; }; then
+        echo "==== ${CG}READY${CZ}:  $_hint ===="; break; fi
+      # BAIL conditions
+      if _panic; then echo "==== ${CR}BOOT FAILED${CZ}: kernel panic / fatal in $LOG — 'zbmc $ZBMC_NAME stop' + check the log ===="; exit 1; fi
+      _el=$(( $(date +%s) - _t0 ))
+      if [ "$_el" -ge "$_max" ]; then echo "==== ${CR}GAVE UP${CZ} after ${_el}s (ZBMC_MAXWAIT=$_max) — not ready; check $LOG ===="; exit 1; fi
+      sleep 10; echo "---- $(date +%H:%M:%S)  waiting (${_el}s/${_max}s; Ctrl-C to stop) ----"
+    done ;;
+  ssh)   zbmc_ssh "$@" ;;
+  ipmi)  [ $# -eq 0 ] && { echo "usage: zbmc $ZBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
+  web)   zbmc_web ;;
+  racadm) declare -F zbmc_racadm >/dev/null && zbmc_racadm "$@" || { echo "no racadm for $ZBMC_NAME"; exit 2; } ;;
+  console)
+    # console = a window on the LIVE console. If the box is DOWN, say so — do NOT
+    # replay the stale $LOG from the last run (which is bring-up/restore output and
+    # can misleadingly show "IDRAC10_UP" etc. long after the box is gone).
+    if ! running >/dev/null 2>&1; then
+      echo "${CR}$ZBMC_NAME is DOWN${CZ} — no live console. Start it:  zbmc $ZBMC_NAME start"; exit 1; fi
+    if declare -F zbmc_console >/dev/null; then zbmc_console "$@"
+    elif [ -f "$LOG" ]; then tail -f "$LOG"
+    else echo "$ZBMC_NAME is up, but its console log is missing ($LOG) — try 'ssh' or restart"; fi ;;
+  build) zbmc_build ;;
+  snapshot) declare -F zbmc_snapshot >/dev/null && zbmc_snapshot "$@" || { echo "zbmc: '$ZBMC_NAME' has no snapshot support"; exit 2; } ;;
+  restore)  declare -F zbmc_restore  >/dev/null && zbmc_restore  "$@" || { echo "zbmc: '$ZBMC_NAME' has no restore support"; exit 2; } ;;
+  rename)
+    new="${1:-}"; old="$ZBMC_NAME"
+    [ -n "$new" ] || { echo "usage: zbmc $old rename <newname>"; exit 2; }
+    [[ "$new" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "zbmc: bad name '$new' (allowed: A-Za-z0-9_-)"; exit 2; }
+    [ "$new" = "$old" ] && { echo "zbmc: already named '$old'"; exit 0; }
+    find_box "$new" >/dev/null && { echo "zbmc: a box named '$new' already exists"; exit 2; }
+    # Surgical: only identity fields. NEVER the qemu machine (ast2600-evb) or image (evb-ast2600.static.mtd),
+    # which also contain the name substring — perl \Q..\E + line anchors keep those untouched.
+    perl -i -pe "
+      s/^ZBMC_NAME=.*/ZBMC_NAME=$new/;
+      s/^ZBMC_HOST=\Q$old\E\$/ZBMC_HOST=$new/;
+      if (/^(PIDF|LOG|SOCK)=/) { s/zbmc-\Q$old\E/zbmc-$new/ }
+      if (/^ZBMC_HINT=/)       { s/\b\Q$old\E\b/$new/g }
+    " "$BF" || { echo "zbmc: rename edit failed"; exit 1; }
+    # Swap the /etc/hosts alias if it used the old name (box re-adds the new one on next start).
+    [ "${ZBMC_HOST:-}" = "$old" ] && sudo perl -i -pe "s/\b\Q$old\E\b/$new/g if /^\Q$ZBMC_IP\E\s/" /etc/hosts 2>/dev/null
+    echo "renamed '$old' -> '$new'  ($BF)"
+    running >/dev/null 2>&1 && echo "  box is running — 'zbmc $new restart' to refresh its scratch paths/hosts"
+    echo "  try:  zbmc $new status" ;;
+  *) echo "zbmc: unknown verb '$VERB'"; echo; usage; exit 2 ;;
+esac

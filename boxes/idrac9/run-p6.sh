@@ -15,6 +15,6 @@ exec "${QEMU_BIN:-qemu-system-arm}" -M npcm750-evb -m 1G -display none \
   -netdev user,id=n1,hostfwd=tcp::2222-:22,hostfwd=udp::6623-:623,hostfwd=tcp::6443-:443 \
   -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
-  -qmp unix:/tmp/vbmc-idrac9-qmp.sock,server,nowait \
+  -qmp unix:/tmp/zbmc-idrac9-qmp.sock,server,nowait \
   -serial mon:stdio \
-  -serial unix:/tmp/vbmc-idrac9-ttyS1.sock,server,nowait   # ttyS1 = interactive root shell (console-shell.service)
+  -serial unix:/tmp/zbmc-idrac9-ttyS1.sock,server,nowait   # ttyS1 = interactive root shell (console-shell.service)
