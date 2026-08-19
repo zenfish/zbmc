@@ -9,11 +9,11 @@
 # NOTE:  Must match the snapshot's machine/dtb exactly (ast2600-evb + x14-noncsi.dtb).
 #
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "${WD:-$(dirname "$0")}"
 SNAP="${1:-svc-snap.gz}"; IP=10.0.8.14
 [ -f "$SNAP" ] || { echo "no snapshot at $SNAP — run snapshot-x14.sh first"; exit 1; }
 ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
-sudo -n pkill -9 -f "ast2600-evb" 2>/dev/null || true; sleep 2
+sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f /tmp/x14.sock /tmp/x14-qmp.sock
 sudo -n /opt/homebrew/bin/qemu-system-arm \
   -m 1024 -M ast2600-evb -display none -no-reboot \

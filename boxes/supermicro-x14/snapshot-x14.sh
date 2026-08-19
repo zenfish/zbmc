@@ -12,7 +12,7 @@
 # PAIR:  restore-svc-x14.sh loads it.
 #
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "${WD:-$(dirname "$0")}"
 OUT="${1:-svc-snap.gz}"
 QMP=/tmp/x14-qmp.sock
 sudo -n chmod 666 "$QMP" 2>/dev/null || true
