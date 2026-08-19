@@ -13,7 +13,7 @@ ZIPMI="$HOME/phd/src/zipmi"
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
 # CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
-if [ -t 1 ]; then
+if [ -t 1 ] || [ -n "${ZBMC_COLOR:-}" ]; then
   CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CZ=$'\e[0m'
 else CG=; CR=; CP=; CC=; CZ=; fi
 
@@ -123,6 +123,7 @@ fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
 if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   verb="${1:-status}"; td=$(mktemp -d); i=0; order=()
+  [ -t 1 ] && export ZBMC_COLOR=1   # children write to files (non-TTY); force color so the final cat shows it
   for f in "${REGISTRY[@]}"; do
     [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] || continue
     order+=("$i:$n")
