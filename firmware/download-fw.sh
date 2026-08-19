@@ -23,11 +23,12 @@ FW=(
 "idrac9|iDRAC-with-Lifecycle-Controller_Firmware_92MM7_LN64_7.10.90.00_A00.BIN|752dc96fd01002934c82454e79b80af01593e18e7c6265c91fa72b4a63fafd44|https://dl.dell.com/FOLDER12233673M/1/iDRAC-with-Lifecycle-Controller_Firmware_92MM7_LN64_7.10.90.00_A00.BIN|https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=92MM7"
 "idrac10|iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.BIN|372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9||https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=YP95X"
 "x14|x14-flash.img|8af1ba767ed0363653537ee6e2fab3fabd66d838e397903cb99e9cd00caaa792||Supermicro X14 BMC (mirror only)"
+"supermicro-x10|x10-master.flash|9bd3fbe8ddb8ee8e0f7d96ee37c810cef99d6c9f9566ddd13dca7ea455204214||Supermicro X10 BMC flat flash (AST2400, FW 3.93; from BMC_X10AST2400-32M_20210528_03.93_STD.bin — mirror only)"
 )
 
 sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 _get() { curl -fL -A "$UA" --retry 2 --connect-timeout 20 -o "$2" "$1"; }   # url dest
-want="${*:-advantech-asmb787 openbmc nvidia-obmc megarac-hpe idrac9 idrac10 x14}"
+want="${*:-advantech-asmb787 openbmc nvidia-obmc megarac-hpe idrac9 idrac10 x14 supermicro-x10}"
 
 for row in "${FW[@]}"; do
   IFS='|' read -r box file want256 vurl page <<<"$row"

@@ -25,7 +25,13 @@
 ZBMC_NAME=supermicro-x10
 ZBMC_DESC="Supermicro X10 BMC (ASPEED AST2400, FW 3.93) — weak-cipher ORACLE: offers IPMI 2.0 suites 0-14 (RC4/MD5); ADMIN:ADMIN"
 
-ZBMC_DIR=/Users/zen/phd/bmc/sm/x10-virtual
+# Portable paths (clone-and-run): scripts ship in THIS box dir; runtime artifacts go
+# to the repo's work/; the master flash comes from firmware/ (fetch via
+# firmware/download-fw.sh supermicro-x10). No author-absolute paths.
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="$_XREPO/work/supermicro-x10"
+X10_MASTER="$_XREPO/firmware/x10-master.flash"
 
 # Zoo subnet target: qemu user-net forwards udp 10.0.8.10:623 -> guest 623, bound
 # on a lo0 alias (qemu under sudo, like x14). zbmc_boot aliases lo0 + primes sudo,
@@ -48,7 +54,7 @@ IPMI_PORT=623
 WEB_PORT=443
 
 PIDF=/tmp/zbmc-supermicro-x10.pid
-LOG=/Users/zen/phd/bmc/sm/x10-virtual/x10-start.log
+LOG="$ZBMC_DIR/x10-start.log"
 
 # boot: alias lo0 + prime sudo (so start-x10.sh's `sudo -n qemu` never prompts),
 # then launch the detached driver; it prints the qemu pid on NET_CONFIGURED.
@@ -58,13 +64,14 @@ zbmc_boot() {
   $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null   # also primes the sudo timestamp for start-x10.sh's `sudo -n qemu`
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  bash "$ZBMC_DIR/start-x10.sh" >/dev/null 2>&1
+  mkdir -p "$ZBMC_DIR"
+  WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" bash "$PROJ_DIR/start-x10.sh" >/dev/null 2>&1
   local qp; qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1)
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
   echo "$qp"
 }
 
-zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $ZBMC_DIR/x10-master.flash (from ipmi.old/fw/BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
+zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $X10_MASTER (fetch: firmware/download-fw.sh supermicro-x10; orig BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
 
 # ipmi: zipmi password-auth on 10.0.8.10:623 (we WANT zipmi's cipher stack
 # exercised, not ipmitool). Generous timeout — scan probes ~20 suites.
