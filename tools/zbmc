@@ -122,16 +122,24 @@ if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
 fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
 if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
-  verb="${1:-status}"; td=$(mktemp -d); i=0; order=()
-  [ -t 1 ] && export ZBMC_COLOR=1   # children write to files (non-TTY); force color so the final cat shows it
-  for f in "${REGISTRY[@]}"; do
-    [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] || continue
-    order+=("$i:$n")
-    ( printf '===== %s%s%s =====\n' "$CC" "$n" "$CZ"; "$0" "$n" "$verb" 2>&1 ) > "$td/$i" &
-    i=$((i+1))
+  verb="${1:-status}"; td=$(mktemp -d); [ -t 1 ] && export ZBMC_COLOR=1
+  # resolve box names once (registry order)
+  names=(); for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] && names+=("$n"); done
+  N=${#names[@]}
+  if [ "$verb" = status ]; then printf 'checking status on %s%d%s inmates in the asylum -\n' "$CC" "$N" "$CZ"
+  else printf 'running %s%s%s on %s%d%s inmates -\n' "$CC" "$verb" "$CZ" "$CC" "$N" "$CZ"; fi
+  # fan out concurrently; each box drops a .done marker when finished
+  i=0; for n in "${names[@]}"; do ( "$0" "$n" "$verb" >"$td/$i" 2>&1; : > "$td/$i.done" ) & i=$((i+1)); done
+  # print in registry order, STREAMING: block on each box's own completion, then flush it
+  alive=0; j=0
+  for n in "${names[@]}"; do
+    while [ ! -e "$td/$j.done" ]; do sleep 0.1; done
+    printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
+    cat "$td/$j"
+    grep -qE "QEMU +: .*UP" "$td/$j" && alive=$((alive+1))
+    j=$((j+1))
   done
-  wait
-  for e in "${order[@]}"; do cat "$td/${e%%:*}"; echo; done
+  [ "$verb" = status ] && printf '\n%s%d/%d%s inmates currently alive\n' "$CG" "$alive" "$N" "$CZ"
   rm -rf "$td"; exit 0
 fi
 BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 2; }
