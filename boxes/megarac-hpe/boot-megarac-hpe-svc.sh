@@ -8,10 +8,9 @@
 # WHY  : this is the tier that exercises the real attack surface (Redfish = Eclypsium CVE-2024-54085
 #        lua at /usr/local/redfish/extensions/host-interface/host-interface-support-module.lua).
 #
-# STATUS (2026-07-28): extract.sh injects the devmap shim that fixes the IPMIMain MsgHndlr SIGSEGV, so
-#   the IPMI stack stays up, eth0 gets a DHCP lease, and the Redfish server is externally reachable:
-#     curl -sk https://<IP>/redfish/v1/  ->  AMI Redfish Server, Redfish 1.11.0 (ServiceRoot, public).
-#   REMAINING: protected Redfish (auth backend: PAM->IPMI user table) + IPMI-623 RMCP+ not serving yet.
+# STATUS (2026-08-20): cold boot stable (0 IPMIMain SIGSEGVs), UDS serves, admin/superuser provisioned,
+#   authenticated Redfish works (curl -sk -u admin:superuser https://<IP>/redfish/v1/Managers).
+#   Warm snapshot in work/cray-snap.gz restores in ~10s (restore-megarac-hpe.sh). LAN IPMI UDP/623 TBD.
 #
 # KEY: mtdparts names MUST match extract.sh's layout — mountall.sh greps /proc/mtd for 'conf'/'bkupconf'.
 # RUN  : ./boot-megarac-hpe-svc.sh              (foreground, console = your terminal)

@@ -15,19 +15,23 @@
 #   (Also stages /tmp/devmap.xml for sdrgen/spx_restservice — orthogonal to the crash but harmless.)
 #
 # FIX 2 — make the IPMI.conf consistent with qemu's hardware so IPMIMain doesn't crash or self-stop.
-#   qemu ast2600-evb provides ONLY: LAN (eth0), UDS (unix socket), KCS1-3 (ast-kcs-bmc). It has NO
+#   qemu ast2600-evb provides: LAN (eth0), UDS (unix socket), KCS1-3 (ast-kcs-bmc). It has NO
 #   /dev/ttyS2/ttyS3 (kernel wires only ttyS0/ttyS4) and NO i2c adapters (/sys/bus/i2c empty). A stock
 #   IPMI.conf enables SERIAL/SOL (ttyS2/3), IPMB x5 + SMBUS (i2c), SMM (needs absent Smmchcfg.ini) and
 #   BT (needs /dev/ipmi-bt-host); each leaves a half-initialised table entry the central MsgHndlr
 #   thread later derefs -> SIGSEGV -> procmgr 15x -> BMC reboot. Ghidra RE of IPMIConf.c also found a
 #   Node-Manager guard: it self-stops unless NM_IPMB_BUS is 0/1/2 AND that IPMB bus is enabled; the
 #   disable value is NM_IPMB_BUS=0xFF (>=3 falls through the check). So: disable every absent-hardware
-#   interface AND set NM_IPMB_BUS=0xFF. Kept ON: LAN, UDS, KCS1-3 (present hw), DCMI (needs GROUP_EXTN,
-#   which stays 1). Result: IPMIMain runs stable and binds its UDS server /var/UDSocket1.
+#   interface AND set NM_IPMB_BUS=0xFF. KCS1-3 also disabled: even though ast-kcs-bmc hw exists,
+#   keeping KCS enabled caused early crashes (interface init failures → table corruption).
+#   Kept ON: LAN, UDS, DCMI (needs GROUP_EXTN, which stays 1).
+#   Result: IPMIMain runs stable and UDS server /var/UDSocket1 listens from boot.
 #
-# STATUS: with both fixes the box boots stable (no SIGSEGV/reboot loop), IPMIMain serves UDS, and
-#   external Redfish ServiceRoot is reachable. Remaining: no IPMI user is provisioned in the empty
-#   UserConfig.ini, so RMCP+ (623) + authed Redfish need a user seeded (WIP; see README.html).
+# STATUS (2026-08-20): all fixes applied → cold boot stable (0 IPMIMain SIGSEGVs on 3rd try),
+#   UDS listens (/var/UDSocket1), MsgHndlr health counter updates via UDS clients → thread monitor
+#   never fires, admin/superuser provisioned at boot, authenticated Redfish works. LAN IPMI (UDP/623)
+#   still doesn't bind (libipmilan init race TBD). Warm QMP snapshot at work/cray-snap.gz restores
+#   in ~10s skipping the 5-min cold boot entirely.
 set -eu
 R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 
@@ -48,6 +52,9 @@ sed -i.bak -E \
  -e 's/^([[:space:]]*SUPPORT_SMM_IFC=)1/\10/' \
  -e 's/^([[:space:]]*SUPPORT_SMBUS_IFC=)1/\10/' \
  -e 's/^([[:space:]]*SUPPORT_BT_IFC=)1/\10/' \
+ -e 's/^([[:space:]]*SUPPORT_KCS1_IFC=)1/\10/' \
+ -e 's/^([[:space:]]*SUPPORT_KCS2_IFC=)1/\10/' \
+ -e 's/^([[:space:]]*SUPPORT_KCS3_IFC=)1/\10/' \
  -e 's/^([[:space:]]*PRIMARY_IPMB_SUPPORT=)1/\10/' \
  -e 's/^([[:space:]]*SECONDARY_IPMB_SUPPORT=)1/\10/' \
  -e 's/^([[:space:]]*THIRD_IPMB_SUPPORT=)1/\10/' \
@@ -155,11 +162,17 @@ fi
 { [ -f /tmp/devmap.xml ] || \
   cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || \
   cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; } || true
+# libunix.so.13 waits for /var/tmp/rc-init-complete before calling listen() on /var/UDSocket1.
+# Without this file, UDS refuses connections for ~6 min (until S99zz-rc-init-complete creates it),
+# which matches the thread monitor's 36x10s=360s window exactly -> restart -> double-reg SIGSEGV.
+# Creating it here (S07, before IPMIMain starts at S22) makes UDS accept immediately at startup.
+mkdir -p /var/tmp
+touch /var/tmp/rc-init-complete
 CONFSEED
 chmod 0755 "$R/etc/rcS.d/S07conf-seed.sh"
 
-echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf: kept LAN/UDS/KCS, disabled"
-echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable + UDS serving"
+echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf: kept LAN/UDS/DCMI, disabled KCS1/2/3"
+echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable, UDS listens, authed Redfish works"
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
 echo "[qemu-patch] inittab console: getty -> /bin/sh -i (no login prompt, direct root shell)"
-echo "[qemu-patch] S07conf-seed.sh -> seeds /conf before S10gbt-init; pam_withunix+pam_wounix covered"
+echo "[qemu-patch] S07conf-seed.sh -> seeds /conf + rc-init-complete early; UDS listens from boot"

@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 # start-megarac-hpe-green.sh — boot the Cray XD670 BMC and RETRY until IPMIMain comes up healthy.
 #
-# WHY: IPMIMain hits a nondeterministic message-handler race under qemu — ~half of cold boots it
-#      crash-loops (SIGSEGV x15 -> procmgr reboots the BMC) and ~half it comes up clean (SEGV=0) with
-#      IPMI 2.0 RMCP+ + authed Redfish fully working. A good boot is fully green; a bad one never
-#      recovers. So we boot, watch for the crash-loop vs healthy signal, and re-roll on a crash-loop.
-#      (A warm QMP snapshot of a green instance — like the x14 box — would remove the reroll; TODO.)
+# WHY: After a patch (KCS disabled + early rc-init-complete), cold boots mostly stabilize within 2 early
+#      IPMIMain SIGSEGVs then come up clean. Occasionally a boot still crash-loops (>2 SIGSEGVs); this
+#      script re-rolls in that case. Prefer restore-megarac-hpe.sh (warm snap, ~10s) over cold-boot rerolls.
+#      Cold-boot is needed only if no snapshot exists or the flash needs to be reset.
 #
-# HEALTHY  = /tmp/ipmimain_init_done written AND SIGSEGV count stays low (<4) AND `ipmitool mc info`
-#            authenticates (admin/superuser). CRASH-LOOP = SIGSEGV count climbs past the threshold.
+# HEALTHY  = /tmp/ipmimain_init_done + /tmp/restservice_init_done written AND SIGSEGV count stays low
+#            (<4) AND authed Redfish (/redfish/v1/Managers) returns 200. CRASH-LOOP = SIGSEGV > threshold.
 # RUN: IP=10.0.6.66 WD=/Users/zen/phd/tmp/cray-xd670 ./start-megarac-hpe-green.sh   (prints qemu pid on green)
 # ENV: WD (workdir/artifacts), IP (bind IP), HTTPS_PORT/IPMI_PORT (default 443/623), TRIES (default 4).
 set -u
-WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+WD="${WD:-/Volumes/xxx/src/me/git/vbmc-lab/work/megarac-hpe}"
 IP="${IP:-10.0.6.66}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; IPMI_PORT="${IPMI_PORT:-623}"
 TRIES="${TRIES:-4}"
@@ -34,13 +33,24 @@ for t in $(seq 1 "$TRIES"); do
   ok=0
   for i in $(seq 1 100); do
     sleep 3
-    segv=$(grep -c 'received SIGSEGV' "$LOG" 2>/dev/null); segv=${segv:-0}   # grep -c exits 1 on 0 matches
-    [ "$segv" -ge 3 ] && { echo "[green] attempt $t crash-loop (SEGV=$segv) — reroll" >&2; break; }
-    if grep -q 'ipmimain_init_done' "$LOG" 2>/dev/null && grep -q 'Redfish Server ready' "$LOG" 2>/dev/null; then
-      # healthy = Redfish responds with authed ManagerCollection.
-      # Give the BMC a few extra seconds after the ready signal before polling externally
-      # (emulated ARM is slow; the port needs a moment to accept connections).
-      # ipmitool dropped: it's not always installed and hammers login attempts on each failure.
+    # procmgr respawns run without >/dev/null redirect, so shell prints "Segmentation fault" to svc.log.
+    # IPMIMain's own signal handler writes "received SIGSEGV" to crit.log via syslog — NOT svc.log.
+    segv=$(grep -c 'Segmentation fault' "$LOG" 2>/dev/null || true); segv=${segv:-0}
+    boot_fail=$(grep -c 'Boot CompleteCheck ipmi or rest: FAIL' "$LOG" 2>/dev/null || true)
+    [ "$segv" -ge 1 ] || [ "${boot_fail:-0}" -ge 1 ] && { echo "[green] attempt $t crash-loop (SEGV=$segv fail=$boot_fail) — reroll" >&2; break; }
+    if [ "$segv" -eq 0 ] && grep -q 'ipmimain_init_done' "$LOG" 2>/dev/null && grep -q 'Redfish Server ready' "$LOG" 2>/dev/null; then
+      # Poke RMCP+ once — IPMIMain's LAN init is lazy under emulation; a single UDP packet
+      # triggers it and causes admin/superuser provisioning into UserConfig.ini. Without this,
+      # no user exists and Redfish returns AccessDenied. python3+socket is always available.
+      python3 -c "
+import socket,struct
+# RMCP Get Channel Auth Capabilities (no session required)
+pkt = bytes([0x06,0x00,0xff,0x07,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x09,
+             0x20,0x18,0xc8,0x81,0x00,0x38,0x8e,0x04,0x31])
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2); s.sendto(pkt, ('$IP', $IPMI_PORT)); s.close()
+" 2>/dev/null || true
+      sleep 8
       if timeout 35 curl -sk --max-time 30 -u admin:superuser "https://$IP:$HTTPS_PORT/redfish/v1/Managers" 2>/dev/null | grep -q ManagerCollection; then
         ok=1; break
       fi
