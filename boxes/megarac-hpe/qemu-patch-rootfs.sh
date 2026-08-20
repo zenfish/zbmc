@@ -35,7 +35,10 @@ R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 IPMISTACK="$R/etc/init.d/ipmistack"
 SEED='    mkdir -p /conf /var/tmp\n    if [ ! -f /conf/AMI ]; then\n        cp -a /etc/defconfig/* /conf/ 2>/dev/null\n        ln -sfn BMC1/ast2600evb_ami /conf/BMC\n        touch /conf/AMI\n    fi\n    { [ -f /tmp/devmap.xml ] || cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; }\n'
 # insert the seed block immediately before every "/usr/local/bin/IPMIMain --daemonize" line
-perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)}{${SEED}\$1\$2}g" "$IPMISTACK"
+# ALSO: append `>/dev/null 2>&1` INLINE (same line as IPMIMain) so its crash-loop spam doesn't
+# drown the console tty. Console readability is critical when FIX 5 replaces getty with /bin/sh -i.
+# Anchor perl regex on the FULL line including trailing whitespace/newline to keep redirect on same line.
+perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)(\n)}{${SEED}\$1\$2 >/dev/null 2>&1\$3}g" "$IPMISTACK"
 
 # --- FIX 2: disable the hardware-less IPMI interfaces in the seed IPMI.conf ------------------------
 IC="$R/etc/defconfig/BMC1/ast2600evb_ami/IPMI.conf"
@@ -83,16 +86,80 @@ install -d -m 0755 "$DBDIR"
 PROJ_PB="$(cd "$(dirname "$0")" && pwd)/prebuilt"
 if [ -f "$PROJ_PB/dropbear" ]; then
   install -m 0755 "$PROJ_PB/dropbear" "$DBDIR/dropbear"
-  # Inject dropbear launcher INSIDE the start) branch of ipmistack, immediately after IPMIMain
-  # exec's — must land inside the case-statement, not after `esac; exit 0`. Anchor on the same
-  # IPMIMain launch line FIX 1 already targets.
-  DBLAUNCH='\n    # qemu shim: dropbear sshd (host-key auto-gen via -R; auth = PAM \/ \/etc\/shadow)\n    if [ -x \/usr\/local\/bin\/dropbear ] \&\& ! pidof dropbear >\/dev\/null 2>\&1; then\n        mkdir -p \/etc\/dropbear \/var\/log \/var\/run\n        [ -c \/dev\/pts\/0 ] || mount -t devpts devpts \/dev\/pts 2>\/dev\/null || true\n        \/usr\/local\/bin\/dropbear -R -p 22 -B >>\/var\/log\/dropbear.log 2>\&1 \&\n    fi'
-  perl -0pi -e "s{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)}{\$1${DBLAUNCH}}g" "$IPMISTACK"
-  echo "[qemu-patch] dropbear (static-pie ARMv7 from prebuilt/) staged -> /usr/local/bin/dropbear; launcher injected after IPMIMain in ipmistack"
+  # /etc is squashfs (RO). dropbear -R writes host keys to /etc/dropbear/, so redirect that path
+  # to /var/dropbear (tmpfs, writable) via a build-time symlink. Confirmed via early boot log line
+  # "mkdir: can't create directory '/etc/dropbear': Read-only file system" — dropbear died at key
+  # gen without this. /var is a tmpfs mounted by AMI init before rc3, so the symlink resolves.
+  rm -f "$R/etc/dropbear" 2>/dev/null
+  ln -sfn /var/dropbear "$R/etc/dropbear"
+  # Write launcher stanza to a temp file to avoid nested escape hell, then perl-inject.
+  DBLAUNCH_TMP="$(mktemp)"
+  cat > "$DBLAUNCH_TMP" <<'DBS'
+
+    # qemu shim: dropbear sshd (host-key auto-gen via -R -> /var/dropbear via symlink)
+    if [ -x /usr/local/bin/dropbear ] && ! pidof dropbear >/dev/null 2>&1; then
+        mkdir -p /var/dropbear /var/log /var/run
+        [ -c /dev/pts/0 ] || mount -t devpts devpts /dev/pts 2>/dev/null || true
+        /usr/local/bin/dropbear -R -p 22 -B -E >>/var/log/dropbear.log 2>&1 &
+    fi
+DBS
+  DBLAUNCH_CONTENT="$(cat "$DBLAUNCH_TMP")"
+  rm -f "$DBLAUNCH_TMP"
+  # perl -0777 slurps the whole file; use a Perl variable to hold the injection text safely.
+  # Anchor on the FIX 1-modified line (already has `>/dev/null 2>&1` from perl above); inject stanza AFTER that suffix.
+  DBLAUNCH_ENV="$DBLAUNCH_CONTENT" perl -0777 -i -pe 's{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr(?: >/dev/null 2>&1)?)}{$1 . $ENV{DBLAUNCH_ENV}}ge' "$IPMISTACK"
+  echo "[qemu-patch] dropbear staged -> /usr/local/bin/dropbear; /etc/dropbear -> /var/dropbear symlink; launcher injected in ipmistack"
 else
   echo "[qemu-patch] WARN: prebuilt/dropbear missing; SSH will remain unavailable"
 fi
 
+# --- FIX 5: bypass getty on console — direct /bin/sh (no login, no PAM, no race) --------------------
+#   Console login is racy: IPMIMain's crash-loop respawn floods ttyS4 stderr, drowning login's
+#   password prompt so busybox `login` never sees the user's echoed cred. Rather than fight the
+#   race, replace the `getty -L console 115200 vt100` line in /etc/inittab with a bare `/bin/sh`
+#   respawn — no login required, root shell drops in immediately. Only reasonable because this is
+#   a dev vBMC with no external LAN attackers; NEVER ship this to real hardware.
+INIT="$R/etc/inittab"
+if [ -f "$INIT" ]; then
+    sed -i.bak -E 's|^(co:[0-9]+:respawn:).*|\1/bin/sh -i <>/dev/console >\&0 2>\&0|' "$INIT"
+    rm -f "$INIT.bak"
+fi
+
+# Also silence processmanager (respawn spam of "Process(...) stopped, so respawning")
+PROCMGR="$R/etc/init.d/procmanager"
+if [ -f "$PROCMGR" ]; then
+    sed -i.bak -E 's|(/usr/local/bin/processmanager) &|\1 >/dev/null 2>\&1 \&|' "$PROCMGR"
+    rm -f "$PROCMGR.bak"
+fi
+
+# --- FIX 6: early /conf seed script at S07 — before S10gbt-init writes to /conf/BMC1/ ----------
+#   FIX 1 seeds /conf inside ipmistack (S22). But S10gbt-init.sh and neighbouring scripts write
+#   to /conf/BMC1/ast2600evb_ami/ BEFORE S22, producing:
+#     cp: can't create '/conf/BMC1/ast2600evb_ami/pci_devices.json': No such file or directory
+#     cp: can't create '/conf/BMC1/ast2600evb_ami/SDR.dat': No such file or directory
+#   Also ipmistack reads /conf/pam_withunix + /conf/pam_wounix to configure PAM BEFORE launching
+#   IPMIMain, so the FIX 1 injection (just before IPMIMain --daemonize) is too late for PAM too.
+#   Both pam_withunix and pam_wounix live in /etc/defconfig/ alongside BMC1/ast2600evb_ami/,
+#   so the existing `cp -a /etc/defconfig/* /conf/` covers everything — it just needs to run earlier.
+#   S06mountall.sh mounts /conf from flash; S07 is the next free slot before S10.
+#   The /conf/AMI sentinel makes FIX 1 (inside ipmistack) a no-op if S07 already ran — idempotent.
+cat > "$R/etc/rcS.d/S07conf-seed.sh" <<'CONFSEED'
+#!/bin/sh
+# Early /conf seed — before S10gbt-init.sh and ipmistack need /conf/BMC1/ast2600evb_ami/ and PAM files.
+# /conf is mounted by S06mountall.sh; /etc/defconfig has BMC1/ast2600evb_ami/, pam_withunix, pam_wounix.
+if [ ! -f /conf/AMI ]; then
+    cp -a /etc/defconfig/* /conf/ 2>/dev/null || true
+    ln -sfn BMC1/ast2600evb_ami /conf/BMC
+    touch /conf/AMI
+fi
+{ [ -f /tmp/devmap.xml ] || \
+  cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || \
+  cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; } || true
+CONFSEED
+chmod 0755 "$R/etc/rcS.d/S07conf-seed.sh"
+
 echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf: kept LAN/UDS/KCS, disabled"
 echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable + UDS serving"
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
+echo "[qemu-patch] inittab console: getty -> /bin/sh -i (no login prompt, direct root shell)"
+echo "[qemu-patch] S07conf-seed.sh -> seeds /conf before S10gbt-init; pam_withunix+pam_wounix covered"

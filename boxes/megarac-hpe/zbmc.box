@@ -8,14 +8,19 @@
 # BOOT: boot-megarac-hpe-svc.sh (real /sbin/init + qemu user-net). Artifacts regenerate from the HPM via
 #       extract.sh. There is no warm snapshot yet (cold boot ~2 min).
 #
-# STATUS (2026-07-28): GREEN — IPMI 2.0 RMCP+ + authenticated Redfish both work. extract.sh ->
+# STATUS (2026-08-20): GREEN — IPMI 2.0 RMCP+ + authenticated Redfish both work. extract.sh ->
 #   qemu-patch-rootfs.sh applies the Ghidra-RE'd fixes that let IPMIMain run stably under qemu:
 #     (1) seed /conf + create /conf/BMC -> BMC1/ast2600evb_ami symlink (IPMIMain opens the literal
-#         /conf/BMC/IPMI.conf to build g_BMCInfo[]); (2) IPMI.conf consistent with qemu hardware —
-#         keep LAN/UDS/KCS, disable serial/sol/bt/smm/smbus/ipmb (absent hw crash the central MsgHndlr),
-#         set NM_IPMB_BUS=0xFF (Node-Manager validation self-stop otherwise). IPMIMain then completes
-#         init, binds /var/UDSocket1, and auto-provisions the default admin/superuser (Admin, chan 1).
-#   Verified: ipmitool -I lanplus -U admin -P superuser mc info -> Gigabyte MfgID 15370, IPMI 2.0;
+#         /conf/BMC/IPMI.conf to build g_BMCInfo[]). FIX 6 (2026-08-20) moves this seed to S07conf-seed.sh
+#         in rcS.d, so it runs after S06mountall (mounts /conf) but before S10gbt-init (first script to
+#         write to /conf/BMC1/ast2600evb_ami/). Previously in ipmistack (S22) = too late; caused:
+#           cp: can't create '/conf/BMC1/ast2600evb_ami/pci_devices.json': No such file
+#           cp: can't create '/conf/BMC1/ast2600evb_ami/SDR.dat': No such file
+#         Also fixes missing /conf/pam_withunix+pam_wounix (ipmistack PAM config reads them before
+#         launching IPMIMain; both are in /etc/defconfig/ and covered by the cp -a seed).
+#     (2) IPMI.conf consistent with qemu hardware — keep LAN/UDS/KCS, disable serial/sol/bt/smm/smbus/ipmb
+#         (absent hw crash the central MsgHndlr), set NM_IPMB_BUS=0xFF (Node-Manager guard).
+#   Verified: zipmi -H 10.0.6.66 mc info -> Gigabyte MfgID 15370, IPMI 2.0;
 #     user2=admin=ADMINISTRATOR; curl -u admin:superuser https://IP/redfish/v1/Managers -> real JSON.
 #
 # ACCESS:
@@ -25,8 +30,8 @@
 #             'superuser' which is the IPMI user; getty only drops into the restricted defshell anyway)
 #   Shell   : zbmc megarac-hpe shell   (boots init=/bin/sh — UNRESTRICTED ROOT, no net/IPMI; RE mode,
 #             separate qemu from the service box. quit qemu: Ctrl-A x). THE way to get a real shell.
-#   SSH     : BROKEN — guest sshd resets at kex under emulation (binds guest-loopback). Use `shell`.
-#             Fix pending: sshd ListenAddress 0.0.0.0 + host keys via qemu-patch-rootfs.sh, then re-snapshot.
+#   SSH     : via dropbear (injected by qemu-patch-rootfs.sh FIX 4 — static ARMv7 binary, -R host-key
+#             auto-gen, port 22). Auth = sysadmin/<unknown_pw> via PAM→/etc/shadow (pw not cracked yet).
 #   Raw sh  : WD=... boot-megarac-hpe.sh  (init=/bin/sh, unrestricted root — for RE)
 ZBMC_NAME=megarac-hpe
 ZBMC_DESC="HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser)"
