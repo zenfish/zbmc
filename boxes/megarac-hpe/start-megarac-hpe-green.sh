@@ -37,9 +37,11 @@ for t in $(seq 1 "$TRIES"); do
     segv=$(grep -c 'received SIGSEGV' "$LOG" 2>/dev/null); segv=${segv:-0}   # grep -c exits 1 on 0 matches
     [ "$segv" -ge 3 ] && { echo "[green] attempt $t crash-loop (SEGV=$segv) — reroll" >&2; break; }
     if grep -q 'ipmimain_init_done' "$LOG" 2>/dev/null && grep -q 'Redfish Server ready' "$LOG" 2>/dev/null; then
-      # healthy if EITHER IPMI RMCP+ or authed Redfish answers with admin/superuser
-      if timeout 22 ipmitool -I lanplus -H "$IP" -p "$IPMI_PORT" -U admin -P superuser mc info 2>/dev/null | grep -q 'Manufacturer' \
-         || timeout 12 curl -sk -u admin:superuser "https://$IP:$HTTPS_PORT/redfish/v1/Managers" 2>/dev/null | grep -q ManagerCollection; then
+      # healthy = Redfish responds with authed ManagerCollection.
+      # Give the BMC a few extra seconds after the ready signal before polling externally
+      # (emulated ARM is slow; the port needs a moment to accept connections).
+      # ipmitool dropped: it's not always installed and hammers login attempts on each failure.
+      if timeout 35 curl -sk --max-time 30 -u admin:superuser "https://$IP:$HTTPS_PORT/redfish/v1/Managers" 2>/dev/null | grep -q ManagerCollection; then
         ok=1; break
       fi
     fi
