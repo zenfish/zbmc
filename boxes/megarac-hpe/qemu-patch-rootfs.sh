@@ -79,45 +79,36 @@ exec /bin/sh "$@"
 SMASH
 chmod 0755 "$R/usr/local/bin/smash"
 
-# --- FIX 4: dropbear sshd — give host-side SSH access on :22 ---------------------------------------
-#   This rootfs has neither an sshd binary nor an ssh-main startup script, so guest port 22 sits
-#   forwarded (see boot-megarac-hpe-svc.sh hostfwd) but nothing binds to answer. We inject a static
-#   ARMv7 dropbear from prebuilt/ (source: https://kuba.szczodrzynski.pl/tools/linux-static-binaries/,
-#   static-pie, ~300 KB, no libc deps) and hook the launch onto `ipmistack` — the same init script
-#   FIX 1 already patches, so we know it runs. rc3.d/S99 was tried first but AMI's init dispatcher
-#   didn't invoke it; ipmistack is proven-live. Host keys auto-generate on first connect via `-R`
-#   (no dropbearkey needed). Auth path: dropbear → PAM → /etc/shadow (same as console getty).
-#   FIX 3's smash shim ensures admin's login shell exists.
-DBDIR="$R/usr/local/bin"
-install -d -m 0755 "$DBDIR"
+# --- FIX 4: telnetd on :22 — give host-side shell access (SSH port forwarded by qemu hostfwd) ---
+#   This rootfs has no sshd. We tried injecting a static dropbear but all available ARM static
+#   dropbear binaries require VFPv3/NEON which the qemu ast2600-evb Cortex-A7 does NOT emulate
+#   (guest /proc/cpuinfo has no 'vfp'/'neon' in Features; SIGILL on first instruction of VFPv3 binary).
+#   Solution: mini_telnetd (https://github.com/Troll338cz/mini_telnetd; prebuilt/telnetd — ARMv4T
+#   soft-float, truly static, no PT_INTERP — @therealsaumil static-arm-bins collection). It runs
+#   /bin/sh directly without auth (uid=0/sysadmin). Access: nc 10.0.6.66 22 / zbmc_ssh().
+#   Port 22 is the SSH hostfwd, repurposed for telnetd so no new qemu port is needed.
+#   FIX 3's smash shim kept for console login completeness but unrelated to telnetd.
+TDDIR="$R/usr/local/bin"
+install -d -m 0755 "$TDDIR"
 PROJ_PB="$(cd "$(dirname "$0")" && pwd)/prebuilt"
-if [ -f "$PROJ_PB/dropbear" ]; then
-  install -m 0755 "$PROJ_PB/dropbear" "$DBDIR/dropbear"
-  # /etc is squashfs (RO). dropbear -R writes host keys to /etc/dropbear/, so redirect that path
-  # to /var/dropbear (tmpfs, writable) via a build-time symlink. Confirmed via early boot log line
-  # "mkdir: can't create directory '/etc/dropbear': Read-only file system" — dropbear died at key
-  # gen without this. /var is a tmpfs mounted by AMI init before rc3, so the symlink resolves.
-  rm -f "$R/etc/dropbear" 2>/dev/null
-  ln -sfn /var/dropbear "$R/etc/dropbear"
+if [ -f "$PROJ_PB/telnetd" ]; then
+  install -m 0755 "$PROJ_PB/telnetd" "$TDDIR/telnetd"
   # Write launcher stanza to a temp file to avoid nested escape hell, then perl-inject.
-  DBLAUNCH_TMP="$(mktemp)"
-  cat > "$DBLAUNCH_TMP" <<'DBS'
+  TDLAUNCH_TMP="$(mktemp)"
+  cat > "$TDLAUNCH_TMP" <<'TDS'
 
-    # qemu shim: dropbear sshd (host-key auto-gen via -R -> /var/dropbear via symlink)
-    if [ -x /usr/local/bin/dropbear ] && ! pidof dropbear >/dev/null 2>&1; then
-        mkdir -p /var/dropbear /var/log /var/run
-        [ -c /dev/pts/0 ] || mount -t devpts devpts /dev/pts 2>/dev/null || true
-        /usr/local/bin/dropbear -R -p 22 -B -E >>/var/log/dropbear.log 2>&1 &
+    # qemu shim: mini_telnetd on port 22 (repurposed SSH hostfwd); no auth, direct /bin/sh root
+    if [ -x /usr/local/bin/telnetd ] && ! pidof telnetd >/dev/null 2>&1; then
+        mkdir -p /var/log /var/run
+        /usr/local/bin/telnetd -l /bin/sh -p 22 &
     fi
-DBS
-  DBLAUNCH_CONTENT="$(cat "$DBLAUNCH_TMP")"
-  rm -f "$DBLAUNCH_TMP"
-  # perl -0777 slurps the whole file; use a Perl variable to hold the injection text safely.
-  # Anchor on the FIX 1-modified line (already has `>/dev/null 2>&1` from perl above); inject stanza AFTER that suffix.
-  DBLAUNCH_ENV="$DBLAUNCH_CONTENT" perl -0777 -i -pe 's{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr(?: >/dev/null 2>&1)?)}{$1 . $ENV{DBLAUNCH_ENV}}ge' "$IPMISTACK"
-  echo "[qemu-patch] dropbear staged -> /usr/local/bin/dropbear; /etc/dropbear -> /var/dropbear symlink; launcher injected in ipmistack"
+TDS
+  TDLAUNCH_CONTENT="$(cat "$TDLAUNCH_TMP")"
+  rm -f "$TDLAUNCH_TMP"
+  TDLAUNCH_ENV="$TDLAUNCH_CONTENT" perl -0777 -i -pe 's{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr(?: >/dev/null 2>&1)?)}{$1 . $ENV{TDLAUNCH_ENV}}ge' "$IPMISTACK"
+  echo "[qemu-patch] telnetd staged -> /usr/local/bin/telnetd; launcher on port 22 injected in ipmistack"
 else
-  echo "[qemu-patch] WARN: prebuilt/dropbear missing; SSH will remain unavailable"
+  echo "[qemu-patch] WARN: prebuilt/telnetd missing; shell-over-port-22 unavailable"
 fi
 
 # --- FIX 5: bypass getty on console — direct /bin/sh (no login, no PAM, no race) --------------------
@@ -176,3 +167,4 @@ echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain st
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
 echo "[qemu-patch] inittab console: getty -> /bin/sh -i (no login prompt, direct root shell)"
 echo "[qemu-patch] S07conf-seed.sh -> seeds /conf + rc-init-complete early; UDS listens from boot"
+echo "[qemu-patch] telnetd on port 22 (SSH hostfwd repurposed) -> direct /bin/sh, uid=0, no auth"

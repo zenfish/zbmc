@@ -6,32 +6,34 @@
 # WHY:  the Cray XD670 does NOT run iLO — it runs AMI MegaRAC (same stack Eclypsium BMC&C Part 3 hit,
 #       CVE-2024-54085 in the Redfish host-interface lua). First MegaRAC-on-Gigabyte box in the zoo.
 # BOOT: boot-megarac-hpe-svc.sh (real /sbin/init + qemu user-net). Artifacts regenerate from the HPM via
-#       extract.sh. There is no warm snapshot yet (cold boot ~2 min).
+#       extract.sh. FAST PATH: restore from warm snapshot work/cray-snap.gz (~10s to green) — cold boot is
+#       ~5 min and requires the 3rd IPMIMain launch to survive; always prefer the snapshot.
 #
-# STATUS (2026-08-20): GREEN — IPMI 2.0 RMCP+ + authenticated Redfish both work. extract.sh ->
-#   qemu-patch-rootfs.sh applies the Ghidra-RE'd fixes that let IPMIMain run stably under qemu:
-#     (1) seed /conf + create /conf/BMC -> BMC1/ast2600evb_ami symlink (IPMIMain opens the literal
-#         /conf/BMC/IPMI.conf to build g_BMCInfo[]). FIX 6 (2026-08-20) moves this seed to S07conf-seed.sh
-#         in rcS.d, so it runs after S06mountall (mounts /conf) but before S10gbt-init (first script to
-#         write to /conf/BMC1/ast2600evb_ami/). Previously in ipmistack (S22) = too late; caused:
-#           cp: can't create '/conf/BMC1/ast2600evb_ami/pci_devices.json': No such file
-#           cp: can't create '/conf/BMC1/ast2600evb_ami/SDR.dat': No such file
-#         Also fixes missing /conf/pam_withunix+pam_wounix (ipmistack PAM config reads them before
-#         launching IPMIMain; both are in /etc/defconfig/ and covered by the cp -a seed).
-#     (2) IPMI.conf consistent with qemu hardware — keep LAN/UDS/KCS, disable serial/sol/bt/smm/smbus/ipmb
-#         (absent hw crash the central MsgHndlr), set NM_IPMB_BUS=0xFF (Node-Manager guard).
-#   Verified: zipmi -H 10.0.6.66 mc info -> Gigabyte MfgID 15370, IPMI 2.0;
-#     user2=admin=ADMINISTRATOR; curl -u admin:superuser https://IP/redfish/v1/Managers -> real JSON.
+# STATUS (2026-08-20): GREEN — IPMI 2.0 RMCP+ (LAN/UDP 623) + authenticated Redfish + shell (port 22)
+#   all work. Warm QMP snapshot at work/cray-snap.gz (~177MB) restores in ~10s via restore-megarac-hpe.sh.
+#   qemu-patch-rootfs.sh applies Ghidra-RE'd fixes that let IPMIMain run stably:
+#     (1) seed /conf + create /conf/BMC -> BMC1/ast2600evb_ami symlink. FIX 6 (2026-08-20) moves seed
+#         to S07conf-seed.sh (rcS.d), before S10gbt-init writes to /conf/BMC1/ and before ipmistack
+#         reads PAM config. Also creates /var/tmp/rc-init-complete early so UDSIfcTask → /var/UDSocket1
+#         listens immediately (without it, a 360s gate delays UDS → MsgHndlr health counter never updates
+#         → thread monitor fires → IPMIMain restart → double-reg SIGSEGV crash loop).
+#     (2) IPMI.conf consistent with qemu hardware — keep LAN/UDS/DCMI, disable KCS1-3/serial/sol/bt/
+#         smm/smbus/ipmb (absent hw crash the central MsgHndlr), set NM_IPMB_BUS=0xFF (Node-Manager guard).
+#     (3) smash shim: /usr/local/bin/smash -> /bin/sh (console admin login shell).
+#     (4) telnetd (mini_telnetd, ARMv4T static) on port 22 — direct root shell, no auth (dev only).
+#         Replaces dropbear: all available static ARM dropbear binaries need VFPv3/NEON which the
+#         ast2600-evb qemu Cortex-A7 does NOT emulate (no 'vfp'/'neon' in guest /proc/cpuinfo features).
+#   Verified: zipmi -H 10.0.6.66 mc info -> Gigabyte MfgID 15370, IPMI 2.0 (LAN UDP 623 binds);
+#     user2=admin=ADMINISTRATOR; curl -u admin:superuser https://IP/redfish/v1/Managers -> real JSON;
+#     nc 10.0.6.66 22 -> telnet shell -> uid=0(sysadmin).
 #
 # ACCESS:
 #   IPMI    : zipmi -H 10.0.6.66 -U admin -P superuser mc info   (zbmc megarac-hpe ipmi …)
 #   Redfish : curl -sk -u admin:superuser https://10.0.6.66/redfish/v1/Managers   (zbmc megarac-hpe web)
-#   Console : zbmc megarac-hpe console   (serial ttyS4; getty login = sysadmin/<pw> — pw UNKNOWN, NOT
-#             'superuser' which is the IPMI user; getty only drops into the restricted defshell anyway)
-#   Shell   : zbmc megarac-hpe shell   (boots init=/bin/sh — UNRESTRICTED ROOT, no net/IPMI; RE mode,
-#             separate qemu from the service box. quit qemu: Ctrl-A x). THE way to get a real shell.
-#   SSH     : via dropbear (injected by qemu-patch-rootfs.sh FIX 4 — static ARMv7 binary, -R host-key
-#             auto-gen, port 22). Auth = sysadmin/<unknown_pw> via PAM→/etc/shadow (pw not cracked yet).
+#   Shell   : zbmc megarac-hpe ssh   (telnet-over-port-22 -> direct root shell, uid=0, no auth/password)
+#             OR: zbmc megarac-hpe shell  (init=/bin/sh — unrestricted root, no net/IPMI; RE mode; Ctrl-A x)
+#   Console : zbmc megarac-hpe console   (serial ttyS4; getty login = sysadmin/<unknown_pw>; drops into
+#             restricted defshell. Use 'ssh' verb above for real shell on the live service box.)
 #   Raw sh  : WD=... boot-megarac-hpe.sh  (init=/bin/sh, unrestricted root — for RE)
 ZBMC_NAME=megarac-hpe
 ZBMC_DESC="HPE Cray XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — IPMI 2.0 RMCP+ + authed Redfish WORK (admin/superuser)"
@@ -56,9 +58,11 @@ IPMI_USER=admin
 IPMI_PW=superuser
 IPMI_KEY=00
 IPMI_OPTS=""
-IPMI_T=20        # RMCP+ RAKP under armv7 emulation is slow; short timeouts look dead
-SSH_USER=sysadmin
-SSH_PW=superuser
+IPMI_T=20        # RMCP+ RAKK under armv7 emulation is slow; short timeouts look dead
+# Shell access is via telnetd on port 22 (no auth, direct root shell).
+# No password needed — mini_telnetd spawns /bin/sh directly.
+SSH_USER=root
+SSH_PW=
 SSH_PORT=22
 IPMI_PORT=623
 WEB_PORT=443
@@ -142,12 +146,20 @@ zbmc_ipmi_health() {
     echo "AUTH OK (zipmi RMCP+ admin/superuser; Gigabyte MfgID 15370)"; return 0
   else echo "no answer (still booting? RMCP+ is slow under emulation — IPMI_T=$IPMI_T)"; return 1; fi
 }
-# ssh: try the real sshd, fall back to console. Guest sshd currently resets at kex (binds guest-loopback
-# under emulation) — this WILL work once qemu-patch-rootfs.sh sets ListenAddress 0.0.0.0 + host keys.
+# ssh verb: port 22 has mini_telnetd (not SSH) — direct /bin/sh root shell, no auth.
+# Pass a command to run non-interactively, or no args for an interactive shell.
+# Protocol: raw telnet (nc). No password. Port 22 is the qemu SSH hostfwd, repurposed.
+# Note: all available static ARM dropbear binaries need VFPv3/NEON which the ast2600-evb CPU
+# does NOT emulate -> SIGILL. Use this telnet-over-22 approach until a musl dropbear is built.
 zbmc_ssh() {
-  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@" 2>&1 && return 0
-  echo "megarac-hpe ssh unavailable (rootfs has no ssh host keys -> sshd resets at kex). For a root shell: zbmc megarac-hpe shell"; return 1
+  if [ $# -gt 0 ]; then
+    # non-interactive: send command + exit, capture output
+    printf '%s\nexit\n' "$*" | nc -w 5 "$ZBMC_IP" "$SSH_PORT" 2>/dev/null | \
+      LC_ALL=C sed 's/\r//' | grep -v '^\s*$' | tail -n +2
+  else
+    echo "megarac-hpe shell (telnetd on port 22, uid=0, no auth). quit: Ctrl-C or type 'exit'"
+    nc "$ZBMC_IP" "$SSH_PORT"
+  fi
 }
 
 ZBMC_READY_GREP='Redfish Server ready'
