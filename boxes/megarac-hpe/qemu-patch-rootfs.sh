@@ -29,9 +29,9 @@
 #
 # STATUS (2026-08-20): all fixes applied → cold boot stable (0 IPMIMain SIGSEGVs on 3rd try),
 #   UDS listens (/var/UDSocket1), MsgHndlr health counter updates via UDS clients → thread monitor
-#   never fires, admin/superuser provisioned at boot, authenticated Redfish works. LAN IPMI (UDP/623)
-#   still doesn't bind (libipmilan init race TBD). Warm QMP snapshot at work/cray-snap.gz restores
-#   in ~10s skipping the 5-min cold boot entirely.
+#   never fires, admin/superuser provisioned at boot, authenticated Redfish + LAN IPMI UDP/623 work.
+#   Shell: dropbear SSH on port 22 (sysadmin/blank; musl soft-float ARMv5T static); mini_telnetd on
+#   port 23 (no auth, direct /bin/sh). Warm QMP snapshot at work/cray-snap.gz restores in ~10s.
 set -eu
 R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 
@@ -79,36 +79,64 @@ exec /bin/sh "$@"
 SMASH
 chmod 0755 "$R/usr/local/bin/smash"
 
-# --- FIX 4: telnetd on :22 — give host-side shell access (SSH port forwarded by qemu hostfwd) ---
-#   This rootfs has no sshd. We tried injecting a static dropbear but all available ARM static
-#   dropbear binaries require VFPv3/NEON which the qemu ast2600-evb Cortex-A7 does NOT emulate
-#   (guest /proc/cpuinfo has no 'vfp'/'neon' in Features; SIGILL on first instruction of VFPv3 binary).
-#   Solution: mini_telnetd (https://github.com/Troll338cz/mini_telnetd; prebuilt/telnetd — ARMv4T
-#   soft-float, truly static, no PT_INTERP — @therealsaumil static-arm-bins collection). It runs
-#   /bin/sh directly without auth (uid=0/sysadmin). Access: nc 10.0.6.66 22 / zbmc_ssh().
-#   Port 22 is the SSH hostfwd, repurposed for telnetd so no new qemu port is needed.
-#   FIX 3's smash shim kept for console login completeness but unrelated to telnetd.
-TDDIR="$R/usr/local/bin"
-install -d -m 0755 "$TDDIR"
-PROJ_PB="$(cd "$(dirname "$0")" && pwd)/prebuilt"
-if [ -f "$PROJ_PB/telnetd" ]; then
-  install -m 0755 "$PROJ_PB/telnetd" "$TDDIR/telnetd"
-  # Write launcher stanza to a temp file to avoid nested escape hell, then perl-inject.
-  TDLAUNCH_TMP="$(mktemp)"
-  cat > "$TDLAUNCH_TMP" <<'TDS'
+# --- FIX 4: dropbear SSH on :22 + telnetd on :23 -----------------------------------------------
+#   Two static ARM binaries from prebuilt/:
+#
+#   prebuilt/dropbear — musl-linked soft-float static dropbear 2024.86. Built via Docker +
+#     musl.cc arm-linux-musleabi cross-compiler (x86-32 Linux ELF, run inside debian:12-slim).
+#     soft-float EABI, ARMv5T, no PT_INTERP — runs on any ARM without VFP. All *hard-float*
+#     prebuilt dropbears SIGILL on ast2600-evb Cortex-A7 because qemu ast2600-evb doesn't
+#     emulate VFP/NEON (despite the real Cortex-A7 supporting it in hardware).
+#     Auth: blank password via -B. sysadmin shell + shadow fixed directly below (rootfs writable
+#     at patch time — no bind-mount needed at runtime).
+#   prebuilt/telnetd — mini_telnetd ARMv4T soft-float truly-static (@therealsaumil static-arm-
+#     bins). No auth, direct /bin/sh. Port 23 (separate hostfwd in boot-megarac-hpe-svc.sh).
+#
+#   qemu hostfwd: :22 → SSH (dropbear); :23 → telnet (mini_telnetd).
+#   Access: zbmc_ssh (sshpass sysadmin/blank); zbmc_telnet / nc 10.0.6.66 23.
 
-    # qemu shim: mini_telnetd on port 22 (repurposed SSH hostfwd); no auth, direct /bin/sh root
-    if [ -x /usr/local/bin/telnetd ] && ! pidof telnetd >/dev/null 2>&1; then
+# /etc/passwd: change sysadmin's shell from /usr/local/bin/defshell to /bin/sh.
+#   dropbear rejects shells not in /etc/shells (absent) or its compiled-in whitelist; /bin/sh is
+#   in the whitelist. /usr/local/bin/defshell is NOT. squashfs is extracted/writable at patch time.
+sed -i.bak -E 's|^(sysadmin:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:)/usr/local/bin/defshell$|\1/bin/sh|' \
+    "$R/etc/passwd"
+rm -f "$R/etc/passwd.bak"
+# /etc/shadow: blank sysadmin's password hash (field 2 empty = no password required with dropbear -B).
+#   Original hash 3y0qpRW/8peJ6 (DES-crypt); clearing avoids needing to know/crack the password.
+sed -i.bak -E 's|^(sysadmin:)[^:]*(:)|\1\2|' "$R/etc/shadow"
+rm -f "$R/etc/shadow.bak"
+
+SHDIR="$R/usr/local/bin"
+install -d -m 0755 "$SHDIR"
+PROJ_PB="$(cd "$(dirname "$0")" && pwd)/prebuilt"
+# Write launcher stanza to a temp file to avoid nested heredoc/escape hell, then perl-inject.
+SHLAUNCH_TMP="$(mktemp)"
+cat > "$SHLAUNCH_TMP" <<'SSHS'
+
+    # qemu shim: dropbear SSH on port 22 (musl soft-float static; blank-password -B; -R auto host keys)
+    if [ -x /usr/local/bin/dropbear ] && ! pidof dropbear >/dev/null 2>&1; then
         mkdir -p /var/log /var/run
-        /usr/local/bin/telnetd -l /bin/sh -p 22 &
+        /usr/local/bin/dropbear -R -p 22 -B -E >>/var/log/dropbear.log 2>&1 &
     fi
-TDS
-  TDLAUNCH_CONTENT="$(cat "$TDLAUNCH_TMP")"
-  rm -f "$TDLAUNCH_TMP"
-  TDLAUNCH_ENV="$TDLAUNCH_CONTENT" perl -0777 -i -pe 's{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr(?: >/dev/null 2>&1)?)}{$1 . $ENV{TDLAUNCH_ENV}}ge' "$IPMISTACK"
-  echo "[qemu-patch] telnetd staged -> /usr/local/bin/telnetd; launcher on port 22 injected in ipmistack"
+    # qemu shim: mini_telnetd on port 23 (ARMv4T static; no auth, direct /bin/sh root shell)
+    if [ -x /usr/local/bin/telnetd ] && ! pidof telnetd >/dev/null 2>&1; then
+        /usr/local/bin/telnetd -l /bin/sh -p 23 &
+    fi
+SSHS
+SHLAUNCH_CONTENT="$(cat "$SHLAUNCH_TMP")"
+rm -f "$SHLAUNCH_TMP"
+if [ -f "$PROJ_PB/dropbear" ]; then
+  install -m 0755 "$PROJ_PB/dropbear" "$SHDIR/dropbear"
+  SHLAUNCH_ENV="$SHLAUNCH_CONTENT" perl -0777 -i -pe 's{(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr(?: >/dev/null 2>&1)?)}{$1 . $ENV{SHLAUNCH_ENV}}ge' "$IPMISTACK"
+  echo "[qemu-patch] dropbear (musl soft-float ARMv5T) -> /usr/local/bin/dropbear; SSH on port 22 (sysadmin/blank)"
 else
-  echo "[qemu-patch] WARN: prebuilt/telnetd missing; shell-over-port-22 unavailable"
+  echo "[qemu-patch] WARN: prebuilt/dropbear missing; SSH unavailable"
+fi
+if [ -f "$PROJ_PB/telnetd" ]; then
+  install -m 0755 "$PROJ_PB/telnetd" "$SHDIR/telnetd"
+  echo "[qemu-patch] telnetd (ARMv4T static) -> /usr/local/bin/telnetd; telnet on port 23 (no auth)"
+else
+  echo "[qemu-patch] WARN: prebuilt/telnetd missing; telnetd unavailable"
 fi
 
 # --- FIX 5: bypass getty on console — direct /bin/sh (no login, no PAM, no race) --------------------
@@ -167,4 +195,5 @@ echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain st
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
 echo "[qemu-patch] inittab console: getty -> /bin/sh -i (no login prompt, direct root shell)"
 echo "[qemu-patch] S07conf-seed.sh -> seeds /conf + rc-init-complete early; UDS listens from boot"
-echo "[qemu-patch] telnetd on port 22 (SSH hostfwd repurposed) -> direct /bin/sh, uid=0, no auth"
+echo "[qemu-patch] sysadmin /etc/passwd shell: /usr/local/bin/defshell -> /bin/sh; shadow pw hash cleared"
+echo "[qemu-patch] dropbear SSH on port 22 (sysadmin/blank via -B); telnetd on port 23 (no auth)"

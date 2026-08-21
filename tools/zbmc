@@ -49,7 +49,8 @@ usage(){
   echo "  stop              kill the QEMU process"
   echo "  restart           stop then start"
   echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
-  echo "  ssh [cmd]         root shell into the box"
+  echo "  ssh [cmd]         SSH into the box (dropbear; sysadmin/blank)"
+  echo "  telnet            telnet into the box (mini_telnetd; no auth; port 23)"
   echo "  ipmi <cmd...>     authenticated zipmi (e.g. zbmc idrac9 ipmi mc info)"
   echo "  web               bring up httpd + Redfish"
   echo "  console           live console (box must be up): interactive serial login on"
@@ -225,7 +226,8 @@ case "$VERB" in
       { [ "$_sshok" = 1 ] && [ "$_ipmiok" = 1 ]; } && { echo "==== READY:  ssh root@$ZBMC_HOST  |  zipmi -H $ZBMC_HOST ===="; break; }
       sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
     done ;;
-  ssh)   zbmc_ssh "$@" ;;
+  ssh)    zbmc_ssh "$@" ;;
+  telnet) declare -F zbmc_telnet >/dev/null && zbmc_telnet "$@" || { nc "$ZBMC_IP" "${TELNET_PORT:-23}"; } ;;
   ipmi)  [ $# -eq 0 ] && { echo "usage: zbmc $ZBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
   web)   zbmc_web ;;
   console)

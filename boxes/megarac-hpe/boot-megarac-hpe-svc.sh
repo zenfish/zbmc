@@ -24,7 +24,7 @@ IP="${IP:-127.0.0.1}"
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
 # host-side forward ports. Zoo/real-IP use = standard ports (needs root to bind 443/623); loopback dev
 # use = pass HTTPS_PORT=8443 SSH_PORT=8022 IPMI_PORT=8623 to avoid root. Guest side is always 443/22/623.
-HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; IPMI_PORT="${IPMI_PORT:-623}"
+HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 MTDPARTS='mtdparts=1e620000.spi:1M(uboot),2M(conf),2M(bkupconf),1M(extlog),4M(www),-(root)'
 APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_size=131072 ramdisk_blocksize=4096 $MTDPARTS rootwait"
 # Boot from a FRESH copy of the pristine flash each start: IPMIMain only auto-provisions the default
@@ -36,7 +36,7 @@ QEMU=(qemu-system-arm -M ast2600-evb -m 1024 -nographic
   -qmp "unix:$WD/cray-qmp.sock,server,nowait"
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs"
   -drive "file=$WD/mtdflash-run.bin,format=raw,if=mtd"
-  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=udp:$IP:$IPMI_PORT-:623,hostname=megarac-hpe"
+  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$TELNET_PORT-:23,hostfwd=udp:$IP:$IPMI_PORT-:623,hostname=megarac-hpe"
   -append "$APPEND")
 
 if [ "${BG:-}" = 1 ]; then

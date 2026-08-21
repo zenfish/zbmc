@@ -13,7 +13,7 @@
 set -u
 WD="${WD:-/Volumes/xxx/src/me/git/vbmc-lab/work/megarac-hpe}"
 IP="${IP:-10.0.6.66}"
-HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; IPMI_PORT="${IPMI_PORT:-623}"
+HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 TRIES="${TRIES:-4}"
 PROJ="$(cd "$(dirname "$0")" && pwd)"
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -25,7 +25,7 @@ kill_qemu(){ $SUDO pkill -f 'hostname=megarac-hpe' 2>/dev/null; pkill -f "tail -
 for t in $(seq 1 "$TRIES"); do
   echo "[green] boot attempt $t/$TRIES" >&2
   kill_qemu
-  HTTPS_PORT="$HTTPS_PORT" SSH_PORT="$SSH_PORT" IPMI_PORT="$IPMI_PORT" BG=1 IP="$IP" WD="$WD" \
+  HTTPS_PORT="$HTTPS_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" IPMI_PORT="$IPMI_PORT" BG=1 IP="$IP" WD="$WD" \
     bash "$PROJ/boot-megarac-hpe-svc.sh" >/dev/null 2>&1
   # watch up to ~300s: crash-loop (SEGV>=6) -> reroll; once init_done+Redfish-ready, poll IPMI/Redfish
   # health (RMCP+ + provisioning are slow under emulation) until it passes or the window ends.
