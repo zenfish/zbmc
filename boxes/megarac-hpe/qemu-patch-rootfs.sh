@@ -95,16 +95,24 @@ chmod 0755 "$R/usr/local/bin/smash"
 #   qemu hostfwd: :22 → SSH (dropbear); :23 → telnet (mini_telnetd).
 #   Access: zbmc_ssh (sshpass sysadmin/blank); zbmc_telnet / nc 10.0.6.66 23.
 
-# /etc/passwd: change sysadmin's shell from /usr/local/bin/defshell to /bin/sh.
-#   dropbear rejects shells not in /etc/shells (absent) or its compiled-in whitelist; /bin/sh is
-#   in the whitelist. /usr/local/bin/defshell is NOT. squashfs is extracted/writable at patch time.
+# /etc/passwd + /etc/shadow are SYMLINKS -> /conf/passwd, /conf/shadow in the squashfs.
+# /conf is the persistent flash partition seeded at boot by `cp -a /etc/defconfig/* /conf/`.
+# Patch the SEED files in /etc/defconfig/ — they become /conf/passwd and /conf/shadow at runtime.
+#   passwd: change sysadmin shell /usr/local/bin/defshell -> /bin/sh (dropbear whitelist).
+#   shadow: blank sysadmin pw hash (field 2 empty = no pw; dropbear -B allows blank-pw login).
+#   Original shadow hash: 3y0qpRW/8peJ6 (DES-crypt); cleared to avoid needing to crack it.
+DC="$R/etc/defconfig"
 sed -i.bak -E 's|^(sysadmin:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:)/usr/local/bin/defshell$|\1/bin/sh|' \
-    "$R/etc/passwd"
-rm -f "$R/etc/passwd.bak"
-# /etc/shadow: blank sysadmin's password hash (field 2 empty = no password required with dropbear -B).
-#   Original hash 3y0qpRW/8peJ6 (DES-crypt); clearing avoids needing to know/crack the password.
-sed -i.bak -E 's|^(sysadmin:)[^:]*(:)|\1\2|' "$R/etc/shadow"
-rm -f "$R/etc/shadow.bak"
+    "$DC/passwd"
+rm -f "$DC/passwd.bak"
+sed -i.bak -E 's|^(sysadmin:)[^:]*(:)|\1\2|' "$DC/shadow"
+rm -f "$DC/shadow.bak"
+
+# /etc/dropbear -> /var/dropbear/ symlink: dropbear -R auto-generates host keys in /etc/dropbear/
+# (hardcoded default). /etc is squashfs RO at runtime so it can't create the dir there. Solution:
+# bake the symlink into the squashfs at patch time; /var/ is tmpfs (writable) so dropbear can write.
+# mkdir -p /var/dropbear in the init shim ensures the target exists before dropbear runs.
+ln -sfn /var/dropbear "$R/etc/dropbear"
 
 SHDIR="$R/usr/local/bin"
 install -d -m 0755 "$SHDIR"
@@ -113,9 +121,11 @@ PROJ_PB="$(cd "$(dirname "$0")" && pwd)/prebuilt"
 SHLAUNCH_TMP="$(mktemp)"
 cat > "$SHLAUNCH_TMP" <<'SSHS'
 
-    # qemu shim: dropbear SSH on port 22 (musl soft-float static; blank-password -B; -R auto host keys)
-    if [ -x /usr/local/bin/dropbear ] && ! pidof dropbear >/dev/null 2>&1; then
-        mkdir -p /var/log /var/run
+    # qemu shim: dropbear SSH on port 22 (musl soft-float static; blank-password -B)
+    # /etc/dropbear is a symlink -> /var/dropbear/ (writable tmpfs, created in squashfs at patch time).
+    # dropbear -R auto-generates keys in /etc/dropbear/ = /var/dropbear/ which is writable.
+    if [ -x /usr/local/bin/dropbear ]; then
+        mkdir -p /var/log /var/run /var/dropbear
         /usr/local/bin/dropbear -R -p 22 -B -E >>/var/log/dropbear.log 2>&1 &
     fi
     # qemu shim: mini_telnetd on port 23 (ARMv4T static; no auth, direct /bin/sh root shell)
@@ -178,6 +188,12 @@ if [ ! -f /conf/AMI ]; then
     ln -sfn BMC1/ast2600evb_ami /conf/BMC
     touch /conf/AMI
 fi
+# Unconditional: fix sysadmin shell + blank password regardless of whether the bulk seed ran.
+# Required so warm snapshots from stale /conf don't block dropbear SSH (defshell is rejected;
+# unknown pw hash prevents blank-password login even with dropbear -B).
+# busybox sed: no -E; use BRE with simple literal patterns to avoid portability issues.
+sed -i 's|/usr/local/bin/defshell|/bin/sh|' /conf/passwd 2>/dev/null || true
+sed -i 's|^sysadmin:[^:]*:|sysadmin::|' /conf/shadow 2>/dev/null || true
 { [ -f /tmp/devmap.xml ] || \
   cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || \
   cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; } || true
