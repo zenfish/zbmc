@@ -32,6 +32,7 @@ _REPO="$(cd "$_SELF/.." && pwd)"
 # --- user network config (zbmc.conf) ---
 # Sourced before any box, so ZBMC_POOL and ZBMC_IP_* are available when zbmc.box sets ZBMC_IP.
 [ -f "$_REPO/zbmc.conf" ] && . "$_REPO/zbmc.conf"
+export ZBMC_POOL="${ZBMC_POOL:-}"
 
 # _zbmc_resolve_ip BOX_NAME POOL_OCTET DEFAULT_IP
 # Priority: ZBMC_IP_<box> (per-box override) > ZBMC_POOL.<octet> > built-in default.
@@ -42,6 +43,7 @@ _zbmc_resolve_ip(){
   elif [ -n "${ZBMC_POOL:-}" ]; then echo "${ZBMC_POOL}.$2"
   else echo "$3"; fi
 }
+export -f _zbmc_resolve_ip
 
 # _zbmc_pick_port PREFERRED FALLBACK — return PREFERRED if bindable, else FALLBACK.
 # On Linux, sshd on 0.0.0.0:22 blocks QEMU from binding $IP:22; detect and dodge.
@@ -54,6 +56,7 @@ _zbmc_pick_port(){
   fi
   echo "$want"
 }
+export -f _zbmc_pick_port
 
 # _zbmc_lo_alias IP — add an IP to the loopback interface (idempotent, cross-platform).
 _zbmc_lo_alias(){
@@ -63,6 +66,7 @@ _zbmc_lo_alias(){
     *)      ip addr show dev lo 2>/dev/null | grep -q "$ip" || $SUDO ip addr add "$ip/32" dev lo 2>/dev/null ;;
   esac
 }
+export -f _zbmc_lo_alias
 
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
@@ -109,9 +113,9 @@ _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
 _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
   local r
   if [ "$1" = pw ]; then
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
   else
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
   fi
   # authfail patterns checked FIRST — "BMC error" could otherwise match a 0x0d reply
   echo "$r" | grep -qiE "0x0d|auth code mismatch|unauthorized" && return 2
@@ -192,7 +196,7 @@ running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's
 # IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
 # A box may override by defining zbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
 Z(){ if declare -F zbmc_ipmi >/dev/null; then zbmc_ipmi "$@"; else
-  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p 623 -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
+  timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
 
 case "$VERB" in
   start)
