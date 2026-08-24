@@ -2,14 +2,16 @@
 # Copy to zbmc.conf (gitignored) and uncomment what you need.
 #
 # By default, zbmc uses 10.0.{6,7,8,9}.x addresses (lo0 aliases).
-# If your network already owns 10/8, set ZBMC_POOL to relocate
-# every box into a single /24 you control.
+# If your network already uses the default 10.0.{6,7,8,9}.x range,
+# set ZBMC_POOL to relocate every box into any /24 you control —
+# a quiet corner of the same 10/8 block works fine.
 
 # --- Pool mode: all boxes share one /24 prefix ---
 # Uncomment and set to your free /24 prefix (first 3 octets).
 # Each box gets a fixed last octet (see table below).
 #
-# ZBMC_POOL=192.168.9
+# ZBMC_POOL=10.250.0        # still in 10/8, just out of the way
+# ZBMC_POOL=192.168.9       # or a completely different block
 #
 # Allocation table (last octet, deterministic):
 #   .10  openbmc           (vanilla upstream OpenBMC baseline)
