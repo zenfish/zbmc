@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zbmc-lab:turnkey   <- vanilla OpenBMC flash image ships in this repo; boots on stock qemu ast2600-evb.
+# zbmc:turnkey   <- vanilla OpenBMC flash image ships in this repo; boots on stock qemu ast2600-evb.
 #
 # build.sh — stage the OpenBMC flash image into the box's work dir. This is a "flash-boot" box: the
 # .mtd already contains u-boot + kernel + rootfs, so there's nothing to unpack — build just copies the

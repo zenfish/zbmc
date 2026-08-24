@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zbmc-lab:turnkey   <- flat flash boots directly under qemu -M supermicrox11-bmc; no unpacking needed.
+# zbmc:turnkey   <- flat flash boots directly under qemu -M supermicrox11-bmc; no unpacking needed.
 #
 # build.sh — fetch the X10 firmware and stage it. The pexpect boot driver (start-x10.py) copies
 # the master flash to a run image itself, so build just ensures the firmware exists.

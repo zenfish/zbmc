@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zbmc-lab:turnkey   <- NVIDIA GB200NVL OpenBMC flash image; boots on stock qemu -M gb200nvl-bmc.
+# zbmc:turnkey   <- NVIDIA GB200NVL OpenBMC flash image; boots on stock qemu -M gb200nvl-bmc.
 #
 # build.sh — fetch (if missing) + stage the flash image into the box's work dir. Flash-boot: nothing to
 # unpack, just copy the .mtd so boot.sh can run it (snapshot=on keeps the copy pristine).

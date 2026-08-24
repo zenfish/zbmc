@@ -11,7 +11,7 @@
 # RUN  : ./box/build.sh [WORKDIR]   (default WORKDIR = ~/phd/tmp/asmb787 or ./work)
 # NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage (u-boot-tools), jefferson (pip),
 #        python3, dtc (optional). tools/unpack-ami must be on PATH or alongside.
-# zbmc-lab:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
+# zbmc:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"          # boxes/advantech-asmb787 -> repo root

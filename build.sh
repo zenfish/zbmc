@@ -23,11 +23,19 @@ for boxdir in "$HERE"/boxes/*/; do
   fi
   # a box is turnkey (clone-buildable) only if its build.sh carries the marker; the others
   # carry the author's session build scripts, kept as reference recipes.
-  if ! grep -q 'zbmc-lab:turnkey' "$boxdir/build.sh" 2>/dev/null; then
+  if ! grep -q 'zbmc:turnkey' "$boxdir/build.sh" 2>/dev/null; then
     skipped+=("$box  (reference recipe — supply firmware + adapt boxes/$box/; see docs/zoo-lessons.md)")
     continue
   fi
   if [ "$listonly" = 1 ]; then echo "buildable: $box"; continue; fi
+  # skip if already built — source zbmc.box for zbmc_ready()
+  if [ -f "$boxdir/zbmc.box" ]; then
+    (ZBMC_DIR="$HERE/work/$box"; export ZBMC_DIR; . "$boxdir/zbmc.box"; \
+     declare -F zbmc_ready >/dev/null && zbmc_ready >/dev/null 2>&1) && {
+      built+=("$box  (already built)")
+      continue
+    }
+  fi
   echo "=============================================================="
   echo "  building: $box"
   echo "=============================================================="

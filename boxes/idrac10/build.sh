@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zbmc-lab:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). RESTORE-based: ships a warm snapshot, not a
+# zbmc:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). RESTORE-based: ships a warm snapshot, not a
 #                       from-firmware build (cold boot is a dbus-broker socket-activation lottery under
 #                       TCG; see docs/why-dell-is-hard.md). "build" = fetch the snapshot bundle + rebase.
 #

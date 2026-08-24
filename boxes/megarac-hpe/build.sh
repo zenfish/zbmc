@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zbmc-lab:turnkey   <- HPE XD670 BMC (AMI MegaRAC SP-X). RESTORE-based turnkey path: fetch a warm
+# zbmc:turnkey   <- HPE XD670 BMC (AMI MegaRAC SP-X). RESTORE-based turnkey path: fetch a warm
 #                       snapshot captured past the IPMIMain cold-boot race, so IPMI + Redfish are green
 #                       on resume. (build-from-hpm.sh is the reference "carve the DUP" path — flaky cold.)
 #
