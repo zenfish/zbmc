@@ -130,7 +130,11 @@ zbmc_redfish_health() {
 # SSH also gives root (patched at boot), but serial is always available.
 zbmc_shell() { socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
 
-# Console: interactive serial session (same socket, same root shell).
-zbmc_console() { socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+# Console: interactive serial login (not a log tail — press Enter for prompt).
+# For boot/dmesg output, see $LOG (x10-console.log during start-x10.py, then quiet).
+zbmc_console() {
+  echo "serial login → $SOCK  (press Enter for prompt; Ctrl-] to detach)"
+  socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
+}
 
 ZBMC_READY_GREP='NET_CONFIGURED'
