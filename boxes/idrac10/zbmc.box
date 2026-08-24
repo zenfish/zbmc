@@ -83,11 +83,17 @@ zbmc_boot() {
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
 zbmc_ready() {
   local d="$ZBMC_DIR"
-  if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/img/sd.img" ]; then
-    [ -f "$d/ckpt/state.gz" ] && { echo "ready (warm snapshot)"; return 0; }
+  # build.sh puts files flat in $d/; symlinked work dirs use boot/ + img/ subdirs
+  local kernel="" sdimg=""
+  [ -f "$d/Image.boot-patched" ] && kernel="$d/Image.boot-patched"
+  [ -f "$d/boot/Image.boot-patched" ] && kernel="$d/boot/Image.boot-patched"
+  [ -f "$d/sd.img" ] && sdimg="$d/sd.img"
+  [ -f "$d/img/sd.img" ] && sdimg="$d/img/sd.img"
+  if [ -n "$kernel" ] && [ -n "$sdimg" ]; then
+    { [ -f "$d/state.gz" ] || [ -f "$d/ckpt/state.gz" ]; } && { echo "ready (warm snapshot)"; return 0; }
     echo "ready (cold boot only)"; return 0
   fi
-  echo "not built — need boot/Image.boot-patched + img/sd.img"; return 1
+  echo "not built — need Image.boot-patched + sd.img"; return 1
 }
 # snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.

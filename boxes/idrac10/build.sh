@@ -22,17 +22,30 @@ BUNDLE=(
 "overlay-frozen.qcow2:ad3e43efc0e4e2222859cdf7b6b40dc5a41fef42b0af9ab107a3f866f71bacbe"
 "state.gz:78700e5cf6a4bec1ebb625a33dea469a8e06b0b4cc876a24e3000ddea6338a57"
 )
+NEED_REBASE=0
 for e in "${BUNDLE[@]}"; do
   f="${e%%:*}"; want="${e##*:}"; out="$WD/$f"
+  # overlay-frozen.qcow2: rebase mutates it, so SHA won't match after first build.
+  # Skip re-download if it exists and has already been rebased to our sd.img.
+  if [ "$f" = "overlay-frozen.qcow2" ] && [ -f "$out" ]; then
+    if qemu-img info "$out" 2>/dev/null | grep -q "backing file.*$WD/sd.img"; then
+      echo "[*] $f ✓ present (rebased)"; continue
+    fi
+  fi
   if [ -f "$out" ] && [ "$(sha "$out")" = "$want" ]; then echo "[*] $f ✓ present"; continue; fi
   echo "[*] fetching $f from mirror"
   curl -fL --retry 2 --connect-timeout 20 -o "$out" "$MIRROR/$f"
   [ "$(sha "$out")" = "$want" ] || { echo "SHA-256 mismatch on $f" >&2; exit 1; }
+  [ "$f" = "overlay-frozen.qcow2" ] && NEED_REBASE=1
 done
 
 # the overlay was captured with an absolute backing path; point it at OUR sd.img.
-echo "[*] rebasing overlay onto $WD/sd.img"
-qemu-img rebase -u -b "$WD/sd.img" -F raw "$WD/overlay-frozen.qcow2"
+if [ "$NEED_REBASE" = 1 ]; then
+  echo "[*] rebasing overlay onto $WD/sd.img"
+  qemu-img rebase -u -b "$WD/sd.img" -F raw "$WD/overlay-frozen.qcow2"
+else
+  echo "[*] overlay already rebased"
+fi
 
 echo "[*] bundle ready in $WD"
 echo "next:  ./tools/zbmc idrac10 start ; ./tools/zbmc idrac10 ipmi mc info"
