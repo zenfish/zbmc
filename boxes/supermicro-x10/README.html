@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Supermicro X10 BMC — AST2400 on QEMU</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 leading-relaxed">
+
+<div class="max-w-4xl mx-auto px-6 py-10">
+
+  <header class="mb-8 border-b border-slate-200 pb-6">
+    <h1 class="text-3xl font-bold text-slate-900">Virtual Supermicro X10 BMC</h1>
+    <p class="mt-2 text-lg text-slate-600">ASPEED <b>AST2400</b> (ARMv5TEJ), FW&nbsp;3.93, emulated with <code>qemu-system-arm -M supermicrox11-bmc</code>.</p>
+    <p class="mt-1 text-sm text-slate-500">Firmware: <code>BMC_X10AST2400-32M_20210528_03.93_STD.bin</code> · zoo box <code>zbmc supermicro-x10</code> · 2026-08-23</p>
+  </header>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Why this box</h2>
+    <p>THE WEAK-CIPHER ORACLE. Unlike modern BMCs (iDRAC9/10, X14 offer only cipher suites 3+17),
+      X10-era firmware advertises the <b>full IPMI 2.0 cipher set 0&ndash;14</b> &mdash; including the
+      RC4/MD5 suites 4,5,9&ndash;14 that ipmitool never implemented and modern BMCs dropped.
+      This is the authorized local target for verifying zipmi&rsquo;s MD5-128 (integrity alg 3)
+      and xRC4-128/40 (confidentiality alg 2/3) against real firmware.</p>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Flash layout</h2>
+    <p class="mb-3">32 MB flat flash image (<code>x10-master.flash</code>), booted directly via <code>-drive file=...,format=raw,if=mtd</code>.</p>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Region</th><th class="text-left px-3 py-2">Flash offset</th><th class="text-left px-3 py-2">Size</th><th class="text-left px-3 py-2">Notes</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2">U-Boot + env</td><td class="px-3 py-2"><code>0x000000</code></td><td class="px-3 py-2">4 MB</td><td class="px-3 py-2">Bootloader</td></tr>
+        <tr><td class="px-3 py-2">Root CramFS</td><td class="px-3 py-2"><code>0x400000</code></td><td class="px-3 py-2">~15 MB</td><td class="px-3 py-2">Read-only rootfs; symlinks as CramFS inodes</td></tr>
+        <tr><td class="px-3 py-2">Kernel uImage</td><td class="px-3 py-2"><code>0x1400000</code></td><td class="px-3 py-2">~3 MB</td><td class="px-3 py-2">Linux 2.6.28.9, ARMv5TEJ</td></tr>
+        <tr><td class="px-3 py-2">Web CramFS</td><td class="px-3 py-2"><code>0x1700000</code></td><td class="px-3 py-2">varies</td><td class="px-3 py-2">Mounted on <code>/web</code></td></tr>
+        <tr><td class="px-3 py-2">JFFS2 (<code>/nv</code>)</td><td class="px-3 py-2">mtdblock1</td><td class="px-3 py-2">varies</td><td class="px-3 py-2">Writable persistent storage: dropbear keys, config</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Boot &amp; networking</h2>
+    <p class="mb-3">The firmware zeroes its MAC on boot (no FRU/EEPROM in a flat image) and fails to bond
+      <code>eth0 &rarr; bond0</code>, so DHCP never works. <code>start-x10.py</code> (pexpect driver) fixes this via
+      serial console after boot:</p>
+    <ol class="list-decimal pl-6 space-y-1 text-sm">
+      <li>Sets a valid MAC on <code>eth0</code></li>
+      <li>Assigns the QEMU user-net static IP <code>10.0.2.15</code></li>
+      <li>Adds the default route via <code>10.0.2.2</code></li>
+      <li>Waits for <code>udhcpc</code> to give up, then re-asserts the config (race fix)</li>
+      <li>Patches SSH (see below), then disconnects pexpect</li>
+    </ol>
+    <p class="mt-3 text-sm">Serial is a UNIX socket (<code>x10-serial.sock</code>) so <code>zbmc shell</code>/<code>zbmc console</code> can attach
+      after bootstrap via <code>socat</code>. Cold boot takes ~60s to NET_CONFIGURED.</p>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Issues &amp; solutions</h2>
+
+    <!-- Issue 1: SSH detection -->
+    <div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+      <p class="font-semibold text-amber-800">Issue 1: SSH probe failed (refused / booting)</p>
+      <p class="text-sm text-amber-900 mt-1"><b>Symptom:</b> <code>zbmc status</code> showed SSH as &ldquo;refused&rdquo; even when the BMC was up.</p>
+      <p class="text-sm text-amber-900 mt-1"><b>Root cause:</b> Two problems stacked. (a) <code>zbmc_ssh()</code> was undefined in <code>zbmc.box</code> &mdash;
+        the dispatcher fell through to the default, which tried port 22 with modern key algorithms.
+        (b) This dropbear (ancient build) only supports <code>ssh-rsa</code> and <code>ssh-dss</code>, which modern
+        OpenSSH rejects by default.</p>
+      <p class="text-sm text-amber-900 mt-1"><b>Fix:</b> Added <code>zbmc_ssh()</code> with
+        <code>-o HostKeyAlgorithms=+ssh-rsa,ssh-dss -o PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss</code>.
+        Initial probe detected the SMASH-CLP banner; after the SSH patch (Issue 4), the probe
+        pipes <code>echo up; exit</code> via stdin.</p>
+    </div>
+
+    <!-- Issue 2: Console -->
+    <div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+      <p class="font-semibold text-amber-800">Issue 2: Console showed n/a</p>
+      <p class="text-sm text-amber-900 mt-1"><b>Symptom:</b> <code>zbmc status</code> showed Console as &ldquo;n/a&rdquo;. Original
+        <code>start-x10.py</code> used <code>-nographic</code>, tying the serial port to the pexpect driver&rsquo;s
+        stdio &mdash; no way for a second process to attach.</p>
+      <p class="text-sm text-amber-900 mt-1"><b>Fix:</b> Rewrote to use a UNIX socket serial:
+        <code>-chardev socket,id=ser0,path=$SOCK,server=on,wait=off -serial chardev:ser0</code>.
+        Pexpect connects via <code>socat</code> for bootstrap, then disconnects &mdash; freeing the socket for
+        <code>zbmc shell</code>/<code>zbmc console</code>. Socket is <code>chmod 777</code> after creation (QEMU runs as root).</p>
+    </div>
+
+    <!-- Issue 3: Port 443 -->
+    <div class="bg-sky-50 border border-sky-200 rounded p-4 mb-4">
+      <p class="font-semibold text-sky-800">Issue 3: Web (port 443) not forwarded</p>
+      <p class="text-sm text-sky-900 mt-1"><b>Symptom:</b> lighttpd runs on the guest but port 443 wasn&rsquo;t in the QEMU
+        <code>hostfwd</code> list.</p>
+      <p class="text-sm text-sky-900 mt-1"><b>Fix:</b> Added <code>hostfwd=tcp:{HOSTIP}:443-:443</code> to the QEMU net config.</p>
+    </div>
+
+    <!-- Issue 4: SMASH-CLP (main event) -->
+    <div class="bg-rose-50 border border-rose-200 rounded p-4 mb-4">
+      <p class="font-semibold text-rose-800">Issue 4: SSH gives SMASH-CLP shell, not root</p>
+      <p class="text-sm text-rose-900 mt-1"><b>Symptom:</b> SSH login dropped into SMASH-CLP (<code>/SMASH/msh</code>, 103 KB Insyde management shell).
+        No <code>/bin/sh</code>, no command execution, no filesystem access.</p>
+
+      <p class="text-sm text-rose-900 mt-2"><b>Investigation (Ghidra + radare2):</b></p>
+      <ul class="text-sm text-rose-900 list-disc pl-6 mt-1 space-y-1">
+        <li>Extracted <code>/usr/local/dropbear/sbin/dropbear</code> (ARM32 PIE, stripped, 223640 bytes) from the CramFS rootfs</li>
+        <li>Found <code>/SMASH/msh</code> string at <code>.rodata</code> offset <code>0x2f2c8</code>, adjacent to <code>/</code> (home dir) at <code>0x2f2c4</code></li>
+        <li>Single xref from function at <code>0xc7e8</code> (session setup): loads <code>obj.ses</code> via GOT, stores:
+          <ul class="list-disc pl-6 mt-1">
+            <li><code>ses+0xe4</code> &larr; <code>m_strdup(username)</code></li>
+            <li><code>ses+0xdc</code> &larr; <code>m_strdup("/")</code> (home directory)</li>
+            <li><code>ses+0xe0</code> &larr; <code>m_strdup("/SMASH/msh")</code> (login shell)</li>
+          </ul>
+        </li>
+        <li>Caller at <code>0x161b0</code> (dropbear&rsquo;s <code>fill_passwd()</code> equivalent): checks <code>ses+0xb0</code> (pw_name) &mdash;
+          if NULL, unconditionally jumps to the SMASH setup path. Since <code>/etc/passwd</code> has only <code>root</code>
+          and the SSH user is <code>ADMIN</code>, <code>getpwnam("ADMIN")</code> returns NULL &rarr; always hardcodes SMASH.</li>
+      </ul>
+
+      <p class="text-sm text-rose-900 mt-2"><b>Invocation quirk:</b> This custom dropbear does NOT use the standard
+        <code>shell -c "command"</code> pattern. Instead it invokes <code>/SMASH/msh &lt;username&gt; &lt;password&gt; &lt;privilege-level&gt;</code>
+        (e.g. <code>/SMASH/msh ADMIN ADMIN 4</code>). SSH exec requests are silently dropped &mdash;
+        commands must be piped via stdin.</p>
+
+      <p class="text-sm text-rose-900 mt-2"><b>Failed approaches:</b></p>
+      <ul class="text-sm text-rose-900 list-disc pl-6 space-y-1">
+        <li><b>Binary patch + CramFS rebuild:</b> Patched <code>/SMASH/msh</code> &rarr; <code>/bin/sh\x00\x00\x00\x00</code> in the
+          dropbear binary, rebuilt CramFS with <code>mkcramfs</code>. Failed: binwalk extracts CramFS symlinks
+          as text files (e.g. <code>linuxrc</code> becomes an 11-byte file containing &ldquo;bin/busybox&rdquo;).
+          <code>mkcramfs</code> treats them as regular files &rarr; kernel can&rsquo;t find init &rarr; panic. Restored from backup.</li>
+        <li><b>Docker CramFS mount:</b> Tried <code>mount -t cramfs</code> inside Docker to properly extract.
+          Failed: Docker on macOS shares the linuxkit kernel, which lacks the cramfs module.</li>
+        <li><b>telnetd:</b> Attempted to start a BusyBox telnetd for root access.
+          Failed: this BusyBox build doesn&rsquo;t include the telnetd applet.</li>
+        <li><b>Naive wrapper (<code>$1</code> = username):</b> First wrapper assumed dropbear passes
+          <code>username [-c cmd]</code>. Actual invocation is <code>username password privilege</code>.
+          <code>/bin/ash ADMIN</code> tries to open &ldquo;ADMIN&rdquo; as a script file &rarr; &ldquo;can&rsquo;t open &lsquo;ADMIN&rsquo;&rdquo;.</li>
+        <li><b>tmpfs mount instead of bind mount:</b> Early <code>mount</code> attempt created a tmpfs directory
+          at <code>/SMASH/msh</code> instead of a file bind mount. Content was readable via <code>cat</code> but
+          <code>execve()</code> saw a directory.</li>
+      </ul>
+
+      <p class="text-sm text-rose-900 mt-2"><b>Working solution &mdash; runtime bind mount at boot:</b></p>
+      <ol class="text-sm text-rose-900 list-decimal pl-6 mt-1 space-y-1">
+        <li>Write a 3-line wrapper to <code>/tmp/msh</code>:
+          <pre class="bg-rose-100 rounded p-2 mt-1 text-xs overflow-x-auto">#!/bin/ash
+exec /bin/ash -l</pre>
+        </li>
+        <li><code>mount --bind /tmp/msh /SMASH/msh</code> &mdash; overlays the wrapper on the CramFS binary</li>
+        <li>Kill dropbear, restart with explicit key paths:
+          <code>dropbear -p 22 -r /nv/dropbear/dropbear_rsa_host_key -d /nv/dropbear/dropbear_dss_host_key</code>
+          (default paths are <code>/etc/dropbear/</code> which doesn&rsquo;t exist; keys live on the JFFS2 <code>/nv</code> partition)</li>
+      </ol>
+      <p class="text-sm text-rose-900 mt-2">All three steps are automated in <code>start-x10.py</code> after networking. Every
+        <code>zbmc supermicro-x10 start</code> produces a root SSH shell from cold boot.</p>
+    </div>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Access</h2>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Method</th><th class="text-left px-3 py-2">Command</th><th class="text-left px-3 py-2">Notes</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2">IPMI</td><td class="px-3 py-2"><code>zipmi -H 10.0.8.10 -U ADMIN -P ADMIN mc info</code></td><td class="px-3 py-2">RMCP+; cipher suites 0&ndash;14</td></tr>
+        <tr><td class="px-3 py-2">SSH</td><td class="px-3 py-2"><code>zbmc supermicro-x10 ssh</code></td><td class="px-3 py-2">Root shell (patched at boot); commands via stdin only</td></tr>
+        <tr><td class="px-3 py-2">Serial</td><td class="px-3 py-2"><code>zbmc supermicro-x10 shell</code></td><td class="px-3 py-2">Root shell via UNIX socket; Ctrl-] to detach</td></tr>
+        <tr><td class="px-3 py-2">Web</td><td class="px-3 py-2"><code>curl -sk https://x10bmc:443/</code></td><td class="px-3 py-2">lighttpd + stunnel</td></tr>
+      </tbody>
+    </table>
+    <p class="text-sm text-slate-600 mt-2">Credentials: <b>ADMIN / ADMIN</b> (Supermicro factory default, password auth).</p>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Key processes</h2>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Process</th><th class="text-left px-3 py-2">Role</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2"><code>ipmi_kcs 15</code>, <code>ipmi_kcs 13</code></td><td class="px-3 py-2">KCS IPMI channel handlers</td></tr>
+        <tr><td class="px-3 py-2"><code>ipmi_lan 1</code></td><td class="px-3 py-2">RMCP+ network IPMI</td></tr>
+        <tr><td class="px-3 py-2"><code>ipmi_ipmb 0</code>, <code>ipmi_ipmb 5</code></td><td class="px-3 py-2">IPMB bus handlers</td></tr>
+        <tr><td class="px-3 py-2"><code>ipmi_uart 3</code></td><td class="px-3 py-2">Serial IPMI channel</td></tr>
+        <tr><td class="px-3 py-2"><code>lighttpd</code> + <code>index.fcgi</code></td><td class="px-3 py-2">Web interface (behind stunnel for TLS)</td></tr>
+        <tr><td class="px-3 py-2"><code>sfcbd</code></td><td class="px-3 py-2">CIM/WBEM broker (SFCB)</td></tr>
+        <tr><td class="px-3 py-2"><code>dropbear</code></td><td class="px-3 py-2">SSH (patched to root shell at boot)</td></tr>
+        <tr><td class="px-3 py-2"><code>ikvmserver</code></td><td class="px-3 py-2">KVM-over-IP server</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">RE artifacts</h2>
+    <ul class="list-disc pl-6 space-y-1 text-sm">
+      <li><code>~/phd/tmp/x10-dropbear-re/dropbear</code> &mdash; extracted binary (ARM32 PIE, stripped, 223640 bytes)</li>
+      <li><code>~/phd/tmp/x10-dropbear-re/rootfs.cramfs</code> &mdash; extracted root CramFS (15278080 bytes)</li>
+      <li><code>/SMASH/msh</code> string at <code>.rodata</code> offset <code>0x2f2c8</code>; session setup at <code>fcn.0000c7e8</code>; fill_passwd equivalent at <code>0x161b0</code></li>
+    </ul>
+  </section>
+
+  <footer class="text-xs text-slate-400 border-t border-slate-200 pt-4">
+    Supermicro X10 BMC &middot; ASPEED AST2400 &middot; FW 3.93 &middot; qemu supermicrox11-bmc &middot; part of the zbmc zoo &middot; 2026-08-23.
+  </footer>
+
+</div>
+</body>
+</html>
