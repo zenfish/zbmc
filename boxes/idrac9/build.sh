@@ -1,44 +1,39 @@
 #!/usr/bin/env bash
-# build.sh — (re)build the virtual-iDRAC9 boot artifacts from the iDRAC9 firmware.
+# zbmc:turnkey   <- Dell iDRAC9 (NPCM750/ARM). COLD-BOOT based: fetches pre-built P4 boot
+#                   artifacts from the mirror. "build" = fetch + verify SHA-256. The actual
+#                   firmware extraction (from a Dell DUP) was done once; these are the results.
 #
-# WHAT : reconstructs boot/{md.itb,zImage,base.dtb}, the custom initramfs, and the
-#        256 MiB SD image (rootfs.squashfs padded) from the extracted FIT firmware.
-# WHY  : reproducibility — run.sh consumes these. Idempotent.
-# TGT  : iDRAC9 firmimgFIT.d9, extracted at $FW below.
-# RUN  : ./build.sh   (needs: dumpimage, dtc, xz, cpio, python3, truncate)
+# Bundle (mirror only — https://git.trouble.org/zbmc/idrac9/): patched uImage + P4 dtb,
+# P4 initramfs, 256MB SD image (rootfs squashfs), and the SSH key for root shell access.
+# zbmc_boot() in zbmc.box does qemu-system-arm -M npcm750-evb cold boot.
+# PIN: iDRAC9 firmware 7.10.90.00, P4 mesh boot (RAKP + IPMI + SSH).
 set -euo pipefail
-cd "$(dirname "$0")"
-FW=/Users/zen/phd/bmc/idrac9-firmware/extracted
-ITB_TXT="$FW/images_md.itb@1.txt"          # hex-dump of the kernel ITB
-SQUASH="$FW/images_rootfs.squashfs@1.data" # 177 MiB rootfs
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
+MIRROR="https://git.trouble.org/zbmc/idrac9"
+sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 
-mkdir -p boot img logs
+# file : sha256
+BUNDLE=(
+"uImage.patched:6f0fbf30cca7b8d0b4a9715774718d79d2900daac141a1f4c94f00b6e7ebcad7"
+"p4.dtb:59ce0d24b25739800a604824db1ea877e4d08b54f8ffa86c6b036bb4fc9024e8"
+"initramfs.p4.xz:4d21d9d0409df2c16f61a9799ca5c9a22554c782e23cd95477785a14a185a6f8"
+"sd256.img:8b9a9765d2806473f72051126c10d4ed8eb8c5d6b0b8c4dcfeba3387094fa094"
+"vmkey:b4eee3bb6b863d529201f60c2e10e995a57905cd8a7266aa9dca569a959a3a0c"
+)
 
-echo "[1/5] reconstruct binary ITB from hex dump"
-python3 - "$ITB_TXT" boot/md.itb <<'PY'
-import sys,re
-raw=open(sys.argv[1],'rb').read().decode('latin1')
-hx=bytes.fromhex(''.join(re.findall(r'[0-9a-fA-F]{2}',raw)))
-i=hx.find(bytes.fromhex('d00dfeed'))           # FIT magic
-open(sys.argv[2],'wb').write(hx[i:])
-PY
+mkdir -p "$WD/boot" "$WD/img"
+for e in "${BUNDLE[@]}"; do
+  f="${e%%:*}"; want="${e##*:}"
+  # route files to the correct subdir
+  case "$f" in sd256.img|vmkey) out="$WD/img/$f";; *) out="$WD/boot/$f";; esac
+  if [ -f "$out" ] && [ "$(sha "$out")" = "$want" ]; then echo "[*] $f ✓ present"; continue; fi
+  echo "[*] fetching $f from mirror"
+  curl -fL --retry 2 --connect-timeout 20 -o "$out" "$MIRROR/$f"
+  [ "$(sha "$out")" = "$want" ] || { echo "SHA-256 mismatch on $f" >&2; exit 1; }
+done
+chmod 600 "$WD/img/vmkey"
 
-echo "[2/5] extract kernel / base DT from ITB"
-dumpimage -T flat_dt -p 0 -o boot/zImage   boot/md.itb >/dev/null
-dumpimage -T flat_dt -p 1 -o boot/base.dtb boot/md.itb >/dev/null
-
-echo "[3/5] extract + customise initramfs"
-rm -rf img/initrd && mkdir -p img/initrd
-dumpimage -T flat_dt -p 2 -o boot/initramfs.cpio boot/md.itb >/dev/null
-( cd img/initrd && xz -dc ../../boot/initramfs.cpio 2>/dev/null | cpio -idm 2>/dev/null )
-cp init.custom img/initrd/init 2>/dev/null || {
-  echo "  (init.custom missing — keeping repo copy of img/initrd/init)"; }
-chmod +x img/initrd/init
-( cd img/initrd && find . | cpio -o -H newc 2>/dev/null | xz --check=crc32 -c ) > boot/initramfs.custom.xz
-
-echo "[4/5] build 256 MiB SD image (rootfs.squashfs padded to power-of-2)"
-cp "$SQUASH" img/sd256.img
-truncate -s 256M img/sd256.img
-
-echo "[5/5] done. boot with ./run.sh"
-ls -la boot/zImage boot/base.dtb boot/initramfs.custom.xz img/sd256.img
+echo "[*] bundle ready in $WD"
+echo "next:  ./tools/zbmc idrac9 start ; ./tools/zbmc idrac9 ipmi mc info"
