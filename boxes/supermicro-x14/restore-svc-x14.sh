@@ -22,7 +22,7 @@ sudo -n "$QEMU" \
   -incoming "exec:gunzip -c < $SNAP" \
   -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
   -drive file=x14-ce0-64m.img,format=raw,if=mtd -drive file=emmc.img,format=raw,if=sd,index=2 \
-  -net nic -net user,hostfwd=tcp:$IP:22-:22,hostfwd=tcp:$IP:443-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
+  -net nic -net user,hostfwd=tcp:$IP:${SSH_PORT:-22}-:22,hostfwd=tcp:$IP:${WEB_PORT:-443}-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
   -append "console=ttyS4,115200n8 root=/dev/ram rw maxcpus=1 initcall_blacklist=ast2600_spitee_init,optee_driver_init qemu-x14-ramroot qemu-x14-svc loglevel=4" \
   >/tmp/x14-restore-console.log 2>&1 &   # redirect: else qemu holds caller's stdout -> caller hangs
 echo "restore launched (pid $!); network live in ~10s. socat /tmp/x14.sock to drive."

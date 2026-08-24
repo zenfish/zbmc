@@ -49,9 +49,11 @@ IPMI_T=6
 
 SSH_USER=ADMIN
 SSH_PW=ADMIN
-SSH_PORT=22
 IPMI_PORT=623
-WEB_PORT=443
+
+SSH_PORT=$(_zbmc_pick_port 22 2222)
+WEB_PORT=$(_zbmc_pick_port 443 8443)
+export X10_SSH_PORT="$SSH_PORT" X10_WEB_PORT="$WEB_PORT"
 
 PIDF=/tmp/zbmc-supermicro-x10.pid
 SOCK="$ZBMC_DIR/x10-serial.sock"

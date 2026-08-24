@@ -68,7 +68,7 @@ exec sudo "$QEMU" \
   -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
   -drive file=x14-ce0-64m.img,format=raw,if=mtd \
   -drive file=emmc.img,format=raw,if=sd,index=2 \
-  -net nic -net user,hostfwd=tcp:$IP:22-:22,hostfwd=tcp:$IP:443-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
+  -net nic -net user,hostfwd=tcp:$IP:${SSH_PORT:-22}-:22,hostfwd=tcp:$IP:${WEB_PORT:-443}-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
   -append "$APPEND"
 
 # ---- NEXT STEPS (network last-mile) ----

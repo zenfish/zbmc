@@ -43,6 +43,18 @@ _zbmc_resolve_ip(){
   else echo "$3"; fi
 }
 
+# _zbmc_pick_port PREFERRED FALLBACK — return PREFERRED if bindable, else FALLBACK.
+# On Linux, sshd on 0.0.0.0:22 blocks QEMU from binding $IP:22; detect and dodge.
+_zbmc_pick_port(){
+  local want="$1" alt="$2"
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnH 2>/dev/null | grep -qE "0\.0\.0\.0:${want} " && { echo "$alt"; return; }
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$want" -sTCP:LISTEN -P -n >/dev/null 2>&1 && { echo "$alt"; return; }
+  fi
+  echo "$want"
+}
+
 # _zbmc_lo_alias IP — add an IP to the loopback interface (idempotent, cross-platform).
 _zbmc_lo_alias(){
   local ip="$1" SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo

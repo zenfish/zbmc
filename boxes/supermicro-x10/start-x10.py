@@ -37,6 +37,8 @@ RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
 HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
 HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
+SSH_HPORT = os.environ.get("X10_SSH_PORT", "22")
+WEB_HPORT = os.environ.get("X10_WEB_PORT", "443")
 import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
@@ -58,7 +60,7 @@ qemu_cmd = [
     "-serial", "chardev:ser0",
     "-drive", f"file={RUN},format=raw,if=mtd",
     "-net", "nic",
-    "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:22-:22,hostfwd=tcp:{HOSTIP}:443-:443,hostname=qemu",
+    "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
 ]
 qemu_proc = subprocess.Popen(qemu_cmd)
 

@@ -22,9 +22,9 @@ IPMI_USER=root
 IPMI_PW=0penBmc
 IPMI_KEY=00
 IPMI_OPTS="-C 17"   # gb200 net-ipmid offers cipher-17 only
-SSH_PORT=22
-WEB_PORT=443
-IPMI_PORT=623   # IPMI-LAN via net-ipmid — CIPHER-17 ONLY (use zipmi -C 17 -I lanplus)
+SSH_PORT=$(_zbmc_pick_port 22 2222)
+WEB_PORT=$(_zbmc_pick_port 443 8443)
+IPMI_PORT=623
 
 PIDF=/tmp/zbmc-nvidia-obmc.pid
 LOG=/tmp/zbmc-nvidia-obmc-console.log
@@ -42,9 +42,9 @@ zbmc_boot() {
   # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
   $SUDO nohup qemu-system-arm -M gb200nvl-bmc -smp 2 -m 1G \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
-    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
+    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
     -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:22-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
 zbmc_build() { echo "gb200 image is bitbake-built (MACHINE=gb200nvl-obmc) on dell; not a local rebuild. See reference_nvidia_oem_ipmi."; }

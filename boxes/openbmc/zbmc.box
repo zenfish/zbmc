@@ -33,8 +33,8 @@ SSH_USER=root
 SSH_PASS=0penBmc
 IPMI_USER=root
 IPMI_PW=0penBmc
-SSH_PORT=22
-WEB_PORT=443
+SSH_PORT=$(_zbmc_pick_port 22 2222)
+WEB_PORT=$(_zbmc_pick_port 443 8443)
 IPMI_PORT=623
 
 PIDF=/tmp/zbmc-openbmc.pid
@@ -54,9 +54,9 @@ zbmc_boot() {
   # -serial unix:$SOCK is serial0 = the AST2600 console (ttyS4 getty). Do NOT prepend -serial null.
   $SUDO nohup qemu-system-arm -M ast2600-evb -smp 2 -m 1G -display none \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
-    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
+    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
     -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:22-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
 zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $ZBMC_DIR/evb-ast2600.static.mtd"; }

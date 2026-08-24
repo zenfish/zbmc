@@ -62,10 +62,10 @@ IPMI_OPTS=""
 IPMI_T=20        # RMCP+ RAKK under armv7 emulation is slow; short timeouts look dead
 SSH_USER=sysadmin
 SSH_PW=
-SSH_PORT=22
-TELNET_PORT=23
+SSH_PORT=$(_zbmc_pick_port 22 2222)
+TELNET_PORT=$(_zbmc_pick_port 23 2323)
 IPMI_PORT=623
-WEB_PORT=443
+WEB_PORT=$(_zbmc_pick_port 443 8443)
 
 PIDF=/tmp/zbmc-megarac-hpe.pid
 LOG="$ZBMC_DIR/svc.log"

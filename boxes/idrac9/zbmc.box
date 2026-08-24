@@ -8,10 +8,10 @@ ZBMC_DESC="Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish"
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac9}"
 
-# host port-forwards (QEMU SLIRP)         # standard guest port
-SSH_PORT=22       # root-direct boot binds real-IP:22. (ckpt snapshot boots override to 2222 themselves.)
-IPMI_PORT=623     # root-direct boot binds ZBMC_IP:623 (udp). legacy `net up` remapped to 6623.
-WEB_PORT=6443     # -> 443
+# host port-forwards (QEMU SLIRP)
+SSH_PORT=$(_zbmc_pick_port 22 2222)
+IPMI_PORT=623
+WEB_PORT=$(_zbmc_pick_port 443 6443)
 
 # `zbmc idrac9 net up` maps standard ports to this loopback IP + /etc/hosts name
 ZBMC_IP=$(_zbmc_resolve_ip idrac9 30 10.0.9.9)
@@ -54,7 +54,7 @@ zbmc_boot() {
     -kernel boot/uImage.patched -dtb "$dtb" -initrd boot/initramfs.p4.xz \
     -drive id=rootsd,if=none,file=img/sd256.img,format=raw,snapshot=on \
     -device sd-card,drive=rootsd,bus=sd-bus \
-    -netdev user,id=n1,hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:443-:443 \
+    -netdev user,id=n1,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443 \
     -device usb-net,netdev=n1,bus=usb-bus.0 \
     -serial "file:$LOG" >/dev/null 2>&1 &
   # qemu is a root child of sudo; find its real pid by the hostfwd signature (not $!)

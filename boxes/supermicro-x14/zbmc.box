@@ -42,10 +42,9 @@ IPMI_T=6
 SSH_USER=ADMIN
 SSH_PW=ADMIN
 
-# port vars (kept for the dispatcher; qemu binds the standard ports directly on ZBMC_IP)
-SSH_PORT=22
+SSH_PORT=$(_zbmc_pick_port 22 2222)
 IPMI_PORT=623
-WEB_PORT=443
+WEB_PORT=$(_zbmc_pick_port 443 8443)
 
 PIDF=/tmp/zbmc-supermicro-x14.pid
 LOG=/tmp/x14-restore-console.log     # restore-svc-x14.sh writes qemu console here

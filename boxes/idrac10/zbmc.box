@@ -21,10 +21,9 @@ IPMI_KEY=915F32F49A97456D0D6D66EEE5ED84C894B414AF   # first 20 bytes of the fact
 IPMI_OPTS=""
 IPMI_T=25   # aarch64 emulation is slow; <25 intermittently times out the RAKP handshake (measured 2026-07-15)
 
-# port vars (kept for the dispatcher; the box binds standard ports directly on ZBMC_IP)
-SSH_PORT=22
+SSH_PORT=$(_zbmc_pick_port 22 2222)
 IPMI_PORT=623
-WEB_PORT=443
+WEB_PORT=$(_zbmc_pick_port 443 8443)
 
 PIDF=/tmp/zbmc-idrac10.pid
 LOG=/tmp/zbmc-idrac10-console.log
@@ -69,7 +68,7 @@ zbmc_boot() {
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
     -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
     -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
-    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:22-:22,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
+    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
     -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
   ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1; $SUDO expect boot-idrac10.exp "$SOCK" ) >>"$LOG" 2>&1 &

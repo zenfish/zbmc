@@ -17,6 +17,7 @@ for a in "$@"; do case "$a" in --list|-l) listonly=1;; *) want+=("$a");; esac; d
 # stub dispatcher helpers so zbmc.box files can source without error
 _zbmc_resolve_ip() { echo "${3:-127.0.0.1}"; }; export -f _zbmc_resolve_ip
 _zbmc_lo_alias() { :; }; export -f _zbmc_lo_alias
+_zbmc_pick_port() { echo "$1"; }; export -f _zbmc_pick_port
 
 built=(); skipped=(); failed=()
 for boxdir in "$HERE"/boxes/*/; do
