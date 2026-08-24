@@ -63,7 +63,17 @@ boot/restore/snapshot recipes + findings docs.
 
 ## Network configuration
 
-By default, each box binds to a lo0 alias in the **10.0.{6,7,8,9}.x** range (macOS loopback).
+By default, each box binds to a lo0 alias in the **10.0.{6,7,8,9}.x** range (macOS loopback),
+broken out by vendor family:
+
+| Subnet | Vendor | Boxes |
+|--------|--------|-------|
+| 10.0.6.x | AMI MegaRAC | megarac-hpe (.66) |
+| 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |
+| 10.0.8.x | Supermicro | supermicro-x10 (.10), supermicro-x14 (.14) |
+| 10.0.9.x | Dell iDRAC | idrac9 (.9), idrac10 (.10) |
+| 127.0.0.1 | Advantech | advantech-asmb787 (high ports, no lo0 alias) |
+
 If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf.example`
 to `zbmc.conf` (gitignored) and set **one** of:
 
