@@ -34,8 +34,13 @@ WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
-  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
-    [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
+  # resolve kernel/dtb/sd — build.sh puts them flat, symlinked work dirs use boot/+img/ subdirs
+  local _kernel _dtb _sd
+  for _p in "$ZBMC_DIR/boot" "$ZBMC_DIR"; do [ -f "$_p/Image.boot-patched" ] && { _kernel="$_p/Image.boot-patched"; break; }; done
+  for _p in "$ZBMC_DIR/boot" "$ZBMC_DIR"; do [ -f "$_p/qemu-gmac.dtb" ]      && { _dtb="$_p/qemu-gmac.dtb";      break; }; done
+  for _p in "$ZBMC_DIR/img"  "$ZBMC_DIR"; do [ -f "$_p/sd.img" ]              && { _sd="$_p/sd.img";              break; }; done
+  for f in "${_kernel:-}" "${_dtb:-}" "${_sd:-}" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
+    [ -e "$f" ] || { echo "missing ${f:-kernel/dtb/sd.img} — idrac10 not built" >&2; return 1; }
   done
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
@@ -66,8 +71,8 @@ zbmc_boot() {
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
-    -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
+    -kernel "$_kernel" -dtb "$_dtb" \
+    -drive "id=rootsd,if=none,file=$_sd,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
     -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)

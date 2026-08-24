@@ -33,9 +33,15 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
   pkill -9 -f "$W/serial.sock" 2>/dev/null || true
   pkill -9 -f "hostfwd=udp::${PORT}-:623" 2>/dev/null || true
   sleep 1; rm -f "$SOCK" "$QMP" "$OVL"
-  qemu-img create -f qcow2 -F raw -b "$(pwd)/img/sd.img" "$OVL" >/dev/null
+  # resolve layout — build.sh flat vs symlinked boot/+img/ subdirs
+  _kernel=""; _dtb=""; _sd=""
+  for _d in boot .; do [ -f "$_d/Image.boot-patched" ] && { _kernel="$_d/Image.boot-patched"; break; }; done
+  for _d in boot .; do [ -f "$_d/qemu-gmac.dtb" ]      && { _dtb="$_d/qemu-gmac.dtb";      break; }; done
+  for _d in img  .; do [ -f "$_d/sd.img" ]              && { _sd="$_d/sd.img";              break; }; done
+  [ -n "$_kernel" ] || { echo "no Image.boot-patched in boot/ or ." >&2; exit 1; }
+  qemu-img create -f qcow2 -F raw -b "$(pwd)/$_sd" "$OVL" >/dev/null
   nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
+    -kernel "$_kernel" -dtb "$_dtb" \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp::${PORT}-:623" \
     -serial unix:"$SOCK",server,nowait -qmp unix:"$QMP",server,nowait \
