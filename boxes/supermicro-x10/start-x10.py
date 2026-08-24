@@ -2,20 +2,26 @@
 """Durable X10 BMC boot driver (Supermicro X10 / ASPEED AST2400, FW 3.93).
 
 Boots the 32MB flash under qemu -M supermicrox11-bmc, then drives the serial
-console (per trouble.org/python-shim-over-qemu-to-startup-bmc) to fix networking:
-the firmware zeroes its MAC (no FRU/EEPROM in a flat image) and fails to bond
-eth0 -> bond0, so DHCP never leases. Pexpect connects to the serial UNIX socket,
-sets a valid MAC, assigns the qemu user-net static IP, and adds the default route.
+console to fix networking, patch SSH, and bypass the OEM license gate:
+
+  1. NETWORKING — firmware zeroes its MAC (no FRU/EEPROM in a flat image) and
+     fails to bond eth0→bond0, so DHCP never leases. Sets a valid MAC, assigns
+     the qemu user-net static IP, adds the default route. Re-applies after
+     udhcpc gives up (race fix).
+
+  2. SSH — bind-mounts a wrapper over /SMASH/msh (dropbear's hardcoded login
+     shell) and restarts dropbear with explicit host key paths, so SSH sessions
+     get /bin/ash instead of SMASH-CLP.
+
+  3. REDFISH LICENSE BYPASS — LD_PRELOAD's a tiny ARM .so that overrides
+     license_check() → return 1, then restarts lighttpd. Without this, all
+     Redfish endpoints past /redfish/v1/ return 403 (OOB license required).
 
 Serial is exposed as a UNIX socket ($SOCK) so `zbmc shell` / `zbmc console` can
-connect interactively via socat after bootstrap completes. After networking,
-the boot driver patches SSH: bind-mounts a wrapper over /SMASH/msh (dropbear's
-hardcoded login shell) and restarts dropbear, so SSH sessions get /bin/ash
-instead of SMASH-CLP. Pexpect disconnects once patching is done, freeing the
-socket for interactive use.
+connect interactively via socat after bootstrap completes. Pexpect disconnects
+once all patches are applied, freeing the socket for interactive use.
 
-Prints NET_CONFIGURED when 10.0.8.10:623/udp reaches the guest IPMI, then waits
-for qemu to exit. Kill the qemu (pkill -f supermicrox11-bmc) to stop.
+Prints NET_CONFIGURED when done, then waits for qemu to exit.
 
 Why this box exists: it offers IPMI 2.0 cipher suites 0-14 (incl. the RC4/MD5
 suites 4,5,9-14 that modern firmware dropped) — the authorized local oracle for
@@ -23,8 +29,10 @@ verifying zipmi's MD5-128 + xRC4 implementations.
 """
 import sys, os, time, subprocess, signal, pexpect
 
-WD = os.environ.get("WD", os.path.dirname(os.path.abspath(__file__)))   # artifacts/logs
+SELF = os.path.dirname(os.path.abspath(__file__))                                # box scripts dir
+WD = os.environ.get("WD", SELF)                                                 # artifacts/logs
 MASTER = os.environ.get("X10_MASTER", os.path.join(WD, "x10-master.flash"))     # firmware seed
+BYPASS_SO = os.path.join(SELF, "license_bypass.so")                              # LD_PRELOAD shim
 RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
 HOSTIP   = os.environ.get("X10_HOSTIP", "10.0.8.10")
@@ -107,10 +115,37 @@ for cmd in [
     "cat > /tmp/msh << 'WEOF'\n#!/bin/ash\nexec /bin/ash -l\nWEOF",
     "chmod +x /tmp/msh",
     "mount --bind /tmp/msh /SMASH/msh",
+    # Wait for firmware to generate host keys (written on first boot)
+    "while [ ! -f /nv/dropbear/dropbear_rsa_host_key ]; do sleep 1; done",
     "killall dropbear",
     "/usr/local/dropbear/sbin/dropbear -p 22"
     " -r /nv/dropbear/dropbear_rsa_host_key"
     " -d /nv/dropbear/dropbear_dss_host_key",
+]:
+    child.sendline(cmd); child.expect(r"/ #", timeout=30)
+
+# Patch Redfish: bypass OEM license check via LD_PRELOAD.
+# index.fcgi (FastCGI Redfish handler) imports license_check() from libipmi.so;
+# without a valid OOB license, all Redfish endpoints return 403. Preloading a
+# tiny .so that defines license_check() { return 1; } overrides the real one.
+# Transfer via printf over serial — BusyBox echo -n is unreliable.
+import base64
+with open(BYPASS_SO, "rb") as f:
+    b64 = base64.b64encode(f.read()).decode()
+child.sendline(": > /tmp/lb64"); child.expect(r"/ #", timeout=5)
+for i in range(0, len(b64), 512):
+    chunk = b64[i:i+512]
+    child.sendline(f"printf '%s' '{chunk}' >> /tmp/lb64"); child.expect(r"/ #", timeout=5)
+for cmd in [
+    "base64 -d < /tmp/lb64 > /tmp/license_bypass.so && rm /tmp/lb64",
+    "chmod 644 /tmp/license_bypass.so",
+    "cat > /tmp/index-wrapper.sh << 'WEOF'\n#!/bin/ash\n"
+    "export LD_PRELOAD=/tmp/license_bypass.so\nexec /bin/index.fcgi\nWEOF",
+    "chmod +x /tmp/index-wrapper.sh",
+    "cp /usr/local/httpd/lighttpd.conf /tmp/lighttpd.conf",
+    "sed -i 's|/bin/index.fcgi|/tmp/index-wrapper.sh|g' /tmp/lighttpd.conf",
+    "killall lighttpd 2>/dev/null; killall index.fcgi 2>/dev/null; sleep 1",
+    "/usr/local/httpd/sbin/lighttpd -f /tmp/lighttpd.conf -m /usr/local/httpd/lib/",
 ]:
     child.sendline(cmd); child.expect(r"/ #", timeout=10)
 

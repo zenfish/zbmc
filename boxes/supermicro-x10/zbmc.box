@@ -114,6 +114,16 @@ zbmc_web() {
   local url="https://$ZBMC_HOST:${WEB_PORT:-443}/"
   echo "x10 web: $url  (lighttpd; port 443 forwarded via QEMU slirp)"
   echo "  curl -sk $url"
+  echo "  curl -sk -u ADMIN:ADMIN $url/redfish/v1/  (license bypass via LD_PRELOAD)"
+}
+
+zbmc_redfish_health() {
+  local r; r=$(curl -sk -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers/1" 2>/dev/null)
+  if echo "$r" | grep -q '"FirmwareVersion"'; then
+    echo "REDFISH OK ($(echo "$r" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(f"FW {d[\"FirmwareVersion\"]}, {d[\"ManagerType\"]}")' 2>/dev/null))"; return 0
+  else
+    echo "REDFISH down (license bypass may not be applied)"; return 1
+  fi
 }
 
 # Interactive root shell via serial UNIX socket (socat). Ctrl-] to detach.
