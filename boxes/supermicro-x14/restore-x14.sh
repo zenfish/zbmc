@@ -19,7 +19,8 @@ STATE=ckpt/state.gz
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 sudo -n pkill -9 -f "ast2600-evb" 2>/dev/null || true; sleep 1
 
-exec sudo /opt/homebrew/bin/qemu-system-arm \
+QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
+exec sudo "$QEMU" \
   -m 1024 -M ast2600-evb -nographic -no-reboot \
   -incoming "exec:gunzip -c < $STATE" \
   -kernel kernel.bin -dtb x14.dtb -initrd initramfs-patched.bin \

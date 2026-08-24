@@ -22,7 +22,8 @@ IP="${ZBMC_IP:-10.0.8.14}"
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f /tmp/x14.sock /tmp/x14-qmp.sock
-exec sudo /opt/homebrew/bin/qemu-system-arm \
+QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
+exec sudo "$QEMU" \
   -m 1024 -M ast2600-evb -display none -no-reboot \
   -serial unix:/tmp/x14.sock,server,nowait \
   -qmp unix:/tmp/x14-qmp.sock,server,nowait \

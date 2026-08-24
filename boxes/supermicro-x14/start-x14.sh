@@ -38,7 +38,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 IP="${ZBMC_IP:-10.0.8.14}"
-QEMU=/opt/homebrew/bin/qemu-system-arm
+QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
 
 # ensure the loopback alias exists (idempotent)
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
