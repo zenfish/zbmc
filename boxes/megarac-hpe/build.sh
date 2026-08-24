@@ -3,14 +3,14 @@
 #                       snapshot captured past the IPMIMain cold-boot race, so IPMI + Redfish are green
 #                       on resume. (build-from-hpm.sh is the reference "carve the DUP" path — flaky cold.)
 #
-# Bundle (mirror only — https://git.trouble.org/zbmc-lab/megarac-hpe/): the direct-boot kernel + dtb +
+# Bundle (mirror only — https://git.trouble.org/zbmc/megarac-hpe/): the direct-boot kernel + dtb +
 # patched rootfs, the frozen 64MB NOR (flash at snapshot time), and the gzipped RAM state. Pinned to
 # qemu-system-arm 11.x. The kernel/dtb/rootfs here are the SNAPSHOT's exact copies (must match the RAM state).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
-MIRROR="https://git.trouble.org/zbmc-lab/megarac-hpe"
+MIRROR="https://git.trouble.org/zbmc/megarac-hpe"
 mkdir -p "$WD"
 sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 

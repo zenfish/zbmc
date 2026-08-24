@@ -2,14 +2,14 @@
 # zbmc-lab:turnkey   <- Supermicro X14 BMC (OpenBMC/AST2600). RESTORE-based: ships a warm snapshot
 #                       captured in the scripted-daemon (qemu-x14-svc) mode, whose network survives -incoming.
 #
-# Bundle (mirror only — https://git.trouble.org/zbmc-lab/x14/): the direct-boot kernel + noncsi dtb +
+# Bundle (mirror only — https://git.trouble.org/zbmc/x14/): the direct-boot kernel + noncsi dtb +
 # patched initramfs, the CE0 NOR image, the eMMC image (rootfs on mmcblk0), and the gzipped RAM state.
 # PIN: restores only on the qemu it was captured with — qemu-system-arm 11.x.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
-MIRROR="https://git.trouble.org/zbmc-lab/x14"
+MIRROR="https://git.trouble.org/zbmc/x14"
 mkdir -p "$WD"
 sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 

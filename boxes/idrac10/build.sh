@@ -3,14 +3,14 @@
 #                       from-firmware build (cold boot is a dbus-broker socket-activation lottery under
 #                       TCG; see docs/why-dell-is-hard.md). "build" = fetch the snapshot bundle + rebase.
 #
-# Bundle (mirror only — https://git.trouble.org/zbmc-lab/idrac10/): the patched kernel + gmac dtb, the
+# Bundle (mirror only — https://git.trouble.org/zbmc/idrac10/): the patched kernel + gmac dtb, the
 # 256MB base SD image, a frozen qcow2 overlay, and the gzipped RAM state. boot.sh does qemu -incoming.
 # PIN: this snapshot restores only on the qemu it was captured with — qemu-system-aarch64 11.0.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
-MIRROR="https://git.trouble.org/zbmc-lab/idrac10"
+MIRROR="https://git.trouble.org/zbmc/idrac10"
 mkdir -p "$WD"
 sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 
