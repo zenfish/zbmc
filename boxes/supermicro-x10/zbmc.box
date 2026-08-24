@@ -102,9 +102,15 @@ zbmc_ipmi_health() {
 # Legacy key types required: modern OpenSSH rejects ssh-rsa/ssh-dss by default.
 # This custom dropbear ignores SSH exec requests — commands must be piped via stdin
 # (echo 'cmd' | zbmc ssh), not passed as args. The probe uses stdin 'echo up'.
+# OpenSSH <10: +ssh-rsa,ssh-dss re-enables legacy algs. OpenSSH >=10: ssh-dss removed,
+# and +prefix is invalid; use ssh-rsa directly.
+if ssh -Q key 2>/dev/null | grep -q ssh-dss; then
+  _x10_hka="HostKeyAlgorithms=+ssh-rsa,ssh-dss" _x10_pka="PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss"
+else
+  _x10_hka="HostKeyAlgorithms=ssh-rsa" _x10_pka="PubkeyAcceptedAlgorithms=ssh-rsa"
+fi
 _x10_ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-  -o HostKeyAlgorithms=+ssh-rsa,ssh-dss -o PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss
-  -o ConnectTimeout=4)
+  -o "$_x10_hka" -o "$_x10_pka" -o ConnectTimeout=4)
 zbmc_ssh() {
   if [ "$*" = "echo up" ]; then
     local out; out=$(echo 'echo up; exit' | sshpass -p "$SSH_PW" ssh -T "${_x10_ssh_opts[@]}" \
