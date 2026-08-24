@@ -61,6 +61,26 @@ from `dl.dell.com`), then falls back to the **project mirror at git.trouble.org*
 verified** either way. The reference (non-turnkey) boxes under `boxes/<name>/` also ship their
 boot/restore/snapshot recipes + findings docs.
 
+## Network configuration
+
+By default, each box binds to a lo0 alias in the **10.0.{6,7,8,9}.x** range (macOS loopback).
+If your network already uses 10/8 (common in corporate environments), copy `zbmc.conf.example`
+to `zbmc.conf` (gitignored) and set **one** of:
+
+```bash
+# Pool mode — relocate every box into a /24 you control:
+ZBMC_POOL=192.168.9
+# → openbmc=192.168.9.10, nvidia-obmc=.11, x10=.20, x14=.21,
+#   idrac9=.30, idrac10=.31, megarac-hpe=.40, asmb787=.50
+
+# Per-box override — when you only have a few free IPs:
+ZBMC_IP_idrac9=172.16.0.99
+ZBMC_IP_openbmc=192.168.1.100
+```
+
+Priority: per-box `ZBMC_IP_<name>` > pool > built-in default.
+Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
+
 ## Layout
 
 ```
