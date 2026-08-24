@@ -11,7 +11,7 @@
 # RUN: IP=10.0.6.66 WD=/Users/zen/phd/tmp/cray-xd670 ./start-megarac-hpe-green.sh   (prints qemu pid on green)
 # ENV: WD (workdir/artifacts), IP (bind IP), HTTPS_PORT/IPMI_PORT (default 443/623), TRIES (default 4).
 set -u
-WD="${WD:-/Volumes/xxx/src/me/git/vbmc-lab/work/megarac-hpe}"
+WD="${WD:-$(cd "$(dirname "$0")/../.." && pwd)/work/megarac-hpe}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 TRIES="${TRIES:-4}"
