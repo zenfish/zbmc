@@ -5,5 +5,5 @@
 cd "${WD:-$(dirname "$0")}" || exit 1
 . ./zbmc.box 2>/dev/null
 exec ssh -p "${SSH_PORT:-22}" -i "$PWD/img/vmkey" \
-  -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o ConnectTimeout=8 \
+  -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
   root@"${SSH_HOST:-${ZBMC_IP:-10.0.9.9}}" "$@"

@@ -250,10 +250,13 @@ case "$VERB" in
           ps -p "$qp" >/dev/null 2>&1 || exit
           if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; zbmc_web; exit; fi
           sleep 8
-        done' >"$ZBMC_DIR/web-bringup.log" 2>&1 &
+        done' </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
+      echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
     echo "  watch:  zbmc $ZBMC_NAME status -f   (follow until READY; --build rebuild, --no-web skip)" ;;
   stop)
+    # kill web-bringup poller first (otherwise it lingers after qemu dies, may prompt for SSH passwords)
+    local wbpid; wbpid=$(cat "$ZBMC_DIR/web-bringup.pid" 2>/dev/null) && kill "$wbpid" 2>/dev/null; rm -f "$ZBMC_DIR/web-bringup.pid"
     if p=$(running); then kill "$p" 2>/dev/null && echo "$ZBMC_NAME stopped (killed qemu $p)"; else echo "$ZBMC_NAME not running"; fi ;;
   restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
   status)
