@@ -42,7 +42,8 @@ Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs
 Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**. The short version:
 
 ```bash
-# deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc sshpass && pipx install jefferson
+# deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc curl sshpass socat && pipx install jefferson && pip3 install pexpect
+# deps (Debian): sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat python3-pexpect && pip3 install jefferson
 export PATH="$PWD/tools:$PATH"
 ./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
 zbmc openbmc start             # boot vanilla OpenBMC (~2 min)

@@ -11,10 +11,12 @@ New to this? See the [Glossary](#glossary) at the bottom for BMC / IPMI / Redfis
 
 ```bash
 # macOS
-brew install qemu squashfs-tools u-boot-tools dtc && pipx install jefferson
+brew install qemu squashfs-tools u-boot-tools dtc curl sshpass socat && pipx install jefferson
+pip3 install pexpect
 
 # Debian / Ubuntu
-sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler python3-pip
+sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler \
+  curl sshpass socat python3-pip python3-pexpect
 pip3 install jefferson
 ```
 
