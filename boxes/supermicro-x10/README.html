@@ -201,10 +201,63 @@ exec /bin/ash -l</pre>
       <code>Snooping</code> <code>FanMode</code> <code>IKVM</code>
       <code>MouseMode</code>
     </div>
-    <p class="text-sm">Auth: <code>curl -sk -u ADMIN:ADMIN https://10.0.8.10/redfish/v1/Managers/1</code>.
-      The license system uses AES-128 encryption tied to device MAC + FRU data; key functions in
-      <code>libipmi.so</code>: <code>check_sw_product_license()</code> at 0x663c4,
-      <code>swlicence_aes128_decrypt()</code> imported via <code>rsym</code>.</p>
+    <p class="text-sm">Auth: <code>curl -sk -u ADMIN:ADMIN https://10.0.8.10/redfish/v1/Managers/1</code></p>
+  </section>
+
+  <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">OOB license system (reversed)</h2>
+    <p class="mb-3"><code>license_check()</code> in <code>libipmi.so</code> (0x666cc) gates Redfish/SNMP/OOB features.
+      Two independent validation paths, selected by bitmask:</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mt-4 mb-2">Path 1 &mdash; HMAC (bit 0 / bit 1)</h3>
+    <p class="mb-2">Factory license files <code>/nv/ooblicense</code> and <code>/nv/bios_license</code> are
+      HMAC-SHA1 digests. Two 12-byte keys extracted from <code>libipmi.so</code> <code>.data</code> section:</p>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden mb-3">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Key</th><th class="text-left px-3 py-2">VA</th><th class="text-left px-3 py-2">Value (hex)</th><th class="text-left px-3 py-2">License type</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2"><code>oob_private_key</code></td><td class="px-3 py-2"><code>0x112230</code></td><td class="px-3 py-2 font-mono">8544e3b47eca58f9583043f8</td><td class="px-3 py-2">OOB (bit 0)</td></tr>
+        <tr><td class="px-3 py-2"><code>hsdc_private_key</code></td><td class="px-3 py-2"><code>0x112224</code></td><td class="px-3 py-2 font-mono">39cb2a1a3d748ff1dee46b87</td><td class="px-3 py-2">HSDC (bit 1)</td></tr>
+      </tbody>
+    </table>
+    <p class="mb-2"><b>Algorithm</b> (<code>oob_format_license_create</code> @ 0x66ba0):</p>
+    <ol class="list-decimal pl-6 space-y-1 text-sm mb-3">
+      <li>Read 6-byte board identifier from persistent storage (<code>at_p_St_PS + 0x28E</code>)
+        &mdash; factory MAC from FRU/EEPROM on real hardware; all-zeros on QEMU flat-flash</li>
+      <li><code>HMAC-SHA1(private_key, board_id_6bytes)</code></li>
+      <li>Take first 12 bytes of the 20-byte digest</li>
+      <li>Format as <code>XXXX - XXXX - XXXX - XXXX - XXXX - XXXX</code></li>
+    </ol>
+    <p class="text-sm mb-3"><b>Activation</b> (<code>oob_format_license_activate</code> @ 0x66950): tries both keys
+      against the entered key. Either match activates the license and writes to both files.</p>
+    <p class="text-sm mb-3"><b>Keygen:</b> <code>x10-keygen.py [MAC]</code> generates valid OOB + HSDC keys for any board ID.
+      Verified against the running QEMU BMC.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mt-4 mb-2">Path 2 &mdash; AES (bit 3)</h3>
+    <p class="mb-2">FRU-stored license data validated via AES-128-CBC decrypt + <code>verify_productkey_content</code>.
+      Key derivation (<code>Generate_KeyIV</code> @ 0x4cd18):</p>
+    <ol class="list-decimal pl-6 space-y-1 text-sm mb-3">
+      <li>Passphrase = <code>UPPERCASE(MAC_no_colons)</code> + <code>"ejmb"</code></li>
+      <li><code>MD5(passphrase)</code> &rarr; 16-byte digest</li>
+      <li>KEY = hex-per-nibble of <code>digest[8:16]</code> &rarr; 16 ASCII bytes (each nibble &rarr; one <code>%x</code> char)</li>
+      <li>IV = hex-per-nibble of <code>digest[0:8]</code> &rarr; 16 ASCII bytes</li>
+    </ol>
+    <p class="text-sm">ASCII hex strings used directly as raw AES key/IV bytes (effective entropy ~64 bits).
+      The plaintext format is complex (product info + checksum via <code>verify_productkey_content</code> @ 0x65e60);
+      the HMAC path is sufficient for activation.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mt-4 mb-2">Key functions in libipmi.so</h3>
+    <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+      <thead class="bg-slate-100 text-slate-700"><tr><th class="text-left px-3 py-2">Function</th><th class="text-left px-3 py-2">VA</th><th class="text-left px-3 py-2">Size</th><th class="text-left px-3 py-2">Role</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr><td class="px-3 py-2"><code>license_check</code></td><td class="px-3 py-2"><code>0x666cc</code></td><td class="px-3 py-2">592</td><td class="px-3 py-2">Orchestrator: bit 3 &rarr; AES/FRU, bit 0 &rarr; HMAC</td></tr>
+        <tr><td class="px-3 py-2"><code>oob_format_license_create</code></td><td class="px-3 py-2"><code>0x66ba0</code></td><td class="px-3 py-2">304</td><td class="px-3 py-2">HMAC factory license generation</td></tr>
+        <tr><td class="px-3 py-2"><code>oob_format_license_activate</code></td><td class="px-3 py-2"><code>0x66950</code></td><td class="px-3 py-2">548</td><td class="px-3 py-2">HMAC key validation (tries both keys)</td></tr>
+        <tr><td class="px-3 py-2"><code>oob_format_license_create_file</code></td><td class="px-3 py-2"><code>0x658c8</code></td><td class="px-3 py-2">532</td><td class="px-3 py-2">Write hex-dash format to /nv files</td></tr>
+        <tr><td class="px-3 py-2"><code>check_sw_product_license</code></td><td class="px-3 py-2"><code>0x663c4</code></td><td class="px-3 py-2">748</td><td class="px-3 py-2">AES/FRU decrypt + verify</td></tr>
+        <tr><td class="px-3 py-2"><code>Generate_KeyIV</code></td><td class="px-3 py-2"><code>0x4cd18</code></td><td class="px-3 py-2">308</td><td class="px-3 py-2">MAC &rarr; MD5 &rarr; hex-nibble AES key+IV</td></tr>
+        <tr><td class="px-3 py-2"><code>verify_productkey_content</code></td><td class="px-3 py-2"><code>0x65e60</code></td><td class="px-3 py-2">1344</td><td class="px-3 py-2">AES plaintext validation</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <section class="mb-8">
