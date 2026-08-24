@@ -54,6 +54,7 @@ IPMI_PORT=623
 WEB_PORT=443
 
 PIDF=/tmp/zbmc-supermicro-x10.pid
+SOCK="$ZBMC_DIR/x10-serial.sock"
 LOG="$ZBMC_DIR/x10-start.log"
 
 # boot: alias lo0 + prime sudo (so start-x10.sh's `sudo -n qemu` never prompts),
@@ -91,6 +92,36 @@ zbmc_ipmi_health() {
   fi
 }
 
-zbmc_web() { echo "x10 Redfish/web not wired (oracle box — IPMI only)"; }
+# SSH into X10 BMC (Dropbear, SMASH-CLP shell — not root).
+# Legacy key types required: modern OpenSSH rejects ssh-rsa/ssh-dss by default.
+# SMASH-CLP ignores command args, so `zbmc_ssh 'echo up'` (the _probe_ssh pattern)
+# would fail — we detect the banner and echo "up" for the probe.
+_x10_ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+  -o HostKeyAlgorithms=+ssh-rsa,ssh-dss -o PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss
+  -o ConnectTimeout=4)
+zbmc_ssh() {
+  if [ "$*" = "echo up" ]; then
+    # probe mode: SMASH-CLP won't run 'echo up', so check for its banner instead
+    local out; out=$(sshpass -p "$SSH_PW" ssh "${_x10_ssh_opts[@]}" \
+      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" 2>/dev/null)
+    echo "$out" | grep -q "SMASH-CLP" && echo "up"
+  else
+    sshpass -p "$SSH_PW" ssh "${_x10_ssh_opts[@]}" \
+      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+  fi
+}
+
+zbmc_web() {
+  local url="https://$ZBMC_HOST:${WEB_PORT:-443}/"
+  echo "x10 web: $url  (lighttpd; port 443 forwarded via QEMU slirp)"
+  echo "  curl -sk $url"
+}
+
+# Interactive root shell via serial UNIX socket (socat).
+# SSH only gives SMASH-CLP; serial gives BusyBox /bin/sh as root. Ctrl-] to detach.
+zbmc_shell() { socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+# Console: interactive serial session (same socket, same root shell).
+zbmc_console() { socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
 
 ZBMC_READY_GREP='NET_CONFIGURED'
