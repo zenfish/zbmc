@@ -186,6 +186,28 @@ exec /bin/ash -l</pre>
   </section>
 
   <section class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Redfish (license-bypassed)</h2>
+    <p class="mb-3">Supermicro FW 3.93 gates all Redfish endpoints behind an <b>OOB license check</b>
+      (<code>license_check()</code> in <code>libipmi.so</code>). Without a valid license key in
+      <code>/nv/ooblicense</code>, every endpoint past <code>/redfish/v1/</code> returns 403.
+      The boot driver bypasses this via <code>LD_PRELOAD</code> of a 5 KB ARM .so that overrides
+      <code>license_check() &rarr; return 1</code>, then restarts lighttpd with a wrapper script.</p>
+    <p class="mb-3">After bypass, 13 Supermicro OEM extensions are exposed at
+      <code>/redfish/v1/Managers/1/&lt;ext&gt;</code>:</p>
+    <div class="grid grid-cols-3 gap-1 text-sm mb-3">
+      <code>SMCRAKP</code> <code>IPAccessControl</code> <code>NTP</code>
+      <code>LDAP</code> <code>ActiveDirectory</code> <code>RADIUS</code>
+      <code>SMTP</code> <code>SNMP</code> <code>Syslog</code>
+      <code>Snooping</code> <code>FanMode</code> <code>IKVM</code>
+      <code>MouseMode</code>
+    </div>
+    <p class="text-sm">Auth: <code>curl -sk -u ADMIN:ADMIN https://10.0.8.10/redfish/v1/Managers/1</code>.
+      The license system uses AES-128 encryption tied to device MAC + FRU data; key functions in
+      <code>libipmi.so</code>: <code>check_sw_product_license()</code> at 0x663c4,
+      <code>swlicence_aes128_decrypt()</code> imported via <code>rsym</code>.</p>
+  </section>
+
+  <section class="mb-8">
     <h2 class="text-xl font-semibold text-slate-900 mb-3">RE artifacts</h2>
     <ul class="list-disc pl-6 space-y-1 text-sm">
       <li><code>~/phd/tmp/x10-dropbear-re/dropbear</code> &mdash; extracted binary (ARM32 PIE, stripped, 223640 bytes)</li>
