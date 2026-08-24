@@ -124,6 +124,14 @@ _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
   return 1; }
 
 _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY|NOTE
+  if ! python3 -c "import zipmi" 2>/dev/null && ! PYTHONPATH="$ZIPMI" python3 -c "import zipmi" 2>/dev/null; then
+    if command -v ipmitool >/dev/null 2>&1; then
+      local r; r=$(timeout -s KILL 4 ipmitool -I lanplus -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" mc info 2>&1)
+      echo "$r" | grep -qiE "Manufacturer" && { echo "ok|ipmitool -I lanplus -H $ZBMC_IP -U ${IPMI_USER:-} mc info|"; return; }
+      echo "fail||no answer (warming/down)"; return
+    fi
+    echo "fail||not checked (need zipmi or ipmitool)"; return
+  fi
   local has_key=0; [ -n "${IPMI_KEY:-}" ] && [ "${IPMI_KEY}" != "00" ] && has_key=1
   _ipmi_run pw; local pw=$?
   [ "$pw" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|"; return; }
