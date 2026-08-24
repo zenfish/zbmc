@@ -86,6 +86,7 @@ usage(){
   echo
   echo "verbs:"
   echo "  start [--build][--no-web]   boot (detached); binds the real IP:{22,443,623}; web auto-starts"
+  echo "                              needs root — use 'sudo zbmc' or --run-as-me to skip"
   echo "  stop              kill the QEMU process"
   echo "  restart           stop then start"
   echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
@@ -163,6 +164,10 @@ _probe_console(){
 [ -n "${ZBMC_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
 
 [ $# -eq 0 ] && { usage; exit 0; }
+
+_need_root(){ # verbs that bind privileged ports or kill qemu need root
+  case "$1" in start|stop|restart|shell|snapshot|restore) return 0;; esac; return 1; }
+
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — just the box names, one per line (no status). For scripting/quick recall.
 if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
@@ -172,13 +177,22 @@ fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
 if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   verb="${1:-status}"; td=$(mktemp -d); [ -t 1 ] && export ZBMC_COLOR=1
+  # root check for the whole fleet — fail once up front, not N times in subprocesses
+  _all_run_as_me=0; for _a in "${@:2}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; done
+  if [ "$_all_run_as_me" = 0 ] && _need_root "$verb" && [ "$(id -u)" != 0 ]; then
+    echo "zbmc: '$verb' needs root to bind privileged ports and manage qemu." >&2
+    echo "  sudo zbmc all $verb" >&2
+    echo "  or: zbmc all $verb --run-as-me  (skip root; you handle port failures)" >&2
+    exit 1
+  fi
   # resolve box names once (registry order)
   names=(); for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] && names+=("$n"); done
   N=${#names[@]}
   if [ "$verb" = status ]; then printf 'checking status on %s%d%s inmates in the asylum -\n' "$CC" "$N" "$CZ"
   else printf 'running %s%s%s on %s%d%s inmates -\n' "$CC" "$verb" "$CZ" "$CC" "$N" "$CZ"; fi
   # fan out concurrently; each box drops a .done marker when finished
-  i=0; for n in "${names[@]}"; do ( "$0" "$n" "$verb" >"$td/$i" 2>&1; : > "$td/$i.done" ) & i=$((i+1)); done
+  _rm=; [ "$_all_run_as_me" = 1 ] && _rm="--run-as-me"
+  i=0; for n in "${names[@]}"; do ( "$0" "$n" "$verb" $_rm >"$td/$i" 2>&1; : > "$td/$i.done" ) & i=$((i+1)); done
   # print in registry order, STREAMING: block on each box's own completion, then flush it
   alive=0; j=0
   for n in "${names[@]}"; do
@@ -206,6 +220,16 @@ running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's
 Z(){ if declare -F zbmc_ipmi >/dev/null; then zbmc_ipmi "$@"; else
   timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
 
+# --run-as-me: skip root check (user accepts port-binding failures on privileged ports)
+ZBMC_RUN_AS_ME=0
+for _a in "$@"; do [ "$_a" = "--run-as-me" ] && ZBMC_RUN_AS_ME=1; done
+if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
+  echo "zbmc: '$VERB' needs root to bind privileged ports and manage qemu." >&2
+  echo "  sudo zbmc $BOX $VERB $*" >&2
+  echo "  or: zbmc $BOX $VERB --run-as-me  (skip root; you handle port failures)" >&2
+  exit 1
+fi
+
 case "$VERB" in
   start)
     if p=$(running); then echo "$ZBMC_NAME already running (qemu $p)"; exit 0; fi
@@ -226,11 +250,11 @@ case "$VERB" in
           ps -p "$qp" >/dev/null 2>&1 || exit
           if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; zbmc_web; exit; fi
           sleep 8
-        done' >/tmp/zbmc-$ZBMC_NAME-web.log 2>&1 &
+        done' >"$ZBMC_DIR/web-bringup.log" 2>&1 &
     fi
     echo "  watch:  zbmc $ZBMC_NAME status -f   (follow until READY; --build rebuild, --no-web skip)" ;;
   stop)
-    if p=$(running); then { sudo kill "$p" 2>/dev/null || kill "$p"; } && echo "$ZBMC_NAME stopped (killed qemu $p)"; else echo "$ZBMC_NAME not running"; fi ;;
+    if p=$(running); then kill "$p" 2>/dev/null && echo "$ZBMC_NAME stopped (killed qemu $p)"; else echo "$ZBMC_NAME not running"; fi ;;
   restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
   status)
     _follow=0; [ "${1:-}" = "-f" ] && _follow=1

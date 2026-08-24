@@ -34,13 +34,8 @@ WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
-  # resolve kernel/dtb/sd — build.sh puts them flat, symlinked work dirs use boot/+img/ subdirs
-  local _kernel _dtb _sd
-  for _p in "$ZBMC_DIR/boot" "$ZBMC_DIR"; do [ -f "$_p/Image.boot-patched" ] && { _kernel="$_p/Image.boot-patched"; break; }; done
-  for _p in "$ZBMC_DIR/boot" "$ZBMC_DIR"; do [ -f "$_p/qemu-gmac.dtb" ]      && { _dtb="$_p/qemu-gmac.dtb";      break; }; done
-  for _p in "$ZBMC_DIR/img"  "$ZBMC_DIR"; do [ -f "$_p/sd.img" ]              && { _sd="$_p/sd.img";              break; }; done
-  for f in "${_kernel:-}" "${_dtb:-}" "${_sd:-}" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
-    [ -e "$f" ] || { echo "missing ${f:-kernel/dtb/sd.img} — idrac10 not built" >&2; return 1; }
+  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
+    [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
   done
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
@@ -71,8 +66,8 @@ zbmc_boot() {
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel "$_kernel" -dtb "$_dtb" \
-    -drive "id=rootsd,if=none,file=$_sd,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
+    -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
+    -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
     -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
@@ -87,17 +82,11 @@ zbmc_boot() {
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
 zbmc_ready() {
   local d="$ZBMC_DIR"
-  # build.sh puts files flat in $d/; symlinked work dirs use boot/ + img/ subdirs
-  local kernel="" sdimg=""
-  [ -f "$d/Image.boot-patched" ] && kernel="$d/Image.boot-patched"
-  [ -f "$d/boot/Image.boot-patched" ] && kernel="$d/boot/Image.boot-patched"
-  [ -f "$d/sd.img" ] && sdimg="$d/sd.img"
-  [ -f "$d/img/sd.img" ] && sdimg="$d/img/sd.img"
-  if [ -n "$kernel" ] && [ -n "$sdimg" ]; then
-    { [ -f "$d/state.gz" ] || [ -f "$d/ckpt/state.gz" ]; } && { echo "ready (warm snapshot)"; return 0; }
+  if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/img/sd.img" ]; then
+    [ -f "$d/ckpt/state.gz" ] && { echo "ready (warm snapshot)"; return 0; }
     echo "ready (cold boot only)"; return 0
   fi
-  echo "not built — need Image.boot-patched + sd.img"; return 1
+  echo "not built — need boot/Image.boot-patched + img/sd.img"; return 1
 }
 # snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.

@@ -34,13 +34,8 @@ restore_once() {   # launch qemu -incoming, resume, echo the pid (or empty on QM
   $SUDO pkill -9 -f "$W/rserial.sock" 2>/dev/null || true
   $SUDO pkill -9 -f "$HOSTFWD" 2>/dev/null || true
   sleep 1; $SUDO rm -f "$SOCK" "$QMP" 2>/dev/null; rm -f "$SOCK" "$QMP" 2>/dev/null || true
-  # resolve kernel/dtb — build.sh flat layout vs symlinked boot/ subdir
-  local _kernel="" _dtb=""
-  for _d in boot .; do [ -f "$_d/Image.boot-patched" ] && { _kernel="$_d/Image.boot-patched"; break; }; done
-  for _d in boot .; do [ -f "$_d/qemu-gmac.dtb" ]      && { _dtb="$_d/qemu-gmac.dtb";      break; }; done
-  [ -n "$_kernel" ] || { log "no Image.boot-patched in boot/ or ."; return 1; }
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel "$_kernel" -dtb "$_dtb" \
+    -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"$HOSTFWD" \
     -serial unix:"$SOCK",server,nowait -qmp unix:"$QMP",server,nowait \
