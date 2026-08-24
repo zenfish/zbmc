@@ -43,6 +43,15 @@ _zbmc_resolve_ip(){
   else echo "$3"; fi
 }
 
+# _zbmc_lo_alias IP — add an IP to the loopback interface (idempotent, cross-platform).
+_zbmc_lo_alias(){
+  local ip="$1" SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  case "$(uname -s)" in
+    Darwin) $SUDO ifconfig lo0 alias "$ip" up 2>/dev/null ;;
+    *)      ip addr show dev lo 2>/dev/null | grep -q "$ip" || $SUDO ip addr add "$ip/32" dev lo 2>/dev/null ;;
+  esac
+}
+
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }

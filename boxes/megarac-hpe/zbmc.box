@@ -79,7 +79,7 @@ SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   local PENV="IP=$ZBMC_IP HTTPS_PORT=$WEB_PORT IPMI_PORT=$IPMI_PORT SSH_PORT=$SSH_PORT TELNET_PORT=$TELNET_PORT WD=$ZBMC_DIR"

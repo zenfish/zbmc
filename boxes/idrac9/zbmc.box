@@ -36,7 +36,7 @@ zbmc_boot() {
   # ports, so run qemu as root (self-elevate). This is a local research VM -> root is fine, and it kills
   # the whole socat/high-port/6623 indirection. euid test -> sudo if not already root.
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   # WARM RESTORE (OPT-IN, currently BROKEN): `ZBMC_WARM=1 zbmc idrac9 start` restores the P4 snapshot.

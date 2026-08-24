@@ -56,7 +56,7 @@ SOCK=/tmp/x14.sock                   # root-owned serial console unix socket
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$ZBMC_DIR" || return 1
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then

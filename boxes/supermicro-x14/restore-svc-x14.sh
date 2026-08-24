@@ -12,7 +12,7 @@ set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
 SNAP="${1:-svc-snap.gz}"; IP="${ZBMC_IP:-10.0.8.14}"
 [ -f "$SNAP" ] || { echo "no snapshot at $SNAP — run snapshot-x14.sh first"; exit 1; }
-ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
+case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f /tmp/x14.sock /tmp/x14-qmp.sock
 sudo -n /opt/homebrew/bin/qemu-system-arm \

@@ -46,7 +46,7 @@ zbmc_boot() {
   local MTD=evb-ast2600.static.mtd
   [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null

@@ -15,7 +15,7 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 IP="${ZBMC_IP:-10.0.8.14}"; QEMU=/opt/homebrew/bin/qemu-system-arm; MAX=${1:-8}
-ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
+case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 MASKS="systemd.mask=bmc-shared-lan-discovery.service systemd.mask=com.Supermicro.CPLDInit.service \
 systemd.mask=fan-boot-control.service systemd.mask=obmc-flash-bmc-setenv@.service \
 systemd.mask=sshdgenkeys.service systemd.mask=checkuid.service systemd.mask=clear-once.service \

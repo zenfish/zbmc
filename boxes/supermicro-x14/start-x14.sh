@@ -41,7 +41,7 @@ IP="${ZBMC_IP:-10.0.8.14}"
 QEMU=/opt/homebrew/bin/qemu-system-arm
 
 # ensure the loopback alias exists (idempotent)
-ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
+case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 # free the port if a stale instance is around
 sudo pkill -9 -f "ast2600-evb" 2>/dev/null || true; sleep 1
 
