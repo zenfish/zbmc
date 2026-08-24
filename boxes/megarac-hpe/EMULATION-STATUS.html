@@ -1,0 +1,388 @@
+<title>MegaRAC HPE Emulation Status</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; }
+  .pill { display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 0.1rem 0.45rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
+  .pill-green { background: #d1fae5; color: #065f46; }
+  .pill-amber { background: #fef3c7; color: #92400e; }
+  .pill-red   { background: #fee2e2; color: #991b1b; }
+  .pill-gray  { background: #f1f5f9; color: #475569; }
+  table code { font-size: 0.8em; background: #f1f5f9; padding: 0.1em 0.3em; border-radius: 3px; }
+  .sect-border { border-left: 3px solid #3b82f6; padding-left: 1rem; }
+</style>
+
+<div class="max-w-3xl mx-auto px-6 py-10 text-slate-800 leading-relaxed">
+
+<header class="mb-8">
+  <p class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-1">zbmc &middot; megarac-hpe</p>
+  <h1 class="text-2xl font-bold text-slate-900">Emulation Status: HPE Cray XD670 BMC</h1>
+  <p class="mt-1 text-sm text-slate-500">AMI MegaRAC SP-X 13.04 &middot; AST2600 (Cortex-A7) &middot; qemu ast2600-evb &middot; Last updated 2026-08-21</p>
+</header>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">At a Glance</h2>
+
+<table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden mb-8">
+  <thead class="bg-slate-50">
+    <tr>
+      <th class="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Subsystem</th>
+      <th class="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+      <th class="text-left px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Notes</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-100">
+    <tr>
+      <td class="px-4 py-2 font-medium">Linux boot</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">Full <code>/sbin/init</code>, <code>/conf</code> from JFFS2, all daemons start. Console on ttyS4.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">SSH (dropbear)</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">Port 22. <code>sysadmin</code> / blank pw → uid=0 root shell. Static musl soft-float ARMv5T binary.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Telnet (mini_telnetd)</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">Port 23. No auth, direct <code>/bin/sh</code>, uid=0. Static ARMv4T binary.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">IPMI 2.0 RMCP+</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">UDP 623. <code>admin</code>/<code>superuser</code>. Gigabyte MfgID 15370. <code>mc info</code>, <code>user list</code>, <code>channel info</code> all verified.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Redis</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">Unix socket <code>/run/redis/redis.sock</code>. ~1032 keys. Full Redfish data model populated.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Redfish service root</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2"><code>/redfish/v1/</code> returns 200 (no auth required per spec). AMI Redfish Server, v1.11.0.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Redfish protected endpoints</td>
+      <td class="px-4 py-2"><span class="pill pill-red">broken</span></td>
+      <td class="px-4 py-2"><code>/Managers</code>, <code>/Systems</code>, <code>/AccountService</code>, <code>/Chassis</code> all return <code>AccessDenied</code> or <code>ServiceInUnknownState</code> — even with valid credentials. Backend providers never fully initialize.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">IPMIMain stability</td>
+      <td class="px-4 py-2"><span class="pill pill-amber">flaky</span></td>
+      <td class="px-4 py-2">Cold boot: SEGV race in central MsgHndlr. Warm snapshot sidesteps it but services still die within minutes. Guest eventually watchdog-reboots.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Warm snapshot</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">QMP snapshot → <code>cray-snap.gz</code> (~166 MB). Restores in ~10s. Always use this, never cold boot.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">Filesystem access</td>
+      <td class="px-4 py-2"><span class="pill pill-green">works</span></td>
+      <td class="px-4 py-2">Full rootfs extracted to <code>work/unpacked/</code>. All Lua, configs, binaries accessible for static RE.</td>
+    </tr>
+    <tr>
+      <td class="px-4 py-2 font-medium">NC-SI / host NIC</td>
+      <td class="px-4 py-2"><span class="pill pill-gray">n/a</span></td>
+      <td class="px-4 py-2">qemu ast2600 ftgmac100 has no NC-SI peer. Known wall across all ast2600 zoo boxes.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">Architecture</h2>
+
+<div class="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 text-sm overflow-x-auto">
+<pre class="mono text-xs leading-relaxed text-slate-700">
+┌─────────────────────────────────────────────────────────────────┐
+│  macOS Host                                                     │
+│                                                                 │
+│  sudo qemu-system-arm -M ast2600-evb -m 1024                   │
+│    -kernel kernel.Image  -dtb dtb-a1.dtb  -initrd rootfs.sqfs  │
+│    -drive mtdflash.bin (64MB NOR)                               │
+│    -net user,hostfwd=...                                        │
+│                                                                 │
+│  SLIRP hostfwd:                                                 │
+│    10.0.6.66:443  → guest:443  (Redfish/HTTPS)                  │
+│    10.0.6.66:22   → guest:22   (dropbear SSH)                   │
+│    10.0.6.66:23   → guest:23   (mini_telnetd)                   │
+│    10.0.6.66:623  → guest:623  (IPMI RMCP+ UDP)                 │
+│    10.0.6.66:5123 → guest:5123 (Intel ASD)                      │
+│                                                                 │
+│  10.0.6.66 = lo0 alias (sudo ifconfig lo0 alias 10.0.6.66)     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────┴───────────────────────────────────┐
+│  Guest: Linux 5.4.184-ami (armv7l, Cortex-A7)                   │
+│                                                                 │
+│  rootfs.sqfs (read-only squashfs, booted as RAM disk)           │
+│  /conf, /bkupconf → mtdflash.bin JFFS2 partitions (writable)   │
+│                                                                 │
+│  Services:                                                      │
+│    IPMIMain        → IPMI stack (LAN, UDS)         ⚠ unstable  │
+│    lighttpd        → HTTPS :443                    ✓            │
+│    luajit (turbo)  → Redfish Lua handlers          ✓ front-end  │
+│    redis-server    → /run/redis/redis.sock         ✓            │
+│    sync-agent      → host-interface sync           ✓            │
+│    dropbear        → SSH :22 (injected)            ✓            │
+│    mini_telnetd    → telnet :23 (injected)         ✓            │
+│    procmgr         → watchdog/restart supervisor   ✓ (too well) │
+│    usb0            → host-interface NIC            ✓ (no peer)  │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">What Works in Detail</h2>
+
+<div class="space-y-4 mb-8">
+
+<div class="sect-border">
+<h3 class="text-sm font-semibold text-slate-900">Shell Access (SSH + Telnet)</h3>
+<p class="text-sm text-slate-600 mt-1">
+  <b>SSH (port 22):</b> Custom-built static dropbear 2024.86 (musl soft-float ARMv5T, 317K).
+  Injected into rootfs by <code>qemu-patch-rootfs.sh</code> at <code>/usr/local/bin/dropbear</code>.
+  Launched from <code>ipmistack</code> init script after IPMIMain. Blank password for <code>sysadmin</code>
+  (<code>dropbear -B</code>). Host keys auto-generated in <code>/var/dropbear/</code> via
+  <code>/etc/dropbear → /var/dropbear</code> symlink baked into squashfs.
+</p>
+<p class="text-sm text-slate-600 mt-1">
+  <b>Telnet (port 23):</b> Static <code>mini_telnetd</code> (ARMv4T, ~10K). No authentication,
+  direct <code>/bin/sh</code>, uid=0. Good for scripted commands when SSH hangs (snapshot stale connections).
+</p>
+<p class="text-sm text-slate-600 mt-1">
+  <b>Hard-float gotcha:</b> qemu ast2600-evb emulates Cortex-A7 without VFP/NEON
+  (<code>/proc/cpuinfo</code> shows no vfp features). Hard-float binaries SIGILL immediately.
+  All injected binaries must be soft-float. The failed <code>dropbear-vfp-bad</code> (302K, Flags 0x5000400)
+  is kept in <code>prebuilt/</code> as a reference.
+</p>
+</div>
+
+<div class="sect-border">
+<h3 class="text-sm font-semibold text-slate-900">IPMI 2.0 RMCP+</h3>
+<p class="text-sm text-slate-600 mt-1">
+  IPMIMain binds LAN on UDP 623. Standard RMCP+ authentication works — <code>admin</code>/<code>superuser</code>
+  (auto-provisioned MegaRAC default, user slot 2, Administrator privilege). Verified commands:
+  <code>mc info</code> (Gigabyte MfgID 15370), <code>user list</code>, <code>channel info</code>,
+  <code>chassis status</code>. Slow (~15-20s for RAKP under emulation, set <code>IPMI_T=20</code>).
+</p>
+</div>
+
+<div class="sect-border">
+<h3 class="text-sm font-semibold text-slate-900">Redis</h3>
+<p class="text-sm text-slate-600 mt-1">
+  redis-server listens on Unix socket <code>/run/redis/redis.sock</code> (not TCP 6379).
+  ~1032 keys populated after a successful boot. Full Redfish data model: Managers, Systems,
+  Chassis, HostInterfaces, EthernetInterfaces, AccountService, all with realistic values.
+  Access: <code>redis-cli -s /run/redis/redis.sock KEYS "*"</code>
+</p>
+</div>
+
+<div class="sect-border">
+<h3 class="text-sm font-semibold text-slate-900">Warm Snapshot</h3>
+<p class="text-sm text-slate-600 mt-1">
+  QMP <code>savevm</code> captures a green state to <code>cray-snap.gz</code> (~166 MB) +
+  <code>cray-snap-flash.bin</code> (64 MB NOR copy). Restore via <code>-incoming exec:gunzip</code>
+  brings the VM back to a working state in ~10 seconds. Always use this — cold boot is unreliable.
+  Scripts: <code>snapshot-megarac-hpe.sh</code> (capture), <code>restore-megarac-hpe.sh</code> (restore).
+  <code>zbmc megarac-hpe start</code> auto-detects and uses the snapshot.
+</p>
+</div>
+
+<div class="sect-border">
+<h3 class="text-sm font-semibold text-slate-900">Static RE (Filesystem)</h3>
+<p class="text-sm text-slate-600 mt-1">
+  Full rootfs extracted at <code>work/unpacked/fw-filesystems/rootfs/</code>. All Lua bytecode,
+  C libraries, init scripts, redis init scripts (<code>.rcmd</code>), configs accessible.
+  Sufficient for: CVE analysis, binary RE (Ghidra), protocol analysis, credential extraction.
+  Does not require a running VM.
+</p>
+</div>
+
+</div>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">What Doesn't Work</h2>
+
+<div class="space-y-4 mb-8">
+
+<div class="border-l-3 border-red-300 pl-4" style="border-left:3px solid #fca5a5;">
+<h3 class="text-sm font-semibold text-slate-900">Redfish Protected Endpoints</h3>
+<p class="text-sm text-slate-600 mt-1">
+  The Redfish Lua front-end (Turbo web framework) works — it serves the service root at
+  <code>/redfish/v1/</code> and runs the host-interface authentication logic. But every
+  protected endpoint (<code>/Managers</code>, <code>/Systems</code>, <code>/AccountService</code>,
+  <code>/Chassis</code>, <code>/SessionService</code>) returns one of two errors:
+</p>
+<ul class="text-sm text-slate-600 list-disc pl-6 mt-1 space-y-1">
+  <li><code>Base.1.12.ServiceInUnknownState</code> — backend providers not initialized</li>
+  <li><code>Security.1.0.AccessDenied</code> — backend denies the connection</li>
+</ul>
+<p class="text-sm text-slate-600 mt-1">
+  These errors appear <b>even with valid credentials</b> (<code>admin:superuser</code>).
+  The issue is the backend service providers (C binaries that translate IPMI data into Redfish JSON)
+  depend on IPMIMain being fully stable, which it isn't. The Lua layer authenticates correctly
+  but has nothing to proxy to.
+</p>
+</div>
+
+<div class="border-l-3 border-red-300 pl-4 mt-4" style="border-left:3px solid #fca5a5;">
+<h3 class="text-sm font-semibold text-slate-900">IPMIMain Stability</h3>
+<p class="text-sm text-slate-600 mt-1">
+  IPMIMain has two failure modes, both from missing QEMU hardware:
+</p>
+<ol class="text-sm text-slate-600 list-decimal pl-6 mt-1 space-y-2">
+  <li>
+    <b>Cold-boot crash race</b> — central MsgHndlr thread NULL-derefs on an early client message
+    before initialization completes. Nondeterministic: depends on thread scheduling. A good roll
+    boots green; a bad roll SIGSEGV-loops. After 15 crashes, <code>procmgr</code> reboots the guest.
+    Cold boot success rate: ~20-30%. <code>start-megarac-hpe-green.sh</code> retries up to 6 times.
+  </li>
+  <li>
+    <b>Post-boot degradation</b> — even after a successful boot (or warm restore), background
+    threads periodically hit interfaces that don't exist in QEMU (IPMB polling, sensor scanning,
+    SMBUS probes). These accumulate until <code>procmgr</code>'s health watchdog kills IPMIMain,
+    which cascades to a guest reboot. Typical survival time: 2-15 minutes.
+  </li>
+</ol>
+<p class="text-sm text-slate-600 mt-1">
+  <b>Mitigation applied:</b> <code>qemu-patch-rootfs.sh</code> disables all IPMI interfaces
+  without backing QEMU hardware (KCS1-3, SERIAL, SOL, BT, SMM, SMBUS, IPMB) and sets
+  <code>NM_IPMB_BUS=0xFF</code> (Node-Manager guard). This fixed the immediate startup crash
+  but doesn't prevent all background faults.
+</p>
+</div>
+
+<div class="border-l-3 border-red-300 pl-4 mt-4" style="border-left:3px solid #fca5a5;">
+<h3 class="text-sm font-semibold text-slate-900">NC-SI / Host NIC</h3>
+<p class="text-sm text-slate-600 mt-1">
+  qemu's ast2600-evb <code>ftgmac100</code> NICs have no NC-SI peer implementation.
+  The "has no peer" warnings at boot are cosmetic, but the host-BMC sideband channel (NC-SI over
+  the shared NIC) cannot be tested. This is a known wall across all AST2600 zoo boxes (x14, asmb787, evb).
+</p>
+</div>
+
+</div>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">Rootfs Patches</h2>
+<p class="text-sm text-slate-600 mb-3">
+  <code>qemu-patch-rootfs.sh</code> applies 6 fixes to the squashfs before repacking.
+  All are squashfs-level (no binary patching). Applied automatically by <code>extract.sh</code>.
+</p>
+
+<table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden mb-8">
+  <thead class="bg-slate-50">
+    <tr>
+      <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">Fix</th>
+      <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">What</th>
+      <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">Why</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-100">
+    <tr>
+      <td class="px-3 py-2 font-medium">1</td>
+      <td class="px-3 py-2">Create <code>/conf/BMC → BMC1/ast2600evb_ami</code> symlink</td>
+      <td class="px-3 py-2">IPMIMain reads literal <code>/conf/BMC/IPMI.conf</code></td>
+    </tr>
+    <tr>
+      <td class="px-3 py-2 font-medium">2</td>
+      <td class="px-3 py-2">Seed <code>IPMI.conf</code>: disable KCS/SERIAL/SOL/BT/SMM/SMBUS/IPMB, <code>NM_IPMB_BUS=0xFF</code></td>
+      <td class="px-3 py-2">MsgHndlr threads crash on absent hardware</td>
+    </tr>
+    <tr>
+      <td class="px-3 py-2 font-medium">3</td>
+      <td class="px-3 py-2"><code>/usr/local/bin/smash → /bin/sh</code></td>
+      <td class="px-3 py-2">Console admin login shell</td>
+    </tr>
+    <tr>
+      <td class="px-3 py-2 font-medium">4</td>
+      <td class="px-3 py-2">Deploy dropbear + telnetd to <code>/usr/local/bin/</code>; <code>/etc/dropbear → /var/dropbear</code> symlink</td>
+      <td class="px-3 py-2">Shell access (squashfs is read-only; host keys need writable dir)</td>
+    </tr>
+    <tr>
+      <td class="px-3 py-2 font-medium">5</td>
+      <td class="px-3 py-2">Inject dropbear/telnetd launcher into <code>ipmistack</code> init script</td>
+      <td class="px-3 py-2">Start SSH+telnet after IPMIMain (survives procmgr restarts)</td>
+    </tr>
+    <tr>
+      <td class="px-3 py-2 font-medium">6</td>
+      <td class="px-3 py-2">Patch <code>S07conf-seed.sh</code>: change sysadmin shell to <code>/bin/sh</code>, clear shadow password, create <code>/var/tmp/rc-init-complete</code> early</td>
+      <td class="px-3 py-2">Allow blank-pw SSH; prevent 360s UDS gate delay</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">Files</h2>
+
+<table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden mb-8">
+  <thead class="bg-slate-50">
+    <tr>
+      <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">File</th>
+      <th class="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">Purpose</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-100">
+    <tr><td class="px-3 py-2 mono text-xs">extract.sh</td><td class="px-3 py-2">Carve HPM → bootable artifacts + patch rootfs</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">qemu-patch-rootfs.sh</td><td class="px-3 py-2">Apply all 6 rootfs fixes (called by extract.sh)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">boot-megarac-hpe.sh</td><td class="px-3 py-2">Raw shell boot (init=/bin/sh, no network)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">boot-megarac-hpe-svc.sh</td><td class="px-3 py-2">Full service boot (real init + SLIRP networking)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">start-megarac-hpe-green.sh</td><td class="px-3 py-2">Health-gated cold boot (retries until green)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">snapshot-megarac-hpe.sh</td><td class="px-3 py-2">Capture QMP warm snapshot from green boot</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">restore-megarac-hpe.sh</td><td class="px-3 py-2">Restore from warm snapshot (~10s to green)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">zbmc.box</td><td class="px-3 py-2">Zoo box descriptor (zbmc megarac-hpe &lt;verb&gt;)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">prebuilt/dropbear</td><td class="px-3 py-2">Static musl soft-float ARMv5T SSH server (317K)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">prebuilt/telnetd</td><td class="px-3 py-2">Static ARMv4T mini_telnetd (~10K)</td></tr>
+    <tr><td class="px-3 py-2 mono text-xs">IPMI.html</td><td class="px-3 py-2">IPMI protocol analysis notes</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">Access Quick Reference</h2>
+
+<div class="bg-slate-900 text-slate-100 rounded-lg p-4 mb-8 overflow-x-auto">
+<pre class="mono text-xs leading-relaxed">
+<span style="color:#94a3b8"># Start (warm snapshot, ~10s)</span>
+zbmc megarac-hpe start
+
+<span style="color:#94a3b8"># SSH (root shell)</span>
+zbmc megarac-hpe ssh           <span style="color:#94a3b8"># or: sshpass -p '' ssh sysadmin@10.0.6.66</span>
+
+<span style="color:#94a3b8"># Telnet (root shell, no auth)</span>
+nc 10.0.6.66 23
+
+<span style="color:#94a3b8"># IPMI</span>
+zbmc megarac-hpe ipmi mc info  <span style="color:#94a3b8"># or: zipmi -H 10.0.6.66 -U admin -P superuser mc info</span>
+
+<span style="color:#94a3b8"># Redfish (service root only — protected endpoints broken)</span>
+curl -sk https://10.0.6.66/redfish/v1/
+
+<span style="color:#94a3b8"># Redis (via SSH)</span>
+zbmc megarac-hpe ssh 'redis-cli -s /run/redis/redis.sock KEYS "*HostInterface*"'
+
+<span style="color:#94a3b8"># Console (serial ttyS4)</span>
+zbmc megarac-hpe console
+
+<span style="color:#94a3b8"># RE shell (init=/bin/sh, no network, separate qemu)</span>
+zbmc megarac-hpe shell
+</pre>
+</div>
+
+<!-- ============================================== -->
+<h2 class="text-lg font-semibold text-slate-900 mb-3">Known Issues & Future Work</h2>
+
+<ul class="text-sm text-slate-600 list-disc pl-6 space-y-2 mb-8">
+  <li><b>IPMIMain post-boot death.</b> Background threads still probe absent hardware. Could be fixed by deeper IPMI.conf surgery (disable all sensor scanning, IPMB polling) or by binary-patching <code>libipmimsghndlr.so</code> to NOP the offending thread spawns. The warm snapshot buys time but doesn't prevent the eventual crash.</li>
+  <li><b>Redfish backend providers.</b> These are C binaries (<code>/usr/local/redfish/oem/</code>) that bridge IPMI data to Redfish JSON. They depend on IPMIMain being fully healthy, which it isn't. Until IPMIMain is stabilized, Redfish API testing (including CVE-2024-54085 end-to-end demo) requires real hardware.</li>
+  <li><b>Port 22 collision.</b> Mac's own sshd binds <code>*:22</code>, which answers on the lo0 alias IP (10.0.6.66:22) when QEMU's guest sshd is down. Can look like SSH is up when it's actually the host. Banner check: BMC = <code>SSH-2.0-dropbear_2024.86</code>; Mac = <code>SSH-2.0-OpenSSH_10.2</code>.</li>
+  <li><b>NC-SI.</b> Requires qemu ftgmac100 NC-SI peer implementation. Shared wall across all AST2600 zoo boxes.</li>
+  <li><b>Snapshot staleness.</b> Snapshot was built against a specific rootfs.sqfs. If you re-run <code>extract.sh</code> (re-patching rootfs), the old snapshot boots the old rootfs from its embedded RAM disk. Rebuild with <code>zbmc megarac-hpe snapshot</code> after any rootfs change.</li>
+</ul>
+
+<footer class="text-xs text-slate-400 border-t border-slate-200 pt-4">
+  HPE Cray XD670 BMC &middot; AMI MegaRAC SP-X 13.04 &middot; XD670_BMC_v1.27_signed.bin.hpm &middot;
+  qemu ast2600-evb &middot; zbmc zoo box <code>megarac-hpe</code>
+</footer>
+
+</div>

@@ -4,8 +4,9 @@ Boot real vendor **BMC** (Baseboard Management Controller) firmware under QEMU, 
 (`zbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
 RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
 
-This is the working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
-skill so others can reproduce it on their own images.
+This is my own working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
+skill so others can reproduce it on their own images. C&C very welcome, as are new recipies/methods/improvements
+on what I have here.
 
 > **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `zbmc openbmc start`.
 
