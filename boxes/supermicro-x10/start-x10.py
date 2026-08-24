@@ -8,8 +8,11 @@ eth0 -> bond0, so DHCP never leases. Pexpect connects to the serial UNIX socket,
 sets a valid MAC, assigns the qemu user-net static IP, and adds the default route.
 
 Serial is exposed as a UNIX socket ($SOCK) so `zbmc shell` / `zbmc console` can
-connect interactively via socat after bootstrap completes. Pexpect disconnects
-once networking is configured, freeing the socket for interactive use.
+connect interactively via socat after bootstrap completes. After networking,
+the boot driver patches SSH: bind-mounts a wrapper over /SMASH/msh (dropbear's
+hardcoded login shell) and restarts dropbear, so SSH sessions get /bin/ash
+instead of SMASH-CLP. Pexpect disconnects once patching is done, freeing the
+socket for interactive use.
 
 Prints NET_CONFIGURED when 10.0.8.10:623/udp reaches the guest IPMI, then waits
 for qemu to exit. Kill the qemu (pkill -f supermicrox11-bmc) to stop.
@@ -95,6 +98,21 @@ child.sendline("ifconfig eth0"); child.expect(r"/ #")
 if "10.0.2.15" not in child.before:
     print("NET_CONFIG_FAILED eth0 lost its IP after udhcpc", flush=True)
     qemu_proc.kill(); sys.exit(1)
+
+# Patch SSH: replace SMASH-CLP with a real root shell.
+# Dropbear hardcodes /SMASH/msh as the login shell (not from /etc/passwd).
+# Bind-mount a tiny wrapper over it, then restart dropbear with the correct
+# host key paths so new SSH sessions get /bin/ash instead of SMASH-CLP.
+for cmd in [
+    "cat > /tmp/msh << 'WEOF'\n#!/bin/ash\nexec /bin/ash -l\nWEOF",
+    "chmod +x /tmp/msh",
+    "mount --bind /tmp/msh /SMASH/msh",
+    "killall dropbear",
+    "/usr/local/dropbear/sbin/dropbear -p 22"
+    " -r /nv/dropbear/dropbear_rsa_host_key"
+    " -d /nv/dropbear/dropbear_dss_host_key",
+]:
+    child.sendline(cmd); child.expect(r"/ #", timeout=10)
 
 # Bootstrap done — disconnect socat, freeing the socket for interactive use.
 child.close()
