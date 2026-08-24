@@ -28,6 +28,21 @@ while [ -L "$_src" ]; do
 done
 _SELF="$(cd "$(dirname "$_src")" && pwd)"
 _REPO="$(cd "$_SELF/.." && pwd)"
+
+# --- user network config (zbmc.conf) ---
+# Sourced before any box, so ZBMC_POOL and ZBMC_IP_* are available when zbmc.box sets ZBMC_IP.
+[ -f "$_REPO/zbmc.conf" ] && . "$_REPO/zbmc.conf"
+
+# _zbmc_resolve_ip BOX_NAME POOL_OCTET DEFAULT_IP
+# Priority: ZBMC_IP_<box> (per-box override) > ZBMC_POOL.<octet> > built-in default.
+_zbmc_resolve_ip(){
+  local varname="ZBMC_IP_$(echo "$1" | tr '-' '_')"
+  local override="${!varname:-}"
+  if [ -n "$override" ]; then echo "$override"
+  elif [ -n "${ZBMC_POOL:-}" ]; then echo "${ZBMC_POOL}.$2"
+  else echo "$3"; fi
+}
+
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
@@ -146,6 +161,7 @@ fi
 BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 2; }
 # shellcheck disable=SC1090
 . "$BF"
+export ZBMC_IP ZBMC_HOST ZBMC_NAME
 VERB="${1:-status}"; [ $# -gt 0 ] && shift
 
 running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's IPMI port
@@ -186,8 +202,14 @@ case "$VERB" in
   status)
     _follow=0; [ "${1:-}" = "-f" ] && _follow=1
     while :; do
+      # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
+      printf "%-9s : " "Build"
+      if declare -F zbmc_ready >/dev/null; then
+        _rmsg=$(zbmc_ready 2>/dev/null); _rrc=$?
+      else _rmsg="unknown (no zbmc_ready)"; _rrc=1; fi
+      [ "$_rrc" = 0 ] && echo "${CG}$_rmsg${CZ}" || echo "${CR}$_rmsg${CZ}"
       if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
-      else echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"; exit 1; fi
+      else echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"; [ "$_follow" = 0 ] && exit 1; sleep 15; continue; fi
       # capability rows — probe concurrently, collect, render. Each helper echoes STATE|DISPLAY|NOTE.
       tmp=$(mktemp -d)
       ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &

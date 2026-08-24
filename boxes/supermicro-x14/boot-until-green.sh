@@ -14,7 +14,7 @@
 #
 set -uo pipefail
 cd "$(dirname "$0")"
-IP=10.0.8.14; QEMU=/opt/homebrew/bin/qemu-system-arm; MAX=${1:-8}
+IP="${ZBMC_IP:-10.0.8.14}"; QEMU=/opt/homebrew/bin/qemu-system-arm; MAX=${1:-8}
 ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
 MASKS="systemd.mask=bmc-shared-lan-discovery.service systemd.mask=com.Supermicro.CPLDInit.service \
 systemd.mask=fan-boot-control.service systemd.mask=obmc-flash-bmc-setenv@.service \

@@ -9,7 +9,7 @@
 #        Loopback dev: IP=127.0.0.1 HTTPS_PORT=8443 IPMI_PORT=8623 SSH_PORT=8022 ./restore-megarac-hpe.sh
 set -u
 WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
-IP="${IP:-10.0.6.66}"
+IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 SNAP="${SNAP:-$WD/cray-snap.gz}"; SNAPFLASH="${SNAPFLASH:-$WD/cray-snap-flash.bin}"
 [ -f "$SNAP" ] && [ -f "$SNAPFLASH" ] || { echo "no snapshot ($SNAP / $SNAPFLASH) — run snapshot-megarac-hpe.sh on a green boot first" >&2; exit 1; }

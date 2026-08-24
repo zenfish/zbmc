@@ -14,7 +14,7 @@ IPMI_PORT=623     # root-direct boot binds ZBMC_IP:623 (udp). legacy `net up` re
 WEB_PORT=6443     # -> 443
 
 # `zbmc idrac9 net up` maps standard ports to this loopback IP + /etc/hosts name
-ZBMC_IP=10.0.9.9
+ZBMC_IP=$(_zbmc_resolve_ip idrac9 30 10.0.9.9)
 ZBMC_HOST=drac9
 
 # IPMI/RAKP auth (zipmi client). Primary auth = IPMIKey (-K); calvin is the ssh/redfish pw.
@@ -64,6 +64,10 @@ zbmc_boot() {
 zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
 # snapshot: cold-boot P6 + Redfish bring-up, then freeze to img/ckpt/redfish-200-ready-net.gz (patched
 # qemu, migratable usb-net). Pays the ~15min bring-up ONCE; afterwards `zbmc idrac9 start` restores it.
+zbmc_ready() {
+  [ -f "$ZBMC_DIR/boot/initramfs.p4.xz" ] && { echo "ready (P4 boot artifacts present)"; return 0; }
+  echo "not built — run: zbmc idrac9 build"; return 1
+}
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
 zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
 zbmc_ssh()   { WD="$ZBMC_DIR" "$PROJ_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)

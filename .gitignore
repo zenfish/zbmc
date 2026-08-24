@@ -11,5 +11,6 @@ cin*
 firmware/*
 !firmware/download-fw.sh
 !firmware/.gitkeep
+zbmc.conf
 __pycache__/
 *.pyc

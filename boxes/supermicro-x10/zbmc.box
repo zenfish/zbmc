@@ -37,7 +37,7 @@ X10_MASTER="$_XREPO/firmware/x10-master.flash"
 # on a lo0 alias (qemu under sudo, like x14). zbmc_boot aliases lo0 + primes sudo,
 # then the pexpect driver spawns `sudo -n qemu`. running() greps $PIDF / the 623
 # hostfwd, both now on 10.0.8.10.
-ZBMC_IP=10.0.8.10
+ZBMC_IP=$(_zbmc_resolve_ip supermicro-x10 20 10.0.8.10)
 ZBMC_HOSTPORT=623
 ZBMC_HOST=x10bmc
 
@@ -73,6 +73,10 @@ zbmc_boot() {
 }
 
 zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $X10_MASTER (fetch: firmware/download-fw.sh supermicro-x10; orig BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
+zbmc_ready() {
+  [ -f "$X10_MASTER" ] && { echo "ready (firmware present)"; return 0; }
+  echo "no firmware — run: firmware/download-fw.sh supermicro-x10"; return 1
+}
 
 # ipmi: zipmi password-auth on 10.0.8.10:623 (we WANT zipmi's cipher stack
 # exercised, not ipmitool). Generous timeout — scan probes ~20 suites.

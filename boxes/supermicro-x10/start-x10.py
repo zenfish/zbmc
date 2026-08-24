@@ -35,7 +35,7 @@ MASTER = os.environ.get("X10_MASTER", os.path.join(WD, "x10-master.flash"))     
 BYPASS_SO = os.path.join(SELF, "license_bypass.so")                              # LD_PRELOAD shim
 RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
-HOSTIP   = os.environ.get("X10_HOSTIP", "10.0.8.10")
+HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
 HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
 QEMU     = os.environ.get("X10_QEMU", "/opt/homebrew/bin/qemu-system-arm")
 

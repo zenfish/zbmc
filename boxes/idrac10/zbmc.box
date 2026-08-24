@@ -10,7 +10,7 @@ PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac10}"
 
 # Real IP + /etc/hosts name (idrac10 = 10.0.9.10 in the 10.0.9.x scheme). Ports are bound directly.
-ZBMC_IP=10.0.9.10
+ZBMC_IP=$(_zbmc_resolve_ip idrac10 31 10.0.9.10)
 ZBMC_HOST=drac10
 
 # IPMI/RAKP (zipmi). Primary auth = IPMIKey (-K); calvin is the ssh/redfish pw.
@@ -81,6 +81,14 @@ zbmc_boot() {
   echo "$qp"
 }
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
+zbmc_ready() {
+  local d="$ZBMC_DIR"
+  if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/img/sd.img" ]; then
+    [ -f "$d/ckpt/state.gz" ] && { echo "ready (warm snapshot)"; return 0; }
+    echo "ready (cold boot only)"; return 0
+  fi
+  echo "not built — need boot/Image.boot-patched + img/sd.img"; return 1
+}
 # snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-live-ckpt.sh" "${1:-4}"; }

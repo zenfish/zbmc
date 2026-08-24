@@ -18,7 +18,7 @@
 #
 set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
-IP=10.0.8.14
+IP="${ZBMC_IP:-10.0.8.14}"
 ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f /tmp/x14.sock /tmp/x14-qmp.sock

@@ -1,0 +1,35 @@
+# zbmc.conf — optional network configuration for the virtual BMC zoo.
+# Copy to zbmc.conf (gitignored) and uncomment what you need.
+#
+# By default, zbmc uses 10.0.{6,7,8,9}.x addresses (lo0 aliases).
+# If your network already owns 10/8, set ZBMC_POOL to relocate
+# every box into a single /24 you control.
+
+# --- Pool mode: all boxes share one /24 prefix ---
+# Uncomment and set to your free /24 prefix (first 3 octets).
+# Each box gets a fixed last octet (see table below).
+#
+# ZBMC_POOL=192.168.9
+#
+# Allocation table (last octet, deterministic):
+#   .10  openbmc           (vanilla upstream OpenBMC baseline)
+#   .11  nvidia-obmc       (NVIDIA GB200 OpenBMC)
+#   .20  supermicro-x10    (Supermicro X10 ATEN/AST2400)
+#   .21  supermicro-x14    (Supermicro X14 OpenBMC/AST2600)
+#   .30  idrac9            (Dell iDRAC9 NPCM750)
+#   .31  idrac10           (Dell iDRAC10 NPCM845)
+#   .40  megarac-hpe       (AMI MegaRAC SP-X / HPE XD670)
+#   .50  advantech-asmb787 (Advantech ASMB-787 MegaRAC SP-X 4.0)
+
+# --- Per-box override: set any individual box IP ---
+# These override both the pool and the box's built-in default.
+# Use when you only have a few free IPs or need non-contiguous addresses.
+#
+# ZBMC_IP_openbmc=192.168.1.100
+# ZBMC_IP_nvidia_obmc=192.168.1.101
+# ZBMC_IP_supermicro_x10=192.168.1.102
+# ZBMC_IP_supermicro_x14=192.168.1.103
+# ZBMC_IP_idrac9=192.168.1.104
+# ZBMC_IP_idrac10=192.168.1.105
+# ZBMC_IP_megarac_hpe=192.168.1.106
+# ZBMC_IP_advantech_asmb787=192.168.1.107

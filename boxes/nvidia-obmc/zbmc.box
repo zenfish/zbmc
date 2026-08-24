@@ -12,7 +12,7 @@ PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
 ZBMC_DIR="$_XREPO/firmware"
 
-ZBMC_IP=10.0.7.20        # 10.0.7.* = OpenBMC BMCs (10.0.8.* reserved for Supermicro)
+ZBMC_IP=$(_zbmc_resolve_ip nvidia-obmc 11 10.0.7.20)
 ZBMC_HOST=nvidia-obmc
 
 # ssh/redfish creds (Phosphor default on this build)
@@ -48,6 +48,10 @@ zbmc_boot() {
   echo "$qp"
 }
 zbmc_build() { echo "gb200 image is bitbake-built (MACHINE=gb200nvl-obmc) on dell; not a local rebuild. See reference_nvidia_oem_ipmi."; }
+zbmc_ready() {
+  [ -f "$ZBMC_DIR/obmc-phosphor-image-gb200nvl-obmc.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
+  echo "no firmware — run: firmware/download-fw.sh nvidia-obmc"; return 1
+}
 
 # ssh: password auth (Phosphor root/0penBmc). Real Linux shell (busybox).
 zbmc_ssh() {

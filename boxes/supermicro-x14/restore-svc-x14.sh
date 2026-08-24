@@ -10,7 +10,7 @@
 #
 set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
-SNAP="${1:-svc-snap.gz}"; IP=10.0.8.14
+SNAP="${1:-svc-snap.gz}"; IP="${ZBMC_IP:-10.0.8.14}"
 [ -f "$SNAP" ] || { echo "no snapshot at $SNAP — run snapshot-x14.sh first"; exit 1; }
 ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2

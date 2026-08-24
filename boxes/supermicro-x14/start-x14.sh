@@ -37,7 +37,7 @@
 #
 set -euo pipefail
 cd "$(dirname "$0")"
-IP=10.0.8.14
+IP="${ZBMC_IP:-10.0.8.14}"
 QEMU=/opt/homebrew/bin/qemu-system-arm
 
 # ensure the loopback alias exists (idempotent)

@@ -8,17 +8,18 @@
 set -u
 SELF="$(cd "$(dirname "$0")" && pwd)"   # scripts live here (repo box dir)
 WD="${WD:-$SELF}"; export WD          # artifacts/logs (env override; default self)
+IP="${ZBMC_IP:-10.0.8.10}"; export X10_HOSTIP="$IP"
 LOG="$WD/x10-start.log"; mkdir -p "$WD"
 
-if pgrep -f "hostfwd=udp:10.0.8.10:623-:623" >/dev/null 2>&1; then
-  pgrep -f "hostfwd=udp:10.0.8.10:623-:623" | head -1; exit 0
+if pgrep -f "hostfwd=udp:$IP:623-:623" >/dev/null 2>&1; then
+  pgrep -f "hostfwd=udp:$IP:623-:623" | head -1; exit 0
 fi
 
 : > "$LOG"
 nohup python3 "$SELF/start-x10.py" >>"$LOG" 2>&1 &
 for _ in $(seq 1 60); do
   if grep -q NET_CONFIGURED "$LOG" 2>/dev/null; then
-    pgrep -f "hostfwd=udp:10.0.8.10:623-:623" | head -1; exit 0
+    pgrep -f "hostfwd=udp:$IP:623-:623" | head -1; exit 0
   fi
   pgrep -f supermicrox11-bmc >/dev/null 2>&1 || { echo "x10 qemu died — see $LOG" >&2; exit 1; }
   sleep 3

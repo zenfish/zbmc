@@ -13,7 +13,7 @@
 #
 set -euo pipefail
 cd "$(dirname "$0")"
-IP=10.0.8.14
+IP="${ZBMC_IP:-10.0.8.14}"
 STATE=ckpt/state.gz
 [ -f "$STATE" ] || { echo "no checkpoint at $STATE — run a cold boot + checkpoint.py first"; exit 1; }
 ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP"

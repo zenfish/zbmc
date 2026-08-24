@@ -49,7 +49,7 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/megarac-hpe}"
 # sudo — the x14/x10 root-direct model. The old "SLIRP mangles RMCP+ on an alias" note was WRONG:
 # measured 2026-08-18, RMCP+ mc info + Redfish both work fine on 10.0.6.66 (same as x14/x10). (ssh is a
 # separate guest-sshd bug, not a slirp issue — see header.)
-ZBMC_IP=10.0.6.66
+ZBMC_IP=$(_zbmc_resolve_ip megarac-hpe 40 10.0.6.66)
 ZBMC_HOST=megarac-hpe
 
 # IPMI/Redfish auth = the MegaRAC default IPMI user 'admin'/'superuser' (auto-provisioned by IPMIMain
@@ -87,7 +87,7 @@ zbmc_boot() {
     env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
   else
     [ -f "$ZBMC_DIR/cray-snap.gz" ] || echo "no snapshot — cold retry (flaky; ~minutes)" >&2
-    env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1
+    env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1 || return 1
   fi
   local n=0 qp=; while [ $n -lt 40 ]; do
     qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break
@@ -100,6 +100,12 @@ zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-megarac-hpe.sh" "$@"; 
 zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
 
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
+zbmc_ready() {
+  local d="$ZBMC_DIR"
+  if [ -f "$d/cray-snap.gz" ] && [ -f "$d/cray-snap-flash.bin" ]; then echo "ready (warm snapshot)"; return 0; fi
+  [ -f "$d/mtdflash.bin" ] && { echo "ready (cold boot only — no snapshot)"; return 0; }
+  echo "not built — run: zbmc megarac-hpe build"; return 1
+}
 
 # console: attach to the LIVE serial. The restore path (default) puts the getty on a ROOT-OWNED unix
 # socket (cray.sock) — must attach with `sudo socat`, NOT tail the log (svc.log is only written by the
@@ -149,12 +155,12 @@ zbmc_ipmi_health() {
 # ssh: dropbear on port 22, sysadmin/blank (musl soft-float ARMv5T static; -B blank-pw flag).
 # Telnet (no auth): nc 10.0.6.66 23 (mini_telnetd on port 23, direct /bin/sh, uid=0).
 zbmc_ssh() {
+  local ssh_opts=(-o ConnectTimeout=3 -o ConnectionAttempts=1 -o ServerAliveInterval=2 -o ServerAliveCountMax=1
+                  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
   if [ $# -gt 0 ]; then
-    sshpass -p '' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -p "$SSH_PORT" "${SSH_USER}@${ZBMC_IP}" "$@" 2>/dev/null
+    sshpass -p '' ssh "${ssh_opts[@]}" -p "$SSH_PORT" "${SSH_USER}@${ZBMC_IP}" "$@" 2>/dev/null
   else
-    sshpass -p '' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -p "$SSH_PORT" "${SSH_USER}@${ZBMC_IP}"
+    sshpass -p '' ssh "${ssh_opts[@]}" -p "$SSH_PORT" "${SSH_USER}@${ZBMC_IP}"
   fi
 }
 zbmc_telnet() {

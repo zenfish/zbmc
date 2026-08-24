@@ -30,7 +30,7 @@ PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"   # work/advantech-asmb787/
 
 # Loopback + high ports (5xxx is cray's; asmb787 uses 6xxx to avoid collision).
-ZBMC_IP=127.0.0.1
+ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 127.0.0.1)
 ZBMC_HOST=asmb787bmc
 ZBMC_HINT='zbmc asmb787 console   (login sysadmin/superuser; ext Redfish/IPMI WIP — NC-SI responder)'
 IPMI_USER=admin
@@ -60,6 +60,10 @@ zbmc_boot() {
   [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+zbmc_ready() {
+  [ -f "$ZBMC_DIR/mtdflash.bin" ] && { echo "ready (built)"; return 0; }
+  echo "not built — run: zbmc advantech-asmb787 build"; return 1
+}
 
 # console: no args = live tail. With a command, AUTO-LOGIN once (getty at 'login:'), then run it.
 # Waits for each prompt (login:/Password:/shell) rather than fixed sleeps — robust under emulation load.

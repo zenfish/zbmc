@@ -27,7 +27,7 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/supermicro-x14}"
 SNAP=svc-snap-shell.gz   # canonical warm snapshot: IPMI + Redfish + interactive SSH shell
 
 # Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
-ZBMC_IP=10.0.8.14
+ZBMC_IP=$(_zbmc_resolve_ip supermicro-x14 21 10.0.8.14)
 ZBMC_HOST=x14bmc
 
 # IPMI: password auth via zipmi (ADMIN:ADMIN). IPMI_KEY unused but kept for the
@@ -74,6 +74,14 @@ zbmc_boot() {
 }
 
 zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bin/initramfs-patched.bin + the .gz snapshots are prebuilt. Cold shell: ZBMC_COLD=1 zbmc x14 start"; }
+zbmc_ready() {
+  local d="$ZBMC_DIR"
+  if [ -f "$d/kernel.bin" ] && [ -f "$d/initramfs-patched.bin" ]; then
+    [ -f "$d/$SNAP" ] && { echo "ready (warm snapshot)"; return 0; }
+    echo "ready (cold boot only — no snapshot)"; return 0
+  fi
+  echo "not built — need kernel.bin + initramfs-patched.bin in work/"; return 1
+}
 
 # snapshot: QMP-checkpoint the running instance to a gz (pauses the VM — restore to resume).
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-x14.sh" "${1:-$SNAP}"; }
