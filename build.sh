@@ -14,6 +14,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 want=(); listonly=0
 for a in "$@"; do case "$a" in --list|-l) listonly=1;; *) want+=("$a");; esac; done
 
+# stub dispatcher helpers so zbmc.box files can source without error
+_zbmc_resolve_ip() { echo "${3:-127.0.0.1}"; }; export -f _zbmc_resolve_ip
+_zbmc_lo_alias() { :; }; export -f _zbmc_lo_alias
+
 built=(); skipped=(); failed=()
 for boxdir in "$HERE"/boxes/*/; do
   box="$(basename "$boxdir")"
@@ -32,7 +36,7 @@ for boxdir in "$HERE"/boxes/*/; do
   if [ -f "$boxdir/zbmc.box" ]; then
     (ZBMC_DIR="$HERE/work/$box"; export ZBMC_DIR; . "$boxdir/zbmc.box"; \
      declare -F zbmc_ready >/dev/null && zbmc_ready >/dev/null 2>&1) && {
-      built+=("$box  (already built)")
+      echo "SKIP    ✓ $box  (already built)"
       continue
     }
   fi
