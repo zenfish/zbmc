@@ -185,9 +185,14 @@ cat > "$R/etc/rcS.d/S07conf-seed.sh" <<'CONFSEED'
 # /conf is mounted by S06mountall.sh; /etc/defconfig has BMC1/ast2600evb_ami/, pam_withunix, pam_wounix.
 if [ ! -f /conf/AMI ]; then
     cp -a /etc/defconfig/* /conf/ 2>/dev/null || true
-    ln -sfn BMC1/ast2600evb_ami /conf/BMC
     touch /conf/AMI
 fi
+# The flash template and warm snapshots may already contain /conf/AMI plus an older
+# generated IPMI.conf.  In that case the bulk seed above correctly stays out of the
+# way, but the emulation-safe interface mask must still win on every boot.
+ln -sfn BMC1/ast2600evb_ami /conf/BMC
+cp -f /etc/defconfig/BMC1/ast2600evb_ami/IPMI.conf \
+      /conf/BMC1/ast2600evb_ami/IPMI.conf 2>/dev/null || true
 # Unconditional: fix sysadmin shell + blank password regardless of whether the bulk seed ran.
 # Required so warm snapshots from stale /conf don't block dropbear SSH (defshell is rejected;
 # unknown pw hash prevents blank-password login even with dropbear -B).

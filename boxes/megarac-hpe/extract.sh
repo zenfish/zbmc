@@ -45,11 +45,15 @@ echo "[*] patching rootfs for qemu (conf-seed + /conf/BMC symlink + disable hw-l
 # -all-root: unsquashfs loses root ownership on macOS, so force uid/gid 0 on repack.
 PROJ="$(cd "$(dirname "$0")" && pwd)"
 mv -f rootfs.sqfs rootfs.sqfs.orig            # the raw carved rootfs (untouched original)
-chmod -R u+rwX rootfs 2>/dev/null; rm -rf rootfs
+if [ -d rootfs ]; then
+  chmod -R u+rwX rootfs 2>/dev/null || true
+  rm -rf rootfs
+fi
 unsquashfs -f -d rootfs rootfs.sqfs.orig >/dev/null
 bash "$PROJ/qemu-patch-rootfs.sh" rootfs
 mksquashfs rootfs rootfs.sqfs -comp xz -b 131072 -all-root -noappend -quiet   # -> the rootfs we boot
-chmod -R u+rwX rootfs 2>/dev/null; rm -rf rootfs rootfs.sqfs.orig
+chmod -R u+rwX rootfs 2>/dev/null || true
+rm -rf rootfs rootfs.sqfs.orig
 
 echo "[*] building 64 MB NOR image (FMC w25q512jv) with NAMED mtd partitions"
 # mountall.sh finds /conf & /bkupconf by NAME in /proc/mtd, so the mtdparts= names on the kernel

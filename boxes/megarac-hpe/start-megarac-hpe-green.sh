@@ -12,7 +12,7 @@
 # ENV: WD (workdir/artifacts), IP (bind IP), HTTPS_PORT/IPMI_PORT (default 443/623), TRIES (default 4).
 set -u
 WD="${WD:-/Volumes/xxx/src/me/git/vbmc-lab/work/megarac-hpe}"
-IP="${IP:-10.0.6.66}"
+IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 TRIES="${TRIES:-4}"
 PROJ="$(cd "$(dirname "$0")" && pwd)"
@@ -24,21 +24,36 @@ kill_qemu(){ $SUDO pkill -f 'hostname=megarac-hpe' 2>/dev/null; pkill -f "tail -
 
 for t in $(seq 1 "$TRIES"); do
   echo "[green] boot attempt $t/$TRIES" >&2
+  if [ "$t" -gt 1 ] && [ -f "$LOG" ]; then
+    cp -f "$LOG" "$WD/svc-attempt-$((t-1)).log"
+  fi
   kill_qemu
   HTTPS_PORT="$HTTPS_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" IPMI_PORT="$IPMI_PORT" BG=1 IP="$IP" WD="$WD" \
     bash "$PROJ/boot-megarac-hpe-svc.sh" >/dev/null 2>&1
-  # watch up to ~300s: crash-loop (SEGV>=6) -> reroll; once init_done+Redfish-ready, poll IPMI/Redfish
+  # watch up to ~300s; once init_done+Redfish-ready, poll authenticated Redfish.
   # health (RMCP+ + provisioning are slow under emulation) until it passes or the window ends.
-  # A healthy boot is SEGV=0; SEGV>=3 means IPMIMain is respawn-looping and won't serve -> reroll fast.
+  # The console always contains unrelated bare "Segmentation fault" lines from early
+  # SKU/FRU helpers, so those are not evidence that IPMIMain died.  IPMIMain redirects
+  # stderr and records its own faults in crit.log; the external authenticated health
+  # check below is the authoritative gate.
   ok=0
   for i in $(seq 1 100); do
     sleep 3
-    # procmgr respawns run without >/dev/null redirect, so shell prints "Segmentation fault" to svc.log.
-    # IPMIMain's own signal handler writes "received SIGSEGV" to crit.log via syslog — NOT svc.log.
-    segv=$(grep -c 'Segmentation fault' "$LOG" 2>/dev/null || true); segv=${segv:-0}
-    boot_fail=$(grep -c 'Boot CompleteCheck ipmi or rest: FAIL' "$LOG" 2>/dev/null || true)
-    [ "$segv" -ge 1 ] || [ "${boot_fail:-0}" -ge 1 ] && { echo "[green] attempt $t crash-loop (SEGV=$segv fail=$boot_fail) — reroll" >&2; break; }
-    if [ "$segv" -eq 0 ] && grep -q 'ipmimain_init_done' "$LOG" 2>/dev/null && grep -q 'Redfish Server ready' "$LOG" 2>/dev/null; then
+    # Once dropbear is reachable, use IPMIMain's own signal-handler record as the
+    # authoritative fast-fail.  This avoids waiting the full five-minute window on
+    # a proven-dead attempt while ignoring unrelated SKU/FRU console segfaults.
+    if timeout -s KILL 6 sshpass -p '' ssh \
+         -o ConnectTimeout=2 -o ConnectionAttempts=1 \
+         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+         -p "$SSH_PORT" "sysadmin@$IP" \
+         'grep -q "IPMIMain.*MsgHndlr.*SIGSEGV" /var/log/crit.log' 2>/dev/null; then
+      echo "[green] attempt $t: confirmed IPMIMain MsgHndlr SIGSEGV — reroll" >&2
+      break
+    fi
+    # The firmware's own boot-complete check can report FAIL before LAN provisioning
+    # finishes.  Record it in the console log, but do not treat that transient as a
+    # terminal result; authenticated Redfish below is the actual readiness gate.
+    if grep -q 'ipmimain_init_done' "$LOG" 2>/dev/null && grep -q 'Redfish Server ready' "$LOG" 2>/dev/null; then
       # Poke RMCP+ once — IPMIMain's LAN init is lazy under emulation; a single UDP packet
       # triggers it and causes admin/superuser provisioning into UserConfig.ini. Without this,
       # no user exists and Redfish returns AccessDenied. python3+socket is always available.
@@ -58,7 +73,7 @@ s.settimeout(2); s.sendto(pkt, ('$IP', $IPMI_PORT)); s.close()
   done
   if [ "$ok" = 1 ]; then
     qp=$(pgrep -f "hostfwd=udp:$IP:$IPMI_PORT-:623" | head -1)
-    echo "[green] HEALTHY on attempt $t (SEGV=$segv) — qemu $qp" >&2
+    echo "[green] HEALTHY on attempt $t — qemu $qp" >&2
     echo "$qp"; exit 0
   fi
 done
