@@ -421,7 +421,10 @@ root, running = sys.argv[1], sys.argv[2] == "1"
 p = os.path.join(root, "result.json")
 if os.path.exists(p):
     r = json.load(open(p, encoding="utf-8"))
-    print(f'{r["state"]}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
+    tp0 = os.path.join(root, "termination.json")
+    t0 = json.load(open(tp0, encoding="utf-8")) if os.path.exists(tp0) else None
+    state0 = t0["state"] if t0 else r["state"]
+    print(f'{state0}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
 else:
     print('in progress')
 print(f'Evidence  : {root}')
