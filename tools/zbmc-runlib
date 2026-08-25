@@ -317,6 +317,12 @@ _zr_wait_ready(){
     _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
     if ! ps -p "$_zr_pid" >/dev/null 2>&1; then
       _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure; _zr_capture_stop
+      if [ -f "$ZBMC_RUN_DIR/stop-requested" ]; then
+        _zr_event STOPPED stopped "operator requested shutdown"
+        _zr_result stopped STOPPED "operator requested shutdown"
+        echo "Evidence: $ZBMC_RUN_DIR"
+        return 130
+      fi
       local _zr_tail; _zr_tail=$(tail -n 3 "${LOG:-/dev/null}" 2>/dev/null | tr '\n' ' ')
       _zr_event FAILED failed "QEMU pid $_zr_pid exited after ${_zr_elapsed_s}s" "$_zr_tail"
       _zr_result failed "$_zr_highest" 'QEMU exited before readiness'
@@ -505,6 +511,7 @@ _zr_evidence(){
 
 _zr_stop_current_run(){
   _zr_load "" 2>/dev/null || return 0
+  : >"$ZBMC_RUN_DIR/stop-requested"
   if [ -s "$ZBMC_RUN_DIR/health-watch.pid" ]; then kill "$(cat "$ZBMC_RUN_DIR/health-watch.pid")" 2>/dev/null || true; fi
   _zr_capture_stop
   _zr_archive_logs
