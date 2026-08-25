@@ -430,6 +430,8 @@ if not running and os.path.exists(events):
         from datetime import datetime
         when = datetime.fromtimestamp(int(last["time_epoch"])).astimezone().isoformat(timespec="seconds")
         print(f'Run end   : {when} — {last.get("stage", "event")} {last.get("state", "")}'.rstrip())
+        if not os.path.exists(tp) and last.get("stage") == "STOPPED":
+            print(f'Run result: stopped — {last.get("message", "operator shutdown")}')
     except Exception:
         pass
 hp = os.path.join(root, "health.json")
