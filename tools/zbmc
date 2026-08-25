@@ -68,6 +68,15 @@ _zbmc_pick_port(){
 }
 export -f _zbmc_pick_port
 
+_zbmc_duration(){
+  local s="${1:-0}" d h m
+  if [ "$s" -lt 60 ]; then printf '%ss' "$s"; return; fi
+  if [ "$s" -lt 3600 ]; then printf '%s min%s' "$((s/60))" " $((s%60)) secs"; return; fi
+  if [ "$s" -lt 86400 ]; then printf '%s hour%s' "$((s/3600))" " $(((s%3600)/60)) mins"; return; fi
+  d=$((s/86400)); h=$(((s%86400)/3600)); printf '%s day%s' "$d" " $h hours"
+}
+export -f _zbmc_duration
+
 # _zbmc_lo_alias IP — add an IP to the loopback interface (idempotent, cross-platform).
 _zbmc_lo_alias(){
   local ip="$1" SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -394,13 +403,15 @@ case "$VERB" in
     while :; do
       _qpid=; _running=0
       if _qpid=$(running 2>/dev/null); then _running=1; fi
-      printf "%-9s : %s\n" "Observed" "$(date '+%Y-%m-%dT%H:%M:%S%z (%Z)')"
-      [ "$ZBMC_DETAIL" -gt 1 ] && printf "%-9s : %s\n" "Observed epoch" "$(date +%s)"
       if [ "$_running" = 1 ]; then
-        echo "QEMU      : ${CG}UP${CZ} (pid $_qpid, $(ps -p "$_qpid" -o etime= | tr -d ' '))"
+        _up_s=$(ps -p "$_qpid" -o etimes= 2>/dev/null | tr -d ' ')
+        if ! [[ "$_up_s" =~ ^[0-9]+$ ]]; then _up_s=0; fi
+        echo "QEMU      : ${CG}UP${CZ} (up for $(_zbmc_duration "$_up_s"); pid $_qpid)"
       else
         echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"
       fi
+      printf "%-9s : %s\n" "Observed" "$(date '+%Y-%m-%dT%H:%M:%S%z (%Z)')"
+      [ "$ZBMC_DETAIL" -gt 1 ] && printf "%-9s : %s\n" "Observed epoch" "$(date +%s)"
       if _zr_load "" 2>/dev/null; then
         _run_label="Last run"; [ "$_running" = 1 ] && _run_label="Current run"
         printf "%-9s : " "$_run_label"
