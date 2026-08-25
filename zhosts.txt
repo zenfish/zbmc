@@ -1,10 +1,10 @@
 # Canonical virtual-BMC address map. Names are internal identifiers; operators
 # and generated commands use the IP address. Keep names and addresses unique.
-openbmc              10.250.0.10
-nvidia-obmc          10.250.0.11
-supermicro-x10       10.250.0.20
-supermicro-x14       10.250.0.21
-idrac9               10.250.0.30
-idrac10              10.250.0.31
-megarac-hpe          10.250.0.40
-advantech-asmb787    10.250.0.50
+openbmc              10.0.7.10
+nvidia-obmc          10.0.7.20
+supermicro-x10       10.0.8.10
+supermicro-x14       10.0.8.14
+idrac9               10.0.9.9
+idrac10              10.0.9.10
+megarac-hpe          10.0.6.66
+advantech-asmb787    10.0.10.10

@@ -33,13 +33,25 @@ SSH_USER=root
 SSH_PASS=0penBmc
 IPMI_USER=root
 IPMI_PW=0penBmc
-SSH_PORT=$(_zbmc_pick_port 22 2222)
-WEB_PORT=$(_zbmc_pick_port 443 8443)
+SSH_PORT=22
+WEB_PORT=443
 IPMI_PORT=623
 
-PIDF=/tmp/zbmc-openbmc.pid
-LOG=/tmp/zbmc-openbmc-console.log
-SOCK=/tmp/zbmc-openbmc-serial.sock
+PIDF="$ZBMC_DIR/zbmc-openbmc.pid"
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/serial.sock"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
+CONSOLE_LOG="$LOG"
+OPENBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+export OPENBMC_QEMU
+ZBMC_CAPTURE_INTERFACES="br-zbmc"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
+ZBMC_STABILITY_SECONDS=60
+ZBMC_READY_DEADLINE=360
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
+ZBMC_EXPECTED_FIRMWARE=5
+ZBMC_EXPECTED_L2=90
+ZBMC_EXPECTED_READY=270
 
 zbmc_boot() {
   cd "$ZBMC_DIR" || return 1
@@ -47,16 +59,17 @@ zbmc_boot() {
   [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
-  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
-    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null
-  # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
-  # -serial unix:$SOCK is serial0 = the AST2600 console (ttyS4 getty). Do NOT prepend -serial null.
-  $SUDO nohup qemu-system-arm -M ast2600-evb -smp 2 -m 1G -display none \
+  mkdir -p "$ZBMC_DIR"
+  : > "$LOG"; $SUDO rm -f "$SOCK" "$QMP_SOCK" 2>/dev/null
+  $SUDO nohup "$OPENBMC_QEMU" -M ast2600-evb -smp 2 -m 1G -display none -monitor none \
+    -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
-    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
+    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=openbmc \
     -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  local qp= n=0; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "ast2600-evb.*hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.5; n=$((n+1)); done
+  [ -n "$qp" ] && echo "$qp" > "$PIDF"
   echo "$qp"
 }
 zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $ZBMC_DIR/evb-ast2600.static.mtd"; }
@@ -90,4 +103,5 @@ zbmc_web() { echo "Redfish: curl -sk -u root:0penBmc https://$ZBMC_IP/redfish/v1
 # interactive console on the qemu serial socket (AST2600 ttyS4; escape = Ctrl-]). Root console shell.
 zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
   echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
-ZBMC_READY_GREP='login:'
+ZBMC_READY_GREP=''
+ZBMC_PROBE_AFTER_BOOTSTRAP=0

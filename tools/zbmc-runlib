@@ -239,6 +239,40 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
+_zr_health_watch(){
+  local _zr_pid="$1" _zr_interval="${ZBMC_HEALTH_INTERVAL:-30}" _zr_start="$ZBMC_RUN_START_EPOCH"
+  printf '%s\n' "$$" >"$ZBMC_RUN_DIR/health-watch.pid"
+  while ps -p "$_zr_pid" >/dev/null 2>&1; do
+    local _zr_now; _zr_now=$(_zr_now)
+    local _zr_tmp="$ZBMC_RUN_DIR/.health.$$"; mkdir -p "$_zr_tmp"
+    _zr_probe_service ssh "$_zr_tmp/ssh" & local p1=$!
+    _zr_probe_service ipmi "$_zr_tmp/ipmi" & local p2=$!
+    _zr_probe_service redfish "$_zr_tmp/redfish" & local p3=$!
+    _zr_probe_service console "$_zr_tmp/console" & local p4=$!
+    wait "$p1" "$p2" "$p3" "$p4" 2>/dev/null || true
+    python3 - "$ZBMC_RUN_DIR/health.json" "$ZBMC_RUN_DIR/health.jsonl" "$ZBMC_RUN_ID" "$ZBMC_IP" "$_zr_now" "$_zr_start" "$ZBMC_REQUIRED_SERVICES" "$_zr_tmp" <<'PY'
+import json, os, sys
+snapshot, journal, run_id, ip, now, start, required, tmp = sys.argv[1:]
+checks = {}
+for name in ("ssh", "ipmi", "redfish", "console"):
+    p = os.path.join(tmp, name)
+    text = open(p, encoding="utf-8").read().strip() if os.path.exists(p) else "fail||missing probe"
+    parts = text.split("|", 2)
+    checks[name] = {"state": parts[0], "display": parts[1] if len(parts)>1 else "", "detail": parts[2] if len(parts)>2 else ""}
+state = "ready" if all(checks.get(x, {}).get("state") == "ok" for x in required.split()) else "degraded"
+doc = {"run_id": run_id, "target_ip": ip, "observed_epoch": int(now), "run_uptime_seconds": int(now)-int(start), "state": state, "required": required.split(), "checks": checks}
+tmpout = snapshot + ".tmp"
+with open(tmpout, "w", encoding="utf-8") as f:
+    json.dump(doc, f, sort_keys=True); f.write("\n")
+os.replace(tmpout, snapshot)
+with open(journal, "a", encoding="utf-8") as f: f.write(json.dumps(doc, sort_keys=True) + "\n")
+PY
+    rm -rf "$_zr_tmp"
+    sleep "$_zr_interval"
+  done
+  rm -f "$ZBMC_RUN_DIR/health-watch.pid"
+}
+
 _zr_probe_service(){ # service output-file
   case "$1" in
     ssh) _probe_ssh >"$2";;
@@ -382,6 +416,7 @@ _zr_wait_ready(){
         _zr_timing READY "$_zr_elapsed_s"
         _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
         _zr_result ready READY ''
+        ( trap '' HUP; _zr_health_watch "$_zr_pid" ) >/dev/null 2>&1 &
         echo "Evidence: $ZBMC_RUN_DIR"
         return 0
       fi
@@ -451,6 +486,7 @@ _zr_evidence(){
 
 _zr_stop_current_run(){
   _zr_load "" 2>/dev/null || return 0
+  if [ -s "$ZBMC_RUN_DIR/health-watch.pid" ]; then kill "$(cat "$ZBMC_RUN_DIR/health-watch.pid")" 2>/dev/null || true; fi
   _zr_capture_stop
   _zr_archive_logs
   _zr_qmp_snapshot

@@ -405,6 +405,10 @@ if os.path.exists(p):
 else:
     print('in progress')
 print(f'Evidence  : {root}')
+hp = os.path.join(root, "health.json")
+if os.path.exists(hp):
+    h = json.load(open(hp, encoding="utf-8"))
+    print(f'Health watch: {h["state"]}, run age={h["run_uptime_seconds"]}s, observed={h["observed_epoch"]}')
 PY
       fi
       # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
