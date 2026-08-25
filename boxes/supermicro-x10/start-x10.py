@@ -59,6 +59,7 @@ import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
 QEMU_PLUGIN = os.environ.get("X10_QEMU_PLUGIN", "")
+FTGMAC_GUARD = os.environ.get("X10_FTGMAC_GUARD", "")
 QEMU_DEBUG = os.environ.get("X10_QEMU_DEBUG", "guest_errors,unimp,cpu_reset")
 
 _sh.copyfile(MASTER, RUN)
@@ -92,6 +93,8 @@ qemu_cmd = [
 ]
 if QEMU_PLUGIN:
     qemu_cmd += ["-plugin", QEMU_PLUGIN]
+if FTGMAC_GUARD:
+    qemu_cmd += ["-global", f"ftgmac100.guard={FTGMAC_GUARD}"]
 if NET_MODE == "direct":
     qemu_cmd += [
         # Bridge both AST2400 MACs so controller ordering cannot silently put
