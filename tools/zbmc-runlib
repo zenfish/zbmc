@@ -254,9 +254,11 @@ PY
 
 _zr_health_watch(){
   local _zr_pid="$1" _zr_interval="${ZBMC_HEALTH_INTERVAL:-30}" _zr_start="$ZBMC_RUN_START_EPOCH"
-  printf '%s\n' "$$" >"$ZBMC_RUN_DIR/health-watch.pid"
+  local _zr_self="${BASHPID:-$$}"
+  printf '%s\n' "$_zr_self" >"$ZBMC_RUN_DIR/health-watch.pid"
   while ps -p "$_zr_pid" >/dev/null 2>&1; do
     local _zr_now; _zr_now=$(_zr_now)
+    printf '%s\n' "$_zr_now" >"$ZBMC_RUN_DIR/health-watch-heartbeat"
     local _zr_tmp="$ZBMC_RUN_DIR/.health.$$"; mkdir -p "$_zr_tmp"
     _zr_probe_service ssh "$_zr_tmp/ssh" & local p1=$!
     _zr_probe_service ipmi "$_zr_tmp/ipmi" & local p2=$!
@@ -433,7 +435,7 @@ _zr_wait_ready(){
         printf '%s\n' "$_zr_now_epoch" >"$ZBMC_RUN_DIR/ready-epoch"
         _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
         _zr_result ready READY ''
-        ( trap '' HUP; _zr_health_watch "$_zr_pid" ) >/dev/null 2>&1 &
+        ( trap '' HUP TERM; _zr_health_watch "$_zr_pid" ) </dev/null >/dev/null 2>&1 &
         echo "Evidence: $ZBMC_RUN_DIR"
         return 0
       fi
