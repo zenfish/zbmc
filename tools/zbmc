@@ -394,7 +394,8 @@ case "$VERB" in
     while :; do
       printf "%-9s : %s\n" "Observed" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       if _zr_load "" 2>/dev/null; then
-        printf "%-9s : " "Last run"
+        _run_label="Last run"; running >/dev/null 2>&1 && _run_label="Current run"
+        printf "%-9s : " "$_run_label"
         python3 - "$ZBMC_RUN_DIR" <<'PY'
 import json, os, sys
 root = sys.argv[1]
