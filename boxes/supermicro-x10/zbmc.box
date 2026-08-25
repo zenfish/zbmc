@@ -78,6 +78,7 @@ ZBMC_STABILITY_SECONDS=60
 ZBMC_TIMING_PROFILE=stable60-v1
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
 ZBMC_CAPTURE_INTERFACES="br-zbmc $X10_TAP $X10_AUX_TAP"
+ZBMC_SYSLOG_PORT=5514
 # Initial expectations come from prior observed cold boots. Successful run records
 # replace these profiles with measured averages and ranges automatically.
 ZBMC_EXPECTED_FIRMWARE=5
@@ -180,6 +181,7 @@ zbmc_guest_snapshot() {
     printf 'echo "[counters]"; cat /proc/net/dev\n'
     printf 'echo "[processes]"; ps w\n'
     printf 'echo "[listeners]"; netstat -anp 2>/dev/null\n'
+    printf 'echo "[logging-tools]"; command -v syslogd klogd logread logger 2>/dev/null; syslogd --help 2>&1; echo "[syslog-config]"; cat /etc/syslog.conf 2>/dev/null; ls -l /dev/log /var/log 2>/dev/null; logread 2>/dev/null | tail -100\n'
     printf 'echo "[dmesg-tail]"; dmesg | tail -80\n'
     sleep 4
   } | timeout -s KILL 10 socat - "UNIX-CONNECT:$SOCK"

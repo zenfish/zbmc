@@ -116,6 +116,14 @@ PY
 _zr_capture_start(){
   mkdir -p "$ZBMC_RUN_DIR/packets"
   : >"$ZBMC_RUN_DIR/capture.pids"
+  if [ -n "${ZBMC_SYSLOG_PORT:-}" ] && command -v socat >/dev/null 2>&1; then
+    socat -u UDP-LISTEN:"$ZBMC_SYSLOG_PORT",reuseaddr,fork - \
+      >"$ZBMC_RUN_DIR/syslog-udp.log" 2>"$ZBMC_RUN_DIR/syslog-collector.log" &
+    printf '%s\n' "$!" >"$ZBMC_RUN_DIR/syslog-collector.pid"
+    _zr_event SYSLOG active "Debby UDP syslog collector listening on port $ZBMC_SYSLOG_PORT"
+  elif [ -n "${ZBMC_SYSLOG_PORT:-}" ]; then
+    _zr_event SYSLOG skipped 'socat unavailable; syslog packet capture remains in host pcap'
+  fi
   if ! command -v tcpdump >/dev/null 2>&1; then
     _zr_event CAPTURE skipped 'tcpdump unavailable; QEMU packet capture may still be active'
     return 0
@@ -152,6 +160,9 @@ _zr_capture_stop(){
   while read -r _zr_p _zr_if; do
     [ -n "${_zr_p:-}" ] && kill "$_zr_p" 2>/dev/null || true
   done <"$ZBMC_RUN_DIR/capture.pids"
+  if [ -s "$ZBMC_RUN_DIR/syslog-collector.pid" ]; then
+    kill "$(cat "$ZBMC_RUN_DIR/syslog-collector.pid")" 2>/dev/null || true
+  fi
 }
 
 _zr_archive_logs(){
@@ -265,6 +276,11 @@ _zr_health_watch(){
     _zr_probe_service redfish "$_zr_tmp/redfish" & local p3=$!
     _zr_probe_service console "$_zr_tmp/console" & local p4=$!
     wait "$p1" "$p2" "$p3" "$p4" 2>/dev/null || true
+    if declare -F zbmc_guest_snapshot >/dev/null && mkdir "$ZBMC_RUN_DIR/guest-snapshot.lock" 2>/dev/null; then
+      mkdir -p "$ZBMC_RUN_DIR/guest-snapshots"
+      ( printf 'sample_epoch: %s\n' "$_zr_now"; zbmc_guest_snapshot; rmdir "$ZBMC_RUN_DIR/guest-snapshot.lock" ) \
+        >"$ZBMC_RUN_DIR/guest-snapshots/$_zr_now.txt" 2>&1 &
+    fi
     python3 - "$ZBMC_RUN_DIR/health.json" "$ZBMC_RUN_DIR/health.jsonl" "$ZBMC_RUN_ID" "$ZBMC_IP" "$_zr_now" "$_zr_start" "$ZBMC_REQUIRED_SERVICES" "$_zr_tmp" <<'PY'
 import json, os, sys
 snapshot, journal, run_id, ip, now, start, required, tmp = sys.argv[1:]

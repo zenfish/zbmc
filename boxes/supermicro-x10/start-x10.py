@@ -241,6 +241,14 @@ if GUEST_IP not in child.before:
     print(f"NET_CONFIG_FAILED final assignment missing on {IFACE}", flush=True)
     qemu_proc.kill(); sys.exit(1)
 
+# Preserve both a bounded local ring and a Debby-side copy when the legacy
+# BusyBox logging tools are present.  The remote stream is supplemental: it can
+# disappear with the network, while the guest ring remains available on serial.
+child.sendline("if command -v syslogd >/dev/null 2>&1; then killall syslogd 2>/dev/null; syslogd -C 256 -l 8 -R 10.0.0.24:5514 2>/dev/null || syslogd -C 256 -l 8 2>/dev/null; fi")
+child.expect(r"/ #", timeout=10)
+child.sendline("if command -v klogd >/dev/null 2>&1; then killall klogd 2>/dev/null; klogd -c 8 2>/dev/null; fi; logger -p daemon.debug 'ZBMC instrumentation logging enabled'")
+child.expect(r"/ #", timeout=10)
+
 # Bootstrap done — disconnect socat, freeing the socket for interactive use.
 child.close()
 print("NET_CONFIGURED", flush=True)
