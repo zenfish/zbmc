@@ -486,7 +486,7 @@ PY
       [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' console '* ]] && [ "$_consoleok" = 0 ] && { _overall=0; _missing="$_missing console"; }
       printf "%-9s : " "Health"
       if [ "$_overall" = 1 ]; then echo "${CG}READY${CZ} (functional probes: ${ZBMC_REQUIRED_SERVICES:-ssh ipmi})"
-      else echo "${CR}NOT READY${CZ} (missing:${_missing})"; fi
+      else echo "${CR}DEGRADED${CZ} (target probes missing:${_missing})"; fi
       [ "$_follow" = 0 ] && break
       [ "$_overall" = 1 ] && { echo "==== READY:  zbmc $ZBMC_IP console  |  zipmi -H $ZBMC_IP ===="; break; }
       sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
