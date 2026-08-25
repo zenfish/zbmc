@@ -422,25 +422,29 @@ p = os.path.join(root, "result.json")
 if os.path.exists(p):
     r = json.load(open(p, encoding="utf-8"))
     print(f'{r["state"]}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
-    if r.get("cause"):
-        print(f'Run result: {r["state"]} — {r["cause"]}')
 else:
     print('in progress')
 print(f'Evidence  : {root}')
 tp = os.path.join(root, "termination.json")
+termination = None
 if os.path.exists(tp):
     try:
-        t = json.load(open(tp, encoding="utf-8"))
-        print(f'Run result: {t["state"]} — {t["cause"]}')
+        termination = json.load(open(tp, encoding="utf-8"))
+        print(f'Run result: {termination["state"]} — {termination["cause"]}')
     except Exception:
         pass
+elif os.path.exists(p) and r.get("cause"):
+    print(f'Run result: {r["state"]} — {r["cause"]}')
 events = os.path.join(root, "events.jsonl")
 if not running and os.path.exists(events):
     try:
         last = json.loads(list(open(events, encoding="utf-8"))[-1])
         from datetime import datetime
-        when = datetime.fromtimestamp(int(last["time_epoch"])).astimezone().isoformat(timespec="seconds")
-        print(f'Run end   : {when} — {last.get("stage", "event")} {last.get("state", "")}'.rstrip())
+        end_epoch = int(termination["ended_epoch"]) if termination else int(last["time_epoch"])
+        when = datetime.fromtimestamp(end_epoch).astimezone().isoformat(timespec="seconds")
+        end_desc = (f'{termination["state"]} — {termination["cause"]}' if termination
+                    else f'{last.get("stage", "event")} {last.get("state", "")}')
+        print(f'Run end   : {when} — {end_desc}'.rstrip())
         if not os.path.exists(tp) and last.get("stage") == "STOPPED":
             print(f'Run result: stopped — {last.get("message", "operator shutdown")}')
     except Exception:
