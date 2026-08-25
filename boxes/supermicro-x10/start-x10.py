@@ -59,6 +59,7 @@ import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
 QEMU_PLUGIN = os.environ.get("X10_QEMU_PLUGIN", "")
+QEMU_DEBUG = os.environ.get("X10_QEMU_DEBUG", "guest_errors,unimp,cpu_reset")
 
 _sh.copyfile(MASTER, RUN)
 os.makedirs(PACKET_DIR, exist_ok=True)
@@ -81,7 +82,7 @@ qemu_cmd = [
     "-qmp", f"unix:{QMP_SOCK},server=on,wait=off",
     "-gdb", f"unix:{GDB_SOCK},server=on,wait=off",
     "-perfmap",
-    "-d", "guest_errors,unimp,cpu_reset,int",
+    "-d", QEMU_DEBUG,
     "-D", DEBUG_FILE,
     "-trace", "enable=ftgmac100_*",
     "-trace", f"file={TRACE_FILE}",
