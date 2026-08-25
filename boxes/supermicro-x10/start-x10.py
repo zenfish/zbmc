@@ -27,16 +27,23 @@ Why this box exists: it offers IPMI 2.0 cipher suites 0-14 (incl. the RC4/MD5
 suites 4,5,9-14 that modern firmware dropped) — the authorized local oracle for
 verifying zipmi's MD5-128 + xRC4 implementations.
 """
-import sys, os, time, subprocess, signal, pexpect
+import sys, os, time, subprocess, signal, pexpect, json, uuid
+from datetime import datetime, timezone
 
 SELF = os.path.dirname(os.path.abspath(__file__))                                # box scripts dir
 WD = os.environ.get("WD", SELF)                                                 # artifacts/logs
 PACKET_DIR = os.environ.get("X10_PACKET_DIR", WD)
+RUN_ID = (datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+          .replace("+00:00", "Z") + "_" + str(uuid.uuid4()))
 MASTER = os.environ.get("X10_MASTER", os.path.join(WD, "x10-master.flash"))     # firmware seed
 BYPASS_SO = os.path.join(SELF, "license_bypass.so")                              # LD_PRELOAD shim
 RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
 QMP_SOCK = os.path.join(WD, "x10-qmp.sock")
+GDB_SOCK = os.path.join(WD, "x10-gdb.sock")
+TRACE_FILE = os.path.join(PACKET_DIR, f"{RUN_ID}-qemu-trace.bin")
+DEBUG_FILE = os.path.join(PACKET_DIR, f"{RUN_ID}-qemu-debug.log")
+RUN_MANIFEST = os.path.join(PACKET_DIR, f"{RUN_ID}-manifest.json")
 HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
 HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
 SSH_HPORT = os.environ.get("X10_SSH_PORT", "22")
@@ -51,6 +58,7 @@ IFACE = os.environ.get("X10_IFACE", "eth1" if NET_MODE == "direct" else "eth0")
 import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
+QEMU_PLUGIN = os.environ.get("X10_QEMU_PLUGIN", "")
 
 _sh.copyfile(MASTER, RUN)
 os.makedirs(PACKET_DIR, exist_ok=True)
@@ -60,6 +68,8 @@ if os.path.exists(SOCK):
     os.unlink(SOCK)
 if os.path.exists(QMP_SOCK):
     os.unlink(QMP_SOCK)
+if os.path.exists(GDB_SOCK):
+    os.unlink(GDB_SOCK)
 
 # Launch QEMU with serial on a UNIX socket (not -nographic, which ties serial
 # to stdio). -display none suppresses the GUI; -monitor none avoids the monitor
@@ -69,10 +79,18 @@ qemu_cmd = [
     "-m", "128", "-M", "supermicrox11-bmc",
     "-display", "none", "-monitor", "none",
     "-qmp", f"unix:{QMP_SOCK},server=on,wait=off",
+    "-gdb", f"unix:{GDB_SOCK},server=on,wait=off",
+    "-perfmap",
+    "-d", "guest_errors,unimp,cpu_reset,int",
+    "-D", DEBUG_FILE,
+    "-trace", "enable=ftgmac100_*",
+    "-trace", f"file={TRACE_FILE}",
     "-chardev", f"socket,id=ser0,path={SOCK},server=on,wait=off",
     "-serial", "chardev:ser0",
     "-drive", f"file={RUN},format=raw,if=mtd",
 ]
+if QEMU_PLUGIN:
+    qemu_cmd += ["-plugin", QEMU_PLUGIN]
 if NET_MODE == "direct":
     qemu_cmd += [
         # Bridge both AST2400 MACs so controller ordering cannot silently put
@@ -81,8 +99,8 @@ if NET_MODE == "direct":
         "-net", "nic,netdev=bmcnet",
         "-netdev", f"tap,id=bmcaux,ifname={AUX_TAP},script=no,downscript=no",
         "-net", "nic,netdev=bmcaux",
-        "-object", f"filter-dump,id=netcap,netdev=bmcnet,file={os.path.join(PACKET_DIR, 'qemu-primary.pcap')}",
-        "-object", f"filter-dump,id=auxcap,netdev=bmcaux,file={os.path.join(PACKET_DIR, 'qemu-aux.pcap')}",
+        "-object", f"filter-dump,id=netcap,netdev=bmcnet,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-primary.pcap')}",
+        "-object", f"filter-dump,id=auxcap,netdev=bmcaux,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-aux.pcap')}",
     ]
 else:
     qemu_cmd += [
@@ -90,12 +108,25 @@ else:
         "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
     ]
 qemu_proc = subprocess.Popen(qemu_cmd)
+with open(RUN_MANIFEST, "w", encoding="utf-8") as manifest:
+    json.dump({
+        "run_id": RUN_ID,
+        "started_utc": RUN_ID.split("_", 1)[0],
+        "qemu_pid": qemu_proc.pid,
+        "qemu": QEMU,
+        "qemu_command": qemu_cmd,
+        "work_dir": WD,
+        "packet_dir": PACKET_DIR,
+    }, manifest, indent=2)
+    manifest.write("\n")
+print(f"RUN_ID {RUN_ID}", flush=True)
 
 # Wait for the socket to appear, then fix perms (QEMU runs as root → socket is
 # root-owned; socat/zbmc shell need user access).
 for _ in range(30):
     if os.path.exists(SOCK):
-        subprocess.run(["sudo", "-n", "chmod", "777", SOCK], check=False)
+        for control_sock in (SOCK, QMP_SOCK, GDB_SOCK):
+            subprocess.run(["sudo", "-n", "chmod", "777", control_sock], check=False)
         break
     time.sleep(0.5)
 else:
