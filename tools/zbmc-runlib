@@ -239,6 +239,19 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
+_zr_termination(){ # state cause — records how a run actually ended
+  local _zr_state="$1" _zr_cause="$2" _zr_end; _zr_end=$(_zr_now)
+  python3 - "$ZBMC_RUN_DIR/termination.json" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" "$_zr_end" "$_zr_state" "$_zr_cause" <<'PY'
+import json, sys
+path, run_id, started, ended, state, cause = sys.argv[1:]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump({"run_id": run_id, "state": state, "cause": cause,
+               "started_epoch": int(started), "ended_epoch": int(ended),
+               "elapsed_seconds": int(ended) - int(started)}, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+}
+
 _zr_health_watch(){
   local _zr_pid="$1" _zr_interval="${ZBMC_HEALTH_INTERVAL:-30}" _zr_start="$ZBMC_RUN_START_EPOCH"
   printf '%s\n' "$$" >"$ZBMC_RUN_DIR/health-watch.pid"
@@ -270,6 +283,9 @@ PY
     rm -rf "$_zr_tmp"
     sleep "$_zr_interval"
   done
+  if ! ps -p "$_zr_pid" >/dev/null 2>&1; then
+    _zr_termination crashed "QEMU pid $_zr_pid exited unexpectedly"
+  fi
   rm -f "$ZBMC_RUN_DIR/health-watch.pid"
 }
 
@@ -498,4 +514,5 @@ _zr_stop_current_run(){
   else
     _zr_event STOPPED stopped 'packet capture closed; final state archived'
   fi
+  _zr_termination stopped 'operator requested shutdown'
 }

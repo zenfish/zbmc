@@ -212,7 +212,7 @@ if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
 fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
 if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
-  verb="${1:-status}"; td=$(mktemp -d); [ -t 1 ] && export ZBMC_COLOR=1
+  verb="${1:-status}"; td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
   # root check for the whole fleet — fail once up front, not N times in subprocesses
   _all_run_as_me=0; _all_no_fix_ip=0
   for _a in "${@:2}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; [ "$_a" = "--no-fix-ip" ] && _all_no_fix_ip=1; done
@@ -392,20 +392,46 @@ case "$VERB" in
       -d|--debug) ZBMC_DETAIL=2;;
     esac; done
     while :; do
-      printf "%-9s : %s\n" "Observed" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      _qpid=; _running=0
+      if _qpid=$(running 2>/dev/null); then _running=1; fi
+      printf "%-9s : %s\n" "Observed" "$(date '+%Y-%m-%dT%H:%M:%S%z (%Z)')"
+      [ "$ZBMC_DETAIL" -gt 1 ] && printf "%-9s : %s\n" "Observed epoch" "$(date +%s)"
+      if [ "$_running" = 1 ]; then
+        echo "QEMU      : ${CG}UP${CZ} (pid $_qpid, $(ps -p "$_qpid" -o etime= | tr -d ' '))"
+      else
+        echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"
+      fi
       if _zr_load "" 2>/dev/null; then
-        _run_label="Last run"; running >/dev/null 2>&1 && _run_label="Current run"
+        _run_label="Last run"; [ "$_running" = 1 ] && _run_label="Current run"
         printf "%-9s : " "$_run_label"
-        python3 - "$ZBMC_RUN_DIR" <<'PY'
+        python3 - "$ZBMC_RUN_DIR" "$_running" <<'PY'
 import json, os, sys
-root = sys.argv[1]
+root, running = sys.argv[1], sys.argv[2] == "1"
 p = os.path.join(root, "result.json")
 if os.path.exists(p):
     r = json.load(open(p, encoding="utf-8"))
     print(f'{r["state"]}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
+    if r.get("cause"):
+        print(f'Run result: {r["state"]} — {r["cause"]}')
 else:
     print('in progress')
 print(f'Evidence  : {root}')
+tp = os.path.join(root, "termination.json")
+if os.path.exists(tp):
+    try:
+        t = json.load(open(tp, encoding="utf-8"))
+        print(f'Run result: {t["state"]} — {t["cause"]}')
+    except Exception:
+        pass
+events = os.path.join(root, "events.jsonl")
+if not running and os.path.exists(events):
+    try:
+        last = json.loads(list(open(events, encoding="utf-8"))[-1])
+        from datetime import datetime
+        when = datetime.fromtimestamp(int(last["time_epoch"])).astimezone().isoformat(timespec="seconds")
+        print(f'Run end   : {when} — {last.get("stage", "event")} {last.get("state", "")}'.rstrip())
+    except Exception:
+        pass
 hp = os.path.join(root, "health.json")
 if os.path.exists(hp):
     h = json.load(open(hp, encoding="utf-8"))
@@ -426,8 +452,14 @@ if os.path.exists(hp):
             except Exception:
                 pass
     ready_text = "unknown" if ready_s is None else f'{ready_s//3600:02d}:{(ready_s%3600)//60:02d}:{ready_s%60:02d}'
-    print(f'Health watch: {h["state"]}, run age={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, ready age={ready_text}, '
-          f'last check={datetime.fromtimestamp(observed, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}, check age={age}s')
+    label = "Health watch" if running else "Health (historical)"
+    when = datetime.fromtimestamp(observed).astimezone().isoformat(timespec="seconds")
+    if running:
+        print(f'{label}: {h["state"]}, run age={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, ready age={ready_text}, '
+              f'last check={when}, check age={age}s')
+    else:
+        print(f'{label}: {h["state"]} at {when}, run duration={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, '
+              f'check age={age}s')
 PY
       fi
       # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
@@ -436,13 +468,12 @@ PY
         _rmsg=$(zbmc_ready 2>/dev/null); _rrc=$?
       else _rmsg="unknown (no zbmc_ready)"; _rrc=1; fi
       [ "$_rrc" = 0 ] && echo "${CG}$_rmsg${CZ}" || echo "${CR}$_rmsg${CZ}"
-      if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
-      else echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"; [ "$_follow" = 0 ] && exit 1; sleep 15; continue; fi
+      if [ "$_running" = 0 ]; then [ "$_follow" = 0 ] && break; sleep 15; continue; fi
       printf "%-9s : " "L2"
       if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then echo "${CG}OK${CZ}  $ZBMC_IP answers ICMP"
       else echo "${CR}no ICMP reply${CZ} from $ZBMC_IP"; fi
       # capability rows — probe concurrently, collect, render. Each helper echoes STATE|DISPLAY|NOTE.
-      tmp=$(mktemp -d)
+      tmp="$ZBMC_DIR/tmp/status.$$"; rm -rf "$tmp"; mkdir -p "$tmp"
       ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &
       ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) &
       ( echo "$(_probe_redfish)" > "$tmp/redfish" ) &
