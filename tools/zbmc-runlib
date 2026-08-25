@@ -1,0 +1,464 @@
+#!/usr/bin/env bash
+# Runtime observation and readiness support for tools/zbmc.
+# Sourced after a box descriptor and the dispatcher's probe helpers are loaded.
+
+_zr_now(){ date +%s; }
+
+_zr_elapsed(){
+  local _zr_s=$(( $(_zr_now) - ${ZBMC_RUN_START_EPOCH:-$(_zr_now)} ))
+  printf '%02d:%02d' $((_zr_s / 60)) $((_zr_s % 60))
+}
+
+_zr_event(){ # stage state message [detail]
+  local _zr_stage="$1" _zr_state="$2" _zr_message="$3" _zr_detail="${4:-}"
+  local _zr_now_epoch; _zr_now_epoch=$(_zr_now)
+  mkdir -p "$ZBMC_RUN_DIR"
+  python3 - "$ZBMC_RUN_DIR/events.jsonl" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" \
+    "$_zr_now_epoch" "$_zr_stage" "$_zr_state" "$_zr_message" "$_zr_detail" <<'PY'
+import json, sys
+path, run_id, started, now, stage, state, message, detail = sys.argv[1:]
+event = {
+    "time_epoch": int(now),
+    "elapsed_seconds": int(now) - int(started),
+    "run_id": run_id,
+    "stage": stage,
+    "state": state,
+    "message": message,
+}
+if detail:
+    event["detail"] = detail
+with open(path, "a", encoding="utf-8") as f:
+    f.write(json.dumps(event, sort_keys=True) + "\n")
+PY
+  [ "${ZBMC_EVENT_QUIET:-0}" = 1 ] || printf '[%s] %-11s %-7s %s\n' "$(_zr_elapsed)" "$_zr_stage" "$_zr_state" "$_zr_message"
+}
+
+_zr_manifest(){
+  local _zr_fw_hash=unknown _zr_qemu=unknown _zr_fw="${X10_MASTER:-${FLASH:-${IMAGE:-}}}"
+  if [ -n "$_zr_fw" ] && [ -f "$_zr_fw" ]; then
+    if command -v sha256sum >/dev/null 2>&1; then _zr_fw_hash=$(sha256sum "$_zr_fw" | awk '{print $1}')
+    else _zr_fw_hash=$(shasum -a 256 "$_zr_fw" | awk '{print $1}'); fi
+  fi
+  if [ -n "${X10_QEMU:-}" ] && [ -x "${X10_QEMU:-}" ]; then _zr_qemu=$($X10_QEMU --version 2>/dev/null | head -1)
+  elif command -v qemu-system-arm >/dev/null 2>&1; then _zr_qemu=$(qemu-system-arm --version 2>/dev/null | head -1)
+  elif command -v qemu-system-aarch64 >/dev/null 2>&1; then _zr_qemu=$(qemu-system-aarch64 --version 2>/dev/null | head -1); fi
+  python3 - "$ZBMC_RUN_DIR/manifest.json" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" \
+    "$ZBMC_NAME" "$ZBMC_IP" "$BF" "$_zr_fw" "$_zr_fw_hash" "$_zr_qemu" "${ZBMC_ORIGINAL_COMMAND:-}" <<'PY'
+import json, os, platform, sys
+(path, run_id, started, name, ip, box_file, firmware, firmware_sha256,
+ qemu, command) = sys.argv[1:]
+doc = {
+    "schema": 1,
+    "run_id": run_id,
+    "started_epoch": int(started),
+    "target": {"name": name, "ip": ip, "box_file": box_file},
+    "firmware": {"path": firmware or None, "sha256": firmware_sha256},
+    "qemu": qemu,
+    "host": {"node": platform.node(), "system": platform.platform()},
+    "command": command,
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(doc, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+}
+
+_zr_snapshot(){ # label
+  local _zr_label="$1" _zr_out
+  _zr_out="$ZBMC_RUN_DIR/host-${_zr_label}.txt"
+  {
+    echo "time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "target: $ZBMC_IP"
+    echo "qemu-pid: $(running 2>/dev/null || true)"
+    echo
+    echo '[interfaces]'
+    ip -details address show 2>&1 || ifconfig -a 2>&1 || true
+    echo
+    echo '[routes]'
+    ip route show table all 2>&1 || netstat -rn 2>&1 || true
+    echo
+    echo '[neighbors]'
+    ip neighbor show 2>&1 || arp -an 2>&1 || true
+    echo
+    echo '[listeners]'
+    ss -lntup 2>&1 || netstat -an 2>&1 || true
+    echo
+    echo '[process]'
+    local _zr_pid; _zr_pid=$(running 2>/dev/null || true)
+    [ -z "$_zr_pid" ] || ps -ww -p "$_zr_pid" -o pid,ppid,lstart,etime,state,args 2>&1 || true
+  } >"$_zr_out"
+}
+
+_zr_qmp_snapshot(){
+  [ -n "${QMP_SOCK:-}" ] && [ -S "${QMP_SOCK:-}" ] || return 0
+  python3 - "$QMP_SOCK" "$ZBMC_RUN_DIR/qmp-status.jsonl" <<'PY' 2>"$ZBMC_RUN_DIR/qmp-error.txt" || true
+import json, socket, sys, time
+sock_path, output = sys.argv[1:]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(2)
+s.connect(sock_path)
+f = s.makefile("rwb", buffering=0)
+rows = []
+rows.append(json.loads(f.readline()))
+for command in ("qmp_capabilities", "query-status", "query-block", "query-netdev"):
+    f.write((json.dumps({"execute": command}) + "\r\n").encode())
+    while True:
+        row = json.loads(f.readline())
+        rows.append(row)
+        if "return" in row or "error" in row:
+            break
+with open(output, "w", encoding="utf-8") as out:
+    for row in rows:
+        out.write(json.dumps(row, sort_keys=True) + "\n")
+PY
+}
+
+_zr_capture_start(){
+  mkdir -p "$ZBMC_RUN_DIR/packets"
+  : >"$ZBMC_RUN_DIR/capture.pids"
+  if ! command -v tcpdump >/dev/null 2>&1; then
+    _zr_event CAPTURE skipped 'tcpdump unavailable; QEMU packet capture may still be active'
+    return 0
+  fi
+  local _zr_if _zr_safe _zr_count=0 _zr_started=0 _zr_pid
+  for _zr_if in ${ZBMC_CAPTURE_INTERFACES:-}; do
+    ip link show "$_zr_if" >/dev/null 2>&1 || continue
+    _zr_safe=$(printf '%s' "$_zr_if" | tr -c 'A-Za-z0-9_.-' '_')
+    # Runs are root-owned. Keep tcpdump as root so rotation can create pcap1..
+    # instead of silently dying after its default privilege drop.
+    tcpdump -Z root -ni "$_zr_if" -U -s 0 -C 16 -W 4 -w "$ZBMC_RUN_DIR/packets/host-${_zr_safe}.pcap" \
+      >"$ZBMC_RUN_DIR/packets/host-${_zr_safe}.tcpdump.log" 2>&1 &
+    _zr_pid=$!
+    echo "$_zr_pid $_zr_if" >>"$ZBMC_RUN_DIR/capture.pids"
+    _zr_count=$((_zr_count + 1))
+  done
+  sleep 0.25
+  while read -r _zr_pid _zr_if; do
+    kill -0 "$_zr_pid" 2>/dev/null && _zr_started=$((_zr_started + 1))
+  done <"$ZBMC_RUN_DIR/capture.pids"
+  if [ "$_zr_count" -gt 0 ] && [ "$_zr_started" = "$_zr_count" ]; then
+    _zr_event CAPTURE active "verified tcpdump on $_zr_started interface(s); QEMU captures each guest NIC"
+  elif [ "$_zr_count" -gt 0 ]; then
+    _zr_event CAPTURE degraded "only $_zr_started/$_zr_count tcpdump processes survived startup; inspect packets/*.tcpdump.log"
+    return 1
+  else
+    _zr_event CAPTURE skipped 'no configured capture interfaces exist'
+  fi
+}
+
+_zr_capture_stop(){
+  local _zr_p _zr_if
+  [ -f "$ZBMC_RUN_DIR/capture.pids" ] || return 0
+  while read -r _zr_p _zr_if; do
+    [ -n "${_zr_p:-}" ] && kill "$_zr_p" 2>/dev/null || true
+  done <"$ZBMC_RUN_DIR/capture.pids"
+}
+
+_zr_archive_logs(){
+  [ -n "${LOG:-}" ] && [ -f "${LOG:-}" ] && cp "$LOG" "$ZBMC_RUN_DIR/launcher.log"
+  [ -n "${CONSOLE_LOG:-}" ] && [ -f "${CONSOLE_LOG:-}" ] && cp "$CONSOLE_LOG" "$ZBMC_RUN_DIR/console.log"
+}
+
+_zr_init(){ # mode
+  local _zr_stamp _zr_old _zr_old_dir _zr_old_p _zr_old_if
+  _zr_old=$(cat "$ZBMC_DIR/current-run" 2>/dev/null || true)
+  _zr_old_dir="$ZBMC_DIR/runs/$_zr_old"
+  if [ -n "$_zr_old" ] && [ -f "$_zr_old_dir/capture.pids" ]; then
+    while read -r _zr_old_p _zr_old_if; do
+      [ -z "${_zr_old_p:-}" ] || kill "$_zr_old_p" 2>/dev/null || true
+    done <"$_zr_old_dir/capture.pids"
+  fi
+  _zr_stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  ZBMC_RUN_START_EPOCH=$(_zr_now)
+  ZBMC_RUN_ID="${_zr_stamp}-$$"
+  ZBMC_RUN_ROOT="$ZBMC_DIR/runs"
+  ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
+  export ZBMC_RUN_START_EPOCH ZBMC_RUN_ID ZBMC_RUN_ROOT ZBMC_RUN_DIR
+  mkdir -p "$ZBMC_RUN_DIR/packets"
+  printf '%s\n' "$ZBMC_RUN_START_EPOCH" >"$ZBMC_RUN_DIR/start-epoch"
+  printf '%s\n' "$1" >"$ZBMC_RUN_DIR/mode"
+  printf '%s\n' "$ZBMC_RUN_ID" >"$ZBMC_DIR/current-run"
+  ln -sfn "$ZBMC_RUN_ID" "$ZBMC_RUN_ROOT/latest"
+  _zr_manifest
+  _zr_snapshot start
+  _zr_event RUN started "$1 run $ZBMC_RUN_ID for $ZBMC_IP"
+}
+
+_zr_load(){ # run id, or current
+  ZBMC_RUN_ROOT="$ZBMC_DIR/runs"
+  ZBMC_RUN_ID="${1:-$(cat "$ZBMC_DIR/current-run" 2>/dev/null)}"
+  [ -n "$ZBMC_RUN_ID" ] && [ -d "$ZBMC_RUN_ROOT/$ZBMC_RUN_ID" ] || return 1
+  ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
+  ZBMC_RUN_START_EPOCH=$(cat "$ZBMC_RUN_DIR/start-epoch")
+  export ZBMC_RUN_ROOT ZBMC_RUN_ID ZBMC_RUN_DIR ZBMC_RUN_START_EPOCH
+}
+
+_zr_timing(){ # stage seconds
+  printf '%s\t%s\t%s\t%s\n' "$ZBMC_NAME:${ZBMC_TIMING_PROFILE:-default}" "$1" "$2" "$ZBMC_RUN_ID" >>"$ZBMC_DIR/timings.tsv"
+}
+
+_zr_expected(){ # stage
+  local _zr_stats _zr_profile=
+  _zr_stats=$(awk -F '\t' -v n="$ZBMC_NAME:${ZBMC_TIMING_PROFILE:-default}" -v s="$1" '$1==n && $2==s {sum+=$3; if(!min||$3<min)min=$3; if($3>max)max=$3; count++} END {if(count) printf "%d %d %d %d",sum/count,min,max,count}' "$ZBMC_DIR/timings.tsv" 2>/dev/null)
+  if [ -n "$_zr_stats" ]; then
+    set -- $_zr_stats
+    printf 'expected ~%ss (range %s-%ss from %s run%s)' "$1" "$2" "$3" "$4" "$([ "$4" = 1 ] && echo '' || echo s)"
+  else
+    case "$1" in
+      FIRMWARE) _zr_profile="${ZBMC_EXPECTED_FIRMWARE:-}";;
+      BOOTSTRAP) _zr_profile="${ZBMC_EXPECTED_BOOTSTRAP:-}";;
+      L2) _zr_profile="${ZBMC_EXPECTED_L2:-}";;
+      READY) _zr_profile="${ZBMC_EXPECTED_READY:-}";;
+    esac
+    if [ -n "$_zr_profile" ]; then
+      printf 'expected ~%ss (initial box profile; learned timings will replace this)' "$_zr_profile"
+      return
+    fi
+    printf 'expected time unknown (first measured run)'
+  fi
+}
+
+_zr_result(){ # state highest cause
+  local _zr_state="$1" _zr_highest="$2" _zr_cause="$3" _zr_end; _zr_end=$(_zr_now)
+  python3 - "$ZBMC_RUN_DIR/result.json" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" "$_zr_end" \
+    "$_zr_state" "$_zr_highest" "$_zr_cause" <<'PY'
+import json, sys
+path, run_id, started, ended, state, highest, cause = sys.argv[1:]
+doc = {
+    "run_id": run_id,
+    "state": state,
+    "started_epoch": int(started),
+    "ended_epoch": int(ended),
+    "elapsed_seconds": int(ended) - int(started),
+    "highest_stage": highest,
+    "cause": cause or None,
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(doc, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+}
+
+_zr_probe_service(){ # service output-file
+  case "$1" in
+    ssh) _probe_ssh >"$2";;
+    ipmi) _probe_ipmi >"$2";;
+    redfish) _probe_redfish >"$2";;
+    console) _probe_console >"$2";;
+  esac
+}
+
+_zr_wait_ready(){
+  local _zr_pid="$1" _zr_deadline="${2:-${ZBMC_READY_DEADLINE:-900}}"
+  local _zr_highest=QEMU _zr_last_probe=0 _zr_last_heartbeat=0 _zr_now_epoch _zr_elapsed_s
+  local _zr_console=0 _zr_guest=0 _zr_l2=0 _zr_ssh=0 _zr_ipmi=0 _zr_redfish=0 _zr_console_service=0
+  local _zr_stability="${ZBMC_STABILITY_SECONDS:-0}" _zr_stable_since=0 _zr_stable_elapsed=0
+  local _zr_required=" ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " _zr_tmp="$ZBMC_RUN_DIR/probes"
+  mkdir -p "$_zr_tmp"
+  if [ -r "/proc/$_zr_pid/cmdline" ]; then
+    tr '\0' ' ' <"/proc/$_zr_pid/cmdline" >"$ZBMC_RUN_DIR/qemu-command.txt"
+    printf '\n' >>"$ZBMC_RUN_DIR/qemu-command.txt"
+  fi
+  _zr_event QEMU ready "pid $_zr_pid is running"
+  _zr_timing QEMU 0
+  while :; do
+    _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
+    if ! ps -p "$_zr_pid" >/dev/null 2>&1; then
+      _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure; _zr_capture_stop
+      local _zr_tail; _zr_tail=$(tail -n 3 "${LOG:-/dev/null}" 2>/dev/null | tr '\n' ' ')
+      _zr_event FAILED failed "QEMU pid $_zr_pid exited after ${_zr_elapsed_s}s" "$_zr_tail"
+      _zr_result failed "$_zr_highest" 'QEMU exited before readiness'
+      echo "Evidence: $ZBMC_RUN_DIR"
+      return 1
+    fi
+    if [ -n "${CONSOLE_LOG:-}" ] && grep -qE 'Kernel panic - not syncing|Fatal exception in interrupt' "$CONSOLE_LOG" 2>/dev/null; then
+      _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure; _zr_capture_stop
+      local _zr_panic; _zr_panic=$(grep -E 'Kernel panic - not syncing|Fatal exception in interrupt' "$CONSOLE_LOG" | tail -1)
+      _zr_event GUEST-KERNEL failed "${_zr_panic:-kernel panic observed on serial console}"
+      _zr_result failed GUEST-KERNEL "${_zr_panic:-kernel panic observed on serial console}"
+      echo "Evidence: $ZBMC_RUN_DIR"
+      return 1
+    fi
+    if [ "$_zr_guest" = 0 ] && [ -n "${ZBMC_BOOTSTRAP_PIDF:-}" ] && [ -s "$ZBMC_BOOTSTRAP_PIDF" ]; then
+      local _zr_bootstrap_pid; _zr_bootstrap_pid=$(cat "$ZBMC_BOOTSTRAP_PIDF")
+      if ! ps -p "$_zr_bootstrap_pid" >/dev/null 2>&1; then
+        _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure; _zr_capture_stop
+        _zr_event BOOTSTRAP failed "bootstrap controller pid $_zr_bootstrap_pid exited before its ready marker"
+        _zr_result failed BOOTSTRAP 'bootstrap controller exited before its ready marker'
+        echo "Evidence: $ZBMC_RUN_DIR"
+        return 1
+      fi
+    fi
+
+    if [ "$_zr_console" = 0 ] && { [ -s "${CONSOLE_LOG:-}" ] || [ -s "${LOG:-}" ]; }; then
+      _zr_console=1
+      [ "$_zr_highest" = QEMU ] && _zr_highest=FIRMWARE
+      _zr_event FIRMWARE active "console output observed; $(_zr_expected FIRMWARE)"
+      _zr_timing FIRMWARE "$_zr_elapsed_s"
+    fi
+    if [ "$_zr_guest" = 0 ]; then
+      if [ -n "${ZBMC_READY_GREP:-}" ] && grep -q "${ZBMC_READY_GREP}" "${LOG:-/dev/null}" 2>/dev/null; then
+        _zr_guest=1
+        case "$_zr_highest" in QEMU|FIRMWARE) _zr_highest=BOOTSTRAP;; esac
+        _zr_event BOOTSTRAP ready "serial bootstrap completed for $ZBMC_IP; $(_zr_expected BOOTSTRAP)"
+        _zr_timing BOOTSTRAP "$_zr_elapsed_s"
+        if [ "${ZBMC_GUEST_SNAPSHOT_AT:-}" = bootstrap ] && declare -F zbmc_guest_snapshot >/dev/null; then
+          zbmc_guest_snapshot >"$ZBMC_RUN_DIR/guest-state.txt" 2>&1 || true
+        fi
+      elif [ -z "${ZBMC_READY_GREP:-}" ] && [ "$_zr_console" = 1 ]; then
+        _zr_guest=1
+      fi
+    fi
+    if [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+      _zr_l2=1
+      case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=L2;; esac
+      _zr_event L2 ready "$ZBMC_IP answers ICMP; $(_zr_expected L2)"
+      _zr_timing L2 "$_zr_elapsed_s"
+    fi
+
+    if [ $((_zr_now_epoch - _zr_last_probe)) -ge 5 ] && { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }; then
+      _zr_last_probe=$_zr_now_epoch
+      _zr_probe_service ssh "$_zr_tmp/ssh" & local _zr_p1=$!
+      _zr_probe_service ipmi "$_zr_tmp/ipmi" & local _zr_p2=$!
+      _zr_probe_service redfish "$_zr_tmp/redfish" & local _zr_p3=$!
+      _zr_probe_service console "$_zr_tmp/console" & local _zr_p4=$!
+      wait "$_zr_p1" "$_zr_p2" "$_zr_p3" "$_zr_p4" 2>/dev/null || true
+      _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
+      local _zr_s _zr_d _zr_n _zr_service _zr_service_label
+      for _zr_service in ssh ipmi redfish console; do
+        IFS='|' read -r _zr_s _zr_d _zr_n <"$_zr_tmp/$_zr_service"
+        if [ "$_zr_s" = ok ]; then
+          local _zr_was=0
+          case "$_zr_service" in
+            ssh) _zr_was=$_zr_ssh; _zr_ssh=1;;
+            ipmi) _zr_was=$_zr_ipmi; _zr_ipmi=1;;
+            redfish) _zr_was=$_zr_redfish; _zr_redfish=1;;
+            console) _zr_was=$_zr_console_service; _zr_console_service=1;;
+          esac
+          [ "$_zr_was" = 1 ] && continue
+          _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]')
+          [ "$_zr_service" = console ] || _zr_highest=SERVICES
+          _zr_event "$_zr_service_label" ready "${_zr_n:-authenticated functional probe succeeded}; ${_zr_d:-numeric endpoint $ZBMC_IP}"
+          _zr_timing "$_zr_service_label" "$_zr_elapsed_s"
+          if [ "$_zr_service" = ssh ] && [ "${ZBMC_GUEST_SNAPSHOT_AT:-}" = ssh ] && declare -F zbmc_guest_snapshot >/dev/null; then
+            zbmc_guest_snapshot >"$ZBMC_RUN_DIR/guest-state.txt" 2>&1 || true
+          fi
+        else
+          local _zr_was=0
+          case "$_zr_service" in
+            ssh) _zr_was=$_zr_ssh; _zr_ssh=0;;
+            ipmi) _zr_was=$_zr_ipmi; _zr_ipmi=0;;
+            redfish) _zr_was=$_zr_redfish; _zr_redfish=0;;
+            console) _zr_was=$_zr_console_service; _zr_console_service=0;;
+          esac
+          _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]')
+          if [ "$_zr_was" = 1 ]; then
+            _zr_stable_since=0
+            _zr_event "$_zr_service_label" degraded "previously successful probe now fails: ${_zr_n:-probe failed}"
+          elif [ "${ZBMC_DETAIL:-0}" -ge 2 ]; then
+            _zr_event "$_zr_service_label" waiting "${_zr_n:-probe failed}"
+          fi
+        fi
+      done
+    fi
+
+    local _zr_all=1
+    [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_all=0
+    [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_all=0
+    [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_all=0
+    [[ "$_zr_required" == *' console '* ]] && [ "$_zr_console_service" = 0 ] && _zr_all=0
+    if [ "$_zr_all" = 1 ]; then
+      _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
+      if [ "$_zr_stability" -gt 0 ]; then
+        if [ "$_zr_stable_since" = 0 ]; then
+          _zr_stable_since=$_zr_now_epoch
+          _zr_event STABILITY pending "all required services pass; verifying continuously for ${_zr_stability}s"
+        fi
+        _zr_stable_elapsed=$((_zr_now_epoch - _zr_stable_since))
+      fi
+      if [ "$_zr_stability" = 0 ] || [ "$_zr_stable_elapsed" -ge "$_zr_stability" ]; then
+        _zr_highest=READY
+        _zr_event READY ready "required services (${ZBMC_REQUIRED_SERVICES:-ssh ipmi}) stable for ${_zr_stable_elapsed}s; total ${_zr_elapsed_s}s"
+        _zr_timing READY "$_zr_elapsed_s"
+        _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
+        _zr_result ready READY ''
+        echo "Evidence: $ZBMC_RUN_DIR"
+        return 0
+      fi
+    else
+      _zr_stable_since=0
+    fi
+
+    if [ "$_zr_elapsed_s" -ge "$_zr_deadline" ]; then
+      local _zr_missing=
+      [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_missing="$_zr_missing ssh"
+      [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_missing="$_zr_missing ipmi"
+      [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_missing="$_zr_missing redfish"
+      [[ "$_zr_required" == *' console '* ]] && [ "$_zr_console_service" = 0 ] && _zr_missing="$_zr_missing console"
+      _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot timeout; _zr_capture_stop
+      _zr_event FAILED timeout "readiness deadline ${_zr_deadline}s reached; QEMU remains up; missing:${_zr_missing}" "required:${ZBMC_REQUIRED_SERVICES:-ssh ipmi}"
+      _zr_result timeout "$_zr_highest" "readiness deadline reached; missing:${_zr_missing}; QEMU remained running"
+      echo "Evidence: $ZBMC_RUN_DIR"
+      return 1
+    fi
+    if [ $((_zr_now_epoch - _zr_last_heartbeat)) -ge 15 ]; then
+      _zr_last_heartbeat=$_zr_now_epoch
+      local _zr_context=
+      if [ "${ZBMC_DETAIL:-0}" -ge 1 ]; then
+        [ "$_zr_ssh" = 0 ] && _zr_context="$_zr_context ssh"
+        [ "$_zr_ipmi" = 0 ] && _zr_context="$_zr_context ipmi"
+        [ "$_zr_redfish" = 0 ] && _zr_context="$_zr_context redfish"
+        _zr_context="; probes still pending:${_zr_context:- none}"
+      fi
+      [ "$_zr_stable_since" = 0 ] || _zr_context="; stability ${_zr_stable_elapsed}/${_zr_stability}s"
+      _zr_event WAITING pending "highest stage $_zr_highest; READY $(_zr_expected READY)$_zr_context"
+    fi
+    sleep 2
+  done
+}
+
+_zr_explain(){
+  _zr_load "${1:-}" || { echo "No recorded run for $ZBMC_IP"; return 1; }
+  python3 - "$ZBMC_RUN_DIR" <<'PY'
+import json, os, sys
+root = sys.argv[1]
+result_path = os.path.join(root, "result.json")
+print("Run:", os.path.basename(root))
+if os.path.exists(result_path):
+    r = json.load(open(result_path, encoding="utf-8"))
+    print("State:", r["state"])
+    print("Elapsed:", f'{r["elapsed_seconds"]}s')
+    print("Highest stage:", r["highest_stage"])
+    if r.get("cause"):
+        print("Cause:", r["cause"])
+else:
+    print("State: still running or interrupted (no terminal result)")
+events_path = os.path.join(root, "events.jsonl")
+if os.path.exists(events_path):
+    events = [json.loads(line) for line in open(events_path, encoding="utf-8") if line.strip()]
+    print("Transitions:")
+    for e in events[-20:]:
+        print(f'  [{e["elapsed_seconds"]:4d}s] {e["stage"]:<11} {e["state"]:<7} {e["message"]}')
+print("Evidence:", root)
+PY
+}
+
+_zr_evidence(){
+  _zr_load "${1:-}" || { echo "No recorded run for $ZBMC_IP"; return 1; }
+  echo "$ZBMC_RUN_DIR"
+  find "$ZBMC_RUN_DIR" -maxdepth 2 -type f -exec ls -lh {} \; | sed 's/^/  /'
+}
+
+_zr_stop_current_run(){
+  _zr_load "" 2>/dev/null || return 0
+  _zr_capture_stop
+  _zr_archive_logs
+  _zr_qmp_snapshot
+  _zr_snapshot stopped
+  if [ ! -f "$ZBMC_RUN_DIR/result.json" ]; then
+    _zr_event STOPPED stopped 'operator requested shutdown'
+    _zr_result stopped STOPPED 'operator requested shutdown'
+  else
+    _zr_event STOPPED stopped 'packet capture closed; final state archived'
+  fi
+}

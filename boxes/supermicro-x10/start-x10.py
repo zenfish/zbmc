@@ -31,23 +31,35 @@ import sys, os, time, subprocess, signal, pexpect
 
 SELF = os.path.dirname(os.path.abspath(__file__))                                # box scripts dir
 WD = os.environ.get("WD", SELF)                                                 # artifacts/logs
+PACKET_DIR = os.environ.get("X10_PACKET_DIR", WD)
 MASTER = os.environ.get("X10_MASTER", os.path.join(WD, "x10-master.flash"))     # firmware seed
 BYPASS_SO = os.path.join(SELF, "license_bypass.so")                              # LD_PRELOAD shim
 RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
+QMP_SOCK = os.path.join(WD, "x10-qmp.sock")
 HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
 HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
 SSH_HPORT = os.environ.get("X10_SSH_PORT", "22")
 WEB_HPORT = os.environ.get("X10_WEB_PORT", "443")
+NET_MODE = os.environ.get("X10_NET_MODE", "user")
+TAP = os.environ.get("X10_TAP", "ztap-x10")
+AUX_TAP = os.environ.get("X10_AUX_TAP", "ztap-x10-aux")
+GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP if NET_MODE == "direct" else "10.0.2.15")
+NETMASK = os.environ.get("X10_NETMASK", "255.0.0.0" if NET_MODE == "direct" else "255.255.255.0")
+GATEWAY = os.environ.get("X10_GATEWAY", "10.0.0.1" if NET_MODE == "direct" else "10.0.2.2")
+IFACE = os.environ.get("X10_IFACE", "eth1" if NET_MODE == "direct" else "eth0")
 import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
 
 _sh.copyfile(MASTER, RUN)
+os.makedirs(PACKET_DIR, exist_ok=True)
 
 # Clean stale socket
 if os.path.exists(SOCK):
     os.unlink(SOCK)
+if os.path.exists(QMP_SOCK):
+    os.unlink(QMP_SOCK)
 
 # Launch QEMU with serial on a UNIX socket (not -nographic, which ties serial
 # to stdio). -display none suppresses the GUI; -monitor none avoids the monitor
@@ -56,12 +68,27 @@ qemu_cmd = [
     "sudo", "-n", QEMU,
     "-m", "128", "-M", "supermicrox11-bmc",
     "-display", "none", "-monitor", "none",
+    "-qmp", f"unix:{QMP_SOCK},server=on,wait=off",
     "-chardev", f"socket,id=ser0,path={SOCK},server=on,wait=off",
     "-serial", "chardev:ser0",
     "-drive", f"file={RUN},format=raw,if=mtd",
-    "-net", "nic",
-    "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
 ]
+if NET_MODE == "direct":
+    qemu_cmd += [
+        # Bridge both AST2400 MACs so controller ordering cannot silently put
+        # the guest's configured interface on a translated backend.
+        "-netdev", f"tap,id=bmcnet,ifname={TAP},script=no,downscript=no",
+        "-net", "nic,netdev=bmcnet",
+        "-netdev", f"tap,id=bmcaux,ifname={AUX_TAP},script=no,downscript=no",
+        "-net", "nic,netdev=bmcaux",
+        "-object", f"filter-dump,id=netcap,netdev=bmcnet,file={os.path.join(PACKET_DIR, 'qemu-primary.pcap')}",
+        "-object", f"filter-dump,id=auxcap,netdev=bmcaux,file={os.path.join(PACKET_DIR, 'qemu-aux.pcap')}",
+    ]
+else:
+    qemu_cmd += [
+        "-net", "nic",
+        "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
+    ]
 qemu_proc = subprocess.Popen(qemu_cmd)
 
 # Wait for the socket to appear, then fix perms (QEMU runs as root → socket is
@@ -86,12 +113,12 @@ child.expect(r"/ #")
 
 def apply_net():
     for cmd in [
-        "ip link set eth0 addr 4A:0A:AB:7C:96:2F",
-        "ifconfig eth0 10.0.2.15",
-        "ifconfig eth0 netmask 255.255.255.0",
-        "ifconfig eth0 broadcast 10.0.2.255",
-        "ifconfig eth0 up",
-        "ip route add 0.0.0.0/0.0.0.0 via 10.0.2.2",
+        f"ip link set {IFACE} addr 4A:0A:AB:7C:96:2F",
+        f"ifconfig {IFACE} {GUEST_IP}",
+        f"ifconfig {IFACE} netmask {NETMASK}",
+        f"ifconfig {IFACE} up",
+        "ip route del default 2>/dev/null || true",
+        f"ip route add default via {GATEWAY}",
     ]:
         child.sendline(cmd); child.expect(r"/ #")
 
@@ -106,9 +133,9 @@ try:
 except pexpect.TIMEOUT:
     pass
 
-child.sendline("ifconfig eth0"); child.expect(r"/ #")
-if "10.0.2.15" not in child.before:
-    print("NET_CONFIG_FAILED eth0 lost its IP after udhcpc", flush=True)
+child.sendline(f"ifconfig {IFACE}"); child.expect(r"/ #")
+if GUEST_IP not in child.before:
+    print(f"NET_CONFIG_FAILED {IFACE} lost its IP after udhcpc", flush=True)
     qemu_proc.kill(); sys.exit(1)
 
 # Patch SSH: replace SMASH-CLP with a real root shell.
@@ -119,14 +146,29 @@ for cmd in [
     "cat > /tmp/msh << 'WEOF'\n#!/bin/ash\nexec /bin/ash -l\nWEOF",
     "chmod +x /tmp/msh",
     "mount --bind /tmp/msh /SMASH/msh",
-    # Wait for firmware to generate host keys (written on first boot)
-    "while [ ! -f /nv/dropbear/dropbear_rsa_host_key ]; do sleep 1; done",
-    "killall dropbear",
-    "/usr/local/dropbear/sbin/dropbear -p 22"
-    " -r /nv/dropbear/dropbear_rsa_host_key"
-    " -d /nv/dropbear/dropbear_dss_host_key",
 ]:
     child.sendline(cmd); child.expect(r"/ #", timeout=30)
+
+# Firmware creates RSA and DSS keys asynchronously, then starts its own Dropbear.
+# Waiting for RSA alone races the later DSS/start task: our replacement can lose
+# bind(22), exit, and leave no listener after the firmware instance disappears.
+child.sendline("while [ ! -f /nv/dropbear/dropbear_rsa_host_key ] || "
+               "[ ! -f /nv/dropbear/dropbear_dss_host_key ]; do sleep 1; done")
+child.expect(r"/ #", timeout=90)
+child.sendline("i=0; while netstat -lnt 2>/dev/null | grep -q ':22 '; do "
+               "killall dropbear 2>/dev/null; sleep 1; i=$((i+1)); "
+               "[ $i -ge 15 ] && break; done")
+child.expect(r"/ #", timeout=20)
+child.sendline("/usr/local/dropbear/sbin/dropbear -p 22"
+               " -r /nv/dropbear/dropbear_rsa_host_key"
+               " -d /nv/dropbear/dropbear_dss_host_key")
+child.expect(r"/ #", timeout=10)
+child.sendline("sleep 1; netstat -lnt 2>/dev/null | grep -q ':22 ' && "
+               "echo SSH_LISTENING || echo SSH_START_FAILED")
+child.expect(r"/ #", timeout=10)
+if "SSH_LISTENING" not in child.before:
+    print("SSH_START_FAILED no listener on guest port 22", flush=True)
+    qemu_proc.kill(); sys.exit(1)
 
 # Patch Redfish: bypass OEM license check via LD_PRELOAD.
 # index.fcgi (FastCGI Redfish handler) imports license_check() from libipmi.so;
@@ -153,9 +195,24 @@ for cmd in [
 ]:
     child.sendline(cmd); child.expect(r"/ #", timeout=10)
 
+# LanNotifier/udhcpc can run again late and zero both MACs after every service
+# briefly became reachable. Retire that dynamic path, then make the final static
+# assignment authoritative before releasing the bootstrap console.
+child.sendline("killall udhcpc 2>/dev/null; killall LanNotifier 2>/dev/null; sleep 1")
+child.expect(r"/ #", timeout=10)
+apply_net()
+child.sendline(f"ifconfig {IFACE}"); child.expect(r"/ #", timeout=10)
+if GUEST_IP not in child.before:
+    print(f"NET_CONFIG_FAILED final assignment missing on {IFACE}", flush=True)
+    qemu_proc.kill(); sys.exit(1)
+
 # Bootstrap done — disconnect socat, freeing the socket for interactive use.
 child.close()
 print("NET_CONFIGURED", flush=True)
+ready_file = os.environ.get("X10_READY_FILE")
+if ready_file:
+    with open(ready_file, "w", encoding="ascii") as f:
+        f.write(f"{qemu_proc.pid}\n")
 
 # Hold until qemu exits (killed externally via `zbmc stop`).
 try:

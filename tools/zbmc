@@ -9,7 +9,6 @@ set -u
 # status/`all` loop just continues to the next iteration — so Ctrl-C looks dead. Trap forces the whole
 # tool to exit; the in-flight child already got the same SIGINT from the terminal, so it dies with us.
 trap 'echo; exit 130' INT TERM
-ZIPMI="$HOME/phd/src/zipmi"
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
 # CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
@@ -28,6 +27,8 @@ while [ -L "$_src" ]; do
 done
 _SELF="$(cd "$(dirname "$_src")" && pwd)"
 _REPO="$(cd "$_SELF/.." && pwd)"
+ZIPMI="${ZIPMI:-$_REPO/../zipmi}"
+ZHOSTS_FILE="${ZHOSTS_FILE:-$_REPO/zhosts.txt}"
 
 # --- user network config (zbmc.conf) ---
 # Sourced before any box, so ZBMC_POOL and ZBMC_IP_* are available when zbmc.box sets ZBMC_IP.
@@ -35,8 +36,17 @@ _REPO="$(cd "$_SELF/.." && pwd)"
 export ZBMC_POOL="${ZBMC_POOL:-}"
 
 # _zbmc_resolve_ip BOX_NAME POOL_OCTET DEFAULT_IP
-# Priority: ZBMC_IP_<box> (per-box override) > ZBMC_POOL.<octet> > built-in default.
+# zhosts.txt is canonical. Legacy config remains as a fallback for old clones.
 _zbmc_resolve_ip(){
+  local mapped=
+  if [ -f "$ZHOSTS_FILE" ]; then
+    mapped=$(awk -v n="$1" '$1 == n { print $2; exit }' "$ZHOSTS_FILE")
+    if [ -z "$mapped" ]; then
+      echo "zbmc: $1 has no address in $ZHOSTS_FILE" >&2
+      return 1
+    fi
+    echo "$mapped"; return 0
+  fi
   local varname="ZBMC_IP_$(echo "$1" | tr '-' '_')"
   local override="${!varname:-}"
   if [ -n "$override" ]; then echo "$override"
@@ -68,28 +78,19 @@ _zbmc_lo_alias(){
 }
 export -f _zbmc_lo_alias
 
-# _zbmc_check_hosts_ip — warn/fix if /etc/hosts has a stale IP for this box's hostname.
-# Called per-box after sourcing zbmc.box; skipped with --no-fix-ip.
-_zbmc_check_hosts_ip(){
-  [ -n "${ZBMC_NO_FIX_IP:-}" ] && return 0
-  local host="${ZBMC_HOST:-}" ip="${ZBMC_IP:-}"
-  [ -z "$host" ] || [ -z "$ip" ] && return 0
-  local cur; cur=$(grep -E "^[^#]*[[:space:]]${host}([[:space:]]|$)" /etc/hosts 2>/dev/null \
-                   | head -1 | awk '{print $1}')
-  [ -z "$cur" ] && return 0
-  [ "$cur" = "$ip" ] && return 0
-  if [ -w /etc/hosts ]; then
-    perl -i -pe "s/^\Q${cur}\E(\\s.*\\b\Q${host}\E\\b)/${ip}\$1/" /etc/hosts
-    echo "zbmc: /etc/hosts: ${host} ${cur} → ${ip} (fixed)"
-  else
-    echo "zbmc: WARNING: /etc/hosts has ${host} → ${cur}, but config says ${ip}" >&2
-  fi
-}
-
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
-find_box(){ local want="$1" f; for f in "${REGISTRY[@]}"; do [ -f "$f" ] && [ "$(boxname_of "$f")" = "$want" ] && { echo "$f"; return 0; }; done; return 1; }
+boxip_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_IP:-}" ); }
+find_box(){
+  local want="$1" f name ip
+  for f in "${REGISTRY[@]}"; do
+    [ -f "$f" ] || continue
+    name="$(boxname_of "$f")"; ip="$(boxip_of "$f")"
+    { [ "$name" = "$want" ] || [ "$ip" = "$want" ]; } && { echo "$f"; return 0; }
+  done
+  return 1
+}
 
 usage(){
   echo "zbmc — virtual-BMC control"
@@ -103,11 +104,14 @@ usage(){
   echo "  (just the names:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
-  echo "  start [--build][--no-web]   boot (detached); binds the real IP:{22,443,623}; web auto-starts"
-  echo "                              needs root — use 'sudo zbmc' or --run-as-me to skip"
-  echo "  stop              kill the QEMU process"
-  echo "  restart           stop then start"
+  echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web]"
+  echo "                    boot and wait through functional readiness (default); record evidence"
+  echo "                    --no-wait leaves a supervised readiness watcher running"
+  echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
+  echo "  restart           down then blocking up"
   echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
+  echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
+  echo "  evidence [RUN_ID] show the run evidence directory and its files"
   echo "  ssh [cmd]         SSH into the box (dropbear; sysadmin/blank)"
   echo "  telnet            telnet into the box (mini_telnetd; no auth; port 23)"
   echo "  ipmi <cmd...>     authenticated zipmi (e.g. zbmc idrac9 ipmi mc info)"
@@ -118,8 +122,7 @@ usage(){
   echo "  build             rebuild the boot image"
   echo "  rename <newname>  rename the box (dispatch name + host alias; qemu machine/image untouched)"
   echo
-  echo "  --no-fix-ip       don't touch /etc/hosts even if it disagrees with the box's IP"
-  echo "                    (default: if /etc/hosts is writable and stale, zbmc fixes it and says so)"
+  echo "  Address map: $ZHOSTS_FILE (generated commands always use numeric IPs)"
 }
 
 # --- status probe helpers -------------------------------------------------------------
@@ -127,17 +130,17 @@ usage(){
 # _ipmi_invocation is PURE (no network) so the shown command == the probed command.
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
   if [ "$1" = pw ]; then
-    echo "zipmi -H $ZBMC_HOST -U ${IPMI_USER:-} -P ${IPMI_PW:-}${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P ${IPMI_PW:-}${IPMI_OPTS:+ $IPMI_OPTS}"
   else
-    echo "zipmi -H $ZBMC_HOST -U ${IPMI_USER:-} -K ${IPMI_KEY:-}${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -K ${IPMI_KEY:-}${IPMI_OPTS:+ $IPMI_OPTS}"
   fi; }
 
 _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
-  local r
+  local r outer=$(( ${IPMI_T:-3} + 6 ))
   if [ "$1" = pw ]; then
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL "$outer" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" -R 0 mc info 2>&1)
   else
-    r=$(timeout -s KILL 4 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t 3 -R 0 mc info 2>&1)
+    r=$(timeout -s KILL "$outer" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" -R 0 mc info 2>&1)
   fi
   # authfail patterns checked FIRST — "BMC error" could otherwise match a 0x0d reply
   echo "$r" | grep -qiE "0x0d|auth code mismatch|unauthorized" && return 2
@@ -146,6 +149,12 @@ _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
   return 1; }
 
 _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY|NOTE
+  if declare -F zbmc_ipmi_health >/dev/null; then
+    local r rc
+    r=$(zbmc_ipmi_health 2>&1); rc=$?
+    [ "$rc" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|$r"; return; }
+    echo "fail||${r:-box-specific IPMI probe failed}"; return
+  fi
   if ! python3 -c "import zipmi" 2>/dev/null && ! PYTHONPATH="$ZIPMI" python3 -c "import zipmi" 2>/dev/null; then
     if command -v ipmitool >/dev/null 2>&1; then
       local r; r=$(timeout -s KILL 4 ipmitool -I lanplus -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" mc info 2>&1)
@@ -168,18 +177,24 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
 
 _probe_ssh(){
   if timeout -s KILL 4 bash -c '. "'"$BF"'"; zbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then
-    echo "ok|zbmc $ZBMC_NAME ssh|"; else echo "fail||no (refused/booting)"; fi; }
+    echo "ok|zbmc $ZBMC_IP ssh|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
+  if declare -F zbmc_redfish_health >/dev/null; then
+    local r rc
+    r=$(zbmc_redfish_health 2>&1); rc=$?
+    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers|$r"; return; }
+    echo "fail||${r:-box-specific Redfish probe failed}"; return
+  fi
   local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
   if timeout -s KILL 4 curl -sk --max-time 3 -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi "ManagerCollection\|Members"; then
-    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_HOST:${WEB_PORT:-443}/redfish/v1/Managers|"
+    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers|"
   else echo "fail||down"; fi; }
 
 _probe_console(){
   if [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
-    echo "ok|zbmc $ZBMC_NAME console|"; else echo "fail||n/a"; fi; }
+    echo "ok|zbmc $ZBMC_IP console|"; else echo "fail||n/a"; fi; }
 
 # Allow `ZBMC_SOURCE_ONLY=1 . zbmc` to load helpers without running a verb (tests).
 [ -n "${ZBMC_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
@@ -187,7 +202,7 @@ _probe_console(){
 [ $# -eq 0 ] && { usage; exit 0; }
 
 _need_root(){ # verbs that bind privileged ports or kill qemu need root
-  case "$1" in start|stop|restart|shell|snapshot|restore) return 0;; esac; return 1; }
+  case "$1" in up|start|down|stop|restart|shell|snapshot|restore) return 0;; esac; return 1; }
 
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — just the box names, one per line (no status). For scripting/quick recall.
@@ -233,22 +248,34 @@ BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 
 export ZBMC_IP ZBMC_HOST ZBMC_NAME
 VERB="${1:-status}"; [ $# -gt 0 ] && shift
 
-running(){ # pidfile first; fall back to a qemu whose hostfwd matches this box's IPMI port
+running(){ # pidfile first; then a box-specific or legacy hostfwd lookup
   local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
+  if declare -F zbmc_running >/dev/null; then
+    p=$(zbmc_running) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+  fi
   p=$(pgrep -f "hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
   return 1; }
+
+# Per-run event records, packet capture, readiness state machine, and failure explanations.
+# shellcheck disable=SC1091
+. "$_SELF/zbmc-runlib"
 # IPMI via zipmi, straight at the box's real IP + standard port 623 (qemu binds it directly as root).
 # A box may override by defining zbmc_ipmi() (e.g. X14 uses password-auth ipmitool, not zipmi/-K).
 Z(){ if declare -F zbmc_ipmi >/dev/null; then zbmc_ipmi "$@"; else
   timeout -s KILL "$(( ${IPMI_T:-3} + 6 ))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -K "${IPMI_KEY:-}" ${IPMI_OPTS:-} -t "${IPMI_T:-3}" "$@" 2>&1; fi; }
 
-# --run-as-me / --no-fix-ip: per-invocation flags
+_zbmc_spawn_watcher(){ # run-id qemu-pid deadline detail
+  nohup "$0" "$ZBMC_IP" _watch "$1" "$2" "$3" "$4" </dev/null >"$ZBMC_RUN_ROOT/$1/progress.log" 2>&1 &
+  printf '%s\n' "$!" >"$ZBMC_RUN_ROOT/$1/watcher.pid"
+  echo "$!"
+}
+
+# --run-as-me: per-invocation flag
 ZBMC_RUN_AS_ME=0; ZBMC_NO_FIX_IP=
 for _a in "$@"; do
   [ "$_a" = "--run-as-me" ] && ZBMC_RUN_AS_ME=1
   [ "$_a" = "--no-fix-ip" ] && ZBMC_NO_FIX_IP=1
 done
-_zbmc_check_hosts_ip
 if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
   echo "zbmc: '$VERB' needs root to bind privileged ports and manage qemu." >&2
   echo "  sudo zbmc $BOX $VERB $*" >&2
@@ -257,18 +284,66 @@ if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
 fi
 
 case "$VERB" in
-  start)
-    if p=$(running); then echo "$ZBMC_NAME already running (qemu $p)"; exit 0; fi
-    do_web=1
+  _watch)
+    [ $# -ge 3 ] || exit 2
+    _zr_load "$1" || exit 2
+    ZBMC_DETAIL="${4:-0}"
+    _zr_wait_ready "$2" "$3" ;;
+  up|start)
+    do_web=1; _wait=1; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
+    _original_args="$*"
     for a in "$@"; do case "$a" in
       --build)  zbmc_build || exit 1;;
       --no-web) do_web=0;;
+      --no-wait) _wait=0;;
+      -v|--verbose) ZBMC_DETAIL=1;;
+      -d|--debug) ZBMC_DETAIL=2;;
+      --deadline=*) _deadline="${a#*=}";;
     esac; done
+    set -- "$@"
+    while [ $# -gt 0 ]; do
+      if [ "$1" = --deadline ]; then
+        [ $# -ge 2 ] || { echo "zbmc: --deadline needs seconds" >&2; exit 2; }
+        _deadline="$2"; shift 2
+      else shift; fi
+    done
+    [[ "$_deadline" =~ ^[0-9]+$ ]] || { echo "zbmc: bad deadline '$_deadline'" >&2; exit 2; }
+    ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"
+    export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND
+    if p=$(running); then _zr_init attach; _zr_event QEMU reused "already running as pid $p"
+    else
+      _zr_init boot
+      if declare -F zbmc_ready >/dev/null; then
+        _rmsg=$(zbmc_ready 2>&1); _rrc=$?
+        if [ "$_rrc" != 0 ]; then
+          _zr_event BUILD failed "$_rmsg"; _zr_result failed BUILD "$_rmsg"; exit 1
+        fi
+        _zr_event BUILD ready "$_rmsg"
+      fi
     # zbmc_boot self-elevates (sudo), sets the lo0 alias + /etc/hosts, and binds $ZBMC_IP:{22,443,623}
     # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
-    qp=$(zbmc_boot) || { echo "boot failed"; exit 1; }
+    qp=$(zbmc_boot) || {
+      _zr_archive_logs; _zr_snapshot failure; _zr_event LAUNCH failed 'box launcher returned failure'; _zr_result failed LAUNCH 'box launcher returned failure'
+      echo "$ZBMC_NAME: boot failed; evidence: $ZBMC_RUN_DIR" >&2; exit 1
+    }
+    sleep 0.5
+    if [ -z "$qp" ] || ! ps -p "$qp" >/dev/null 2>&1; then
+      echo "$ZBMC_NAME: boot failed — QEMU did not stay running; check $LOG" >&2
+      rm -f "$PIDF"
+      _zr_archive_logs; _zr_snapshot failure; _zr_event QEMU failed 'QEMU did not stay running'; _zr_result failed QEMU 'QEMU did not stay running'
+      exit 1
+    fi
     echo "$qp" > "$PIDF"
-    echo "$ZBMC_NAME started: qemu pid $qp  →  $ZBMC_HOST ($ZBMC_IP)   console -> $LOG"
+      p="$qp"
+      _zr_event LAUNCH complete "qemu pid $p launched for $ZBMC_IP"
+    fi
+    qp="$p"
+    if ! _zr_capture_start; then
+      _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure
+      _zr_result failed CAPTURE 'baseline host packet capture failed to start'
+      echo "Baseline capture failed; QEMU remains up for diagnosis. Evidence: $ZBMC_RUN_DIR" >&2
+      exit 1
+    fi
     # auto-bring-up web once SSH is reachable (box needs ~6-15 min to boot). --no-web skips.
     if [ "$do_web" = 1 ]; then
       nohup bash -c '. "'"$BF"'"; qp="'"$qp"'"
@@ -279,15 +354,59 @@ case "$VERB" in
         done' </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
       echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
-    echo "  watch:  zbmc $ZBMC_NAME status -f   (follow until READY; --build rebuild, --no-web skip)" ;;
-  stop)
+    if [ "$_wait" = 1 ]; then
+      trap '_watch_pid=$(_zbmc_spawn_watcher "$ZBMC_RUN_ID" "$p" "$_deadline" "$ZBMC_DETAIL"); echo; echo "Readiness watcher $_watch_pid continues; follow $ZBMC_RUN_DIR/progress.log"; exit 130' INT TERM
+      _zr_wait_ready "$p" "$_deadline"; _wait_rc=$?
+      trap 'echo; exit 130' INT TERM
+      exit "$_wait_rc"
+    else
+      _watch_pid=$(_zbmc_spawn_watcher "$ZBMC_RUN_ID" "$p" "$_deadline" "$ZBMC_DETAIL")
+      _zr_event WATCHER active "pid $_watch_pid continues readiness checks; follow $ZBMC_RUN_DIR/progress.log"
+      echo "Evidence: $ZBMC_RUN_DIR"
+    fi ;;
+  down|stop)
     # kill web-bringup poller first (otherwise it lingers after qemu dies, may prompt for SSH passwords)
     wbpid=$(cat "$ZBMC_DIR/web-bringup.pid" 2>/dev/null) && kill "$wbpid" 2>/dev/null; rm -f "$ZBMC_DIR/web-bringup.pid"
-    if p=$(running); then kill "$p" 2>/dev/null && echo "$ZBMC_NAME stopped (killed qemu $p)"; else echo "$ZBMC_NAME not running"; fi ;;
-  restart) "$0" "$BOX" stop; sleep 1; exec "$0" "$BOX" start "$@" ;;
+    if _zr_load "" 2>/dev/null; then
+      _watch_pid=$(cat "$ZBMC_RUN_DIR/watcher.pid" 2>/dev/null || true)
+      [ -z "$_watch_pid" ] || kill "$_watch_pid" 2>/dev/null || true
+    fi
+    _zr_stop_current_run
+    if p=$(running); then
+      kill "$p" 2>/dev/null || true
+      for _ in $(seq 1 20); do ps -p "$p" >/dev/null 2>&1 || break; sleep 0.25; done
+      if ps -p "$p" >/dev/null 2>&1; then
+        echo "$ZBMC_NAME: QEMU $p did not stop after 5s" >&2; exit 1
+      fi
+      rm -f "$PIDF"
+      echo "$ZBMC_NAME stopped (qemu $p exited)"
+    else echo "$ZBMC_NAME not running"; fi ;;
+  restart) "$0" "$BOX" down; sleep 1; exec "$0" "$BOX" up "$@" ;;
+  explain) _zr_explain "${1:-}" ;;
+  evidence) _zr_evidence "${1:-}" ;;
   status)
-    _follow=0; [ "${1:-}" = "-f" ] && _follow=1
+    _follow=0; ZBMC_DETAIL=0
+    for _a in "$@"; do case "$_a" in
+      -f|--follow) _follow=1;;
+      -v|--verbose) ZBMC_DETAIL=1;;
+      -d|--debug) ZBMC_DETAIL=2;;
+    esac; done
     while :; do
+      printf "%-9s : %s\n" "Observed" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      if _zr_load "" 2>/dev/null; then
+        printf "%-9s : " "Last run"
+        python3 - "$ZBMC_RUN_DIR" <<'PY'
+import json, os, sys
+root = sys.argv[1]
+p = os.path.join(root, "result.json")
+if os.path.exists(p):
+    r = json.load(open(p, encoding="utf-8"))
+    print(f'{r["state"]}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
+else:
+    print('in progress')
+print(f'Evidence  : {root}')
+PY
+      fi
       # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
       printf "%-9s : " "Build"
       if declare -F zbmc_ready >/dev/null; then
@@ -296,6 +415,9 @@ case "$VERB" in
       [ "$_rrc" = 0 ] && echo "${CG}$_rmsg${CZ}" || echo "${CR}$_rmsg${CZ}"
       if p=$(running); then echo "QEMU      : ${CG}UP${CZ} (pid $p, $(ps -p "$p" -o etime= | tr -d ' '))"
       else echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"; [ "$_follow" = 0 ] && exit 1; sleep 15; continue; fi
+      printf "%-9s : " "L2"
+      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then echo "${CG}OK${CZ}  $ZBMC_IP answers ICMP"
+      else echo "${CR}no ICMP reply${CZ} from $ZBMC_IP"; fi
       # capability rows — probe concurrently, collect, render. Each helper echoes STATE|DISPLAY|NOTE.
       tmp=$(mktemp -d)
       ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &
@@ -307,12 +429,14 @@ case "$VERB" in
         local st ds nt IFS='|'; read -r st ds nt < "$2"
         printf "%-9s : " "$1"
         case "$st" in
-          ok)       echo "${CG}OK${CZ}${ds:+  ${CC}$ds${CZ}}" ;;
+          ok)       echo "${CG}OK${CZ}${ds:+  ${CC}$ds${CZ}}${nt:+  $([ "$ZBMC_DETAIL" -gt 0 ] && echo "— $nt")}" ;;
           authfail) echo "${CR}${nt}${CZ}  → ${CG}$ds${CZ}" ;;
           *)        echo "${CR}${nt:-fail}${CZ}" ;;
         esac; }
       _sshok=0; grep -q '^ok' "$tmp/ssh"  && _sshok=1
       _ipmiok=0; grep -q '^ok' "$tmp/ipmi" && _ipmiok=1
+      _redfishok=0; grep -q '^ok' "$tmp/redfish" && _redfishok=1
+      _consoleok=0; grep -q '^ok' "$tmp/console" && _consoleok=1
       _row SSH     "$tmp/ssh"
       _row IPMI    "$tmp/ipmi"
       _row Redfish "$tmp/redfish"
@@ -329,9 +453,17 @@ case "$VERB" in
         else echo "${CR}n/a${CZ}"; fi
       else echo "${CR}n/a${CZ} (ssh down)"; fi
       printf "%-9s : " "Net (IP)"
-      echo "${CC}$ZBMC_HOST${CZ} = ${CP}$ZBMC_IP${CZ}"
+      echo "${CP}$ZBMC_IP${CZ}  (${CC}$ZBMC_NAME${CZ})"
+      _overall=1; _missing=
+      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ssh '* ]] && [ "$_sshok" = 0 ] && { _overall=0; _missing="$_missing ssh"; }
+      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ipmi '* ]] && [ "$_ipmiok" = 0 ] && { _overall=0; _missing="$_missing ipmi"; }
+      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' redfish '* ]] && [ "$_redfishok" = 0 ] && { _overall=0; _missing="$_missing redfish"; }
+      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' console '* ]] && [ "$_consoleok" = 0 ] && { _overall=0; _missing="$_missing console"; }
+      printf "%-9s : " "Health"
+      if [ "$_overall" = 1 ]; then echo "${CG}READY${CZ} (functional probes: ${ZBMC_REQUIRED_SERVICES:-ssh ipmi})"
+      else echo "${CR}NOT READY${CZ} (missing:${_missing})"; fi
       [ "$_follow" = 0 ] && break
-      { [ "$_sshok" = 1 ] && [ "$_ipmiok" = 1 ]; } && { echo "==== READY:  ssh root@$ZBMC_HOST  |  zipmi -H $ZBMC_HOST ===="; break; }
+      [ "$_overall" = 1 ] && { echo "==== READY:  zbmc $ZBMC_IP console  |  zipmi -H $ZBMC_IP ===="; break; }
       sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
     done ;;
   ssh)    zbmc_ssh "$@" ;;

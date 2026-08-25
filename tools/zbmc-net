@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Minimal direct-LAN plumbing for zbmc. Uses iproute2 only: no network manager,
+# DHCP, NAT, or port forwarding. The physical uplink remains the bridge port and
+# the host keeps its original address on the bridge device.
+set -euo pipefail
+
+BR=${ZBMC_BRIDGE:-br-zbmc}
+UPLINK=${ZBMC_UPLINK:-$(ip route show default | awk 'NR == 1 {print $5}')}
+STATE=${ZBMC_NET_STATE:-/run/zbmc-net.state}
+
+need_root() { [ "$(id -u)" = 0 ] || exec sudo -n "$0" "$@"; }
+
+setup_bridge() {
+  [ -n "$UPLINK" ] || { echo "zbmc-net: cannot determine physical uplink" >&2; return 1; }
+  ip link show "$UPLINK" >/dev/null
+  if ip link show "$BR" >/dev/null 2>&1; then return 0; fi
+
+  local mac mtu v4 gw
+  mac=$(ip -o link show dev "$UPLINK" | awk '{for (i=1;i<=NF;i++) if ($i=="link/ether") {print $(i+1); exit}}')
+  mtu=$(ip -o link show dev "$UPLINK" | awk '{for (i=1;i<=NF;i++) if ($i=="mtu") {print $(i+1); exit}}')
+  v4=$(ip -o -4 addr show dev "$UPLINK" scope global | awk 'NR == 1 {print $4}')
+  gw=$(ip route show default dev "$UPLINK" | awk 'NR == 1 {print $3}')
+  [ -n "$v4" ] || { echo "zbmc-net: $UPLINK has no global IPv4 address" >&2; return 1; }
+
+  printf 'UPLINK=%q\nBR=%q\nV4=%q\nGW=%q\n' "$UPLINK" "$BR" "$v4" "$gw" > "$STATE"
+  ip link add "$BR" address "$mac" mtu "$mtu" type bridge
+  ip link set "$BR" up
+  ip addr add "$v4" dev "$BR"
+  [ -z "$gw" ] || ip route replace default via "$gw" dev "$BR" onlink
+  ip link set "$UPLINK" master "$BR"
+  ip addr del "$v4" dev "$UPLINK"
+}
+
+add_tap() {
+  local tap=${1:?tap name required} owner=${2:-${SUDO_USER:-$(id -un)}}
+  setup_bridge
+  ip link show "$tap" >/dev/null 2>&1 || ip tuntap add dev "$tap" mode tap user "$owner"
+  ip link set "$tap" master "$BR"
+  ip link set "$tap" up
+}
+
+teardown() {
+  [ -f "$STATE" ] || { echo "zbmc-net: no saved state at $STATE" >&2; return 1; }
+  # shellcheck disable=SC1090
+  . "$STATE"
+  for tap in /sys/class/net/*/brport; do
+    [ -e "$tap" ] || continue
+    tap=${tap%/brport}; tap=${tap##*/}
+    [ "$tap" = "$UPLINK" ] || ip link del "$tap" 2>/dev/null || true
+  done
+  ip link set "$UPLINK" nomaster
+  ip addr add "$V4" dev "$UPLINK" 2>/dev/null || true
+  [ -z "$GW" ] || ip route replace default via "$GW" dev "$UPLINK" onlink
+  ip link del "$BR"
+  rm -f "$STATE"
+}
+
+cmd=${1:-status}; shift || true
+case "$cmd" in
+  setup)    need_root setup; setup_bridge ;;
+  add-tap)  tap=${1:?tap name required}; owner=${2:-${USER}}; need_root add-tap "$tap" "$owner"; add_tap "$tap" "$owner" ;;
+  del-tap)  tap=${1:?tap name required}; need_root del-tap "$tap"; ip link del "$tap" ;;
+  teardown) need_root teardown; teardown ;;
+  status)   ip -br link show "$BR" 2>/dev/null || true; ip -br addr show "$BR" 2>/dev/null || true; ip link show master "$BR" 2>/dev/null || true ;;
+  *) echo "usage: zbmc-net {setup|add-tap TAP [OWNER]|del-tap TAP|status|teardown}" >&2; exit 2 ;;
+esac

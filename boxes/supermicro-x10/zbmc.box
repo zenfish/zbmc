@@ -51,28 +51,57 @@ SSH_USER=ADMIN
 SSH_PW=ADMIN
 IPMI_PORT=623
 
-SSH_PORT=$(_zbmc_pick_port 22 2222)
-WEB_PORT=$(_zbmc_pick_port 443 8443)
+SSH_PORT=22
+WEB_PORT=443
 export X10_SSH_PORT="$SSH_PORT" X10_WEB_PORT="$WEB_PORT"
+X10_NET_MODE=direct
+X10_TAP=ztap-x10
+X10_AUX_TAP=ztap-x10-aux
+X10_NETMASK=255.0.0.0
+X10_GATEWAY=10.0.0.1
+if [ -x /home/zen/opt/qemu-11/bin/qemu-system-arm ]; then
+  X10_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+fi
+export X10_NET_MODE X10_TAP X10_AUX_TAP X10_NETMASK X10_GATEWAY X10_QEMU
 
-PIDF=/tmp/zbmc-supermicro-x10.pid
+PIDF="$ZBMC_DIR/zbmc.pid"
 SOCK="$ZBMC_DIR/x10-serial.sock"
+QMP_SOCK="$ZBMC_DIR/x10-qmp.sock"
 LOG="$ZBMC_DIR/x10-start.log"
+CONSOLE_LOG="$ZBMC_DIR/x10-console.log"
+ZBMC_BOOTSTRAP_PIDF="$ZBMC_DIR/x10-driver.pid"
+ZBMC_GUEST_SNAPSHOT_AT=bootstrap
+ZBMC_READY_DEADLINE=300
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
+ZBMC_STABILITY_SECONDS=60
+ZBMC_TIMING_PROFILE=stable60-v1
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
+ZBMC_CAPTURE_INTERFACES="br-zbmc $X10_TAP $X10_AUX_TAP"
+# Initial expectations come from prior observed cold boots. Successful run records
+# replace these profiles with measured averages and ranges automatically.
+ZBMC_EXPECTED_FIRMWARE=5
+ZBMC_EXPECTED_BOOTSTRAP=130
+ZBMC_EXPECTED_L2=95
+ZBMC_EXPECTED_READY=190
 
 # boot: alias lo0 + prime sudo (so start-x10.sh's `sudo -n qemu` never prompts),
 # then launch the detached driver; it prints the qemu pid on NET_CONFIGURED.
 # Write that pid to PIDF as the reliable handle for the dispatcher's running().
 zbmc_boot() {
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  _zbmc_lo_alias "$ZBMC_IP"
-  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
-    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
+  $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_TAP" "${SUDO_USER:-${USER}}" || return 1
+  $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_AUX_TAP" "${SUDO_USER:-${USER}}" || return 1
   mkdir -p "$ZBMC_DIR"
-  WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" bash "$PROJ_DIR/start-x10.sh" >/dev/null 2>&1
-  local qp; qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1)
+  WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" ZBMC_IP="$ZBMC_IP" \
+    X10_LAUNCH_ONLY=1 X10_PACKET_DIR="${ZBMC_RUN_DIR:-$ZBMC_DIR}/packets" \
+    bash "$PROJ_DIR/start-x10.sh" >/dev/null 2>&1
+  local qp; qp=$(pgrep -f "^[^ ]*/qemu-system-arm .*ifname=$X10_TAP" | head -1)
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
   echo "$qp"
 }
+
+zbmc_running() { pgrep -f "^[^ ]*/qemu-system-arm .*ifname=$X10_TAP" | head -1; }
 
 zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $X10_MASTER (fetch: firmware/download-fw.sh supermicro-x10; orig BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
 zbmc_ready() {
@@ -123,19 +152,36 @@ zbmc_ssh() {
 }
 
 zbmc_web() {
-  local url="https://$ZBMC_HOST:${WEB_PORT:-443}/"
+  local url="https://$ZBMC_IP:${WEB_PORT:-443}/"
   echo "x10 web: $url  (lighttpd; port 443 forwarded via QEMU slirp)"
   echo "  curl -sk $url"
   echo "  curl -sk -u ADMIN:ADMIN $url/redfish/v1/  (license bypass via LD_PRELOAD)"
 }
 
 zbmc_redfish_health() {
-  local r; r=$(curl -sk -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers/1" 2>/dev/null)
+  local r detail; r=$(curl -sk --max-time 4 -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers/1" 2>/dev/null)
   if echo "$r" | grep -q '"FirmwareVersion"'; then
-    echo "REDFISH OK ($(echo "$r" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(f"FW {d[\"FirmwareVersion\"]}, {d[\"ManagerType\"]}")' 2>/dev/null))"; return 0
+    detail=$(echo "$r" | python3 -c 'import sys,json; d=json.load(sys.stdin); print("FW %s, %s" % (d.get("FirmwareVersion", "?"), d.get("ManagerType", "Manager")))' 2>/dev/null)
+    echo "REDFISH OK (${detail:-authenticated Managers/1 resource})"; return 0
   else
     echo "REDFISH down (license bypass may not be applied)"; return 1
   fi
+}
+
+# One-shot guest-side sensor snapshot after the serial bootstrap releases the socket.
+# X10's ancient ftgmac receive path can panic on larger SSH flows, so instrumentation
+# must not add another network session. Serial is bounded and outside that data path.
+zbmc_guest_snapshot() {
+  {
+    printf '\necho "[identity]"; date; uname -a\n'
+    printf 'echo "[interfaces]"; ifconfig -a\n'
+    printf 'echo "[routes]"; cat /proc/net/route\n'
+    printf 'echo "[counters]"; cat /proc/net/dev\n'
+    printf 'echo "[processes]"; ps w\n'
+    printf 'echo "[listeners]"; netstat -anp 2>/dev/null\n'
+    printf 'echo "[dmesg-tail]"; dmesg | tail -80\n'
+    sleep 4
+  } | timeout -s KILL 10 socat - "UNIX-CONNECT:$SOCK"
 }
 
 # Interactive root shell via serial UNIX socket (socat). Ctrl-] to detach.
