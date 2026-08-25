@@ -414,6 +414,7 @@ _zr_wait_ready(){
         _zr_highest=READY
         _zr_event READY ready "required services (${ZBMC_REQUIRED_SERVICES:-ssh ipmi}) stable for ${_zr_stable_elapsed}s; total ${_zr_elapsed_s}s"
         _zr_timing READY "$_zr_elapsed_s"
+        printf '%s\n' "$_zr_now_epoch" >"$ZBMC_RUN_DIR/ready-epoch"
         _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
         _zr_result ready READY ''
         ( trap '' HUP; _zr_health_watch "$_zr_pid" ) >/dev/null 2>&1 &

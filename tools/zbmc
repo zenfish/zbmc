@@ -408,7 +408,25 @@ print(f'Evidence  : {root}')
 hp = os.path.join(root, "health.json")
 if os.path.exists(hp):
     h = json.load(open(hp, encoding="utf-8"))
-    print(f'Health watch: {h["state"]}, run age={h["run_uptime_seconds"]}s, observed={h["observed_epoch"]}')
+    from datetime import datetime, timezone
+    observed = int(h["observed_epoch"])
+    age = max(0, int(datetime.now(timezone.utc).timestamp()) - observed)
+    run_s = int(h["run_uptime_seconds"])
+    ready_path = os.path.join(root, "ready-epoch")
+    ready_s = None
+    if os.path.exists(ready_path):
+        ready_s = max(0, int(datetime.now(timezone.utc).timestamp()) - int(open(ready_path).read().strip()))
+    elif os.path.exists(os.path.join(root, "events.jsonl")):
+        for line in open(os.path.join(root, "events.jsonl"), encoding="utf-8"):
+            try:
+                event = json.loads(line)
+                if event.get("stage") == "READY" and event.get("state") == "ready":
+                    ready_s = max(0, int(datetime.now(timezone.utc).timestamp()) - int(event["time_epoch"]))
+            except Exception:
+                pass
+    ready_text = "unknown" if ready_s is None else f'{ready_s//3600:02d}:{(ready_s%3600)//60:02d}:{ready_s%60:02d}'
+    print(f'Health watch: {h["state"]}, run age={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, ready age={ready_text}, '
+          f'last check={datetime.fromtimestamp(observed, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}, check age={age}s')
 PY
       fi
       # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
@@ -458,6 +476,8 @@ PY
       else echo "${CR}n/a${CZ} (ssh down)"; fi
       printf "%-9s : " "Net (IP)"
       echo "${CP}$ZBMC_IP${CZ}  (${CC}$ZBMC_NAME${CZ})"
+      printf "%-9s : " "Remediation"
+      echo "${ZBMC_REMEDIATION:-none configured}"
       _overall=1; _missing=
       [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ssh '* ]] && [ "$_sshok" = 0 ] && { _overall=0; _missing="$_missing ssh"; }
       [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ipmi '* ]] && [ "$_ipmiok" = 0 ] && { _overall=0; _missing="$_missing ipmi"; }
