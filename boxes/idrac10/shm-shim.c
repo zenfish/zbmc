@@ -192,12 +192,13 @@ static int mem_write(int fd, unsigned long addr, const void *src, size_t n) {
     return pwrite(fd, src, n, (off_t)addr) == (ssize_t)n ? 0 : -1;
 }
 
-/* Decoded from this build's libipmicmdtableapi.so.9.9.9: the GOT entries
+/* Decoded from this build's libipmicmdtableapi.so.9.9.9. Ghidra's image
+ * base is 0x100000, so these are the runtime-relative GOT offsets. They
  * lead to the active 16-byte command table and its uint16 entry count. The
  * library calls its handlers directly, so LD_PRELOAD symbol interposition
  * cannot replace Get Device ID on the network path. */
-#define IPMI_CMD_TABLE_GOT_OFFSET      0x1175e0
-#define IPMI_CMD_TABLE_SIZE_GOT_OFFSET 0x117610
+#define IPMI_CMD_TABLE_GOT_OFFSET      0x175e0
+#define IPMI_CMD_TABLE_SIZE_GOT_OFFSET 0x17610
 
 static void patch_ipmi_command_table(int mfd) {
     static int patched;
