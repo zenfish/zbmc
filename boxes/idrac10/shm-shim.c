@@ -48,6 +48,10 @@
 #define MAX_SEGS 64
 #define MAX_SEMS 64
 #define SHM_DIR  "/tmp"
+/* AIM creates the 54,340-byte SDC regions before fullfw opens them with
+ * shmget(key, 0, 0). The emulator has no AIM producer, so preserve that
+ * observed capacity when materializing an otherwise-size-less region. */
+#define UNKNOWN_SDC_SIZE 54340
 
 typedef struct {
     key_t   key;
@@ -398,7 +402,7 @@ int shmget(key_t key, size_t size, int shmflg) {
     seg_t *n = &segs[nseg];
     n->key   = key;
     n->shmid = nseg + 1;  /* 1-indexed fake id */
-    n->size  = size > 0 ? size : 4096;
+    n->size  = size > 0 ? size : UNKNOWN_SDC_SIZE;
     n->mapped = NULL;
     snprintf(n->path, sizeof(n->path), SHM_DIR "/shmshim2-%08x", (unsigned)key);
 

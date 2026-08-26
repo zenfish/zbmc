@@ -14,7 +14,8 @@ wrapper="$(sed -n '/RequestHandleTableSearch(/,/^}/p' "$source_file")"
 [ "$(grep -Ec 'case 0x[[:xdigit:]]+:' <<<"$wrapper")" -eq 2 ]
 ! grep -Eq 'out->(selector|required_priv|request_len|reserved)[[:space:]]*=' <<<"$wrapper"
 ! grep -q 'shmget ENOENT (no IPC_CREAT, not found)' "$source_file"
-grep -q 'n->size  = size > 0 ? size : 4096;' "$source_file"
+grep -q '#define UNKNOWN_SDC_SIZE 54340' "$source_file"
+grep -q 'n->size  = size > 0 ? size : UNKNOWN_SDC_SIZE;' "$source_file"
 
 real_line="$(grep -n 'found = real_fn(message, out);' <<<"$wrapper" | cut -d: -f1)"
 replace_line="$(grep -n 'out->handler =' <<<"$wrapper" | head -1 | cut -d: -f1)"
