@@ -905,6 +905,10 @@ PY
       if [ "$ZBMC_DETAIL" -gt 0 ]; then
         _row(){
           local label="$1" state="$2" why="$3" display="$4" note="$5" detail
+          if [ "$state" = STARTING ]; then
+            printf "%-9s : %s\n" "$label" "$(_colored_state "$state")"
+            return
+          fi
           detail="$why"
           if [ "$why" = required ]; then
             if [ "$state" = READY ]; then detail=; else detail=expected; fi
