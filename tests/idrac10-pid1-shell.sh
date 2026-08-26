@@ -21,7 +21,10 @@ grep -A8 '^zbmc_ipmi_health()' "$box" | grep -q 'raw 0x06 0x3b 0x04'
 grep -q 'usb@f0828100' "$overlay"
 grep -q -- '-device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1' "$box"
 grep -q '/home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64' "$box"
-grep -q '^+    \.high = &desc_device_net,' "$qemu_patch"
+grep -q '^+static const USBDescDevice desc_device_net_high' "$qemu_patch"
+[ "$(grep -c '^+.*wMaxPacketSize.*= 0x200' "$qemu_patch")" -eq 4 ]
+[ "$(grep -c '^+.*bInterval.*= 9' "$qemu_patch")" -eq 2 ]
+[ "$(grep -c '^+.*p->ep->max_packet_size' "$qemu_patch")" -eq 2 ]
 grep -q 'hostfwd=udp:.*10.0.2.15:623' "$box"
 grep -q 'pgrep -f "hostfwd=udp:\$ZBMC_IP:623-"' "$box"
 grep -q 'hostfwd=tcp:.*10.0.3.15:22' "$box"
