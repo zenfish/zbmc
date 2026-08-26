@@ -14,6 +14,7 @@ if tail -n 12 "$script" | grep -q '^exit '; then
 fi
 grep -A5 '^zbmc_ssh()' "$box" | grep -q 'sshpass'
 grep -A5 '^zbmc_console()' "$box" | grep -q 'socat'
+grep -A8 '^zbmc_ipmi_health()' "$box" | grep -q 'raw 0x06 0x3b 0x04'
 ! grep -q 'pkill .*fullfw' "$driver"
 
 echo "idrac10 access paths and PID 1 shell supervision: PASS"

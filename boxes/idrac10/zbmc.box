@@ -112,6 +112,14 @@ zbmc_console() {
   local SUDO=; { [ -r "$sk" ] && [ -w "$sk" ]; } || { [ "$(id -u)" = 0 ] || SUDO="sudo -n"; }
   exec $SUDO socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$sk"
 }
+zbmc_ipmi_health() {
+  local out rc
+  out=$(timeout -s KILL "$((IPMI_T + 10))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -K "$IPMI_KEY" -t "$IPMI_T" -R 0 \
+    raw 0x06 0x3b 0x04 2>&1); rc=$?
+  [ "$rc" = 0 ] && { echo "authenticated RMCP+ works; ordinary command dispatch is not ready"; return 1; }
+  echo "${out:-no answer (warming/down)}"; return 1
+}
 zbmc_web()   { echo "idrac10 Redfish: P3 (run-p3-redfish.sh) — not wired into zbmc yet"; }
 # readiness marker in the console log (zbmc status greps IDRAC10_UP / IPMI_READY)
 ZBMC_READY_GREP='IDRAC10_UP'
