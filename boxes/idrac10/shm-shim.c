@@ -36,6 +36,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <time.h>
@@ -635,9 +636,41 @@ int GetSystemPowerStatusSHM(void) {
     return 1;
 }
 
+#if defined(__aarch64__)
+#define INDIRECT_CALL_TARGET __attribute__((target("branch-protection=standard")))
+#else
+#define INDIRECT_CALL_TARGET
+#endif
+
+typedef uint8_t (*ipmi_handler_fn)(const uint8_t *message,
+                                   uint8_t *response_len,
+                                   uint8_t *response_data);
+
+struct request_handle_record {
+    uint16_t selector;
+    uint8_t required_priv;
+    uint8_t request_len;
+    uint32_t reserved;
+    ipmi_handler_fn handler;
+};
+
+_Static_assert(offsetof(struct request_handle_record, selector) == 0,
+               "request selector ABI offset");
+_Static_assert(offsetof(struct request_handle_record, required_priv) == 2,
+               "request privilege ABI offset");
+_Static_assert(offsetof(struct request_handle_record, request_len) == 3,
+               "request length ABI offset");
+_Static_assert(offsetof(struct request_handle_record, reserved) == 4,
+               "request reserved ABI offset");
+_Static_assert(offsetof(struct request_handle_record, handler) == 8,
+               "request handler ABI offset");
+_Static_assert(sizeof(struct request_handle_record) == 16,
+               "request record ABI size");
+
 /* Minimum backend-free providers for authenticated IPMI commands. */
-uint8_t CmdGetDeviceID(const void *request, uint8_t *response_len,
-                       uint8_t response_data[15]) {
+INDIRECT_CALL_TARGET uint8_t CmdGetDeviceID(const uint8_t *request,
+                                            uint8_t *response_len,
+                                            uint8_t response_data[15]) {
     static const uint8_t device_id[15] = {
         0x20, 0x81, 0x01, 0x0a, 0x02, 0x7f, 0xa2, 0x02,
         0x00, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00
@@ -648,6 +681,41 @@ uint8_t CmdGetDeviceID(const void *request, uint8_t *response_len,
     *response_len = sizeof device_id;
     if (log_fp) { fprintf(log_fp, "[shim2] CmdGetDeviceID → 0 (15-byte static response)\n"); fflush(log_fp); }
     return 0;
+}
+
+static INDIRECT_CALL_TARGET uint8_t shim_get_chassis_status(
+        const uint8_t *message, uint8_t *response_len, uint8_t *response_data) {
+    static const uint8_t chassis_status[3] = { 0x01, 0x00, 0x00 };
+    (void)message;
+    if (!response_len || !response_data) return 0xff;
+    memcpy(response_data, chassis_status, sizeof chassis_status);
+    *response_len = sizeof chassis_status;
+    return 0;
+}
+
+INDIRECT_CALL_TARGET uint8_t RequestHandleTableSearch(
+        const uint8_t *message, struct request_handle_record *out) {
+    typedef uint8_t (*search_fn)(const uint8_t *, struct request_handle_record *);
+    static search_fn real_fn = NULL;
+    if (!real_fn) {
+        real_fn = (search_fn)dlsym(RTLD_NEXT, "RequestHandleTableSearch");
+    }
+    if (!real_fn) return 0;
+
+    uint8_t found = real_fn(message, out);
+    if (!found) return found;
+
+    switch (out->selector) {
+    case 0x0601:
+        out->handler = CmdGetDeviceID;
+        if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch → CmdGetDeviceID\n"); fflush(log_fp); }
+        break;
+    case 0x0001:
+        out->handler = shim_get_chassis_status;
+        if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch → chassis status\n"); fflush(log_fp); }
+        break;
+    }
+    return found;
 }
 
 void SenMgrGetSysHealth(uint8_t health[9]) {
