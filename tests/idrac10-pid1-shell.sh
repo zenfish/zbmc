@@ -25,6 +25,7 @@ grep -q '^+static const USBDescDevice desc_device_net_high' "$qemu_patch"
 [ "$(grep -c '^+.*wMaxPacketSize.*= 0x200' "$qemu_patch")" -eq 4 ]
 [ "$(grep -c '^+.*bInterval.*= 9' "$qemu_patch")" -eq 2 ]
 [ "$(grep -c '^+.*p->ep->max_packet_size' "$qemu_patch")" -eq 2 ]
+grep -q '^+    uc->handle_attach  = usb_desc_attach;' "$qemu_patch"
 grep -q 'hostfwd=udp:.*10.0.2.15:623' "$box"
 grep -q 'pgrep -f "hostfwd=udp:\$ZBMC_IP:623-"' "$box"
 grep -q 'hostfwd=tcp:.*10.0.3.15:22' "$box"
