@@ -71,7 +71,8 @@ _openbmc_retry_net_ipmi() { # qemu-pid
 
 zbmc_post_launch() { # qemu-pid
   local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}" qemu_pid="$1"
-  local dispatcher="${_SELF:-$_XREPO/tools/zbmc}" descriptor="${BF:-${BASH_SOURCE[0]}}"
+  local dispatcher="${_SELF:+$_SELF/zbmc}" descriptor="${BF:-${BASH_SOURCE[0]}}"
+  dispatcher="${dispatcher:-$_XREPO/tools/zbmc}"
   mkdir -p "$retry_dir"
   nohup bash -c '
     trap "" HUP TERM

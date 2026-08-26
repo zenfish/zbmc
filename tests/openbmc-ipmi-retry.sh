@@ -19,7 +19,7 @@ cat > "$tmp/retry.box" <<'EOF'
 _openbmc_retry_net_ipmi(){ echo "retry ran for $1"; }
 EOF
 mkdir -p "$tmp/run"
-ZBMC_DIR="$tmp" ZBMC_RUN_DIR="$tmp/run" _SELF="$tmp/zbmc" BF="$tmp/retry.box" bash -c '
+ZBMC_DIR="$tmp" ZBMC_RUN_DIR="$tmp/run" _SELF="$tmp" BF="$tmp/retry.box" bash -c '
   _zbmc_resolve_ip(){ echo 127.0.0.1; }
   . "$1"
   zbmc_post_launch "$$"
