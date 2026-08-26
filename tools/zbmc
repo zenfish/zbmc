@@ -987,8 +987,14 @@ PY
         [ -n "$_health_detail" ] && _health_detail="$_health_detail; "
         _health_detail="${_health_detail}${_failed_names} failed"
       fi
-      printf "%-9s : %s [%d/%d - %s]\n" "Health" "$(_colored_state "$_health")" \
-        "$_ready_n" "$_expected_n" "$_health_detail"
+      if [ "$_health" = STARTING ]; then
+        printf "%-9s : %d/%d %s" "Health" "$_ready_n" "$_expected_n" "$(_colored_state READY)"
+        [ -n "$_ready_names" ] && printf " [%s]" "$_ready_names"
+        printf "; %d %s [%s]\n" "$_starting_n" "$(_colored_state STARTING)" "$_starting_names"
+      else
+        printf "%-9s : %s [%d/%d - %s]\n" "Health" "$(_colored_state "$_health")" \
+          "$_ready_n" "$_expected_n" "$_health_detail"
+      fi
       if [ "$_follow" = 1 ] && [ "${_run_state:-}" = starting ] && [ -f "${ZBMC_RUN_DIR:-}/progress.log" ]; then
         echo "Progress (Ctrl-C stops following; QEMU keeps running):"
         tail -n +1 -f "$ZBMC_RUN_DIR/progress.log" & _tail_pid=$!

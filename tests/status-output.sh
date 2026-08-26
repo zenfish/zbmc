@@ -187,8 +187,7 @@ printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/watcher.pid"
 starting=$("$fixture/tools/zbmc" fake status)
 expect "$starting" "Current run : STARTING ("
 expect "$starting" "reached BOOTSTRAP)"
-expect "$starting" "Health    : STARTING"
-expect "$starting" "STARTING [3/4 - ICMP, SSH, Web-UI; IPMI coming online]"
+expect "$starting" "Health    : 3/4 READY [ICMP, SSH, Web-UI]; 1 STARTING [IPMI]"
 
 verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
@@ -232,7 +231,7 @@ expect "$console_output" "current run serial output"
 
 ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
 expect "$ncsi" "NC-SI     : READY (fixture NC-SI)"
-expect "$ncsi" "Health    : STARTING [4/5 - ICMP, SSH, Web-UI, NC-SI; IPMI coming online]"
+expect "$ncsi" "Health    : 4/5 READY [ICMP, SSH, Web-UI, NC-SI]; 1 STARTING [IPMI]"
 
 runlib_ncsi=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"
