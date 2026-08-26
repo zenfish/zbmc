@@ -80,7 +80,7 @@ zbmc_post_launch() { # qemu-pid
     . "$2"
     echo "Waiting for SSH before Network IPMI retry"
     _openbmc_retry_net_ipmi "$3"
-  ' bash "$dispatcher" "$descriptor" "$qemu_pid" >"$retry_dir/net-ipmi-retry.log" 2>&1 &
+  ' "$dispatcher" "$dispatcher" "$descriptor" "$qemu_pid" >"$retry_dir/net-ipmi-retry.log" 2>&1 &
   printf '%s\n' "$!" > "$retry_dir/net-ipmi-retry.pid"
 }
 
