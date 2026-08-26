@@ -1,0 +1,12 @@
+diff --git a/hw/net/ftgmac100.c b/hw/net/ftgmac100.c
+--- a/hw/net/ftgmac100.c
++++ b/hw/net/ftgmac100.c
+@@ -1091,6 +1091,7 @@ static ssize_t ftgmac100_receive(NetClientState *nc, const uint8_t *buf,
+             s->isr |= FTGMAC100_INT_NO_RXBUF;
+             break;
+         }
++        bd.des0 &= s->rxdes0_edorr;
+         buf_len = (size <= s->rbsr) ? size : s->rbsr;
+-        bd.des0 |= buf_len & 0x3fff;
++        bd.des0 |= buf_len & FTGMAC100_RXDES0_VDBC;
+         size -= buf_len;
