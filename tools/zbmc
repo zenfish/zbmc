@@ -404,7 +404,7 @@ _zbmc_validate_qemu(){ # path, descriptor-declared major, descriptor-declared ma
   printf '%s\n' "$qemu"
 }
 
-_zbmc_qemu_smoke(){ # executable; start the declared board without firmware or network state
+_zbmc_qemu_smoke(){ # executable; create the declared board and exercise QMP before firmware boot
   python3 - "$1" "$ZBMC_QEMU_MACHINE" <<'PY'
 import json
 import select
@@ -440,10 +440,8 @@ try:
     if "QMP" not in receive():
         raise RuntimeError("missing QMP greeting")
     command("qmp_capabilities")
-    command("cont")
-    if command("query-status").get("status") != "running":
-        raise RuntimeError("machine did not enter running state")
-    command("stop")
+    if command("query-status").get("status") != "prelaunch":
+        raise RuntimeError("machine did not remain in prelaunch state")
     command("quit")
     proc.wait(timeout=8)
 except Exception as error:

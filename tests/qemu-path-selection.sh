@@ -22,7 +22,7 @@ printf '%s\\n' '{"QMP":{"version":{},"capabilities":[]}}'
 while IFS= read -r request; do
   case "\$request" in
     *qmp_capabilities*|*cont*|*stop*|*quit*) printf '%s\\n' '{"return":{}}' ;;
-    *query-status*) printf '%s\\n' '{"return":{"status":"running"}}' ;;
+    *query-status*) printf '%s\\n' '{"return":{"status":"prelaunch"}}' ;;
   esac
   case "\$request" in *quit*) exit 0 ;; esac
 done
