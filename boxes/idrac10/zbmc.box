@@ -35,9 +35,13 @@ WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
-  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp; do
+  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh prebind-v2 boot-idrac10.exp qemu-usb-net-overlay.dts; do
     [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
   done
+  command -v dtc >/dev/null && command -v fdtoverlay >/dev/null || {
+    echo "need dtc and fdtoverlay to build the idrac10 USB network DTB" >&2
+    return 1
+  }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
@@ -63,13 +67,19 @@ zbmc_boot() {
   cp shm-shim.so "$ZBMC_DIR/shm-shim.so" 2>/dev/null || cp "$SERVE/shm-shim.so" shm-shim.so
   cp boot-fullfw-guest.sh fake-journal udp-echo cfgdb-defaults.sql "$SERVE/" 2>/dev/null
   cp prebind-v2 "$SERVE/prebind"
+  dtc -Wno-interrupts_property -@ -I dts -O dtb \
+    -o "$WORK/qemu-usb-net.dtbo" qemu-usb-net-overlay.dts || return 1
+  fdtoverlay -i "$ZBMC_DIR/boot/qemu-gmac.dtb" -o "$WORK/qemu-usb-net.dtb" \
+    "$WORK/qemu-usb-net.dtbo" || return 1
   pkill -f "http.server 8091" 2>/dev/null
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
   $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
-    -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
+    -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$WORK/qemu-usb-net.dtb" \
     -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
-    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
+    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-10.0.2.15:623" \
+    -netdev user,id=tcpnet,net=10.0.3.0/24,host=10.0.3.2,dhcpstart=10.0.3.15,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-10.0.3.15:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-10.0.3.15:443,hostfwd=tcp:$ZBMC_IP:5200-10.0.3.15:5200,hostfwd=tcp:$ZBMC_IP:5201-10.0.3.15:5201" \
+    -device usb-net,netdev=tcpnet,bus=usb-bus.0,id=tcpnic \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
     -serial chardev:serial0 >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)

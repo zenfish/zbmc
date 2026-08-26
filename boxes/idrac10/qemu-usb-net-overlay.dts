@@ -1,0 +1,21 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+
+		__overlay__ {
+			#address-cells = <2>;
+			#size-cells = <2>;
+
+			usb@f0828100 {
+				compatible = "nuvoton,npcm750-ehci";
+				reg = <0x0 0xf0828100 0x0 0x100>;
+				interrupt-parent = <0x01>;
+				interrupts = <0x0 0x3d 0x04>;
+				status = "okay";
+			};
+		};
+	};
+};
