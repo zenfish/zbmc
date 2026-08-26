@@ -56,8 +56,8 @@ LOG=/tmp/x14-restore-console.log     # restore-svc-x14.sh writes qemu console he
 SOCK=/tmp/x14.sock                   # root-owned serial console unix socket
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 
-# boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback (shell-x14.sh,
-# interactive /bin/sh as PID1) when ZBMC_COLD=1 or the snapshot is missing. Prints the qemu pid.
+# boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback starts the
+# scripted service stack, then leaves its root shell on serial. Prints the qemu pid.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$ZBMC_DIR" || return 1
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -67,9 +67,9 @@ zbmc_boot() {
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
     ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
   else
-    [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (shell)" >&2
+    [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (scripted services)" >&2
     : > "$LOG"
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" X14_BOOT_TOKEN=qemu-x14-svc nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &
   fi
   # wait for the qemu whose hostfwd matches this box's IPMI port to appear, print its pid
   local n=0 qp=; while [ $n -lt 60 ]; do
@@ -78,7 +78,7 @@ zbmc_boot() {
   echo "$qp"
 }
 
-zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bin/initramfs-patched.bin + the .gz snapshots are prebuilt. Cold shell: ZBMC_COLD=1 zbmc x14 start"; }
+zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bin/initramfs-patched.bin + the .gz snapshots are prebuilt. Cold service boot: ZBMC_COLD=1 zbmc x14 start"; }
 zbmc_ready() {
   local d="$ZBMC_DIR"
   if [ -f "$d/kernel.bin" ] && [ -f "$d/initramfs-patched.bin" ]; then

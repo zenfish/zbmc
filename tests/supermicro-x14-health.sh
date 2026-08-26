@@ -16,5 +16,8 @@ grep -Fq 'timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd"' "$repo
 grep -Fxq 'ZBMC_SSH_PROBE_TIMEOUT=18' "$box"
 grep -Fxq 'ZBMC_HTTP_PROBE_TIMEOUT=18' "$box"
 grep -Fq 'ConnectTimeout=15' "$box"
+grep -Fq 'X14_BOOT_TOKEN=qemu-x14-svc' "$box"
+grep -Fq 'BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"' "$repo/boxes/supermicro-x14/shell-x14.sh"
+grep -Fq 'qemu-x14-ramroot $BOOT_TOKEN loglevel=4' "$repo/boxes/supermicro-x14/shell-x14.sh"
 
-echo "supermicro-x14 IPMI health and HTTP probe deadlines: PASS"
+echo "supermicro-x14 health probes and cold service boot: PASS"

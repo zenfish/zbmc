@@ -20,6 +20,7 @@ set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
 IP="${ZBMC_IP:-10.0.8.14}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-/tmp/x14-console-uart.log}"
+BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f /tmp/x14.sock /tmp/x14-qmp.sock
@@ -33,4 +34,4 @@ exec sudo "$QEMU" \
   -drive file=x14-ce0-64m.img,format=raw,if=mtd \
   -drive file=emmc.img,format=raw,if=sd,index=2 \
   -net nic -net user,hostfwd=tcp:$IP:${SSH_PORT:-22}-:22,hostfwd=tcp:$IP:${WEB_PORT:-443}-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
-  -append "console=ttyS4,115200n8 root=/dev/ram rw maxcpus=1 initcall_blacklist=ast2600_spitee_init,optee_driver_init qemu-x14-ramroot qemu-x14-shell loglevel=4"
+  -append "console=ttyS4,115200n8 root=/dev/ram rw maxcpus=1 initcall_blacklist=ast2600_spitee_init,optee_driver_init qemu-x14-ramroot $BOOT_TOKEN loglevel=4"
