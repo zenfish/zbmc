@@ -72,7 +72,7 @@ ps_fallback=$(TEST_ZBMC="$fixture/tools/zbmc" bash -c '
   eval "$(sed -n '\''/^running(){/,/^  return 1; }/p'\'' "$TEST_ZBMC")"
   PIDF=/nonexistent; ZBMC_IP=192.0.2.10; IPMI_PORT=623
   pgrep(){ return 1; }
-  ps(){ [ "$1" = -p ] && return 1; printf "4242 qemu-system-arm hostfwd=udp:192.0.2.10:623-:623\\n"; }
+  ps(){ [ "$1" = -p ] && return 1; [ "$1" = -ww ] || return 1; printf "4242 qemu-system-arm hostfwd=udp:192.0.2.10:623-:623\\n"; }
   running
 ')
 [ "$ps_fallback" = 4242 ] || { echo "root-process ps fallback failed: $ps_fallback" >&2; exit 1; }
