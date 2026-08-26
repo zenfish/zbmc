@@ -389,15 +389,6 @@ int shmget(key_t key, size_t size, int shmflg) {
         return s->shmid;
     }
 
-    /* Unknown key */
-    if (!(shmflg & IPC_CREAT) && size == 0) {
-        /* Caller wants existing segment but we don't have it */
-        if (log_fp) { fprintf(log_fp, "[shim2] shmget ENOENT (no IPC_CREAT, not found)\n"); fflush(log_fp); }
-        errno = ENOENT;
-        __sync_lock_release(&mu_lock);
-        return -1;
-    }
-
     if (nseg >= MAX_SEGS) {
         errno = ENOSPC;
         __sync_lock_release(&mu_lock);
