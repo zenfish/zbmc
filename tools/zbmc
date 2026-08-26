@@ -350,11 +350,16 @@ case "${1:-}" in
 esac
 
 running(){ # pidfile first; then a box-specific or legacy hostfwd lookup
-  local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
+  local p needle
+  p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
   if declare -F zbmc_running >/dev/null; then
     p=$(zbmc_running) && [ -n "$p" ] && { echo "$p"; return 0; }
   fi
-  p=$(pgrep -f "hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p"; return 0; }
+  needle="hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623"
+  p=$(pgrep -f "$needle" | head -1) && [ -n "$p" ] && { echo "$p"; return 0; }
+  p=$(ps -eo pid=,args= 2>/dev/null |
+    ZBMC_QEMU_NEEDLE="$needle" awk 'index($0, ENVIRON["ZBMC_QEMU_NEEDLE"]) { print $1; exit }')
+  [ -n "$p" ] && { echo "$p"; return 0; }
   return 1; }
 
 # Per-run event records, packet capture, readiness state machine, and failure explanations.
