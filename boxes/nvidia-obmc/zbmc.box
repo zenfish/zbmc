@@ -31,6 +31,9 @@ PIDF=/tmp/zbmc-nvidia-obmc.pid
 LOG=/tmp/zbmc-nvidia-obmc-console.log
 SOCK=/tmp/zbmc-nvidia-obmc-serial.sock
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
+ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=gb200nvl-bmc
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 
 zbmc_boot() {
@@ -44,7 +47,7 @@ zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null
   # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
-  $SUDO nohup qemu-system-arm -M gb200nvl-bmc -smp 2 -m 1G \
+  $SUDO nohup "$ZBMC_QEMU" -M gb200nvl-bmc -smp 2 -m 1G \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
     -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
@@ -72,8 +75,8 @@ zbmc_ipmi() {
   zbmc_ssh "busctl call xyz.openbmc_project.Ipmi.Host /xyz/openbmc_project/Ipmi xyz.openbmc_project.Ipmi.Server execute yyyaya{sv} $nf 0 $cmd $n $data 0"
 }
 zbmc_ipmi_health() {
-  command -v zipmi >/dev/null || { echo "IPMI-LAN: cipher-17 (zipmi not in PATH to probe)"; return 1; }
-  if timeout 12 zipmi -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$SSH_USER" -P "$SSH_PASS" -C 17 -I lanplus mc info 2>/dev/null | grep -q Manufacturer; then
+  local r; r=$(timeout 12 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" -C 17 -I lanplus mc info 2>&1)
+  if grep -q Manufacturer <<<"$r"; then
     echo "IPMI-LAN: OK (cipher-17 RMCP+; NVIDIA OEM 0x3C over LAN — zipmi -C 17)"; return 0
   fi
   echo "IPMI-LAN: no answer yet (cipher-17 only; net-ipmid starts late — retry once settled)"; return 1
