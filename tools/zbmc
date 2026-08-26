@@ -558,13 +558,43 @@ if running:
         reached = f"; reached {highest}" if highest else ""
         summary = f"STARTING ({elapsed} elapsed{reached})"
 else:
-    terminal = termination or result
-    if terminal:
-        state = str(terminal.get("state", "unknown")).lower()
-        elapsed = duration(terminal.get("elapsed_seconds", (result or {}).get("elapsed_seconds", 0)))
-        reached = highest or terminal.get("highest_stage")
-        suffix = f" (had reached {reached})" if reached else ""
-        summary = f"{state.upper()} after {elapsed}{suffix}"
+    def elapsed(record):
+        value = record.get("elapsed_seconds")
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
+
+    def outcome(record):
+        raw_state = str(record.get("state", "unknown")).lower()
+        label = "TIMED OUT" if raw_state == "timeout" else raw_state.upper()
+        value = elapsed(record)
+        return raw_state, f"{label} after {duration(value)}" if value is not None else label
+
+    if termination:
+        state, ended = outcome(termination)
+        if result:
+            startup_state, startup = outcome(result)
+            reached = result.get("highest_stage") or highest
+            if startup_state != "ready" and reached:
+                startup += f" (reached {reached})"
+            startup_elapsed, ended_elapsed = elapsed(result), elapsed(termination)
+            if startup_state == "ready" and startup_elapsed is not None and ended_elapsed is not None and ended_elapsed >= startup_elapsed:
+                terminal_label = "TIMED OUT" if state == "timeout" else state.upper()
+                summary = f"{startup}; UP for {duration(ended_elapsed - startup_elapsed)}; {terminal_label}"
+            else:
+                summary = f"{startup}; {ended}"
+        else:
+            summary = ended
+            reached = termination.get("highest_stage") or highest
+            if reached:
+                summary += f" (reached {reached})"
+        cause = str(termination.get("cause", "")).strip()
+        if cause:
+            summary += f" — {cause}"
+    elif result:
+        state, summary = outcome(result)
+        reached = result.get("highest_stage") or highest
+        if state != "ready" and reached:
+            summary += f" (reached {reached})"
+        summary += "; END UNKNOWN"
     else:
         state, summary = "unknown", "ENDED (no readable result)"
 print(f"{state}|{summary}")

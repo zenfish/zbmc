@@ -68,8 +68,62 @@ expect(){ grep -Fq "$2" <<<"$1" || { printf 'missing: %s\n%s\n' "$2" "$1" >&2; e
 
 down=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
-expect "$down" "Last run  : STOPPED"
-expect "$down" "had reached READY"
+expect "$down" "Last run  : READY after 10m 12s; UP for 9m 48s; STOPPED — operator requested shutdown"
+[[ "$down" != *"had reached READY"* ]] || { printf 'redundant highest stage:\n%s\n' "$down" >&2; exit 1; }
+
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"crashed","elapsed_seconds":43860,"highest_stage":"READY","cause":"QEMU exited unexpectedly"}
+EOF
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":209,"highest_stage":"READY","cause":""}
+EOF
+crashed=$("$fixture/tools/zbmc" fake status)
+expect "$crashed" "Last run  : READY after 3m 29s; UP for 12h 7m; CRASHED — QEMU exited unexpectedly"
+
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":1200,"highest_stage":"READY","cause":""}
+EOF
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"crashed","elapsed_seconds":600,"highest_stage":"READY","cause":"inconsistent history"}
+EOF
+inconsistent=$("$fixture/tools/zbmc" fake status)
+expect "$inconsistent" "Last run  : READY after 20m 0s; CRASHED after 10m 0s — inconsistent history"
+
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","highest_stage":"READY","cause":""}
+EOF
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"stopped","elapsed_seconds":1200,"highest_stage":"READY","cause":"missing startup duration"}
+EOF
+missing_duration=$("$fixture/tools/zbmc" fake status)
+expect "$missing_duration" "Last run  : READY; STOPPED after 20m 0s — missing startup duration"
+
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"timeout","elapsed_seconds":900,"highest_stage":"SERVICES","cause":"readiness deadline reached"}
+EOF
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"stopped","elapsed_seconds":1200,"highest_stage":"SERVICES","cause":"operator requested shutdown"}
+EOF
+never_ready=$("$fixture/tools/zbmc" fake status)
+expect "$never_ready" "Last run  : TIMED OUT after 15m 0s (reached SERVICES); STOPPED after 20m 0s — operator requested shutdown"
+
+rm "$TEST_ROOT/runs/run-1/termination.json"
+incomplete=$("$fixture/tools/zbmc" fake status)
+expect "$incomplete" "Last run  : TIMED OUT after 15m 0s (reached SERVICES); END UNKNOWN"
+
+rm "$TEST_ROOT/runs/run-1/result.json"
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"crashed","highest_stage":"SERVICES","cause":"QEMU exited unexpectedly"}
+EOF
+legacy=$("$fixture/tools/zbmc" fake status)
+expect "$legacy" "Last run  : CRASHED (reached SERVICES) — QEMU exited unexpectedly"
+
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
+EOF
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"stopped","elapsed_seconds":1200,"highest_stage":"READY","cause":"operator requested shutdown"}
+EOF
 
 down_verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$down_verbose" "Evidence  : $TEST_ROOT/runs/run-1"
