@@ -697,13 +697,21 @@ INDIRECT_CALL_TARGET uint8_t RequestHandleTableSearch(
         const uint8_t *message, struct request_handle_record *out) {
     typedef uint8_t (*search_fn)(const uint8_t *, struct request_handle_record *);
     static search_fn real_fn = NULL;
+    if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch entry\n"); fflush(log_fp); }
     if (!real_fn) {
         real_fn = (search_fn)dlsym(RTLD_NEXT, "RequestHandleTableSearch");
     }
-    if (!real_fn) return 0;
+    if (!real_fn) {
+        if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch real lookup unavailable\n"); fflush(log_fp); }
+        return 0;
+    }
 
     uint8_t found = real_fn(message, out);
-    if (!found) return found;
+    if (!found) {
+        if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch no match\n"); fflush(log_fp); }
+        return found;
+    }
+    if (log_fp) { fprintf(log_fp, "[shim2] RequestHandleTableSearch selector=%04x\n", out->selector); fflush(log_fp); }
 
     switch (out->selector) {
     case 0x0601:
