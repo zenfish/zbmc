@@ -355,7 +355,7 @@ running(){ # pidfile first; then a box-specific or legacy hostfwd lookup
   if declare -F zbmc_running >/dev/null; then
     p=$(zbmc_running) && [ -n "$p" ] && { echo "$p"; return 0; }
   fi
-  needle="hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623"
+  needle="hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-"
   p=$(pgrep -f "$needle" | head -1) && [ -n "$p" ] && { echo "$p"; return 0; }
   p=$(ps -ww -eo pid=,args= 2>/dev/null |
     ZBMC_QEMU_NEEDLE="$needle" awk 'index($0, ENVIRON["ZBMC_QEMU_NEEDLE"]) { print $1; exit }')
