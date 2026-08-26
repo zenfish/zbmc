@@ -9,20 +9,19 @@ set sock [lindex $argv 0]
 match_max 2000000
 set timeout 60
 spawn socat - UNIX-CONNECT:$sock
+send "\r"
 expect { "sh-5.2#" {} timeout { puts "BOOT_TIMEOUT (no shell)"; exit 1 } }
 puts "\[exp] shell ready"
 send "mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t devtmpfs devtmpfs /dev; mkdir -p /dev/pts; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /tmp; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /var/volatile; mount -t tmpfs tmpfs /mnt; printf '__ZBMC_%s__\\n' FS_READY\r"
 expect -timeout 30 "__ZBMC_FS_READY__"
-expect -timeout 15 "sh-5.2#"
 puts "\[exp] fs mounted"
 send "ip link set eth0 up; ip addr add 10.0.2.15/24 dev eth0; ip route add default via 10.0.2.2; printf '__ZBMC_%s__\\n' NET_UP\r"
 expect -timeout 210 "__ZBMC_NET_UP__"
-expect -timeout 15 "sh-5.2#"
 puts "\[exp] NET_UP"
-send "TCP_NIC=; for i in {1..30}; do for n in /sys/class/net/*; do n=\${n##*/}; case \$n in lo|eth0) ;; *) TCP_NIC=\$n; break 2;; esac; done; sleep 1; done; if test -n \"\$TCP_NIC\" && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\"; then printf '__ZBMC_TCP_NET_%s__=%s\\n' UP \"\$TCP_NIC\"; else printf '__ZBMC_TCP_NET_%s__\\n' MISSING; fi\r"
+send "TCP_NIC=usb0; for i in {1..30}; do test -e /sys/class/net/\$TCP_NIC && break; sleep 1; done; if test -e /sys/class/net/\$TCP_NIC && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\"; then printf '__ZBMC_TCP_NET_%s__=%s\\n' UP \"\$TCP_NIC\"; else printf '__ZBMC_TCP_NET_%s__\\n' MISSING; fi\r"
 expect {
     -timeout 45
-    "__ZBMC_TCP_NET_UP__=" { puts "\[exp] TCP_NET_UP"; expect -timeout 15 "sh-5.2#" }
+    "__ZBMC_TCP_NET_UP__=usb0" { puts "\[exp] TCP_NET_UP" }
     "__ZBMC_TCP_NET_MISSING__" { puts "\[exp] TCP_NET_MISSING"; exit 1 }
     timeout { puts "\[exp] TIMEOUT configuring TCP network"; exit 1 }
 }
