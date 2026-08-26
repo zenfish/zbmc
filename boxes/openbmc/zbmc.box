@@ -55,6 +55,20 @@ ZBMC_EXPECTED_FIRMWARE=5
 ZBMC_EXPECTED_L2=90
 ZBMC_EXPECTED_READY=270
 
+_openbmc_retry_net_ipmi() { # qemu-pid
+  local qemu_pid="$1" attempt
+  for attempt in $(seq 1 120); do
+    kill -0 "$qemu_pid" 2>/dev/null || { echo "QEMU exited before Network IPMI retry"; return 0; }
+    if zbmc_ssh 'systemctl start phosphor-ipmi-net@eth0.socket && systemctl is-active phosphor-ipmi-net@eth0.socket' 2>/dev/null | grep -qx active; then
+      echo "Network IPMI socket active after SSH became reachable"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "Network IPMI socket did not become reachable before retry deadline"
+  return 1
+}
+
 zbmc_boot() {
   cd "$FIRMWARE_DIR" || return 1
   local MTD=evb-ast2600.static.mtd
@@ -73,6 +87,12 @@ zbmc_boot() {
     qp=$(pgrep -f "ast2600-evb.*hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
     sleep 0.5; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
+  if [ -n "$qp" ]; then
+    local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}"
+    mkdir -p "$retry_dir"
+    _openbmc_retry_net_ipmi "$qp" >"$retry_dir/net-ipmi-retry.log" 2>&1 &
+    echo "$!" > "$retry_dir/net-ipmi-retry.pid"
+  fi
   echo "$qp"
 }
 zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $FIRMWARE_DIR/evb-ast2600.static.mtd"; }

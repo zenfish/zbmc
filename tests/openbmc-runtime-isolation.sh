@@ -24,4 +24,6 @@ check_box(){
 
 check_box openbmc ast2600-evb
 check_box nvidia-obmc ''
+grep -Fq '_openbmc_retry_net_ipmi()' "$repo/boxes/openbmc/zbmc.box"
+grep -Fq 'systemctl start phosphor-ipmi-net@eth0.socket' "$repo/boxes/openbmc/zbmc.box"
 echo "OpenBMC runtime isolation and health contracts: PASS"
