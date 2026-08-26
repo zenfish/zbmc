@@ -14,12 +14,16 @@ output=$(bash -c '
 [ "$output" = "Network IPMI socket active after SSH became reachable" ]
 cat > "$tmp/zbmc" <<'EOF'
 _zbmc_resolve_ip(){ echo 127.0.0.1; }
+_SELF="$(cd "$(dirname "$0")" && pwd)"
 EOF
 cat > "$tmp/retry.box" <<'EOF'
-_openbmc_retry_net_ipmi(){ echo "retry ran for $1"; }
+_openbmc_retry_net_ipmi(){
+  [ "$_SELF" = "$EXPECTED_SELF" ] || { echo "wrong dispatcher context: $_SELF"; return 1; }
+  echo "retry ran for $1"
+}
 EOF
 mkdir -p "$tmp/run"
-ZBMC_DIR="$tmp" ZBMC_RUN_DIR="$tmp/run" _SELF="$tmp" BF="$tmp/retry.box" bash -c '
+ZBMC_DIR="$tmp" ZBMC_RUN_DIR="$tmp/run" EXPECTED_SELF="$tmp" _SELF="$tmp" BF="$tmp/retry.box" bash -c '
   _zbmc_resolve_ip(){ echo 127.0.0.1; }
   . "$1"
   zbmc_post_launch "$$"
