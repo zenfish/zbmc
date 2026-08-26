@@ -51,6 +51,9 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/megarac-hpe}"
 # separate guest-sshd bug, not a slirp issue — see header.)
 ZBMC_IP=$(_zbmc_resolve_ip megarac-hpe 40 10.0.6.66)
 ZBMC_HOST=megarac-hpe
+ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=ast2600-evb
 
 # IPMI/Redfish auth = the MegaRAC default IPMI user 'admin'/'superuser' (auto-provisioned by IPMIMain
 # into /conf/BMC1/UserConfig.ini once it runs; verified: RMCP+ mc info + user2=ADMINISTRATOR). NOTE the
@@ -83,7 +86,7 @@ zbmc_boot() {
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  local PENV="IP=$ZBMC_IP HTTPS_PORT=$WEB_PORT IPMI_PORT=$IPMI_PORT SSH_PORT=$SSH_PORT TELNET_PORT=$TELNET_PORT WD=$ZBMC_DIR"
+  local PENV="IP=$ZBMC_IP HTTPS_PORT=$WEB_PORT IPMI_PORT=$IPMI_PORT SSH_PORT=$SSH_PORT TELNET_PORT=$TELNET_PORT WD=$ZBMC_DIR ZBMC_QEMU=$ZBMC_QEMU"
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/cray-snap.gz" ] && [ -f "$ZBMC_DIR/cray-snap-flash.bin" ]; then
     ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
   else
@@ -98,7 +101,7 @@ zbmc_boot() {
 }
 # snapshot/restore verbs (build a warm base from a green boot, then always restore it)
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-megarac-hpe.sh" "$@"; }
-zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
+zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" ZBMC_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
 
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
 zbmc_ready() {

@@ -10,6 +10,7 @@
 set -u
 WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
+QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 SNAP="${SNAP:-$WD/cray-snap.gz}"; SNAPFLASH="${SNAPFLASH:-$WD/cray-snap-flash.bin}"
@@ -22,7 +23,7 @@ APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_siz
 $SUDO pkill -9 -f 'hostname=megarac-hpe' 2>/dev/null || true; sleep 2
 $SUDO rm -f "$WD/cray-qmp.sock" "$WD/cray.sock"
 cp -f "$SNAPFLASH" "$WD/cray-restore-flash.bin"   # fresh writable copy -> repeatable restore
-$SUDO qemu-system-arm -M ast2600-evb -m 1024 -display none -no-reboot \
+$SUDO "$QEMU_BIN" -M ast2600-evb -m 1024 -display none -no-reboot \
   -chardev "socket,id=ser0,path=$WD/cray.sock,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
   -serial chardev:ser0 -qmp "unix:$WD/cray-qmp.sock,server,nowait" \
   -incoming "exec:gunzip -c < $SNAP" \

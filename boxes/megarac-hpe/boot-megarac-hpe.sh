@@ -14,6 +14,7 @@
 # RELATED: extract.sh (makes the artifacts), boot-megarac-hpe-svc.sh (real init + net), README.html.
 set -u
 WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
-exec qemu-system-arm -M ast2600-evb -m 1024 -nographic \
+QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
+exec "$QEMU_BIN" -M ast2600-evb -m 1024 -nographic \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -append "console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_size=131072 ramdisk_blocksize=4096 rootwait init=/bin/sh"

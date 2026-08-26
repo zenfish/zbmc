@@ -6,6 +6,7 @@
 set -u
 _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
 WD="${WD:-$_REPO/work/$(basename "$_HERE")}"
+QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${IP:-127.0.0.1}"
 SSH_PORT="${SSH_PORT:-5022}"; HTTPS_PORT="${HTTPS_PORT:-5443}"; IPMI_PORT="${IPMI_PORT:-5623}"
 for f in kernel.Image dtb-a1.dtb rootfs.sqfs cray-snap-flash.bin cray-snap.gz; do
@@ -13,7 +14,7 @@ for f in kernel.Image dtb-a1.dtb rootfs.sqfs cray-snap-flash.bin cray-snap.gz; d
 done
 SOCK="$WD/rserial.sock"; QMP="$WD/rqmp.sock"; rm -f "$SOCK" "$QMP"
 
-qemu-system-arm -M ast2600-evb -m 1024 \
+"$QEMU_BIN" -M ast2600-evb -m 1024 \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -drive "file=$WD/cray-snap-flash.bin,format=raw,if=mtd,snapshot=on" \
   -display none \
