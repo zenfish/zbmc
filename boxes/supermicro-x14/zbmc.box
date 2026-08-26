@@ -44,6 +44,7 @@ IPMI_T=6
 # SSH: password auth via sshpass, NOT the iDRAC serial-socat path.
 SSH_USER=ADMIN
 SSH_PW=ADMIN
+ZBMC_SSH_PROBE_TIMEOUT=18
 
 SSH_PORT=$(_zbmc_pick_port 22 2222)
 IPMI_PORT=623
@@ -94,7 +95,7 @@ zbmc_restore()  { ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEM
 # ssh: password auth (sshpass). Real Linux shell; `sudo -i` for root. Args = remote command.
 zbmc_ssh() {
   sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+    -o ConnectTimeout=15 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
 }
 
 # ipmi: zipmi RMCP+ password auth (ADMIN:ADMIN). mc info returns 0xff on X14, so health uses channel info 1.

@@ -211,7 +211,7 @@ _probe_ssh(){
     exec 8>"$lock_dir/$ZBMC_NAME.ssh" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
-  if timeout -s KILL 10 bash -c "$cmd" 2>/dev/null | grep -q up; then
+  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" 2>/dev/null | grep -q up; then
     echo "ok|zbmc $ZBMC_IP ssh${ZBMC_SSH_NOTE:+; $ZBMC_SSH_NOTE}|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
