@@ -99,32 +99,18 @@ zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT
 # the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
 # $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the
 # running box. qemu runs as root so the socket is root-owned -> sudo.
-#   zbmc idrac10 ssh          -> interactive root shell on the console
-#   zbmc idrac10 ssh <cmd...> -> run <cmd> on the console, print its stdout, propagate its exit code
 _zbmc_sock(){ local s; for s in $(ls -t "$WORK/ckpt/rserial.sock" "$SOCK" 2>/dev/null); do [ -S "$s" ] && { echo "$s"; return; }; done; }
 zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "sshpass missing"; return 1; }
+  exec sshpass -p "$IPMI_PW" ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password \
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR \
+    -p "$SSH_PORT" "root@$ZBMC_IP" "$@"
+}
+zbmc_console() {
   command -v socat >/dev/null || { echo "socat missing"; return 1; }
   local sk; sk="$(_zbmc_sock)"; [ -n "$sk" ] || { echo "no serial console — box up? (zbmc idrac10 status)"; return 1; }
   local SUDO=; { [ -r "$sk" ] && [ -w "$sk" ]; } || { [ "$(id -u)" = 0 ] || SUDO="sudo -n"; }
-  [ $# -eq 0 ] && exec $SUDO socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$sk"   # interactive shell
-  $SUDO python3 - "$sk" "$*" <<'PY'
-import socket,sys,time,select,re
-sk,cmd=sys.argv[1],sys.argv[2]
-s=socket.socket(socket.AF_UNIX);s.connect(sk);s.setblocking(False)
-def send(b): s.send(b);time.sleep(0.2)
-send(b'\r\n'); send(("%s; echo __RC_$?__\r\n"%cmd).encode())
-buf=b'';end=time.time()+12
-while time.time()<end:
-    r,_,_=select.select([s],[],[],0.3)
-    if r:
-        try:d=s.recv(4096)
-        except BlockingIOError:continue
-        if d:buf+=d
-        if re.search(rb'__RC_\d+__',buf):break
-t=buf.decode('utf-8','replace'); m=re.search(r'__RC_(\d+)__',t)
-body=re.sub(r'^.*?echo __RC_\$\?__\r?\n','',t,count=1,flags=re.S)
-sys.stdout.write(re.split(r'__RC_\d+__',body)[0]); sys.exit(int(m.group(1)) if m else 1)
-PY
+  exec $SUDO socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$sk"
 }
 zbmc_web()   { echo "idrac10 Redfish: P3 (run-p3-redfish.sh) — not wired into zbmc yet"; }
 # readiness marker in the console log (zbmc status greps IDRAC10_UP / IPMI_READY)

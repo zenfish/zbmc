@@ -423,7 +423,7 @@ cat /proc/net/udp 2>/dev/null || true
   ssh-keygen -A 2>/dev/null
   printf 'passwd: files avct ucache systemd\ngroup: files avct ucache systemd\nshadow: files\nhosts: files dns\n' > /tmp/nss.conf
   mount --bind /tmp/nss.conf /etc/nsswitch.conf 2>/dev/null
-  printf 'Port 22\nPermitRootLogin yes\nPubkeyAuthentication yes\nAuthorizedKeysFile /tmp/.idrac_ak\nStrictModes no\nUsePAM no\nPidFile /run/sshd.pid\n' > /run/sshd/sshd_config
+  printf 'Port 22\nPermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\nAuthorizedKeysFile /tmp/.idrac_ak\nStrictModes no\nUsePAM no\nPidFile /run/sshd.pid\n' > /run/sshd/sshd_config
   /sbin/sshd -f /run/sshd/sshd_config 2>/dev/null && echo "SSHD_READY (root@:22 -> /bin/sh)"
 ) || true
 # --- end SSH bring-up ---
