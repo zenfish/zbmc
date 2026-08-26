@@ -635,6 +635,26 @@ int GetSystemPowerStatusSHM(void) {
     return 1;
 }
 
+/* Minimum backend-free providers for authenticated IPMI commands. */
+uint8_t CmdGetDeviceID(const void *request, uint8_t *response_len,
+                       uint8_t response_data[15]) {
+    static const uint8_t device_id[15] = {
+        0x20, 0x81, 0x01, 0x0a, 0x02, 0x7f, 0xa2, 0x02,
+        0x00, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00
+    };
+    (void)request;
+    if (!response_len || !response_data) return 0xff;
+    memcpy(response_data, device_id, sizeof device_id);
+    *response_len = sizeof device_id;
+    if (log_fp) { fprintf(log_fp, "[shim2] CmdGetDeviceID → 0 (15-byte static response)\n"); fflush(log_fp); }
+    return 0;
+}
+
+void SenMgrGetSysHealth(uint8_t health[9]) {
+    if (health) memset(health, 0, 9);
+    if (log_fp) { fprintf(log_fp, "[shim2] SenMgrGetSysHealth → healthy\n"); fflush(log_fp); }
+}
+
 /*
  * Dell_shm_init_shm / Dell_shm_init_static_shm bypass (libshareddata.so.9.9.9):
  *
