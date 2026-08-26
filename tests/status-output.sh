@@ -43,7 +43,7 @@ zbmc_ipmi_health(){
   mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
   sleep .1; rmdir "$TEST_ACTIVITY_ROOT"; echo "fixture IPMI"
 }
-zbmc_redfish_health(){ echo "no HTTPS response"; return 1; }
+zbmc_redfish_health(){ [ -z "${TEST_REDFISH_MARK:-}" ] || : > "$TEST_REDFISH_MARK"; echo "no HTTPS response"; return 1; }
 zbmc_webui_health(){
   [ -f "$TEST_ROOT/webui-down" ] && { echo "no HTTPS root response"; return 1; }
   echo "fixture Web-UI"
@@ -138,6 +138,10 @@ ready=$("$fixture/tools/zbmc" fake status)
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - L2, SSH, IPMI, Web-UI]"
 expect "$("$fixture/tools/zbmc" fake web --ui-only)" "web args: --ui-only"
+rm -f "$TEST_ROOT/redfish-probed"
+disabled_redfish=$(TEST_REDFISH_MARK="$TEST_ROOT/redfish-probed" "$fixture/tools/zbmc" fake status --verbose)
+[ ! -e "$TEST_ROOT/redfish-probed" ] || { echo "disabled Redfish was still probed" >&2; exit 1; }
+expect "$disabled_redfish" "Redfish   : N/A (disabled)"
 
 rm "$TEST_ROOT/runs/run-1/result.json"
 printf '%s\n' "$(date +%s)" > "$TEST_ROOT/runs/run-1/start-epoch"

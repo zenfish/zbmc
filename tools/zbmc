@@ -788,20 +788,29 @@ PY
       mkdir -p "$tmp_base" 2>/dev/null || tmp_base="${TMPDIR:-/tmp}"
       [ -w "$tmp_base" ] || tmp_base="${TMPDIR:-/tmp}"
       tmp=$(mktemp -d "${tmp_base%/}/status.XXXXXXXX" 2>/dev/null || mktemp -d "${TMPDIR:-/tmp}/zbmc-status.XXXXXXXX")
+      _disabled(){
+        [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
+        [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
+      }
       _probe_pids=()
-      ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) & _probe_pids+=("$!")
-      ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) & _probe_pids+=("$!")
-      ( echo "$(_probe_redfish)" > "$tmp/redfish" ) & _probe_pids+=("$!")
-      if [ "$_webui_run_disabled" = 1 ]; then echo "na||disabled" > "$tmp/webui"
+      if _disabled ssh; then echo "na||disabled" > "$tmp/ssh"
+      else ( echo "$(_probe_ssh)" > "$tmp/ssh" ) & _probe_pids+=("$!"); fi
+      if _disabled ipmi; then echo "na||disabled" > "$tmp/ipmi"
+      else ( echo "$(_probe_ipmi)" > "$tmp/ipmi" ) & _probe_pids+=("$!"); fi
+      if _disabled redfish; then echo "na||disabled" > "$tmp/redfish"
+      else ( echo "$(_probe_redfish)" > "$tmp/redfish" ) & _probe_pids+=("$!"); fi
+      if _disabled webui; then echo "na||disabled" > "$tmp/webui"
       else ( echo "$(_probe_webui)" > "$tmp/webui" ) & _probe_pids+=("$!"); fi
-      ( echo "$(_probe_console)" > "$tmp/console" ) & _probe_pids+=("$!")
+      if _disabled console; then echo "na||disabled" > "$tmp/console"
+      else ( echo "$(_probe_console)" > "$tmp/console" ) & _probe_pids+=("$!"); fi
       if declare -F zbmc_ncsi_health >/dev/null && [[ " ${ZBMC_REQUIRED_SERVICES:-} " != *' ncsi '* ]]; then
         ZBMC_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:+$ZBMC_REQUIRED_SERVICES }ncsi"
       fi
       _ncsi_expected=0
       if [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' ncsi '* ]]; then
         _ncsi_expected=1
-        ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) & _probe_pids+=("$!")
+        if _disabled ncsi; then echo "na||disabled" > "$tmp/ncsi"
+        else ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) & _probe_pids+=("$!"); fi
       fi
       _background_pids=("${_probe_pids[@]}")
       _si=0; _sf='|/-\'
@@ -824,10 +833,6 @@ PY
       if [ "$_ncsi_expected" = 1 ]; then IFS='|' read -r _ncsist _ncsids _ncsint < "$tmp/ncsi"; fi
       rm -rf "$tmp"
 
-      _disabled(){
-        [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
-        [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
-      }
       _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
       _classify(){
         local raw="$1" service="$2"

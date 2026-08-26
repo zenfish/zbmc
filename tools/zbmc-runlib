@@ -21,6 +21,11 @@ _zr_set_effective_services(){ # 1 disables Web-UI for this run
   export ZBMC_REQUIRED_SERVICES ZBMC_WEBUI_DISABLED
 }
 
+_zr_service_disabled(){
+  [ "$1" = webui ] && [ "${ZBMC_WEBUI_DISABLED:-0}" = 1 ] && return 0
+  [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
+}
+
 _zr_guid(){
   if command -v uuidgen >/dev/null 2>&1; then
     uuidgen | tr '[:upper:]' '[:lower:]'
@@ -360,7 +365,7 @@ PY
 
 _zr_health_watch(){
   local _zr_pid="$1" _zr_interval="${ZBMC_HEALTH_INTERVAL:-30}" _zr_start="$ZBMC_RUN_START_EPOCH"
-  local _zr_self="${BASHPID:-$$}" p5= p6=
+  local _zr_self="${BASHPID:-$$}" p3= p4= p5= p6=
   printf '%s\n' "$_zr_self" >"$ZBMC_RUN_DIR/health-watch.pid"
   while ps -p "$_zr_pid" >/dev/null 2>&1; do
     local _zr_now; _zr_now=$(_zr_now)
@@ -368,17 +373,21 @@ _zr_health_watch(){
     local _zr_tmp="$ZBMC_RUN_DIR/.health.$$"; mkdir -p "$_zr_tmp"
     _zr_probe_service ssh "$_zr_tmp/ssh" & local p1=$!
     _zr_probe_service ipmi "$_zr_tmp/ipmi" & local p2=$!
-    _zr_probe_service redfish "$_zr_tmp/redfish" & local p3=$!
-    _zr_probe_service console "$_zr_tmp/console" & local p4=$!
-    if [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; then
-      _zr_probe_service webui "$_zr_tmp/webui" & p5=$!
+    if _zr_service_disabled redfish; then echo 'na||disabled' >"$_zr_tmp/redfish"
+    else _zr_probe_service redfish "$_zr_tmp/redfish" & p3=$!; fi
+    if _zr_service_disabled console; then echo 'na||disabled' >"$_zr_tmp/console"
+    else _zr_probe_service console "$_zr_tmp/console" & p4=$!; fi
+    if _zr_service_disabled webui; then echo 'na||disabled' >"$_zr_tmp/webui"
     else
-      echo 'na||disabled' >"$_zr_tmp/webui"
+      _zr_probe_service webui "$_zr_tmp/webui" & p5=$!
     fi
     if [[ " $ZBMC_REQUIRED_SERVICES " == *' ncsi '* ]]; then
-      _zr_probe_service ncsi "$_zr_tmp/ncsi" & p6=$!
+      if _zr_service_disabled ncsi; then echo 'na||disabled' >"$_zr_tmp/ncsi"
+      else _zr_probe_service ncsi "$_zr_tmp/ncsi" & p6=$!; fi
     fi
-    wait "$p1" "$p2" "$p3" "$p4" 2>/dev/null || true
+    wait "$p1" "$p2" 2>/dev/null || true
+    [ -z "$p3" ] || wait "$p3" 2>/dev/null || true
+    [ -z "$p4" ] || wait "$p4" 2>/dev/null || true
     [ -z "$p5" ] || wait "$p5" 2>/dev/null || true
     [ -z "$p6" ] || wait "$p6" 2>/dev/null || true
     if declare -F zbmc_guest_snapshot >/dev/null && mkdir "$ZBMC_RUN_DIR/guest-snapshot.lock" 2>/dev/null; then
@@ -507,18 +516,22 @@ _zr_wait_ready(){
       _zr_last_probe=$_zr_now_epoch
       _zr_probe_service ssh "$_zr_tmp/ssh" & local _zr_p1=$!
       _zr_probe_service ipmi "$_zr_tmp/ipmi" & local _zr_p2=$!
-      _zr_probe_service redfish "$_zr_tmp/redfish" & local _zr_p3=$!
-      _zr_probe_service console "$_zr_tmp/console" & local _zr_p4=$!
-      local _zr_p5= _zr_p6=
-      if [[ "$_zr_required" == *' webui '* ]]; then
-        _zr_probe_service webui "$_zr_tmp/webui" & _zr_p5=$!
+      local _zr_p3= _zr_p4= _zr_p5= _zr_p6=
+      if _zr_service_disabled redfish; then echo 'na||disabled' >"$_zr_tmp/redfish"
+      else _zr_probe_service redfish "$_zr_tmp/redfish" & _zr_p3=$!; fi
+      if _zr_service_disabled console; then echo 'na||disabled' >"$_zr_tmp/console"
+      else _zr_probe_service console "$_zr_tmp/console" & _zr_p4=$!; fi
+      if _zr_service_disabled webui; then echo 'na||disabled' >"$_zr_tmp/webui"
       else
-        echo 'na||disabled' >"$_zr_tmp/webui"
+        _zr_probe_service webui "$_zr_tmp/webui" & _zr_p5=$!
       fi
       if [[ "$_zr_required" == *' ncsi '* ]]; then
-        _zr_probe_service ncsi "$_zr_tmp/ncsi" & _zr_p6=$!
+        if _zr_service_disabled ncsi; then echo 'na||disabled' >"$_zr_tmp/ncsi"
+        else _zr_probe_service ncsi "$_zr_tmp/ncsi" & _zr_p6=$!; fi
       fi
-      wait "$_zr_p1" "$_zr_p2" "$_zr_p3" "$_zr_p4" 2>/dev/null || true
+      wait "$_zr_p1" "$_zr_p2" 2>/dev/null || true
+      [ -z "$_zr_p3" ] || wait "$_zr_p3" 2>/dev/null || true
+      [ -z "$_zr_p4" ] || wait "$_zr_p4" 2>/dev/null || true
       [ -z "$_zr_p5" ] || wait "$_zr_p5" 2>/dev/null || true
       [ -z "$_zr_p6" ] || wait "$_zr_p6" 2>/dev/null || true
       _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
