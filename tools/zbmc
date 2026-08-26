@@ -227,6 +227,17 @@ _probe_webui(){
   esac
 }
 
+_probe_ncsi(){
+  if ! declare -F zbmc_ncsi_health >/dev/null; then
+    echo "fail||functional probe not configured"
+    return
+  fi
+  local r rc
+  r=$(zbmc_ncsi_health 2>&1); rc=$?
+  [ "$rc" = 0 ] && { echo "ok||$r"; return; }
+  echo "fail||${r:-functional probe failed}"
+}
+
 _probe_console(){
   if [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
     echo "ok|zbmc $ZBMC_IP console|interactive serial"
@@ -563,12 +574,21 @@ PY
       if [ "$_webui_run_disabled" = 1 ]; then echo "na||disabled" > "$tmp/webui"
       else ( echo "$(_probe_webui)" > "$tmp/webui" ) & fi
       ( echo "$(_probe_console)" > "$tmp/console" ) &
+      if declare -F zbmc_ncsi_health >/dev/null && [[ " ${ZBMC_REQUIRED_SERVICES:-} " != *' ncsi '* ]]; then
+        ZBMC_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:+$ZBMC_REQUIRED_SERVICES }ncsi"
+      fi
+      _ncsi_expected=0
+      if [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' ncsi '* ]]; then
+        _ncsi_expected=1
+        ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) &
+      fi
       wait
       IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
       IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
       IFS='|' read -r _redfishst _redfishds _redfishnt < "$tmp/redfish"
       IFS='|' read -r _webuist _webuids _webuint < "$tmp/webui"
       IFS='|' read -r _consolest _consoleds _consolent < "$tmp/console"
+      if [ "$_ncsi_expected" = 1 ]; then IFS='|' read -r _ncsist _ncsids _ncsint < "$tmp/ncsi"; fi
       rm -rf "$tmp"
 
       _disabled(){
@@ -597,6 +617,9 @@ PY
       _classify "$_redfishst" redfish; _redfishstate=$_state; _redfishwhy=$_why
       _classify "$_webuist" webui; _webuistate=$_state; _webuiwhy=$_why
       _classify "$_consolest" console; _consolestate=$_state; _consolewhy=$_why
+      if [ "$_ncsi_expected" = 1 ]; then
+        _classify "$_ncsist" ncsi; _ncsistate=$_state; _ncsiwhy=$_why
+      fi
 
       _ready_n=0; _expected_n=0; _starting_n=0; _failed_n=0; _na_n=0
       _ready_names=; _starting_names=; _failed_names=; _na_names=
@@ -620,6 +643,7 @@ PY
       _count "$_ipmistate" "$_ipmiwhy" IPMI; _count "$_redfishstate" "$_redfishwhy" Redfish
       _count "$_webuistate" "$_webuiwhy" Web-UI
       _count "$_consolestate" "$_consolewhy" Console
+      if [ "$_ncsi_expected" = 1 ]; then _count "$_ncsistate" "$_ncsiwhy" NC-SI; fi
 
       if [ "$ZBMC_DETAIL" -gt 0 ]; then
         _row(){
@@ -637,12 +661,8 @@ PY
         _row Redfish "$_redfishstate" "$_redfishwhy" "$_redfishds" "$_redfishnt"
         _row Web-UI "$_webuistate" "$_webuiwhy" "$_webuids" "$_webuint"
         _row Console "$_consolestate" "$_consolewhy" "$_consoleds" "$_consolent"
-        printf "%-9s : " "NC-SI"
-        if [ "$_sshstate" = READY ]; then
-          _ncsi=$(timeout -s KILL 4 bash -c '. "'"$BF"'"; zbmc_ssh '\''zcat /proc/config.gz 2>/dev/null | grep -q "^CONFIG_NET_NCSI=y"'\''' 2>/dev/null)
-          [ $? = 0 ] && echo "$(_colored_state AVAILABLE) (kernel support present)" || echo "N/A (not present)"
-        else
-          echo "N/A (not checked; SSH unavailable)"
+        if [ "$_ncsi_expected" = 1 ]; then
+          _row NC-SI "$_ncsistate" "$_ncsiwhy" "$_ncsids" "$_ncsint"
         fi
         printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$ZBMC_NAME" "$CZ"
         if [ -n "${ZBMC_REMEDIATION:-}" ]; then

@@ -35,6 +35,9 @@ zbmc_webui_health(){
   [ -f "$TEST_ROOT/webui-down" ] && { echo "no HTTPS root response"; return 1; }
   echo "fixture Web-UI"
 }
+if [ "${TEST_NCSI:-0}" = 1 ]; then
+  zbmc_ncsi_health(){ echo "fixture NC-SI"; }
+fi
 EOF
 
 printf 'run-1\n' > "$TEST_ROOT/current-run"
@@ -78,6 +81,24 @@ expect "$verbose" "IPMI      : STARTING (required; no response)"
 expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (required; fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
+[[ "$verbose" != *"NC-SI"* ]] || { printf 'unexpected NC-SI row:\n%s\n' "$verbose" >&2; exit 1; }
+
+ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
+expect "$ncsi" "NC-SI     : READY (required; fixture NC-SI)"
+expect "$ncsi" "Health    : STARTING [4/5 - L2, SSH, Web-UI, NC-SI; IPMI coming online]"
+
+runlib_ncsi=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"
+  ZBMC_NAME=fake; ZBMC_IP=127.0.0.1; ZBMC_DESCRIPTOR_REQUIRED_SERVICES="ssh ipmi"
+  zbmc_ncsi_health(){ echo "fixture NC-SI"; }
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_set_effective_services 0
+  _zr_probe_service ncsi "$TEST_ROOT/runlib-ncsi"
+  printf "%s|" "$ZBMC_REQUIRED_SERVICES"
+  cat "$TEST_ROOT/runlib-ncsi"
+')
+expect "$runlib_ncsi" "ssh ipmi webui ncsi|ok||fixture NC-SI"
+rm "$TEST_ROOT/runlib-ncsi"
 
 shorthand=$("$fixture/tools/zbmc" fake -v)
 expect "$shorthand" "Observed  :"
