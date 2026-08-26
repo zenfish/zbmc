@@ -221,9 +221,9 @@ _probe_redfish(){
     [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
     echo "fail||${r:-box-specific Redfish probe failed}"; return
   fi
-  local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/"
+  local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/" probe_timeout="${ZBMC_HTTP_PROBE_TIMEOUT:-6}"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
-  if timeout -s KILL 7 curl -sk --max-time 6 -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi '"RedfishVersion"'; then
+  if timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_timeout" -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi '"RedfishVersion"'; then
     echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
   else echo "fail||down"; fi; }
 
@@ -234,8 +234,8 @@ _probe_webui(){
     [ "$rc" = 0 ] && { echo "ok|curl -sk https://$ZBMC_IP:${WEB_PORT:-443}/|$r"; return; }
     echo "fail||${r:-box-specific Web-UI probe failed}"; return
   fi
-  local url="https://$ZBMC_IP:${WEB_PORT:-443}/" code
-  code=$(timeout -s KILL 7 curl -sk --max-time 6 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+  local url="https://$ZBMC_IP:${WEB_PORT:-443}/" code probe_timeout="${ZBMC_HTTP_PROBE_TIMEOUT:-6}"
+  code=$(timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_timeout" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
   case "$code" in
     ""|000) echo "fail||no HTTPS root response" ;;
     *) echo "ok|curl -sk $url|HTTP $code from $(hostname -s)" ;;
