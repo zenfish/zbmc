@@ -748,7 +748,7 @@ PY
   ssh)    zbmc_ssh "$@" ;;
   telnet) declare -F zbmc_telnet >/dev/null && zbmc_telnet "$@" || { nc "$ZBMC_IP" "${TELNET_PORT:-23}"; } ;;
   ipmi)  [ $# -eq 0 ] && { echo "usage: zbmc $ZBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
-  web)   zbmc_web ;;
+  web)   zbmc_web "$@" ;;
   console)
     # console = a window on the LIVE console. If the box is DOWN, say so — do NOT
     # replay the stale $LOG from the last run (which is bring-up/restore output and

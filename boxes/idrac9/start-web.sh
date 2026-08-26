@@ -35,6 +35,9 @@
 #      FCGI_ODATA_RESPONDER_PORT=4200, socket-activate on 127.0.0.1:4200.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; SSH="$HERE/ssh-in.sh"
+MODE="${1:-}"
+case "$MODE" in ""|--ui-only) ;; *) echo "usage: zbmc idrac9 web [--ui-only]" >&2; exit 2;; esac
+WEB_ORIGIN="https://${ZBMC_IP:-localhost}:${WEB_PORT:-6443}"
 
 echo "== 1. seed self-signed cert/key at the iDRAC flash paths =="
 "$SSH" 'mkdir -p /flash/data0/etc/certs/CA/certs /flash/data0/cv/private
@@ -57,6 +60,9 @@ echo "== 2. bypass fcgi-auth for /redfish (Require all granted) in the volatile 
   } {print}" /tmp/fcgi-auth.conf.bak > "$F"; echo "auth bypass applied"'
 
 echo "== 3. start backend daemons (best-effort; their listen sockets hang the ssh -> timeout-cap) =="
+if [ "$MODE" = --ui-only ]; then
+  echo "skipped for Web-UI-only mode"
+else
 # odatalite (Redfish responder 4200) + fcgi-rds socket (GUI REST) + fcgi-auth (4300) + fcgi-auth-mut
 # (4301; binary /usr/bin/fcgi-auth-mut, NOT fcgi-auth). fcgi-rds.socket via systemd — manual
 # socket-activate won't create the AF_UNIX path /run/fcgirds/fcgirds.socket.
@@ -75,6 +81,7 @@ setsid systemd-socket-activate -l 127.0.0.1:4301 /usr/bin/fcgi-auth-mut </dev/nu
 EOS
 chmod +x /tmp/web-daemons.sh; sh /tmp/web-daemons.sh; sleep 2
 echo "odatalite=$(pgrep -fc fcgiodata) rds-sock=$([ -S /run/fcgirds/fcgirds.socket ] && echo Y) authmut=$(pgrep -fc fcgi-auth-mut)"' || echo "(daemon ssh capped — they start detached; normal)"
+fi
 
 echo "== 4. apply GUI config edits — NOT capped (tmpfiles re-copies the volatile config + reverts these) =="
 # fcgi-auth-mut .html authorizer bypass for /restgui (login UI serves static, no CIAM authorizer)
@@ -102,10 +109,11 @@ echo "httpd=$(pgrep -c httpd)  cfg=$(httpd -d / -t 2>&1 | tail -1)"'
 
 echo "== test (poll host) =="
 for i in 1 2 3 4 5 6; do
-  r=$(timeout -s KILL 8 curl -sk https://localhost:6443/redfish/ 2>/dev/null)
+  r=$(timeout -s KILL 8 curl -sk "$WEB_ORIGIN/redfish/" 2>/dev/null || true)
   echo "$r" | grep -q '"v1"' && { echo "Redfish service root UP"; break; }
   sleep 3
 done
-g=$(timeout -s KILL 8 curl -sk --compressed -o /dev/null -w '%{http_code}' https://localhost:6443/restgui/start.html 2>/dev/null)
+g=$(timeout -s KILL 8 curl -sk --compressed -o /dev/null -w '%{http_code}' "$WEB_ORIGIN/restgui/start.html" 2>/dev/null || true)
 echo "GUI login page (/restgui/start.html): HTTP $g  -> browser: https://drac9/restgui/start.html"
-echo "  host: curl -k https://localhost:6443/redfish/   (or https://drac9/redfish/ after: zbmc idrac9 net up)"
+echo "  host: curl -k $WEB_ORIGIN/redfish/"
+[ "$g" = 200 ]

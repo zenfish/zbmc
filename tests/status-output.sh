@@ -43,6 +43,7 @@ zbmc_webui_health(){
   [ -f "$TEST_ROOT/webui-down" ] && { echo "no HTTPS root response"; return 1; }
   echo "fixture Web-UI"
 }
+zbmc_web(){ printf 'web args: %s\n' "$*"; }
 if [ "${TEST_NCSI:-0}" = 1 ]; then
   zbmc_ncsi_health(){ echo "fixture NC-SI"; }
 fi
@@ -77,6 +78,7 @@ ready=$("$fixture/tools/zbmc" fake status)
 [[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - L2, SSH, IPMI, Web-UI]"
+expect "$("$fixture/tools/zbmc" fake web --ui-only)" "web args: --ui-only"
 
 rm "$TEST_ROOT/runs/run-1/result.json"
 printf '%s\n' "$(date +%s)" > "$TEST_ROOT/runs/run-1/start-epoch"

@@ -75,6 +75,6 @@ zbmc_ready() {
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
 zbmc_restore()  { WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
 zbmc_ssh()   { WD="$ZBMC_DIR" "$PROJ_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)
-zbmc_web()   { WD="$ZBMC_DIR" "$PROJ_DIR/start-web.sh"; }              # bring up httpd + Redfish (only needed on a cold P4 box)
+zbmc_web()   { WD="$ZBMC_DIR" ZBMC_IP="$ZBMC_IP" WEB_PORT="$WEB_PORT" "$PROJ_DIR/start-web.sh" "$@"; } # `--ui-only` skips Redfish backends
 # readiness markers in the serial log (zbmc status greps these)
 ZBMC_READY_GREP='pre-fullfw gate'
