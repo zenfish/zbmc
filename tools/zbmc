@@ -165,7 +165,9 @@ _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
 
 _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY|NOTE
   if command -v flock >/dev/null 2>&1; then
-    exec 9<"$BF" || { echo "fail||probe lock unavailable"; return; }
+    local lock_dir="${TMPDIR:-/tmp}/zbmc-probe-locks-$UID"
+    mkdir -p -m 700 "$lock_dir" 2>/dev/null || { echo "fail||probe lock unavailable"; return; }
+    exec 9>"$lock_dir/$ZBMC_NAME.ipmi" || { echo "fail||probe lock unavailable"; return; }
     flock -w "$(( ${IPMI_T:-3} + 8 ))" 9 || { echo "fail||probe busy"; return; }
   fi
   if declare -F zbmc_ipmi_health >/dev/null; then
@@ -199,7 +201,9 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
 _probe_ssh(){
   local cmd='.'" '$BF'"'; zbmc_ssh '\''echo up'\'''
   if command -v flock >/dev/null 2>&1; then
-    exec 8<"$BF" || { echo "fail||probe lock unavailable"; return; }
+    local lock_dir="${TMPDIR:-/tmp}/zbmc-probe-locks-$UID"
+    mkdir -p -m 700 "$lock_dir" 2>/dev/null || { echo "fail||probe lock unavailable"; return; }
+    exec 8>"$lock_dir/$ZBMC_NAME.ssh" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
   if timeout -s KILL 10 bash -c "$cmd" 2>/dev/null | grep -q up; then
