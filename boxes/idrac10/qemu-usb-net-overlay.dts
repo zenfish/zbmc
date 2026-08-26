@@ -18,4 +18,34 @@
 			};
 		};
 	};
+
+	fragment@1 {
+		target-path = "/cpus";
+
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			cpu@1 {
+				device_type = "cpu";
+				compatible = "arm,cortex-a35";
+				reg = <1>;
+				enable-method = "psci";
+			};
+
+			cpu@2 {
+				device_type = "cpu";
+				compatible = "arm,cortex-a35";
+				reg = <2>;
+				enable-method = "psci";
+			};
+
+			cpu@3 {
+				device_type = "cpu";
+				compatible = "arm,cortex-a35";
+				reg = <3>;
+				enable-method = "psci";
+			};
+		};
+	};
 };
