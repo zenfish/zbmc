@@ -178,6 +178,10 @@ rm "$TEST_ROOT/runs/run-1/result.json"
 printf '%s\n' "$(date +%s)" > "$TEST_ROOT/runs/run-1/start-epoch"
 printf '%s\n' '{"stage":"BOOTSTRAP","state":"ready"}' > "$TEST_ROOT/runs/run-1/events.jsonl"
 touch "$TEST_ROOT/ipmi-down"
+unobserved=$("$fixture/tools/zbmc" fake status)
+expect "$unobserved" "Startup watch : NOT ACTIVE (last recorded BOOTSTRAP; no terminal result)"
+expect "$unobserved" "Health    : DEGRADED [3/4 - ICMP, SSH, Web-UI; IPMI failed]"
+printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/watcher.pid"
 starting=$("$fixture/tools/zbmc" fake status)
 expect "$starting" "Current run : STARTING ("
 expect "$starting" "reached BOOTSTRAP)"

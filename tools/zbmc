@@ -580,8 +580,9 @@ case "$VERB" in
       echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
     if [ "$_wait" = 1 ]; then
+      printf '%s\n' "$$" > "$ZBMC_RUN_DIR/watcher.pid"
       trap '_watch_pid=$(_zbmc_spawn_watcher "$ZBMC_RUN_ID" "$p" "$_deadline" "$ZBMC_DETAIL"); echo; echo "Readiness watcher $_watch_pid continues; follow $ZBMC_RUN_DIR/progress.log"; exit 130' INT TERM
-      _zr_wait_ready "$p" "$_deadline"; _wait_rc=$?
+      _zr_wait_ready "$p" "$_deadline"; _wait_rc=$?; rm -f "$ZBMC_RUN_DIR/watcher.pid"
       trap 'echo; exit 130' INT TERM
       exit "$_wait_rc"
     else
@@ -652,10 +653,13 @@ case "$VERB" in
       if _zr_load "" 2>/dev/null; then
         [ "$_running" = 0 ] || _webui_run_disabled="${ZBMC_WEBUI_DISABLED:-0}"
         _run_label="Last run"; [ "$_running" = 1 ] && _run_label="Current run"
-        _run_info=$(python3 - "$ZBMC_RUN_DIR" "$_running" <<'PY'
+        _watcher_active=0
+        _watcher_pid=$(cat "$ZBMC_RUN_DIR/watcher.pid" 2>/dev/null || true)
+        [[ "$_watcher_pid" =~ ^[0-9]+$ ]] && ps -p "$_watcher_pid" >/dev/null 2>&1 && _watcher_active=1
+        _run_info=$(python3 - "$ZBMC_RUN_DIR" "$_running" "$_watcher_active" <<'PY'
 import json, os, sys, time
 
-root, running = sys.argv[1], sys.argv[2] == "1"
+root, running, watcher_active = sys.argv[1], sys.argv[2] == "1", sys.argv[3] == "1"
 
 def load(name):
     try:
@@ -708,10 +712,15 @@ if running:
             reached = f" (reached {highest})" if highest else ""
             summary = f"{state.upper()} after {elapsed}{reached}"
     else:
-        state = "starting"
         elapsed = duration(time.time() - seconds("start-epoch", int(time.time())))
-        reached = f"; reached {highest}" if highest else ""
-        summary = f"STARTING ({elapsed} elapsed{reached})"
+        if watcher_active:
+            state = "starting"
+            reached = f"; reached {highest}" if highest else ""
+            summary = f"STARTING ({elapsed} elapsed{reached})"
+        else:
+            state = "unobserved"
+            reached = f"last recorded {highest}" if highest else "no recorded stage"
+            summary = f"NOT ACTIVE ({reached}; no terminal result)"
 else:
     def elapsed(record):
         value = record.get("elapsed_seconds")
@@ -756,7 +765,7 @@ print(f"{state}|{summary}")
 PY
 )
         IFS='|' read -r _run_state _run_summary <<<"$_run_info"
-        [ "$_running" != 1 ] || [ "$_run_state" != timeout ] || _run_label="Startup watch"
+        [ "$_running" != 1 ] || [[ "$_run_state" != timeout && "$_run_state" != unobserved ]] || _run_label="Startup watch"
         printf "%-9s : %s\n" "$_run_label" "$_run_summary"
         if [ "$ZBMC_DETAIL" -gt 0 ]; then
           printf "%-9s : %s\n" "Evidence" "$ZBMC_RUN_DIR"
