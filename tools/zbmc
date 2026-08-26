@@ -1000,7 +1000,7 @@ PY
         tail -n +1 -f "$ZBMC_RUN_DIR/progress.log" & _tail_pid=$!
         _watch_pid=$(cat "$ZBMC_RUN_DIR/watcher.pid" 2>/dev/null || true)
         if [[ "$_watch_pid" =~ ^[0-9]+$ ]]; then
-          while kill -0 "$_watch_pid" 2>/dev/null; do sleep 1; done
+          while ps -p "$_watch_pid" >/dev/null 2>&1; do sleep 1; done
         fi
         sleep 0.2; kill "$_tail_pid" 2>/dev/null || true; wait "$_tail_pid" 2>/dev/null || true
       fi
