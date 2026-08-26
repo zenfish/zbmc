@@ -16,6 +16,7 @@ WEB_PORT=$(_zbmc_pick_port 443 6443)
 # `zbmc idrac9 net up` maps standard ports to this loopback IP + /etc/hosts name
 ZBMC_IP=$(_zbmc_resolve_ip idrac9 30 10.0.9.9)
 ZBMC_HOST=drac9
+ZBMC_SSH_NOTE='prompt is "/admin1->", but is a real shell'
 
 # IPMI/RAKP auth (zipmi client). Primary auth = IPMIKey (-K); calvin is the ssh/redfish pw.
 IPMI_USER=root

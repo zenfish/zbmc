@@ -16,6 +16,7 @@ ZBMC_DESC="status fixture"
 ZBMC_DIR="$TEST_ROOT"
 ZBMC_IP=$(_zbmc_resolve_ip fake 2 127.0.0.1)
 ZBMC_HOST=fake
+ZBMC_SSH_NOTE="${TEST_SSH_NOTE:-}"
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
 CONSOLE_LOG="$LOG"
@@ -91,6 +92,9 @@ expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
 [[ "$verbose" != *"NC-SI"* ]] || { printf 'unexpected NC-SI row:\n%s\n' "$verbose" >&2; exit 1; }
+
+ssh_note=$(TEST_SSH_NOTE='prompt is "/admin1->", but is a real shell' "$fixture/tools/zbmc" fake status --verbose)
+expect "$ssh_note" 'SSH       : READY (zbmc 127.0.0.1 ssh; prompt is "/admin1->", but is a real shell)'
 
 mv "$TEST_ROOT/runs/run-1/console.log" "$TEST_ROOT/runs/run-1/console.saved"
 printf 'legacy live serial output\n' > "$TEST_ROOT/console.log"
