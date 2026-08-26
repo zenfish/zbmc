@@ -70,9 +70,16 @@ _openbmc_retry_net_ipmi() { # qemu-pid
 }
 
 zbmc_post_launch() { # qemu-pid
-  local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}"
+  local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}" qemu_pid="$1"
+  local dispatcher="${_SELF:-$_XREPO/tools/zbmc}" descriptor="${BF:-${BASH_SOURCE[0]}}"
   mkdir -p "$retry_dir"
-  ( trap '' HUP; _openbmc_retry_net_ipmi "$1" ) >"$retry_dir/net-ipmi-retry.log" 2>&1 &
+  nohup bash -c '
+    trap "" HUP TERM
+    ZBMC_SOURCE_ONLY=1 . "$1"
+    . "$2"
+    echo "Waiting for SSH before Network IPMI retry"
+    _openbmc_retry_net_ipmi "$3"
+  ' bash "$dispatcher" "$descriptor" "$qemu_pid" >"$retry_dir/net-ipmi-retry.log" 2>&1 &
   printf '%s\n' "$!" > "$retry_dir/net-ipmi-retry.pid"
 }
 
