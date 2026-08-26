@@ -426,7 +426,7 @@ if os.path.exists(p):
     state0 = t0["state"] if t0 else r["state"]
     print(f'{state0}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
 else:
-    print('in progress')
+    print('in progress' if running else 'ended unexpectedly (no final result)')
 print(f'Evidence  : {root}')
 tp = os.path.join(root, "termination.json")
 termination = None
@@ -493,7 +493,10 @@ PY
       if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then echo "${CG}OK${CZ}  $ZBMC_IP answers ICMP"
       else echo "${CR}no ICMP reply${CZ} from $ZBMC_IP"; fi
       # capability rows — probe concurrently, collect, render. Each helper echoes STATE|DISPLAY|NOTE.
-      tmp="$ZBMC_DIR/tmp/status.$$"; rm -rf "$tmp"; mkdir -p "$tmp"
+      tmp_base="$ZBMC_DIR/tmp"
+      mkdir -p "$tmp_base" 2>/dev/null || tmp_base="${TMPDIR:-/tmp}"
+      [ -w "$tmp_base" ] || tmp_base="${TMPDIR:-/tmp}"
+      tmp=$(mktemp -d "${tmp_base%/}/status.XXXXXXXX" 2>/dev/null || mktemp -d "${TMPDIR:-/tmp}/zbmc-status.XXXXXXXX")
       ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &
       ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) &
       ( echo "$(_probe_redfish)" > "$tmp/redfish" ) &
@@ -529,7 +532,31 @@ PY
       printf "%-9s : " "Net (IP)"
       echo "${CP}$ZBMC_IP${CZ}  (${CC}$ZBMC_NAME${CZ})"
       printf "%-9s : " "Remediation"
-      echo "${ZBMC_REMEDIATION:-none configured}"
+      if [ -n "${ZBMC_REMEDIATION:-}" ]; then
+        _remedy_events=
+        if [ -n "${ZBMC_RUN_DIR:-}" ] && [ -f "$ZBMC_RUN_DIR/events.jsonl" ]; then
+          _remedy_events=$(python3 - "$ZBMC_RUN_DIR/events.jsonl" <<'PY' 2>/dev/null || true
+import json, sys
+hits = []
+for line in open(sys.argv[1], encoding="utf-8"):
+    try:
+        e = json.loads(line)
+    except Exception:
+        continue
+    text = " ".join(str(e.get(k, "")) for k in ("stage", "state", "message", "detail")).lower()
+    if any(word in text for word in ("remediation", "recovery", "recovered", "hardware-reset")):
+        hits.append(e)
+if hits:
+    last = hits[-1]
+    print(f'{len(hits)} recorded; last at +{last.get("elapsed_seconds", "?")}s: {last.get("message", "")}')
+PY
+)
+        fi
+        if [ -n "$_remedy_events" ]; then echo "$_remedy_events"
+        else echo "none recorded this run; configured: $ZBMC_REMEDIATION"; fi
+      else
+        echo "none configured"
+      fi
       _overall=1; _missing=
       [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ssh '* ]] && [ "$_sshok" = 0 ] && { _overall=0; _missing="$_missing ssh"; }
       [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ipmi '* ]] && [ "$_ipmiok" = 0 ] && { _overall=0; _missing="$_missing ipmi"; }

@@ -9,6 +9,19 @@ _zr_elapsed(){
   printf '%02d:%02d' $((_zr_s / 60)) $((_zr_s % 60))
 }
 
+_zr_guid(){
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr '[:upper:]' '[:lower:]'
+  elif [ -r /proc/sys/kernel/random/uuid ]; then
+    cat /proc/sys/kernel/random/uuid
+  else
+    python3 - <<'PY'
+import uuid
+print(uuid.uuid4())
+PY
+  fi
+}
+
 _zr_event(){ # stage state message [detail]
   local _zr_stage="$1" _zr_state="$2" _zr_message="$3" _zr_detail="${4:-}"
   local _zr_now_epoch; _zr_now_epoch=$(_zr_now)
@@ -34,19 +47,26 @@ PY
 }
 
 _zr_manifest(){
-  local _zr_fw_hash=unknown _zr_qemu=unknown _zr_fw="${X10_MASTER:-${FLASH:-${IMAGE:-}}}"
+  local _zr_fw_hash=unknown _zr_qemu=unknown _zr_qemu_path= _zr_qemu_hash=unknown
+  local _zr_fw="${X10_MASTER:-${FLASH:-${IMAGE:-}}}"
   if [ -n "$_zr_fw" ] && [ -f "$_zr_fw" ]; then
     if command -v sha256sum >/dev/null 2>&1; then _zr_fw_hash=$(sha256sum "$_zr_fw" | awk '{print $1}')
     else _zr_fw_hash=$(shasum -a 256 "$_zr_fw" | awk '{print $1}'); fi
   fi
-  if [ -n "${X10_QEMU:-}" ] && [ -x "${X10_QEMU:-}" ]; then _zr_qemu=$($X10_QEMU --version 2>/dev/null | head -1)
-  elif command -v qemu-system-arm >/dev/null 2>&1; then _zr_qemu=$(qemu-system-arm --version 2>/dev/null | head -1)
-  elif command -v qemu-system-aarch64 >/dev/null 2>&1; then _zr_qemu=$(qemu-system-aarch64 --version 2>/dev/null | head -1); fi
+  if [ -n "${X10_QEMU:-}" ] && [ -x "${X10_QEMU:-}" ]; then _zr_qemu_path="$X10_QEMU"
+  elif command -v qemu-system-arm >/dev/null 2>&1; then _zr_qemu_path=$(command -v qemu-system-arm)
+  elif command -v qemu-system-aarch64 >/dev/null 2>&1; then _zr_qemu_path=$(command -v qemu-system-aarch64); fi
+  if [ -n "$_zr_qemu_path" ]; then
+    _zr_qemu=$("$_zr_qemu_path" --version 2>/dev/null | head -1)
+    if command -v sha256sum >/dev/null 2>&1; then _zr_qemu_hash=$(sha256sum "$_zr_qemu_path" | awk '{print $1}')
+    else _zr_qemu_hash=$(shasum -a 256 "$_zr_qemu_path" | awk '{print $1}'); fi
+  fi
   python3 - "$ZBMC_RUN_DIR/manifest.json" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" \
-    "$ZBMC_NAME" "$ZBMC_IP" "$BF" "$_zr_fw" "$_zr_fw_hash" "$_zr_qemu" "${ZBMC_ORIGINAL_COMMAND:-}" <<'PY'
+    "$ZBMC_NAME" "$ZBMC_IP" "$BF" "$_zr_fw" "$_zr_fw_hash" "$_zr_qemu" "$_zr_qemu_path" "$_zr_qemu_hash" \
+    "${X10_FTGMAC_GUARD:-}" "${ZBMC_REMEDIATION:-}" "${ZBMC_ORIGINAL_COMMAND:-}" <<'PY'
 import json, os, platform, sys
 (path, run_id, started, name, ip, box_file, firmware, firmware_sha256,
- qemu, command) = sys.argv[1:]
+ qemu, qemu_path, qemu_sha256, ftgmac_guard, remediation, command) = sys.argv[1:]
 doc = {
     "schema": 1,
     "run_id": run_id,
@@ -54,6 +74,12 @@ doc = {
     "target": {"name": name, "ip": ip, "box_file": box_file},
     "firmware": {"path": firmware or None, "sha256": firmware_sha256},
     "qemu": qemu,
+    "qemu_path": qemu_path or None,
+    "qemu_sha256": qemu_sha256,
+    "config": {
+        "ftgmac_guard": ftgmac_guard or None,
+        "remediation_configured": remediation or None,
+    },
     "host": {"node": platform.node(), "system": platform.platform()},
     "command": command,
 }
@@ -181,7 +207,7 @@ _zr_init(){ # mode
   fi
   _zr_stamp=$(date -u +%Y%m%dT%H%M%SZ)
   ZBMC_RUN_START_EPOCH=$(_zr_now)
-  ZBMC_RUN_ID="${_zr_stamp}-$$"
+  ZBMC_RUN_ID="${_zr_stamp}-$(_zr_guid)"
   ZBMC_RUN_ROOT="$ZBMC_DIR/runs"
   ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
   export ZBMC_RUN_START_EPOCH ZBMC_RUN_ID ZBMC_RUN_ROOT ZBMC_RUN_DIR
