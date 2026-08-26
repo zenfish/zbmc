@@ -26,6 +26,10 @@ _zr_service_disabled(){
   [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
 }
 
+_zr_service_should_probe(){
+  [ "$1" = console ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]
+}
+
 _zr_guid(){
   if command -v uuidgen >/dev/null 2>&1; then
     uuidgen | tr '[:upper:]' '[:lower:]'
@@ -371,13 +375,20 @@ _zr_health_watch(){
     local _zr_now; _zr_now=$(_zr_now)
     printf '%s\n' "$_zr_now" >"$ZBMC_RUN_DIR/health-watch-heartbeat"
     local _zr_tmp="$ZBMC_RUN_DIR/.health.$$"; mkdir -p "$_zr_tmp"
-    _zr_probe_service ssh "$_zr_tmp/ssh" & local p1=$!
-    _zr_probe_service ipmi "$_zr_tmp/ipmi" & local p2=$!
+    local p1= p2=
+    if _zr_service_disabled ssh; then echo 'na||disabled' >"$_zr_tmp/ssh"
+    elif ! _zr_service_should_probe ssh; then echo 'skip||not configured' >"$_zr_tmp/ssh"
+    else _zr_probe_service ssh "$_zr_tmp/ssh" & p1=$!; fi
+    if _zr_service_disabled ipmi; then echo 'na||disabled' >"$_zr_tmp/ipmi"
+    elif ! _zr_service_should_probe ipmi; then echo 'skip||not configured' >"$_zr_tmp/ipmi"
+    else _zr_probe_service ipmi "$_zr_tmp/ipmi" & p2=$!; fi
     if _zr_service_disabled redfish; then echo 'na||disabled' >"$_zr_tmp/redfish"
+    elif ! _zr_service_should_probe redfish; then echo 'skip||not configured' >"$_zr_tmp/redfish"
     else _zr_probe_service redfish "$_zr_tmp/redfish" & p3=$!; fi
     if _zr_service_disabled console; then echo 'na||disabled' >"$_zr_tmp/console"
     else _zr_probe_service console "$_zr_tmp/console" & p4=$!; fi
     if _zr_service_disabled webui; then echo 'na||disabled' >"$_zr_tmp/webui"
+    elif ! _zr_service_should_probe webui; then echo 'skip||not configured' >"$_zr_tmp/webui"
     else
       _zr_probe_service webui "$_zr_tmp/webui" & p5=$!
     fi
@@ -385,7 +396,8 @@ _zr_health_watch(){
       if _zr_service_disabled ncsi; then echo 'na||disabled' >"$_zr_tmp/ncsi"
       else _zr_probe_service ncsi "$_zr_tmp/ncsi" & p6=$!; fi
     fi
-    wait "$p1" "$p2" 2>/dev/null || true
+    [ -z "$p1" ] || wait "$p1" 2>/dev/null || true
+    [ -z "$p2" ] || wait "$p2" 2>/dev/null || true
     [ -z "$p3" ] || wait "$p3" 2>/dev/null || true
     [ -z "$p4" ] || wait "$p4" 2>/dev/null || true
     [ -z "$p5" ] || wait "$p5" 2>/dev/null || true
@@ -514,14 +526,20 @@ _zr_wait_ready(){
 
     if [ $((_zr_now_epoch - _zr_last_probe)) -ge 5 ] && { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }; then
       _zr_last_probe=$_zr_now_epoch
-      _zr_probe_service ssh "$_zr_tmp/ssh" & local _zr_p1=$!
-      _zr_probe_service ipmi "$_zr_tmp/ipmi" & local _zr_p2=$!
-      local _zr_p3= _zr_p4= _zr_p5= _zr_p6=
+      local _zr_p1= _zr_p2= _zr_p3= _zr_p4= _zr_p5= _zr_p6=
+      if _zr_service_disabled ssh; then echo 'na||disabled' >"$_zr_tmp/ssh"
+      elif ! _zr_service_should_probe ssh; then echo 'skip||not configured' >"$_zr_tmp/ssh"
+      else _zr_probe_service ssh "$_zr_tmp/ssh" & _zr_p1=$!; fi
+      if _zr_service_disabled ipmi; then echo 'na||disabled' >"$_zr_tmp/ipmi"
+      elif ! _zr_service_should_probe ipmi; then echo 'skip||not configured' >"$_zr_tmp/ipmi"
+      else _zr_probe_service ipmi "$_zr_tmp/ipmi" & _zr_p2=$!; fi
       if _zr_service_disabled redfish; then echo 'na||disabled' >"$_zr_tmp/redfish"
+      elif ! _zr_service_should_probe redfish; then echo 'skip||not configured' >"$_zr_tmp/redfish"
       else _zr_probe_service redfish "$_zr_tmp/redfish" & _zr_p3=$!; fi
       if _zr_service_disabled console; then echo 'na||disabled' >"$_zr_tmp/console"
       else _zr_probe_service console "$_zr_tmp/console" & _zr_p4=$!; fi
       if _zr_service_disabled webui; then echo 'na||disabled' >"$_zr_tmp/webui"
+      elif ! _zr_service_should_probe webui; then echo 'skip||not configured' >"$_zr_tmp/webui"
       else
         _zr_probe_service webui "$_zr_tmp/webui" & _zr_p5=$!
       fi
@@ -529,7 +547,8 @@ _zr_wait_ready(){
         if _zr_service_disabled ncsi; then echo 'na||disabled' >"$_zr_tmp/ncsi"
         else _zr_probe_service ncsi "$_zr_tmp/ncsi" & _zr_p6=$!; fi
       fi
-      wait "$_zr_p1" "$_zr_p2" 2>/dev/null || true
+      [ -z "$_zr_p1" ] || wait "$_zr_p1" 2>/dev/null || true
+      [ -z "$_zr_p2" ] || wait "$_zr_p2" 2>/dev/null || true
       [ -z "$_zr_p3" ] || wait "$_zr_p3" 2>/dev/null || true
       [ -z "$_zr_p4" ] || wait "$_zr_p4" 2>/dev/null || true
       [ -z "$_zr_p5" ] || wait "$_zr_p5" 2>/dev/null || true

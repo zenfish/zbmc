@@ -792,16 +792,23 @@ PY
         [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
         [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
       }
+      _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
+      _should_probe(){ [ "$1" = console ] || _required "$1"; }
       _probe_pids=()
       if _disabled ssh; then echo "na||disabled" > "$tmp/ssh"
+      elif ! _should_probe ssh; then echo "skip||not configured" > "$tmp/ssh"
       else ( echo "$(_probe_ssh)" > "$tmp/ssh" ) & _probe_pids+=("$!"); fi
       if _disabled ipmi; then echo "na||disabled" > "$tmp/ipmi"
+      elif ! _should_probe ipmi; then echo "skip||not configured" > "$tmp/ipmi"
       else ( echo "$(_probe_ipmi)" > "$tmp/ipmi" ) & _probe_pids+=("$!"); fi
       if _disabled redfish; then echo "na||disabled" > "$tmp/redfish"
+      elif ! _should_probe redfish; then echo "skip||not configured" > "$tmp/redfish"
       else ( echo "$(_probe_redfish)" > "$tmp/redfish" ) & _probe_pids+=("$!"); fi
       if _disabled webui; then echo "na||disabled" > "$tmp/webui"
+      elif ! _should_probe webui; then echo "skip||not configured" > "$tmp/webui"
       else ( echo "$(_probe_webui)" > "$tmp/webui" ) & _probe_pids+=("$!"); fi
       if _disabled console; then echo "na||disabled" > "$tmp/console"
+      elif ! _should_probe console; then echo "skip||not configured" > "$tmp/console"
       else ( echo "$(_probe_console)" > "$tmp/console" ) & _probe_pids+=("$!"); fi
       if declare -F zbmc_ncsi_health >/dev/null && [[ " ${ZBMC_REQUIRED_SERVICES:-} " != *' ncsi '* ]]; then
         ZBMC_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:+$ZBMC_REQUIRED_SERVICES }ncsi"
@@ -833,7 +840,6 @@ PY
       if [ "$_ncsi_expected" = 1 ]; then IFS='|' read -r _ncsist _ncsids _ncsint < "$tmp/ncsi"; fi
       rm -rf "$tmp"
 
-      _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
       _classify(){
         local raw="$1" service="$2"
         if _disabled "$service"; then _state=N/A; _why=disabled

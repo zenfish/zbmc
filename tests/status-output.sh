@@ -142,6 +142,9 @@ rm -f "$TEST_ROOT/redfish-probed"
 disabled_redfish=$(TEST_REDFISH_MARK="$TEST_ROOT/redfish-probed" "$fixture/tools/zbmc" fake status --verbose)
 [ ! -e "$TEST_ROOT/redfish-probed" ] || { echo "disabled Redfish was still probed" >&2; exit 1; }
 expect "$disabled_redfish" "Redfish   : N/A (disabled)"
+not_configured_redfish=$(TEST_DISABLED=console TEST_REDFISH_MARK="$TEST_ROOT/redfish-probed" "$fixture/tools/zbmc" fake status --verbose)
+[ ! -e "$TEST_ROOT/redfish-probed" ] || { echo "unconfigured Redfish was still probed" >&2; exit 1; }
+expect "$not_configured_redfish" "Redfish   : N/A (not configured)"
 
 rm "$TEST_ROOT/runs/run-1/result.json"
 printf '%s\n' "$(date +%s)" > "$TEST_ROOT/runs/run-1/start-epoch"
