@@ -1,0 +1,11 @@
+diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
+index 3a6cb4d4f2..a252f9ec47 100644
+--- a/hw/usb/dev-network.c
++++ b/hw/usb/dev-network.c
+@@ -300,6 +300,7 @@ static const USBDesc desc_net = {
+         .iSerialNumber     = STRING_SERIALNUMBER,
+     },
+     .full = &desc_device_net,
++    .high = &desc_device_net,
+     .str  = usb_net_stringtable,
+ };

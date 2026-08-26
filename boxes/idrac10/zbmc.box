@@ -30,6 +30,13 @@ LOG=/tmp/zbmc-idrac10-console.log
 SOCK=/tmp/zbmc-idrac10-serial.sock
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
+if [ -z "${IDRAC10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64 ]; then
+  IDRAC10_QEMU=/home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64
+elif [ -z "${IDRAC10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64 ]; then
+  IDRAC10_QEMU=/home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64
+fi
+IDRAC10_QEMU="${IDRAC10_QEMU:-qemu-system-aarch64}"
+export IDRAC10_QEMU
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
@@ -74,12 +81,12 @@ zbmc_boot() {
   pkill -f "http.server 8091" 2>/dev/null
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
-  $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
+  $SUDO nohup "$IDRAC10_QEMU" -M npcm845-evb -m 1G \
     -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$WORK/qemu-usb-net.dtb" \
     -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-10.0.2.15:623" \
     -netdev user,id=tcpnet,net=10.0.3.0/24,host=10.0.3.2,dhcpstart=10.0.3.15,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-10.0.3.15:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-10.0.3.15:443,hostfwd=tcp:$ZBMC_IP:5200-10.0.3.15:5200,hostfwd=tcp:$ZBMC_IP:5201-10.0.3.15:5201" \
-    -device usb-net,netdev=tcpnet,bus=usb-bus.0,id=tcpnic \
+    -device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1,id=tcpnic \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
     -serial chardev:serial0 >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
