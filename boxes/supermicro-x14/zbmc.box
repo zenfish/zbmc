@@ -25,6 +25,9 @@ ZBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — passwor
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/supermicro-x14}"
 SNAP=svc-snap-shell.gz   # canonical warm snapshot: IPMI + Redfish + interactive SSH shell
+ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=ast2600-evb
 
 # Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
 ZBMC_IP=$(_zbmc_resolve_ip supermicro-x14 21 10.0.8.14)
@@ -60,11 +63,11 @@ zbmc_boot() {
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
   else
     [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (shell)" >&2
     : > "$LOG"
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
   fi
   # wait for the qemu whose hostfwd matches this box's IPMI port to appear, print its pid
   local n=0 qp=; while [ $n -lt 60 ]; do
@@ -86,7 +89,7 @@ zbmc_ready() {
 # snapshot: QMP-checkpoint the running instance to a gz (pauses the VM — restore to resume).
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-x14.sh" "${1:-$SNAP}"; }
 # restore: bring a warm snapshot up on the real IP (what `start` does automatically).
-zbmc_restore()  { ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "${1:-$SNAP}"; }
+zbmc_restore()  { ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-svc-x14.sh" "${1:-$SNAP}"; }
 
 # ssh: password auth (sshpass). Real Linux shell; `sudo -i` for root. Args = remote command.
 zbmc_ssh() {

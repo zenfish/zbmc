@@ -65,7 +65,8 @@ _zr_manifest(){
     if command -v sha256sum >/dev/null 2>&1; then _zr_fw_hash=$(sha256sum "$_zr_fw" | awk '{print $1}')
     else _zr_fw_hash=$(shasum -a 256 "$_zr_fw" | awk '{print $1}'); fi
   fi
-  if [ -n "${X10_QEMU:-}" ] && [ -x "${X10_QEMU:-}" ]; then _zr_qemu_path="$X10_QEMU"
+  if [ -n "${ZBMC_QEMU:-}" ] && [ -x "${ZBMC_QEMU:-}" ]; then _zr_qemu_path="$ZBMC_QEMU"
+  elif [ -n "${X10_QEMU:-}" ] && [ -x "${X10_QEMU:-}" ]; then _zr_qemu_path="$X10_QEMU"
   elif command -v qemu-system-arm >/dev/null 2>&1; then _zr_qemu_path=$(command -v qemu-system-arm)
   elif command -v qemu-system-aarch64 >/dev/null 2>&1; then _zr_qemu_path=$(command -v qemu-system-aarch64); fi
   if [ -n "$_zr_qemu_path" ]; then

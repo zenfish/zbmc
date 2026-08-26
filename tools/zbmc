@@ -124,7 +124,7 @@ usage(){
   echo "  (just the names:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
-  echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web]"
+  echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web] [-q PATH|--qemu-path PATH]"
   echo "                    boot and wait through functional readiness (default); record evidence"
   echo "                    --no-wait leaves a supervised readiness watcher running"
   echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
@@ -328,6 +328,14 @@ BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 
 . "$BF"
 ZBMC_DESCRIPTOR_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:-ssh ipmi}"
 export ZBMC_IP ZBMC_HOST ZBMC_NAME ZBMC_DESCRIPTOR_REQUIRED_SERVICES
+ZBMC_QEMU_OVERRIDE=
+case "${1:-}" in
+  -q|--qemu-path)
+    [ $# -ge 2 ] || { echo "zbmc: $1 needs a QEMU path" >&2; exit 2; }
+    ZBMC_QEMU_OVERRIDE="$2"; shift 2 ;;
+  --qemu-path=*)
+    ZBMC_QEMU_OVERRIDE="${1#*=}"; shift ;;
+esac
 case "${1:-}" in
   ""|-f|--follow|-v|--verbose|-d|--debug) VERB=status ;;
   *) VERB="$1"; shift ;;
@@ -368,6 +376,110 @@ if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
   exit 1
 fi
 
+_zbmc_validate_qemu(){ # path, descriptor-declared major, descriptor-declared machine
+  local qemu="$1" version
+  [ -n "${ZBMC_QEMU_MACHINE:-}" ] || { echo "$ZBMC_NAME: no QEMU compatibility contract" >&2; return 1; }
+  [ -n "${ZBMC_QEMU_MAJOR:-}" ] || { echo "$ZBMC_NAME: no required QEMU major version" >&2; return 1; }
+  case "$qemu" in *$'\n'*) echo "$ZBMC_NAME: invalid QEMU path" >&2; return 1;; esac
+  if [[ "$qemu" != */* ]]; then qemu="$(command -v "$qemu" || true)"; fi
+  [ -x "$qemu" ] || { echo "$ZBMC_NAME: QEMU is not executable: $qemu" >&2; return 1; }
+  version="$("$qemu" --version 2>/dev/null | sed -n '1s/^QEMU emulator version \([0-9][0-9]*\)\..*/\1/p')"
+  [ "$version" = "$ZBMC_QEMU_MAJOR" ] || {
+    echo "$ZBMC_NAME: need QEMU $ZBMC_QEMU_MAJOR.x, got ${version:-unknown}: $qemu" >&2
+    return 1
+  }
+  "$qemu" -machine help 2>/dev/null | awk -v machine="$ZBMC_QEMU_MACHINE" '$1 == machine { found=1 } END { exit !found }' || {
+    echo "$ZBMC_NAME: QEMU lacks required machine $ZBMC_QEMU_MACHINE: $qemu" >&2
+    return 1
+  }
+  _zbmc_qemu_smoke "$qemu" || {
+    echo "$ZBMC_NAME: QEMU cannot start $ZBMC_QEMU_MACHINE: $qemu" >&2
+    return 1
+  }
+  printf '%s\n' "$qemu"
+}
+
+_zbmc_qemu_smoke(){ # executable; start the declared board without firmware or network state
+  python3 - "$1" "$ZBMC_QEMU_MACHINE" <<'PY'
+import json
+import select
+import subprocess
+import sys
+
+qemu, machine = sys.argv[1:]
+proc = subprocess.Popen(
+    [qemu, "-M", machine, "-nodefaults", "-display", "none", "-S", "-qmp", "stdio"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+)
+
+def receive():
+    ready, _, _ = select.select([proc.stdout], [], [], 8)
+    if not ready:
+        raise RuntimeError("QMP timed out")
+    line = proc.stdout.readline()
+    if not line:
+        raise RuntimeError("QMP closed stdout")
+    return json.loads(line)
+
+def command(name):
+    proc.stdin.write(json.dumps({"execute": name}) + "\n")
+    proc.stdin.flush()
+    while True:
+        reply = receive()
+        if "event" not in reply:
+            if "return" not in reply:
+                raise RuntimeError(f"QMP {name}: {reply}")
+            return reply["return"]
+
+try:
+    if "QMP" not in receive():
+        raise RuntimeError("missing QMP greeting")
+    command("qmp_capabilities")
+    command("cont")
+    if command("query-status").get("status") != "running":
+        raise RuntimeError("machine did not enter running state")
+    command("stop")
+    command("quit")
+    proc.wait(timeout=8)
+except Exception as error:
+    if proc.poll() is None:
+        proc.kill()
+    _, stderr = proc.communicate()
+    print(f"QMP smoke failed: {error}; {stderr.strip()}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+_zbmc_persist_qemu(){ # descriptor path, already-validated executable
+  python3 - "$1" "$2" <<'PY'
+import pathlib, shlex, sys
+
+path = pathlib.Path(sys.argv[1])
+qemu = sys.argv[2]
+lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+line = "ZBMC_QEMU=" + shlex.quote(qemu) + "\n"
+for index, current in enumerate(lines):
+    if current.startswith("ZBMC_QEMU="):
+        lines[index] = line
+        break
+else:
+    lines.append(line)
+path.write_text("".join(lines), encoding="utf-8")
+PY
+}
+
+_zbmc_select_qemu(){
+  [ -n "${ZBMC_QEMU:-}${ZBMC_QEMU_OVERRIDE:-}" ] || return 0
+  local selected="${ZBMC_QEMU_OVERRIDE:-${ZBMC_QEMU:-}}"
+  [ -n "$selected" ] || { echo "$ZBMC_NAME: no approved QEMU path; use -q PATH once" >&2; return 1; }
+  selected="$(_zbmc_validate_qemu "$selected")" || return 1
+  if [ -n "$ZBMC_QEMU_OVERRIDE" ] && [ "$selected" != "${ZBMC_QEMU:-}" ]; then
+    _zbmc_persist_qemu "$BF" "$selected" || { echo "$ZBMC_NAME: could not store approved QEMU path in $BF" >&2; return 1; }
+  fi
+  ZBMC_QEMU="$selected"; QEMU="$selected"
+  export ZBMC_QEMU QEMU
+}
+
 case "$VERB" in
   _watch)
     [ $# -ge 3 ] || exit 2
@@ -377,6 +489,18 @@ case "$VERB" in
   up|start)
     do_web=1; _wait=1; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
     _original_args="$*"
+    _start_args=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -q|--qemu-path)
+          [ $# -ge 2 ] || { echo "zbmc: $1 needs a QEMU path" >&2; exit 2; }
+          ZBMC_QEMU_OVERRIDE="$2"; shift 2 ;;
+        --qemu-path=*) ZBMC_QEMU_OVERRIDE="${1#*=}"; shift ;;
+        *) _start_args+=("$1"); shift ;;
+      esac
+    done
+    set -- "${_start_args[@]}"
+    _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; no launch attempted" >&2; exit 1; }
     for a in "$@"; do case "$a" in
       --build)  zbmc_build || exit 1;;
       --no-web) do_web=0;;
@@ -470,7 +594,20 @@ case "$VERB" in
       rm -f "$PIDF"
       echo "$ZBMC_NAME stopped (qemu $p exited)"
     else echo "$ZBMC_NAME not running"; fi ;;
-  restart) "$0" "$BOX" down; sleep 1; exec "$0" "$BOX" up "$@" ;;
+  restart)
+    _restart_args=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -q|--qemu-path)
+          [ $# -ge 2 ] || { echo "zbmc: $1 needs a QEMU path" >&2; exit 2; }
+          ZBMC_QEMU_OVERRIDE="$2"; shift 2 ;;
+        --qemu-path=*) ZBMC_QEMU_OVERRIDE="${1#*=}"; shift ;;
+        *) _restart_args+=("$1"); shift ;;
+      esac
+    done
+    _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; restart aborted" >&2; exit 1; }
+    "$0" "$BOX" down; sleep 1
+    exec "$0" "$BOX" up "${_restart_args[@]}" ;;
   explain) _zr_explain "${1:-}" ;;
   evidence) _zr_evidence "${1:-}" ;;
   status)
