@@ -84,10 +84,11 @@ expect "$starting" "STARTING [3/4 - L2, SSH, Web-UI; IPMI coming online]"
 verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
 expect "$verbose" $'Evidence  : '"$TEST_ROOT/runs/run-1"$'\nConsole log : '"$TEST_ROOT/runs/run-1/console.log (live)"$'\nFollow      : tail -f '"$TEST_ROOT/runs/run-1/console.log"
-expect "$verbose" "SSH       : READY (required"
-expect "$verbose" "IPMI      : STARTING (required; no response)"
+expect "$verbose" "L2        : READY (127.0.0.1 answers ICMP)"
+expect "$verbose" "SSH       : READY (zbmc 127.0.0.1 ssh)"
+expect "$verbose" "IPMI      : STARTING (expected; no response)"
 expect "$verbose" "Redfish   : N/A (disabled)"
-expect "$verbose" "Web-UI    : READY (required; fixture Web-UI"
+expect "$verbose" "Web-UI    : READY (fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
 [[ "$verbose" != *"NC-SI"* ]] || { printf 'unexpected NC-SI row:\n%s\n' "$verbose" >&2; exit 1; }
 
@@ -110,7 +111,7 @@ expect "$console_output" "current run serial output"
 [[ "$console_output" != *"stale descriptor log"* ]] || { printf 'console tailed stale descriptor log:\n%s\n' "$console_output" >&2; exit 1; }
 
 ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
-expect "$ncsi" "NC-SI     : READY (required; fixture NC-SI)"
+expect "$ncsi" "NC-SI     : READY (fixture NC-SI)"
 expect "$ncsi" "Health    : STARTING [4/5 - L2, SSH, Web-UI, NC-SI; IPMI coming online]"
 
 runlib_ncsi=$(TEST_ROOT="$TEST_ROOT" bash -c '
@@ -142,7 +143,7 @@ cat > "$TEST_ROOT/runs/run-1/manifest.json" <<'EOF'
 {"command":"zbmc fake start --no-web"}
 EOF
 no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status --verbose)
-expect "$no_web" "Redfish   : FAILED (required; no HTTPS response)"
+expect "$no_web" "Redfish   : FAILED (expected; no HTTPS response)"
 expect "$no_web" "Web-UI    : N/A (disabled)"
 expect "$no_web" "Health    : DEGRADED [3/4 - L2, SSH, IPMI; Redfish failed]"
 runlib_no_web=$(TEST_ROOT="$TEST_ROOT" bash -c '

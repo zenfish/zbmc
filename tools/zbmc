@@ -11,10 +11,10 @@ set -u
 trap 'echo; exit 130' INT TERM
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
-# CG green=good  CR red=bad  CP purple(#af8dc3)=IP+creds  CC cyan=box name  CZ reset
+# CG green=good  CR red=bad  CP purple=IP+creds  CC cyan=box name  CD dim=progress  CZ reset
 if [ -t 1 ] || [ -n "${ZBMC_COLOR:-}" ]; then
-  CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CZ=$'\e[0m'
-else CG=; CR=; CP=; CC=; CZ=; fi
+  CG=$'\e[1;38;2;74;222;128m'; CR=$'\e[31m'; CP=$'\e[38;2;175;141;195m'; CC=$'\e[38;2;34;211;238m'; CD=$'\e[90m'; CZ=$'\e[0m'
+else CG=; CR=; CP=; CC=; CD=; CZ=; fi
 
 # --- registry: every boxes/<name>/zbmc.box in this repo (relative to this script) ----------
 # Single source of truth: the repo's own boxes/. phd runs this tool via a symlink (dogfood),
@@ -289,7 +289,7 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
     printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
     _si=0; _sf='|/-\'
     while [ ! -e "$td/$j.done" ]; do
-      if [ -t 1 ]; then printf '\r  checking %s %s' "$n" "${_sf:_si%4:1}"; _si=$((_si+1)); fi
+      if [ -t 1 ]; then printf '\r%s  checking %s %s%s' "$CD" "$n" "${_sf:_si%4:1}" "$CZ"; _si=$((_si+1)); fi
       sleep 0.1
     done
     [ -t 1 ] && printf '\r%*s\r' 64 ''
@@ -616,7 +616,7 @@ PY
       _spinner_pid=
       if [ -t 1 ]; then
         ( _si=0; _sf='|/-\'; trap 'exit 0' TERM
-          while :; do printf '\r  checking services %s' "${_sf:_si%4:1}"; _si=$((_si+1)); sleep 0.1; done
+          while :; do printf '\r%s  checking services %s%s' "$CD" "${_sf:_si%4:1}" "$CZ"; _si=$((_si+1)); sleep 0.1; done
         ) & _spinner_pid=$!
       fi
       for _probe_pid in "${_probe_pids[@]}"; do wait "$_probe_pid"; done
@@ -687,11 +687,16 @@ PY
         _row(){
           local label="$1" state="$2" why="$3" display="$4" note="$5" detail
           detail="$why"
-          if [ "$state" != N/A ]; then
-            [ -n "$note" ] && detail="$detail; $note"
-            [ -n "$display" ] && detail="$detail; $display"
+          if [ "$why" = required ]; then
+            if [ "$state" = READY ]; then detail=; else detail=expected; fi
           fi
-          printf "%-9s : %s (%s)\n" "$label" "$(_colored_state "$state")" "$detail"
+          if [ "$state" != N/A ]; then
+            [ -n "$note" ] && detail="${detail:+$detail; }$note"
+            [ -n "$display" ] && detail="${detail:+$detail; }$display"
+          fi
+          printf "%-9s : %s" "$label" "$(_colored_state "$state")"
+          [ -n "$detail" ] && printf " (%s)" "$detail"
+          echo
         }
         _row L2 "$_l2state" "$_l2why" "" "$_l2nt"
         _row SSH "$_sshstate" "$_sshwhy" "$_sshds" "$_sshnt"
