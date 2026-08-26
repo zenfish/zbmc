@@ -182,7 +182,7 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
     [ "$ky" = 0 ] && { echo "ok|$(_ipmi_invocation key)|"; return; }
     _ipmi_run pw; local pw=$?
     [ "$pw" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|key auth failed; password worked"; return; }
-    { [ "$ky" = 2 ] || [ "$pw" = 2 ]; } && { echo "authfail||key/password rejected"; return; }
+    { [ "$ky" = 2 ] && [ "$pw" = 2 ]; } && { echo "authfail||key/password rejected"; return; }
     echo "fail||no answer (warming/down)"; return
   fi
   _ipmi_run pw; local pw=$?
