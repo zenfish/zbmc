@@ -5,10 +5,16 @@
 #   zbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|shell|build|net
 # Boxes are described by zbmc.box files (register their paths in REGISTRY below).
 set -u
-# Ctrl-C: without an explicit trap, a probe child (nc/curl/timeout/sleep) absorbs the SIGINT and the
-# status/`all` loop just continues to the next iteration — so Ctrl-C looks dead. Trap forces the whole
-# tool to exit; the in-flight child already got the same SIGINT from the terminal, so it dies with us.
-trap 'echo; exit 130' INT TERM
+_spinner_pid=
+_stop_spinner(){
+  if [ -n "${_spinner_pid:-}" ]; then
+    kill "$_spinner_pid" 2>/dev/null || true
+    wait "$_spinner_pid" 2>/dev/null || true
+    _spinner_pid=
+  fi
+}
+# Ctrl-C must stop both the probe loop and its separately forked animation.
+trap '_stop_spinner; echo; exit 130' INT TERM
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
 # CG green=good  CR red=bad  CP purple=IP+creds  CC cyan=box name  CD dim=progress  CZ reset
@@ -620,7 +626,7 @@ PY
         ) & _spinner_pid=$!
       fi
       for _probe_pid in "${_probe_pids[@]}"; do wait "$_probe_pid"; done
-      if [ -n "$_spinner_pid" ]; then kill "$_spinner_pid" 2>/dev/null; wait "$_spinner_pid" 2>/dev/null; printf '\r%*s\r' 64 ''; fi
+      if [ -n "$_spinner_pid" ]; then _stop_spinner; printf '\r%*s\r' 64 ''; fi
       IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
       IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
       IFS='|' read -r _redfishst _redfishds _redfishnt < "$tmp/redfish"
