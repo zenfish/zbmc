@@ -429,7 +429,8 @@ cat /proc/net/udp 2>/dev/null || true
 # --- end SSH bring-up ---
 
 echo "IPMI_READY"
-# fw.sh exits here. fullfw+AIM are backgrounded and continue running.
-# The parent init shell (pid=1) returns to its sh-5.2# prompt so expect
-# can run diagnostic commands and poll via zipmi.
-exit 0
+# Keep PID 1 blocked in fw.sh while the serial console uses disposable child shells.
+# Logging out of `zbmc idrac10 ssh` then respawns a shell instead of exiting init.
+while :; do
+    /bin/sh || true
+done
