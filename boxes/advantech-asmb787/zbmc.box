@@ -43,6 +43,12 @@ SSH_PW=superuser
 SSH_PORT=22
 IPMI_PORT=623
 WEB_PORT=443
+ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_REQUIRED_SERVICES=console
+ZBMC_L2_REQUIRED=0
+ZBMC_DEFAULT_NO_WEB=1
 
 PIDF="$ZBMC_DIR/zbmc.pid"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
@@ -54,7 +60,7 @@ zbmc_boot() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
   _zbmc_lo_alias "$ZBMC_IP"
   rm -f "$ZBMC_DIR/.loggedin"                          # fresh boot = at the login prompt
-  BG=1 IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" \
+  BG=1 IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" ZBMC_QEMU="$ZBMC_QEMU" \
     WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
     bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
   local n=0 qp=; while [ $n -lt 40 ]; do
@@ -83,6 +89,10 @@ zbmc_console() {
     _c_wait '# ' 15 && touch "$ZBMC_DIR/.loggedin" || { echo "console: login didn't settle — retry the command"; return 1; }
   fi
   printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$CONSOLE_LOG"
+}
+zbmc_console_health() {
+  grep -q 'login:' "$CONSOLE_LOG" 2>/dev/null && { echo "serial login prompt observed"; return 0; }
+  echo "waiting for serial login prompt"; return 1
 }
 # web/ipmi/ssh: this box is CONSOLE-ONLY (older AMI kernel can't complete NC-SI link-up under qemu).
 zbmc_web()         { echo "$ZBMC_NAME: console-only box — no external Redfish. Use:  zbmc $ZBMC_NAME console"; return 1; }

@@ -18,6 +18,7 @@ WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo 
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${IP:-127.0.0.1}"
 HTTPS_PORT="${HTTPS_PORT:-6443}"; SSH_PORT="${SSH_PORT:-6022}"; IPMI_PORT="${IPMI_PORT:-6623}"
+QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 
 # mtdparts numbering MUST match /etc/dupfstab: mtdblock1=/conf, mtdblock3=/usr/local/www, mtdblock4=/dre.
 MTDPARTS='mtdparts=1e620000.spi:832k@0(uboot),1984k@0xd0000(conf),1984k@0x2d0000(bkupconf),6144k@0x2810000(www),-@0x2e10000(dre)'
@@ -26,7 +27,7 @@ APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_siz
 # fresh pristine flash copy each boot so /conf starts clean -> IPMIMain auto-provisions default user.
 cp -f "$WD/mtdflash.bin" "$WD/mtdflash-run.bin"
 rm -f "$WD/asmb787-qmp.sock"
-QEMU=(qemu-system-arm -M ast2600-evb -m 1024 -nographic
+QEMU=("$QEMU_BIN" -M ast2600-evb -m 1024 -nographic
   -qmp "unix:$WD/asmb787-qmp.sock,server,nowait"
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs"
   -drive "file=$WD/mtdflash-run.bin,format=raw,if=mtd"

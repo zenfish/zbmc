@@ -31,6 +31,7 @@ CONSOLE_LOG="$LOG"
 IPMI_USER=root
 IPMI_PW=test
 ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi}"
+ZBMC_L2_REQUIRED="${TEST_L2_REQUIRED:-1}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
 zbmc_ready(){ echo "ready (fixture)"; }
 zbmc_running(){ [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] && echo "$$"; }
@@ -252,6 +253,12 @@ runlib_default=$(TEST_ROOT="$TEST_ROOT" bash -c '
   printf "%s|%s\n" "$ZBMC_REQUIRED_SERVICES" "$ZBMC_WEBUI_DISABLED"
 ')
 [ "$runlib_default" = "ssh ipmi redfish webui|0" ] || { echo "unexpected default runlib services: $runlib_default" >&2; exit 1; }
+
+printf '%s\n' '{"command":"zbmc fake start --no-web"}' > "$TEST_ROOT/runs/run-1/manifest.json"
+console_required=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
+expect "$console_required" "Health    : READY [1/1 - Console]"
+console_required_v=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+expect "$console_required_v" "L2        : N/A (not configured)"
 
 runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"

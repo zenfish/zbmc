@@ -254,7 +254,12 @@ _probe_ncsi(){
 }
 
 _probe_console(){
-  if [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
+  if declare -F zbmc_console_health >/dev/null; then
+    local r rc
+    r=$(zbmc_console_health 2>&1); rc=$?
+    [ "$rc" = 0 ] && { echo "ok|zbmc $ZBMC_IP console|$r"; return; }
+    echo "fail||${r:-box-specific console probe failed}"; return
+  elif [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
     echo "ok|zbmc $ZBMC_IP console|interactive serial"
   elif [ -f "${LOG:-}" ]; then
     echo "ok|zbmc $ZBMC_IP console|live log; non-interactive"
@@ -487,7 +492,8 @@ case "$VERB" in
     ZBMC_DETAIL="${4:-0}"
     _zr_wait_ready "$2" "$3" ;;
   up|start)
-    do_web=1; _wait=1; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
+    do_web=1; [ "${ZBMC_DEFAULT_NO_WEB:-0}" = 1 ] && do_web=0
+    _wait=1; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
     _original_args="$*"
     _start_args=()
     while [ $# -gt 0 ]; do
@@ -844,6 +850,7 @@ PY
         local raw="$1" service="$2"
         if _disabled "$service"; then _state=N/A; _why=disabled
         elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
+        elif [ "$service" = l2 ] && [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then _state=N/A; _why="not configured"
         elif [ "$service" = console ]; then _state=AVAILABLE; _why="operator access"
         elif ! _required "$service"; then _state=N/A; _why="not configured"
         else
@@ -875,7 +882,11 @@ PY
       _count(){
         local state="$1" why="$2" name="$3"
         if [ "$state" = N/A ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
-        [ "$state" = AVAILABLE ] && return
+        if [ "$state" = AVAILABLE ]; then
+          [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' console '* ]] || return
+          _expected_n=$((_expected_n+1)); _ready_n=$((_ready_n+1)); _add_name _ready_names "$name"
+          return
+        fi
         _expected_n=$((_expected_n+1))
         case "$state" in
           READY) _ready_n=$((_ready_n+1)); _add_name _ready_names "$name" ;;
