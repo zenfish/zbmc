@@ -18,6 +18,7 @@ ZBMC_IP=$(_zbmc_resolve_ip fake 2 127.0.0.1)
 ZBMC_HOST=fake
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
+CONSOLE_LOG="$LOG"
 IPMI_USER=root
 IPMI_PW=test
 ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi}"
@@ -57,8 +58,13 @@ down=$("$fixture/tools/zbmc" fake status)
 expect "$down" "Last run  : STOPPED"
 expect "$down" "had reached READY"
 
+down_verbose=$("$fixture/tools/zbmc" fake status --verbose)
+expect "$down_verbose" "Evidence  : $TEST_ROOT/runs/run-1"
+expect "$down_verbose" "Console log : N/A"
+
 rm "$TEST_ROOT/runs/run-1/termination.json"
 printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
+printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
@@ -76,12 +82,31 @@ expect "$starting" "STARTING [3/4 - L2, SSH, Web-UI; IPMI coming online]"
 
 verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
+expect "$verbose" $'Evidence  : '"$TEST_ROOT/runs/run-1"$'\nConsole log : '"$TEST_ROOT/runs/run-1/console.log (live)"$'\nFollow      : tail -f '"$TEST_ROOT/runs/run-1/console.log"
 expect "$verbose" "SSH       : READY (required"
 expect "$verbose" "IPMI      : STARTING (required; no response)"
 expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (required; fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
 [[ "$verbose" != *"NC-SI"* ]] || { printf 'unexpected NC-SI row:\n%s\n' "$verbose" >&2; exit 1; }
+
+mv "$TEST_ROOT/runs/run-1/console.log" "$TEST_ROOT/runs/run-1/console.saved"
+printf 'legacy live serial output\n' > "$TEST_ROOT/console.log"
+legacy_verbose=$("$fixture/tools/zbmc" fake status --verbose)
+expect "$legacy_verbose" "Console log : $TEST_ROOT/console.log (live)"
+expect "$legacy_verbose" "Follow      : tail -f $TEST_ROOT/console.log"
+mv "$TEST_ROOT/runs/run-1/console.saved" "$TEST_ROOT/runs/run-1/console.log"
+
+rm "$TEST_ROOT/zbmc.pid"
+archived=$("$fixture/tools/zbmc" fake status --verbose)
+expect "$archived" "Console log : $TEST_ROOT/runs/run-1/console.log (archived)"
+[[ "$archived" != *"Follow      :"* ]] || { printf 'unexpected archived follow command:\n%s\n' "$archived" >&2; exit 1; }
+printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
+
+printf 'stale descriptor log\n' > "$TEST_ROOT/console.log"
+console_output=$(timeout 1 "$fixture/tools/zbmc" fake console 2>&1 || :)
+expect "$console_output" "current run serial output"
+[[ "$console_output" != *"stale descriptor log"* ]] || { printf 'console tailed stale descriptor log:\n%s\n' "$console_output" >&2; exit 1; }
 
 ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
 expect "$ncsi" "NC-SI     : READY (required; fixture NC-SI)"
@@ -148,6 +173,25 @@ runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
 ')
 expect "$runlib_probe" "ok|curl -sk https://127.0.0.1:443/|runlib Web-UI"
 rm "$TEST_ROOT/webui-down" "$TEST_ROOT/runs/run-1/manifest.json" "$TEST_ROOT/runlib-webui"
+
+runlib_console=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  set -e
+  ZBMC_DIR="$TEST_ROOT/init-contract"; ZBMC_NAME=fake; ZBMC_IP=127.0.0.1
+  LOG=; CONSOLE_LOG="$TEST_ROOT/legacy-console.log"
+  mkdir -p "$ZBMC_DIR"
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_manifest(){ :; }; _zr_snapshot(){ :; }; _zr_event(){ :; }
+  _zr_init boot
+  printf "serial evidence\n" > "$ZBMC_CONSOLE_LOG"
+  _zr_archive_logs
+  printf "%s|%s|%s|" "$ZBMC_CONSOLE_LOG" "$CONSOLE_LOG" "$(bash -c '\''printf %s "$ZBMC_CONSOLE_LOG"'\'')"
+  cat "$ZBMC_CONSOLE_LOG"
+')
+IFS='|' read -r run_console descriptor_console child_console run_console_text <<<"$runlib_console"
+[ "$run_console" = "$descriptor_console" ] || { echo "CONSOLE_LOG was not rebound: $runlib_console" >&2; exit 1; }
+[ "$run_console" = "$child_console" ] || { echo "ZBMC_CONSOLE_LOG was not exported: $runlib_console" >&2; exit 1; }
+[[ "$run_console" == "$TEST_ROOT/init-contract/runs/"*/console.log ]] || { echo "unexpected run console path: $run_console" >&2; exit 1; }
+[ "$run_console_text" = "serial evidence" ] || { echo "self-archive changed console evidence: $runlib_console" >&2; exit 1; }
 
 follow=$("$fixture/tools/zbmc" fake status --follow)
 expect "$follow" "Current run : READY (startup took 10m 12s)"

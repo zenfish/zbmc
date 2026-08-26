@@ -223,7 +223,7 @@ _probe_webui(){
   code=$(timeout -s KILL 4 curl -sk --max-time 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
   case "$code" in
     ""|000) echo "fail||no HTTPS root response" ;;
-    *) echo "ok|curl -sk $url|HTTP $code" ;;
+    *) echo "ok|curl -sk $url|HTTP $code from $(hostname -s)" ;;
   esac
 }
 
@@ -368,7 +368,9 @@ case "$VERB" in
     _zr_set_effective_services "$([ "$do_web" = 0 ] && echo 1 || echo 0)"
     ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"
     export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND
-    if p=$(running); then _zr_init attach; _zr_event QEMU reused "already running as pid $p"
+    if p=$(running); then
+      _zr_load "" 2>/dev/null || _zr_init attach
+      _zr_event QEMU reused "already running as pid $p"
     else
       _zr_init boot
       if declare -F zbmc_ready >/dev/null; then
@@ -542,7 +544,30 @@ PY
 )
         IFS='|' read -r _run_state _run_summary <<<"$_run_info"
         printf "%-9s : %s\n" "$_run_label" "$_run_summary"
-        [ "$ZBMC_DETAIL" -gt 0 ] && printf "%-9s : %s\n" "Evidence" "$ZBMC_RUN_DIR"
+        if [ "$ZBMC_DETAIL" -gt 0 ]; then
+          printf "%-9s : %s\n" "Evidence" "$ZBMC_RUN_DIR"
+          _console_evidence="$ZBMC_RUN_DIR/console.log"
+          if [ "$_running" = 1 ] && [ ! -f "$_console_evidence" ] && [ -n "${CONSOLE_LOG:-}" ] && [ -f "$CONSOLE_LOG" ]; then
+            _console_evidence="$CONSOLE_LOG"
+          fi
+          if [ "$_running" = 1 ] && [ ! -f "$_console_evidence" ] && [ -n "${LOG:-}" ] && [ -f "$LOG" ]; then
+            _console_evidence="$LOG"
+          fi
+          if [ -f "$_console_evidence" ]; then
+            if [ "$_running" = 1 ]; then
+              printf "%-11s : %s (live)\n" "Console log" "$_console_evidence"
+              if [ -r "$_console_evidence" ]; then
+                printf "%-11s : tail -f %s\n" "Follow" "$_console_evidence"
+              else
+                printf "%-11s : sudo tail -f %s\n" "Follow" "$_console_evidence"
+              fi
+            else
+              printf "%-11s : %s (archived)\n" "Console log" "$_console_evidence"
+            fi
+          else
+            printf "%-11s : N/A\n" "Console log"
+          fi
+        fi
       else
         _run_state=unknown
       fi
@@ -702,9 +727,12 @@ PY
     # can misleadingly show "IDRAC10_UP" etc. long after the box is gone).
     if ! running >/dev/null 2>&1; then
       echo "${CR}$ZBMC_NAME is DOWN${CZ} — no live console. Start it:  zbmc $ZBMC_NAME start"; exit 1; fi
+    if _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then
+      CONSOLE_LOG="$ZBMC_RUN_DIR/console.log"
+    fi
     if declare -F zbmc_console >/dev/null; then zbmc_console
-    elif [ -f "$LOG" ]; then tail -f "$LOG"
-    else echo "$ZBMC_NAME is up, but its console log is missing ($LOG) — try 'ssh' or restart"; fi ;;
+    elif _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then tail -f "$ZBMC_RUN_DIR/console.log"
+    else echo "$ZBMC_NAME is up, but its current run has no console evidence — try 'ssh' or restart"; fi ;;
   build) zbmc_build ;;
   shell)    declare -F zbmc_shell    >/dev/null && zbmc_shell    "$@" || { echo "zbmc: '$ZBMC_NAME' has no shell verb"; exit 2; } ;;
   snapshot) declare -F zbmc_snapshot >/dev/null && zbmc_snapshot "$@" || { echo "zbmc: '$ZBMC_NAME' has no snapshot support"; exit 2; } ;;
