@@ -23,7 +23,8 @@ ZBMC_DESC="Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OE
 # and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
-ZBMC_DIR="$_XREPO/firmware"
+FIRMWARE_DIR="$_XREPO/firmware"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/$ZBMC_NAME}"
 
 ZBMC_IP=$(_zbmc_resolve_ip openbmc 10 10.0.7.10)
 ZBMC_HOST=openbmc
@@ -42,10 +43,11 @@ LOG="$ZBMC_DIR/console.log"
 SOCK="$ZBMC_DIR/serial.sock"
 QMP_SOCK="$ZBMC_DIR/qmp.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
-OPENBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
-export OPENBMC_QEMU
+ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_CAPTURE_INTERFACES="br-zbmc"
-ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=360
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
@@ -54,14 +56,14 @@ ZBMC_EXPECTED_L2=90
 ZBMC_EXPECTED_READY=270
 
 zbmc_boot() {
-  cd "$ZBMC_DIR" || return 1
+  cd "$FIRMWARE_DIR" || return 1
   local MTD=evb-ast2600.static.mtd
   [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
   mkdir -p "$ZBMC_DIR"
   : > "$LOG"; $SUDO rm -f "$SOCK" "$QMP_SOCK" 2>/dev/null
-  $SUDO nohup "$OPENBMC_QEMU" -M ast2600-evb -smp 2 -m 1G -display none -monitor none \
+  $SUDO nohup "$ZBMC_QEMU" -M ast2600-evb -smp 2 -m 1G -display none -monitor none \
     -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
     -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=openbmc \
@@ -73,9 +75,9 @@ zbmc_boot() {
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
   echo "$qp"
 }
-zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $ZBMC_DIR/evb-ast2600.static.mtd"; }
+zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $FIRMWARE_DIR/evb-ast2600.static.mtd"; }
 zbmc_ready() {
-  [ -f "$ZBMC_DIR/evb-ast2600.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
+  [ -f "$FIRMWARE_DIR/evb-ast2600.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
   echo "no firmware — run: firmware/download-fw.sh openbmc"; return 1
 }
 

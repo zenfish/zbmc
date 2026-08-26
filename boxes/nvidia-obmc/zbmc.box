@@ -10,7 +10,8 @@ ZBMC_DESC="Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-
 # and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
-ZBMC_DIR="$_XREPO/firmware"
+FIRMWARE_DIR="$_XREPO/firmware"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/$ZBMC_NAME}"
 
 ZBMC_IP=$(_zbmc_resolve_ip nvidia-obmc 11 10.0.7.20)
 ZBMC_HOST=nvidia-obmc
@@ -30,15 +31,17 @@ PIDF=/tmp/zbmc-nvidia-obmc.pid
 LOG=/tmp/zbmc-nvidia-obmc-console.log
 SOCK=/tmp/zbmc-nvidia-obmc-serial.sock
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 
 zbmc_boot() {
-  cd "$ZBMC_DIR" || return 1
+  cd "$FIRMWARE_DIR" || return 1
   local MTD=obmc-phosphor-image-gb200nvl-obmc.static.mtd
   [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  mkdir -p "$ZBMC_DIR"
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null
   # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
   $SUDO nohup qemu-system-arm -M gb200nvl-bmc -smp 2 -m 1G \
@@ -51,7 +54,7 @@ zbmc_boot() {
 }
 zbmc_build() { echo "gb200 image is bitbake-built (MACHINE=gb200nvl-obmc) on dell; not a local rebuild. See reference_nvidia_oem_ipmi."; }
 zbmc_ready() {
-  [ -f "$ZBMC_DIR/obmc-phosphor-image-gb200nvl-obmc.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
+  [ -f "$FIRMWARE_DIR/obmc-phosphor-image-gb200nvl-obmc.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
   echo "no firmware — run: firmware/download-fw.sh nvidia-obmc"; return 1
 }
 
