@@ -108,7 +108,7 @@ zbmc_ipmi() {
 # Prints its own status line; returns 0 when the RMCP+ session authenticates.
 zbmc_ipmi_health() {
   local r; r=$(zbmc_ipmi channel info 1)
-  if echo "$r" | grep -q "Channel Medium Type"; then
+  if echo "$r" | grep -qE 'Channel Medium Type|Medium type[[:space:]]*:'; then
     echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN — mc info=0xff quirk)"; return 0
   else
     echo "no answer (restore warming/down)"; return 1
