@@ -69,6 +69,7 @@ WEB_PORT=$(_zbmc_pick_port 443 8443)
 
 PIDF=/tmp/zbmc-megarac-hpe.pid
 LOG="$ZBMC_DIR/svc.log"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
 # boot: background the service boot (real init + net) bound to the box's real IP on standard ports
@@ -84,10 +85,10 @@ zbmc_boot() {
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   local PENV="IP=$ZBMC_IP HTTPS_PORT=$WEB_PORT IPMI_PORT=$IPMI_PORT SSH_PORT=$SSH_PORT TELNET_PORT=$TELNET_PORT WD=$ZBMC_DIR"
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/cray-snap.gz" ] && [ -f "$ZBMC_DIR/cray-snap-flash.bin" ]; then
-    env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
   else
     [ -f "$ZBMC_DIR/cray-snap.gz" ] || echo "no snapshot — cold retry (flaky; ~minutes)" >&2
-    env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1 || return 1
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1 || return 1
   fi
   local n=0 qp=; while [ $n -lt 40 ]; do
     qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break
@@ -97,7 +98,7 @@ zbmc_boot() {
 }
 # snapshot/restore verbs (build a warm base from a green boot, then always restore it)
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-megarac-hpe.sh" "$@"; }
-zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
+zbmc_restore()  { env IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" bash "$PROJ_DIR/restore-megarac-hpe.sh" "$@"; }
 
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/extract.sh"; }
 zbmc_ready() {
@@ -121,8 +122,8 @@ zbmc_console() {
     if [ $# -gt 0 ]; then printf '%s\n' "$*" | $SUDO socat - UNIX-CONNECT:"$SER"
     else echo "megarac-hpe console (ttyS4) — 'BMC login:' getty (sysadmin/<pw>). exit: Ctrl-]"; \
          $SUDO socat -,raw,echo=0,escape=0x1d UNIX-CONNECT:"$SER"; fi
-  elif [ $# -gt 0 ]; then printf '%s\n' "$*" > "$SOCK"; sleep 1; tail -20 "$LOG"
-  else tail -f "$LOG"; fi
+  elif [ $# -gt 0 ]; then printf '%s\n' "$*" > "$SOCK"; sleep 1; tail -20 "$CONSOLE_LOG"
+  else tail -f "$CONSOLE_LOG"; fi
 }
 
 # shell: boot init=/bin/sh — UNRESTRICTED ROOT, no login, no network/IPMI (RE mode). A separate qemu

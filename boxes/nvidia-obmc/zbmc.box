@@ -29,6 +29,7 @@ IPMI_PORT=623
 PIDF=/tmp/zbmc-nvidia-obmc.pid
 LOG=/tmp/zbmc-nvidia-obmc-console.log
 SOCK=/tmp/zbmc-nvidia-obmc-serial.sock
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 
 zbmc_boot() {
   cd "$ZBMC_DIR" || return 1
@@ -43,7 +44,8 @@ zbmc_boot() {
   $SUDO nohup qemu-system-arm -M gb200nvl-bmc -smp 2 -m 1G \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
     -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
-    -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
+    -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
+    -serial chardev:serial0 -serial null >"$LOG" 2>&1 &
   local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }

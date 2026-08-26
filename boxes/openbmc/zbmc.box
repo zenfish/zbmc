@@ -41,7 +41,7 @@ PIDF="$ZBMC_DIR/zbmc-openbmc.pid"
 LOG="$ZBMC_DIR/console.log"
 SOCK="$ZBMC_DIR/serial.sock"
 QMP_SOCK="$ZBMC_DIR/qmp.sock"
-CONSOLE_LOG="$LOG"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
 OPENBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
 export OPENBMC_QEMU
 ZBMC_CAPTURE_INTERFACES="br-zbmc"
@@ -65,7 +65,8 @@ zbmc_boot() {
     -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
     -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=openbmc \
-    -serial "unix:$SOCK,server,nowait" -serial null >"$LOG" 2>&1 &
+    -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
+    -serial chardev:serial0 -serial null >"$LOG" 2>&1 &
   local qp= n=0; while [ $n -lt 60 ]; do
     qp=$(pgrep -f "ast2600-evb.*hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
     sleep 0.5; n=$((n+1)); done

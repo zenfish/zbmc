@@ -16,6 +16,7 @@ K=915f32f49a97456d0d6d66eee5ed84c894b414af
 W="${HOME}/phd/tmp/idrac9-virtual/ckpt"
 STATE="${STATE:-$W/state-p4.gz}"; FROZEN="$W/overlay-frozen.qcow2"
 QMP=/tmp/zbmc-idrac9-rqmp.sock
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-/tmp/zbmc-idrac9-console.log}"
 [ -s "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -s "$FROZEN" ] || { echo "no frozen overlay at $FROZEN — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -x "$QB" ] || { echo "patched qemu missing ($QB) — build-qemu-patched.sh" >&2; exit 1; }
@@ -32,7 +33,7 @@ $SUDO nohup "$QB" -M npcm750-evb -m 1G -display none \
   -drive "id=rootsd,if=none,file=$FROZEN,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
   -netdev "user,id=n1,$HF" -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
-  -qmp unix:"$QMP",server,nowait -serial file:/tmp/zbmc-idrac9-console.log \
+  -qmp unix:"$QMP",server,nowait -serial "file:$CONSOLE_LOG" \
   -incoming "exec:gzip -dc < $STATE" >/tmp/zbmc-idrac9-rqemu.log 2>&1 &
 QPID=$!
 for i in $(seq 1 30); do $SUDO test -S "$QMP" && break; sleep 0.5; done

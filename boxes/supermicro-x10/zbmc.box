@@ -68,7 +68,7 @@ PIDF="$ZBMC_DIR/zbmc.pid"
 SOCK="$ZBMC_DIR/x10-serial.sock"
 QMP_SOCK="$ZBMC_DIR/x10-qmp.sock"
 LOG="$ZBMC_DIR/x10-start.log"
-CONSOLE_LOG="$ZBMC_DIR/x10-console.log"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/x10-console.log}"
 ZBMC_BOOTSTRAP_PIDF="$ZBMC_DIR/x10-driver.pid"
 ZBMC_GUEST_SNAPSHOT_AT=bootstrap
 ZBMC_READY_DEADLINE=300
@@ -95,7 +95,7 @@ zbmc_boot() {
   $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_TAP" "${SUDO_USER:-${USER}}" || return 1
   $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_AUX_TAP" "${SUDO_USER:-${USER}}" || return 1
   mkdir -p "$ZBMC_DIR"
-  WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" ZBMC_IP="$ZBMC_IP" \
+  WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" ZBMC_IP="$ZBMC_IP" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
     X10_LAUNCH_ONLY=1 X10_PACKET_DIR="${ZBMC_RUN_DIR:-$ZBMC_DIR}/packets" \
     bash "$PROJ_DIR/start-x10.sh" >/dev/null 2>&1
   local qp; qp=$(pgrep -f "^[^ ]*/qemu-system-arm .*ifname=$X10_TAP" | head -1)

@@ -39,6 +39,7 @@ MASTER = os.environ.get("X10_MASTER", os.path.join(WD, "x10-master.flash"))     
 BYPASS_SO = os.path.join(SELF, "license_bypass.so")                              # LD_PRELOAD shim
 RUN = os.path.join(WD, "x10-run.flash")
 SOCK = os.path.join(WD, "x10-serial.sock")
+CONSOLE_LOG = os.environ.get("ZBMC_CONSOLE_LOG", os.path.join(WD, "x10-console.log"))
 QMP_SOCK = os.path.join(WD, "x10-qmp.sock")
 GDB_SOCK = os.path.join(WD, "x10-gdb.sock")
 TRACE_FILE = os.path.join(PACKET_DIR, f"{RUN_ID}-qemu-trace.bin")
@@ -87,7 +88,7 @@ qemu_cmd = [
     "-D", DEBUG_FILE,
     "-trace", "enable=ftgmac100_*",
     "-trace", f"file={TRACE_FILE}",
-    "-chardev", f"socket,id=ser0,path={SOCK},server=on,wait=off",
+    "-chardev", f"socket,id=ser0,path={SOCK},server=on,wait=off,logfile={CONSOLE_LOG},logappend=off",
     "-serial", "chardev:ser0",
     "-drive", f"file={RUN},format=raw,if=mtd",
 ]
@@ -140,7 +141,6 @@ else:
 # Connect pexpect to the serial socket via socat for bootstrap
 child = pexpect.spawn("socat", ["-,raw,echo=0", f"UNIX-CONNECT:{SOCK}"],
                       encoding="utf-8", timeout=240)
-child.logfile = open(os.path.join(WD, "x10-console.log"), "w")
 
 child.expect("Please press Enter to activate this console.")
 child.sendline("")

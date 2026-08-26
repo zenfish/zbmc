@@ -9,6 +9,7 @@
 #        Loopback dev: IP=127.0.0.1 HTTPS_PORT=8443 IPMI_PORT=8623 SSH_PORT=8022 ./restore-megarac-hpe.sh
 set -u
 WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
 SNAP="${SNAP:-$WD/cray-snap.gz}"; SNAPFLASH="${SNAPFLASH:-$WD/cray-snap-flash.bin}"
@@ -22,7 +23,8 @@ $SUDO pkill -9 -f 'hostname=megarac-hpe' 2>/dev/null || true; sleep 2
 $SUDO rm -f "$WD/cray-qmp.sock" "$WD/cray.sock"
 cp -f "$SNAPFLASH" "$WD/cray-restore-flash.bin"   # fresh writable copy -> repeatable restore
 $SUDO qemu-system-arm -M ast2600-evb -m 1024 -display none -no-reboot \
-  -serial "unix:$WD/cray.sock,server,nowait" -qmp "unix:$WD/cray-qmp.sock,server,nowait" \
+  -chardev "socket,id=ser0,path=$WD/cray.sock,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
+  -serial chardev:ser0 -qmp "unix:$WD/cray-qmp.sock,server,nowait" \
   -incoming "exec:gunzip -c < $SNAP" \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -drive "file=$WD/cray-restore-flash.bin,format=raw,if=mtd" \

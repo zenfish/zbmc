@@ -16,6 +16,7 @@ K=915F32F49A97456D0D6D66EEE5ED84C894B414AF
 W="${CKPT:-$PWD/ckpt}"
 STATE="$W/state.gz"; OVL="$W/overlay-frozen.qcow2"
 SOCK="$W/rserial.sock"; QMP="$W/rqmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$W/console-uart.log}"
 TRIES="${RESTORE_TRIES:-3}"
 [ -f "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-live-ckpt.sh first" >&2; exit 1; }
 PORT="${1:-7623}"; BIND="${2:-}"
@@ -38,7 +39,8 @@ restore_once() {   # launch qemu -incoming, resume, echo the pid (or empty on QM
     -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"$HOSTFWD" \
-    -serial unix:"$SOCK",server,nowait -qmp unix:"$QMP",server,nowait \
+    -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
+    -serial chardev:serial0 -qmp unix:"$QMP",server,nowait \
     -incoming "exec:gzip -dc < $STATE" \
     >"$W/rqemu.log" 2>&1 &
   local qp=$!; echo "$qp" | $SUDO tee "$W/rqemu.pid" >/dev/null 2>&1 || echo "$qp" >"$W/rqemu.pid"
@@ -96,6 +98,9 @@ verify() {         # N/5 IPMI answers (per-probe progress -> stderr; count -> st
 
 QPID=""; ok=0
 for try in $(seq 1 "$TRIES"); do
+  if [ "$try" -gt 1 ] && [ -f "$CONSOLE_LOG" ]; then
+    $SUDO cp -f "$CONSOLE_LOG" "$(dirname "$CONSOLE_LOG")/console-attempt-$((try-1)).log"
+  fi
   log "attempt $try/$TRIES: restoring snapshot…"
   QPID=$(restore_once) || { log "  attempt $try: launch failed — retrying"; continue; }
   sleep 3   # let fullfw's socket re-settle on the new slirp

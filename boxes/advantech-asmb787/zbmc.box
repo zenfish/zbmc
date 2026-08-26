@@ -45,7 +45,8 @@ IPMI_PORT=623
 WEB_PORT=443
 
 PIDF="$ZBMC_DIR/zbmc.pid"
-LOG="$ZBMC_DIR/svc.log"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
+LOG="$CONSOLE_LOG"
 SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
 # boot: build artifacts if missing, then background the service boot (real init). ~2 min to login.
@@ -53,7 +54,8 @@ zbmc_boot() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
   _zbmc_lo_alias "$ZBMC_IP"
   rm -f "$ZBMC_DIR/.loggedin"                          # fresh boot = at the login prompt
-  BG=1 IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" WD="$ZBMC_DIR" \
+  BG=1 IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" \
+    WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
     bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
   local n=0 qp=; while [ $n -lt 40 ]; do
     qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT" | head -1); [ -n "$qp" ] && break
@@ -68,10 +70,10 @@ zbmc_ready() {
 
 # console: no args = live tail. With a command, AUTO-LOGIN once (getty at 'login:'), then run it.
 # Waits for each prompt (login:/Password:/shell) rather than fixed sleeps — robust under emulation load.
-_c_seen() { tail -n 8 "$LOG" 2>/dev/null | grep -q "$1"; }           # is $1 near the end of the console log?
+_c_seen() { tail -n 8 "$CONSOLE_LOG" 2>/dev/null | grep -q "$1"; }   # is $1 near the end of the console log?
 _c_wait() { local t=0; until _c_seen "$1" || [ $t -ge "${2:-20}" ]; do sleep 1; t=$((t+1)); done; _c_seen "$1"; }
 zbmc_console() {
-  if [ $# -eq 0 ]; then tail -f "$LOG"; return; fi
+  if [ $# -eq 0 ]; then tail -f "$CONSOLE_LOG"; return; fi
   if [ ! -f "$ZBMC_DIR/.loggedin" ]; then
     printf '\n' > "$SOCK"                                             # nudge a fresh login: prompt
     if _c_wait 'login:' 30; then
@@ -80,7 +82,7 @@ zbmc_console() {
     fi
     _c_wait '# ' 15 && touch "$ZBMC_DIR/.loggedin" || { echo "console: login didn't settle — retry the command"; return 1; }
   fi
-  printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$LOG"
+  printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$CONSOLE_LOG"
 }
 # web/ipmi/ssh: this box is CONSOLE-ONLY (older AMI kernel can't complete NC-SI link-up under qemu).
 zbmc_web()         { echo "$ZBMC_NAME: console-only box — no external Redfish. Use:  zbmc $ZBMC_NAME console"; return 1; }

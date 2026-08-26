@@ -15,6 +15,7 @@
 set -u
 _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
 WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo (build.sh writes here)
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${IP:-127.0.0.1}"
 HTTPS_PORT="${HTTPS_PORT:-6443}"; SSH_PORT="${SSH_PORT:-6022}"; IPMI_PORT="${IPMI_PORT:-6623}"
 
@@ -33,9 +34,9 @@ QEMU=(qemu-system-arm -M ast2600-evb -m 1024 -nographic
   -append "$APPEND")
 
 if [ "${BG:-}" = 1 ]; then
-  cd "$WD"; rm -f cin; mkfifo cin; : > svc.log
-  ( tail -f cin ) | "${QEMU[@]}" > svc.log 2>&1 &
-  echo "backgrounded. console -> $WD/svc.log ; send input: echo 'cmd' > $WD/cin"
+  cd "$WD"; rm -f cin; mkfifo cin; : > "$CONSOLE_LOG"
+  ( tail -f cin ) | "${QEMU[@]}" > "$CONSOLE_LOG" 2>&1 &
+  echo "backgrounded. console -> $CONSOLE_LOG ; send input: echo 'cmd' > $WD/cin"
 else
   exec "${QEMU[@]}"
 fi

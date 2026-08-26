@@ -18,6 +18,7 @@
 # RELATED: extract.sh, boot-megarac-hpe.sh, zbmc.box.
 set -u
 WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${IP:-127.0.0.1}"
 # Standard ports 443/623 are privileged -> qemu must run as root to bind them on the real IP (matches
 # restore-megarac-hpe.sh's root-direct model). Loopback dev with high ports (8443/8623) needs no root.
@@ -40,9 +41,9 @@ QEMU=(qemu-system-arm -M ast2600-evb -m 1024 -nographic
   -append "$APPEND")
 
 if [ "${BG:-}" = 1 ]; then
-  cd "$WD"; rm -f cin; mkfifo cin; : > svc.log
-  ( tail -f cin ) | $SUDO "${QEMU[@]}" > svc.log 2>&1 &
-  echo "backgrounded. console -> $WD/svc.log ; send input: echo 'cmd' > $WD/cin ; login admin/superuser"
+  cd "$WD"; rm -f cin; mkfifo cin; : > "$CONSOLE_LOG"
+  ( tail -f cin ) | $SUDO "${QEMU[@]}" > "$CONSOLE_LOG" 2>&1 &
+  echo "backgrounded. console -> $CONSOLE_LOG ; send input: echo 'cmd' > $WD/cin ; login admin/superuser"
 else
   exec $SUDO "${QEMU[@]}"
 fi

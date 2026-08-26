@@ -28,6 +28,7 @@ WEB_PORT=$(_zbmc_pick_port 443 8443)
 PIDF=/tmp/zbmc-idrac10.pid
 LOG=/tmp/zbmc-idrac10-console.log
 SOCK=/tmp/zbmc-idrac10-serial.sock
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
@@ -49,7 +50,7 @@ zbmc_boot() {
     # DETACHED like the cold path so `start` returns at once; `zbmc status -f` follows to READY.
     # Redirect wraps the whole subshell so it can't hold the $(zbmc_boot) pipe open (bash gotcha).
     ( set +x   # keep the caller's xtrace/PS4 out of the console log
-      WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
+      ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
       grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
     # report the qemu pid the moment it's up (restore launches it before verifying), then detach
     local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
@@ -69,7 +70,8 @@ zbmc_boot() {
     -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$ZBMC_DIR/boot/qemu-gmac.dtb" \
     -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=tcp:$ZBMC_IP:5200-:5200,hostfwd=tcp:$ZBMC_IP:5201-:5201" \
-    -serial unix:"$SOCK",server,nowait >"$WORK/qemu.log" 2>&1 &
+    -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
+    -serial chardev:serial0 >"$WORK/qemu.log" 2>&1 &
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
   ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1; $SUDO expect boot-idrac10.exp "$SOCK" ) >>"$LOG" 2>&1 &
   # UDP-echo prime: boot-fullfw-guest.sh prints UDP_ECHO_READY then waits for a test packet on :623 to

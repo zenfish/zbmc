@@ -25,6 +25,7 @@ IPMI_OPTS="-C 17 -I lanplus"                          # cipher 17, lanplus
 
 PIDF=/tmp/zbmc-idrac9.pid
 LOG=/tmp/zbmc-idrac9-console.log
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 
 # boot QEMU detached; echo the pid. (zbmc sets PIDF/LOG and handles the pidfile + web waiter.)
 zbmc_boot() {
@@ -44,9 +45,11 @@ zbmc_boot() {
   # box comes up NETWORK-DEAD (no IPMI/ssh). Kept for when the QEMU npcm750 USB-migration fix lands.
   # Default `zbmc idrac9 start` = the WORKING cold P4 boot below. See project_idrac9_virtual_qemu memory.
   if [ -n "${ZBMC_WARM:-}" ] && [ -s "$HOME/phd/tmp/idrac9-virtual/ckpt/state-p4.gz" ] && [ -x "$ZBMC_DIR/qemu-system-arm-patched" ]; then
-    : > "$LOG"
-    WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP" >>"$LOG" 2>&1
-    grep -q 'RESTORE OK' "$LOG" && echo "pre-fullfw gate (restored P4)" >>"$LOG"
+    local restore_log="$ZBMC_DIR/restore.log"
+    : > "$restore_log"
+    WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
+      bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP" >>"$restore_log" 2>&1
+    grep -q 'RESTORE OK' "$restore_log" && echo "pre-fullfw gate (restored P4)" >>"$LOG"
     pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1
     return 0
   fi
@@ -56,7 +59,7 @@ zbmc_boot() {
     -device sd-card,drive=rootsd,bus=sd-bus \
     -netdev user,id=n1,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443 \
     -device usb-net,netdev=n1,bus=usb-bus.0 \
-    -serial "file:$LOG" >/dev/null 2>&1 &
+    -serial "file:$CONSOLE_LOG" >/dev/null 2>&1 &
   # qemu is a root child of sudo; find its real pid by the hostfwd signature (not $!)
   local n=0 qp=; while [ $n -lt 30 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
@@ -69,7 +72,7 @@ zbmc_ready() {
   echo "not built — run: zbmc idrac9 build"; return 1
 }
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-p4-ckpt.sh"; }   # P4 IPMI warm snapshot (P6 Redfish deferred: boot-p6-ckpt.sh)
-zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
+zbmc_restore()  { WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" bash "$PROJ_DIR/restore-idrac9.sh" "$ZBMC_IP"; }
 zbmc_ssh()   { WD="$ZBMC_DIR" "$PROJ_DIR/ssh-in.sh" "$@"; }            # root shell (uses img/vmkey) — survives restore (patched usb-net)
 zbmc_web()   { WD="$ZBMC_DIR" "$PROJ_DIR/start-web.sh"; }              # bring up httpd + Redfish (only needed on a cold P4 box)
 # readiness markers in the serial log (zbmc status greps these)

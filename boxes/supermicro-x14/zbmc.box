@@ -49,6 +49,7 @@ WEB_PORT=$(_zbmc_pick_port 443 8443)
 PIDF=/tmp/zbmc-supermicro-x14.pid
 LOG=/tmp/x14-restore-console.log     # restore-svc-x14.sh writes qemu console here
 SOCK=/tmp/x14.sock                   # root-owned serial console unix socket
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 
 # boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback (shell-x14.sh,
 # interactive /bin/sh as PID1) when ZBMC_COLD=1 or the snapshot is missing. Prints the qemu pid.
@@ -59,11 +60,11 @@ zbmc_boot() {
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
-    WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
   else
     [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (shell)" >&2
     : > "$LOG"
-    WD="$ZBMC_DIR" nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &   # cold boot to interactive shell (~55s)
   fi
   # wait for the qemu whose hostfwd matches this box's IPMI port to appear, print its pid
   local n=0 qp=; while [ $n -lt 60 ]; do
@@ -85,7 +86,7 @@ zbmc_ready() {
 # snapshot: QMP-checkpoint the running instance to a gz (pauses the VM — restore to resume).
 zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/snapshot-x14.sh" "${1:-$SNAP}"; }
 # restore: bring a warm snapshot up on the real IP (what `start` does automatically).
-zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "${1:-$SNAP}"; }
+zbmc_restore()  { ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-svc-x14.sh" "${1:-$SNAP}"; }
 
 # ssh: password auth (sshpass). Real Linux shell; `sudo -i` for root. Args = remote command.
 zbmc_ssh() {
