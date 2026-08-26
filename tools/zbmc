@@ -117,11 +117,12 @@ usage(){
   echo "usage: zbmc <box> <verb> [args]"
   echo
   echo "boxes:"
+  printf "  %-20s %-15s %s\n" "NAME" "RESERVED IP" "DESCRIPTION"
   local f n d; for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
-    ( . "$f" 2>/dev/null; printf "  %-10s %s\n" "$ZBMC_NAME" "${ZBMC_DESC:-}" ); done
+    ( . "$f" 2>/dev/null; printf "  %-20s %-15s %s\n" "$ZBMC_NAME" "$ZBMC_IP" "${ZBMC_DESC:-}" ); done
   echo
   echo "  (use 'all' as the box to run a verb across every box:  zbmc all status)"
-  echo "  (just the names:  zbmc list   |   zbmc -l)"
+  echo "  (just the box and reserved IP:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
   echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web] [-q PATH|--qemu-path PATH]"
@@ -278,9 +279,11 @@ _need_root(){ # verbs that bind privileged ports or kill qemu need root
   case "$1" in up|start|down|stop|restart|shell|snapshot|restore) return 0;; esac; return 1; }
 
 BOX="$1"; shift
-# `zbmc list` / `zbmc -l` — just the box names, one per line (no status). For scripting/quick recall.
+# `zbmc list` / `zbmc -l` — box names plus reserved IPs (no status).
 if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
-  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue; n="$(boxname_of "$f")"; [ -n "$n" ] && echo "$n"; done
+  for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
+    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %s\n" "$n" "$(boxip_of "$f")"
+  done
   exit 0
 fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.

@@ -56,6 +56,7 @@ fi
 EOF
 
 printf 'run-1\n' > "$TEST_ROOT/current-run"
+ln -s run-1 "$TEST_ROOT/runs/latest"
 printf '%s\n' "$(( $(date +%s) - 1200 ))" > "$TEST_ROOT/runs/run-1/start-epoch"
 cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
 {"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
@@ -66,6 +67,12 @@ EOF
 
 labels(){ sed -n 's/^\([^:]*\) *:.*/\1/p' | sed 's/[[:space:]]*$//'; }
 expect(){ grep -Fq "$2" <<<"$1" || { printf 'missing: %s\n%s\n' "$2" "$1" >&2; exit 1; }; }
+
+help=$("$fixture/tools/zbmc")
+expect "$help" "NAME                 RESERVED IP     DESCRIPTION"
+expect "$help" "fake                 127.0.0.1"
+listed=$("$fixture/tools/zbmc" list)
+expect "$listed" "fake                 127.0.0.1"
 
 down=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
@@ -166,6 +173,13 @@ expect "$verbose" "IPMI      : STARTING (expected; no response)"
 expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
+
+# A root-started run can leave current-run unreadable to the ordinary operator;
+# status must still discover the group-readable runs/latest evidence link.
+chmod 000 "$TEST_ROOT/current-run"
+unprivileged=$("$fixture/tools/zbmc" fake status --verbose)
+expect "$unprivileged" "Evidence  : $TEST_ROOT/runs/run-1"
+chmod 600 "$TEST_ROOT/current-run"
 [[ "$verbose" != *"NC-SI"* ]] || { printf 'unexpected NC-SI row:\n%s\n' "$verbose" >&2; exit 1; }
 
 ssh_note=$(TEST_SSH_NOTE='prompt is "/admin1->", but is a real shell' "$fixture/tools/zbmc" fake status --verbose)

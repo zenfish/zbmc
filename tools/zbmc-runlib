@@ -272,6 +272,11 @@ _zr_init(){ # mode
 _zr_load(){ # run id, or current
   ZBMC_RUN_ROOT="$ZBMC_DIR/runs"
   ZBMC_RUN_ID="${1:-$(cat "$ZBMC_DIR/current-run" 2>/dev/null)}"
+  # `start` is normally run through sudo, while `status` is intentionally usable
+  # without it. The latest link is group-readable even when current-run is not.
+  if [ -z "$ZBMC_RUN_ID" ] && [ -L "$ZBMC_RUN_ROOT/latest" ]; then
+    ZBMC_RUN_ID=$(readlink "$ZBMC_RUN_ROOT/latest")
+  fi
   [ -n "$ZBMC_RUN_ID" ] && [ -d "$ZBMC_RUN_ROOT/$ZBMC_RUN_ID" ] || return 1
   ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
   ZBMC_CONSOLE_LOG="$ZBMC_RUN_DIR/console.log"
