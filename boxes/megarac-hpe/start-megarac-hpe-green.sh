@@ -39,6 +39,10 @@ for t in $(seq 1 "$TRIES"); do
   ok=0
   for i in $(seq 1 100); do
     sleep 3
+    if grep -qE 'Thread [0-9]+ \(MsgHndlr\) received SIGSEGV|IPMIMain is terminating because of SIGSEGV' "$LOG" 2>/dev/null; then
+      echo "[green] attempt $t: console confirmed IPMIMain MsgHndlr SIGSEGV — reroll" >&2
+      break
+    fi
     # Once dropbear is reachable, use IPMIMain's own signal-handler record as the
     # authoritative fast-fail.  This avoids waiting the full five-minute window on
     # a proven-dead attempt while ignoring unrelated SKU/FRU console segfaults.
