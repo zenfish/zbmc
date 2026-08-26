@@ -20,7 +20,9 @@ grep -A8 '^zbmc_ipmi_health()' "$box" | grep -q 'raw 0x06 0x3b 0x04'
 grep -q 'usb@f0828100' "$overlay"
 grep -q -- '-device usb-net,netdev=tcpnet,bus=usb-bus.0' "$box"
 grep -q 'hostfwd=udp:.*10.0.2.15:623' "$box"
+grep -q 'pgrep -f "hostfwd=udp:\$ZBMC_IP:623-"' "$box"
 grep -q 'hostfwd=tcp:.*10.0.3.15:22' "$box"
 grep -q 'ip addr add 10.0.3.15/24' "$driver"
+grep -q 'stty -echo' "$driver"
 
 echo "idrac10 access paths, USB TCP network, and PID 1 shell supervision: PASS"

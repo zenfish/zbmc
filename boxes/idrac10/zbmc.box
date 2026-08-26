@@ -57,7 +57,7 @@ zbmc_boot() {
       ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
       grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
     # report the qemu pid the moment it's up (restore launches it before verifying), then detach
-    local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+    local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
     echo "$qp"
     return 0
   fi
@@ -88,7 +88,7 @@ zbmc_boot() {
   # verify the UDP RX path (via the shm-shim) before starting fullfw. Send it, else fw.sh -> UDP_ECHO_TIMEOUT.
   ( until grep -q UDP_ECHO_READY "$LOG" 2>/dev/null; do sleep 0.5; done
     python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'HELLO_UDP_TEST',('$ZBMC_IP',623))" 2>/dev/null || true ) >/dev/null 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }

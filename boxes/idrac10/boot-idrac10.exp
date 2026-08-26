@@ -14,14 +14,16 @@ puts "\[exp] shell ready"
 send "mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t devtmpfs devtmpfs /dev; mkdir -p /dev/pts; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /tmp; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /var/volatile; mount -t tmpfs tmpfs /mnt\r"
 expect -timeout 15 "sh-5.2#"
 puts "\[exp] fs mounted"
+send "stty -echo\r"
+expect -timeout 15 "sh-5.2#"
 send "ip link set eth0 up; ip addr add 10.0.2.15/24 dev eth0; ip route add default via 10.0.2.2\r"
 expect -timeout 210 "sh-5.2#"
 puts "\[exp] NET_UP"
-send "TCP_NIC=; for n in /sys/class/net/*; do n=\${n##*/}; case \$n in lo|eth0) ;; *) TCP_NIC=\$n; break;; esac; done; test -n \"\$TCP_NIC\" && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\" && echo TCP_NET_UP=\$TCP_NIC || echo TCP_NET_MISSING\r"
+send "TCP_NIC=; for i in {1..30}; do for n in /sys/class/net/*; do n=\${n##*/}; case \$n in lo|eth0) ;; *) TCP_NIC=\$n; break 2;; esac; done; sleep 1; done; test -n \"\$TCP_NIC\" && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\" && echo __ZBMC_TCP_NET_UP__=\$TCP_NIC || echo __ZBMC_TCP_NET_MISSING__\r"
 expect {
-    -timeout 30
-    "TCP_NET_UP=" { puts "\[exp] TCP_NET_UP"; exp_continue }
-    "TCP_NET_MISSING" { puts "\[exp] TCP_NET_MISSING"; exit 1 }
+    -timeout 45
+    "__ZBMC_TCP_NET_UP__=" { puts "\[exp] TCP_NET_UP"; exp_continue }
+    "__ZBMC_TCP_NET_MISSING__" { puts "\[exp] TCP_NET_MISSING"; exit 1 }
     "sh-5.2#" {}
     timeout { puts "\[exp] TIMEOUT configuring TCP network"; exit 1 }
 }
