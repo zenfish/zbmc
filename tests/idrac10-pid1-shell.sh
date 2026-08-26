@@ -26,6 +26,6 @@ grep -q 'hostfwd=udp:.*10.0.2.15:623' "$box"
 grep -q 'pgrep -f "hostfwd=udp:\$ZBMC_IP:623-"' "$box"
 grep -q 'hostfwd=tcp:.*10.0.3.15:22' "$box"
 grep -q 'ip addr add 10.0.3.15/24' "$driver"
-grep -q 'stty -echo' "$driver"
+grep -q "printf '__ZBMC_%s__" "$driver"
 
 echo "idrac10 access paths, USB TCP network, and PID 1 shell supervision: PASS"
