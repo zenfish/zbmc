@@ -30,13 +30,9 @@ LOG=/tmp/zbmc-idrac10-console.log
 SOCK=/tmp/zbmc-idrac10-serial.sock
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
 WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
-if [ -z "${IDRAC10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64 ]; then
-  IDRAC10_QEMU=/home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64
-elif [ -z "${IDRAC10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64 ]; then
-  IDRAC10_QEMU=/home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64
-fi
-IDRAC10_QEMU="${IDRAC10_QEMU:-qemu-system-aarch64}"
-export IDRAC10_QEMU
+ZBMC_QEMU=/home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_MACHINE=npcm845-evb
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
@@ -61,7 +57,7 @@ zbmc_boot() {
     # DETACHED like the cold path so `start` returns at once; `zbmc status -f` follows to READY.
     # Redirect wraps the whole subshell so it can't hold the $(zbmc_boot) pipe open (bash gotcha).
     ( set +x   # keep the caller's xtrace/PS4 out of the console log
-      ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
+      ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
       grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
     # report the qemu pid the moment it's up (restore launches it before verifying), then detach
     local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
@@ -81,7 +77,7 @@ zbmc_boot() {
   pkill -f "http.server 8091" 2>/dev/null
   python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null; rm -f "$SOCK" 2>/dev/null
-  $SUDO nohup "$IDRAC10_QEMU" -M npcm845-evb -m 1G \
+  $SUDO nohup "$ZBMC_QEMU" -M npcm845-evb -m 1G \
     -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$WORK/qemu-usb-net.dtb" \
     -drive "id=rootsd,if=none,file=$ZBMC_DIR/img/sd.img,format=raw,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-10.0.2.15:623" \
@@ -109,9 +105,9 @@ zbmc_ready() {
 }
 # snapshot: cold-boot until a good box (fullfw up, IPMI answers), then freeze it to $WORK/ckpt/state.gz.
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.
-zbmc_snapshot() { WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-live-ckpt.sh" "${1:-4}"; }
+zbmc_snapshot() { WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/boot-live-ckpt.sh" "${1:-4}"; }
 # restore: bring the warm snapshot up on the real IP:623 (what `start` does automatically when a snap exists).
-zbmc_restore()  { WD="$ZBMC_DIR" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"; }
+zbmc_restore()  { WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"; }
 # Serial console works on BOTH warm-restore and cold boot (the old "vmstate gap" was a wrong socket path:
 # the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
 # $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the

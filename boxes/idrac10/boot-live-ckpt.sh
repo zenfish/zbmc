@@ -20,6 +20,7 @@ SERVE="${HOME}/phd/tmp/idrac10-virtual/serve"; mkdir -p "$SERVE"
 OVL="$W/overlay.qcow2"; STATE="$W/state.gz"
 SOCK="$W/serial.sock"; QMP="$W/qmp.sock"
 PORT=7623
+QEMU="${ZBMC_QEMU:-qemu-system-aarch64}"
 
 zig cc -shared -fPIC -o "$SERVE/shm-shim.so" shm-shim.c -target aarch64-linux-gnu -ldl -lpthread -O2
 cp shm-shim.so "$SERVE/shm-shim.so" 2>/dev/null || true
@@ -34,7 +35,7 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
   pkill -9 -f "hostfwd=udp::${PORT}-:623" 2>/dev/null || true
   sleep 1; rm -f "$SOCK" "$QMP" "$OVL"
   qemu-img create -f qcow2 -F raw -b "$(pwd)/img/sd.img" "$OVL" >/dev/null
-  nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
+  nohup "$QEMU" -M npcm845-evb -m 1G \
     -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"hostfwd=udp::${PORT}-:623" \

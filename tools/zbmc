@@ -964,8 +964,23 @@ PY
     else echo "$ZBMC_NAME is up, but its current run has no console evidence — try 'ssh' or restart"; fi ;;
   build) zbmc_build ;;
   shell)    declare -F zbmc_shell    >/dev/null && zbmc_shell    "$@" || { echo "zbmc: '$ZBMC_NAME' has no shell verb"; exit 2; } ;;
-  snapshot) declare -F zbmc_snapshot >/dev/null && zbmc_snapshot "$@" || { echo "zbmc: '$ZBMC_NAME' has no snapshot support"; exit 2; } ;;
-  restore)  declare -F zbmc_restore  >/dev/null && zbmc_restore  "$@" || { echo "zbmc: '$ZBMC_NAME' has no restore support"; exit 2; } ;;
+  snapshot|restore)
+    _qemu_args=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -q|--qemu-path)
+          [ $# -ge 2 ] || { echo "zbmc: $1 needs a QEMU path" >&2; exit 2; }
+          ZBMC_QEMU_OVERRIDE="$2"; shift 2 ;;
+        --qemu-path=*) ZBMC_QEMU_OVERRIDE="${1#*=}"; shift ;;
+        *) _qemu_args+=("$1"); shift ;;
+      esac
+    done
+    _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; $VERB aborted" >&2; exit 1; }
+    if [ "$VERB" = snapshot ]; then
+      declare -F zbmc_snapshot >/dev/null && zbmc_snapshot "${_qemu_args[@]}" || { echo "zbmc: '$ZBMC_NAME' has no snapshot support"; exit 2; }
+    else
+      declare -F zbmc_restore >/dev/null && zbmc_restore "${_qemu_args[@]}" || { echo "zbmc: '$ZBMC_NAME' has no restore support"; exit 2; }
+    fi ;;
   rename)
     new="${1:-}"; old="$ZBMC_NAME"
     [ -n "$new" ] || { echo "usage: zbmc $old rename <newname>"; exit 2; }
