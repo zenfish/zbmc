@@ -27,7 +27,7 @@ puts "\[exp] fs mounted"
 send "ip link set eth0 up; ip addr add 10.0.2.15/24 dev eth0; ip route add default via 10.0.2.2; printf '__ZBMC_%s__\\n' NET_UP\r"
 expect -timeout 210 "__ZBMC_NET_UP__"
 puts "\[exp] NET_UP"
-send "TCP_NIC=usb0; for i in {1..30}; do test -e /sys/class/net/\$TCP_NIC && break; sleep 1; done; if test -e /sys/class/net/\$TCP_NIC && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\"; then printf '__ZBMC_TCP_NET_%s__=%s\\n' UP \"\$TCP_NIC\"; else printf '__ZBMC_TCP_NET_%s__\\n' MISSING; fi\r"
+send "TCP_NIC=usb0; for i in {1..30}; do test -e /sys/class/net/\$TCP_NIC && break; sleep 1; done; if test -e /sys/class/net/\$TCP_NIC && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\"; then ip route replace 10.0.3.0/24 dev \"\$TCP_NIC\" src 10.0.3.15 table 100; ip route replace default via 10.0.3.2 dev \"\$TCP_NIC\" table 100; ip rule add from 10.0.3.15/32 table 100 priority 32765 2>/dev/null || true; printf '__ZBMC_TCP_NET_%s__=%s\\n' UP \"\$TCP_NIC\"; else printf '__ZBMC_TCP_NET_%s__\\n' MISSING; fi\r"
 expect {
     -timeout 45
     "__ZBMC_TCP_NET_UP__=usb0" { puts "\[exp] TCP_NET_UP" }

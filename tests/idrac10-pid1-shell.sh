@@ -36,6 +36,8 @@ grep -q 'for {set i 0} {\$i < 30' "$driver"
 grep -q 'send "\\r"' "$driver"
 grep -q 'TCP_NIC=usb0' "$driver"
 grep -q 'ip addr add 10.0.3.15/24' "$driver"
+grep -q 'ip route replace default via 10.0.3.2' "$driver"
+grep -q 'ip rule add from 10.0.3.15/32 table 100' "$driver"
 grep -q "printf '__ZBMC_%s__" "$driver"
 
 echo "idrac10 access paths, USB TCP network, and PID 1 shell supervision: PASS"
