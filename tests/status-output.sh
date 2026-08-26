@@ -42,7 +42,9 @@ zbmc_ssh(){
 zbmc_ipmi_health(){
   [ -f "$TEST_ROOT/ipmi-down" ] && { echo "no response"; return 1; }
   mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
-  sleep .1; rmdir "$TEST_ACTIVITY_ROOT"; echo "fixture IPMI"
+  sleep .1; rmdir "$TEST_ACTIVITY_ROOT"
+  [ "${TEST_FLEET_ORDER:-0}" != 1 ] || : > "$TEST_ROOT/fleet-fake-done"
+  echo "fixture IPMI"
 }
 zbmc_redfish_health(){ [ -z "${TEST_REDFISH_MARK:-}" ] || : > "$TEST_REDFISH_MARK"; echo "no HTTPS response"; return 1; }
 zbmc_webui_health(){
@@ -371,13 +373,23 @@ ZBMC_IP=$(_zbmc_resolve_ip slow 3 127.0.0.1)
 ZBMC_HOST=slow
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
-zbmc_ready(){ sleep 2; : > "$TEST_ROOT/slow-build-done"; echo "ready (slow fixture)"; }
+zbmc_ready(){
+  if [ "${TEST_FLEET_ORDER:-0}" = 1 ] && [ ! -e "$TEST_ROOT/fleet-fake-done" ]; then
+    : > "$TEST_ROOT/fleet-overlap"
+  fi
+  sleep 2; : > "$TEST_ROOT/slow-build-done"; echo "ready (slow fixture)"
+}
 EOF
-"$fixture/tools/zbmc" all > "$fixture/all-output" & all_pid=$!
+TEST_FLEET_ORDER=1 "$fixture/tools/zbmc" all > "$fixture/all-output" & all_pid=$!
 for _ in $(seq 1 30); do grep -q '===== slow (2/2) =====' "$fixture/all-output" && break; sleep .1; done
 expect "$(cat "$fixture/all-output")" "===== slow (2/2) ====="
 [ ! -e "$TEST_ROOT/slow-build-done" ] || { echo "slow header printed after its status completed" >&2; exit 1; }
 wait "$all_pid"
+[ ! -e "$TEST_ROOT/fleet-overlap" ] || { echo "fleet status probes overlapped" >&2; exit 1; }
+
+rm -f "$TEST_ROOT/fleet-fake-done" "$TEST_ROOT/fleet-overlap"
+TEST_FLEET_ORDER=1 "$fixture/tools/zbmc" all -f > "$fixture/all-fast-output"
+[ -e "$TEST_ROOT/fleet-overlap" ] || { echo "fast fleet status did not run in parallel" >&2; exit 1; }
 
 fleet_verbose=$("$fixture/tools/zbmc" all status -v)
 expect "$fleet_verbose" "Observed  :"

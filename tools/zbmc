@@ -122,6 +122,7 @@ usage(){
     ( . "$f" 2>/dev/null; printf "  %-20s %-15s %s\n" "$ZBMC_NAME" "$ZBMC_IP" "${ZBMC_DESC:-}" ); done
   echo
   echo "  (use 'all' as the box to run a verb across every box:  zbmc all status)"
+  echo "  (zbmc all status checks boxes sequentially; add -f|--fast-check for parallel probes)"
   echo "  (just the box and reserved IP:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
@@ -291,6 +292,15 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   if [ $# -eq 0 ]; then verb=status; _all_args=()
   elif [[ "$1" = -* ]]; then verb=status; _all_args=("$@")
   else verb="$1"; _all_args=("${@:2}"); fi
+  _all_fast=0; _all_filtered=()
+  for _a in "${_all_args[@]}"; do
+    if [ "$verb" = status ] && { [ "$_a" = -f ] || [ "$_a" = --fast-check ]; }; then
+      _all_fast=1
+    else
+      _all_filtered+=("$_a")
+    fi
+  done
+  _all_args=("${_all_filtered[@]}")
   td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
   # root check for the whole fleet — fail once up front, not N times in subprocesses
   _all_run_as_me=0; _all_no_fix_ip=0
@@ -306,15 +316,22 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   N=${#names[@]}
   if [ "$verb" = status ]; then printf 'checking status on %s%d%s inmates in the asylum -\n' "$CC" "$N" "$CZ"
   else printf 'running %s%s%s on %s%d%s inmates -\n' "$CC" "$verb" "$CZ" "$CC" "$N" "$CZ"; fi
-  # fan out concurrently; each box drops a .done marker when finished
-  i=0; for n in "${names[@]}"; do
-    ( "$0" "$n" "$verb" "${_all_args[@]}" >"$td/$i" 2>&1; : > "$td/$i.done" ) &
-    _background_pids+=("$!"); i=$((i+1))
-  done
+  # Mutating fleet verbs fan out. Status stays sequential so its own probes do not
+  # starve each other and report healthy services as failed.
+  if [ "$verb" != status ] || [ "$_all_fast" = 1 ]; then
+    i=0; for n in "${names[@]}"; do
+      ( "$0" "$n" "$verb" "${_all_args[@]}" >"$td/$i" 2>&1; : > "$td/$i.done" ) &
+      _background_pids+=("$!"); i=$((i+1))
+    done
+  fi
   # print in registry order, STREAMING: block on each box's own completion, then flush it
   alive=0; j=0
   for n in "${names[@]}"; do
     printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
+    if [ "$verb" = status ] && [ "$_all_fast" = 0 ]; then
+      ( "$0" "$n" "$verb" "${_all_args[@]}" >"$td/$j" 2>&1; : > "$td/$j.done" ) &
+      _background_pids+=("$!")
+    fi
     _si=0; _sf='|/-\'
     while [ ! -e "$td/$j.done" ]; do
       kill -0 "$_invoker_pid" 2>/dev/null || _interrupt
