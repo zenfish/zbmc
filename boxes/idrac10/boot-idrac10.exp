@@ -9,8 +9,17 @@ set sock [lindex $argv 0]
 match_max 2000000
 set timeout 60
 spawn socat - UNIX-CONNECT:$sock
-send "\r"
-expect { "sh-5.2#" {} timeout { puts "BOOT_TIMEOUT (no shell)"; exit 1 } }
+set shell_ready 0
+for {set i 0} {$i < 30 && !$shell_ready} {incr i} {
+    send "\r"
+    expect {
+        -timeout 2
+        "sh-5.2#" { set shell_ready 1 }
+        eof { puts "BOOT_EOF (no shell)"; exit 1 }
+        timeout {}
+    }
+}
+if {!$shell_ready} { puts "BOOT_TIMEOUT (no shell)"; exit 1 }
 puts "\[exp] shell ready"
 send "mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t devtmpfs devtmpfs /dev; mkdir -p /dev/pts; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /tmp; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /var/volatile; mount -t tmpfs tmpfs /mnt; printf '__ZBMC_%s__\\n' FS_READY\r"
 expect -timeout 30 "__ZBMC_FS_READY__"
