@@ -34,7 +34,10 @@ ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
 zbmc_ready(){ echo "ready (fixture)"; }
 zbmc_running(){ [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] && echo "$$"; }
-zbmc_ssh(){ echo up; }
+zbmc_ssh(){
+  [ "${TEST_SSH_DOWN:-0}" = 1 ] && { echo "no response"; return 1; }
+  echo up
+}
 zbmc_ipmi_health(){
   [ -f "$TEST_ROOT/ipmi-down" ] && { echo "no response"; return 1; }
   mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
@@ -160,6 +163,16 @@ no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/
 expect "$no_web" "Redfish   : FAILED (expected; no HTTPS response)"
 expect "$no_web" "Web-UI    : N/A (disabled)"
 expect "$no_web" "Health    : DEGRADED [3/4 - L2, SSH, IPMI; Redfish failed]"
+
+printf 'fake 192.0.2.1\n' > "$fixture/zhosts.txt"
+touch "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
+printf '%s\n' '{"command":"zbmc fake start"}' > "$TEST_ROOT/runs/run-1/manifest.json"
+all_failed=$(TEST_SSH_DOWN=1 "$fixture/tools/zbmc" fake status)
+expect "$all_failed" "Health    : DEGRADED [0/4 - L2, SSH, IPMI, Web-UI failed]"
+[[ "$all_failed" != *" - ;"* ]] || { printf 'malformed health detail:\n%s\n' "$all_failed" >&2; exit 1; }
+printf 'fake 127.0.0.1\n' > "$fixture/zhosts.txt"
+rm -f "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
+printf '%s\n' '{"command":"zbmc fake start --no-web"}' > "$TEST_ROOT/runs/run-1/manifest.json"
 runlib_no_web=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_DIR="$TEST_ROOT"; ZBMC_DESCRIPTOR_REQUIRED_SERVICES="ssh ipmi redfish"
   . "'"$fixture"'/tools/zbmc-runlib"
@@ -188,7 +201,7 @@ runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
   cat "$TEST_ROOT/runlib-webui"
 ')
 expect "$runlib_probe" "ok|curl -sk https://127.0.0.1:443/|runlib Web-UI"
-rm "$TEST_ROOT/webui-down" "$TEST_ROOT/runs/run-1/manifest.json" "$TEST_ROOT/runlib-webui"
+rm -f "$TEST_ROOT/webui-down" "$TEST_ROOT/runs/run-1/manifest.json" "$TEST_ROOT/runlib-webui"
 
 runlib_console=$(TEST_ROOT="$TEST_ROOT" bash -c '
   set -e
@@ -258,5 +271,11 @@ for _ in $(seq 1 30); do grep -q '===== slow (2/2) =====' "$fixture/all-output" 
 expect "$(cat "$fixture/all-output")" "===== slow (2/2) ====="
 [ ! -e "$TEST_ROOT/slow-build-done" ] || { echo "slow header printed after its status completed" >&2; exit 1; }
 wait "$all_pid"
+
+fleet_verbose=$("$fixture/tools/zbmc" all status -v)
+expect "$fleet_verbose" "Observed  :"
+fleet_shorthand=$("$fixture/tools/zbmc" all -v)
+expect "$fleet_shorthand" "checking status on 2 inmates"
+expect "$fleet_shorthand" "Observed  :"
 
 echo "status output: PASS"

@@ -280,10 +280,13 @@ if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
 fi
 # `zbmc all [verb]` / `zbmc ls` — run the verb (default status) across every registered box.
 if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
-  verb="${1:-status}"; td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
+  if [ $# -eq 0 ]; then verb=status; _all_args=()
+  elif [[ "$1" = -* ]]; then verb=status; _all_args=("$@")
+  else verb="$1"; _all_args=("${@:2}"); fi
+  td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
   # root check for the whole fleet — fail once up front, not N times in subprocesses
   _all_run_as_me=0; _all_no_fix_ip=0
-  for _a in "${@:2}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; [ "$_a" = "--no-fix-ip" ] && _all_no_fix_ip=1; done
+  for _a in "${_all_args[@]}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; [ "$_a" = "--no-fix-ip" ] && _all_no_fix_ip=1; done
   if [ "$_all_run_as_me" = 0 ] && _need_root "$verb" && [ "$(id -u)" != 0 ]; then
     echo "zbmc: '$verb' needs root to bind privileged ports and manage qemu." >&2
     echo "  sudo zbmc all $verb" >&2
@@ -296,9 +299,8 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   if [ "$verb" = status ]; then printf 'checking status on %s%d%s inmates in the asylum -\n' "$CC" "$N" "$CZ"
   else printf 'running %s%s%s on %s%d%s inmates -\n' "$CC" "$verb" "$CZ" "$CC" "$N" "$CZ"; fi
   # fan out concurrently; each box drops a .done marker when finished
-  _xf=; [ "$_all_run_as_me" = 1 ] && _xf="--run-as-me"; [ "$_all_no_fix_ip" = 1 ] && _xf="$_xf --no-fix-ip"
   i=0; for n in "${names[@]}"; do
-    ( "$0" "$n" "$verb" $_xf >"$td/$i" 2>&1; : > "$td/$i.done" ) &
+    ( "$0" "$n" "$verb" "${_all_args[@]}" >"$td/$i" 2>&1; : > "$td/$i.done" ) &
     _background_pids+=("$!"); i=$((i+1))
   done
   # print in registry order, STREAMING: block on each box's own completion, then flush it
@@ -744,12 +746,17 @@ PY
       if [ "$_failed_n" -gt 0 ]; then _health=DEGRADED
       elif [ "$_starting_n" -gt 0 ]; then _health=STARTING
       else _health=READY; fi
-      printf "%-9s : " "Health"
-      printf "%s [%d/%d - %s" "$(_colored_state "$_health")" "$_ready_n" "$_expected_n" "$_ready_names"
-      [ "$_starting_n" -gt 0 ] && printf "; %s coming online" "$_starting_names"
-      [ "$_failed_n" -gt 0 ] && printf "; %s failed" "$_failed_names"
-      printf "]"
-      echo
+      _health_detail="$_ready_names"
+      if [ "$_starting_n" -gt 0 ]; then
+        [ -n "$_health_detail" ] && _health_detail="$_health_detail; "
+        _health_detail="${_health_detail}${_starting_names} coming online"
+      fi
+      if [ "$_failed_n" -gt 0 ]; then
+        [ -n "$_health_detail" ] && _health_detail="$_health_detail; "
+        _health_detail="${_health_detail}${_failed_names} failed"
+      fi
+      printf "%-9s : %s [%d/%d - %s]\n" "Health" "$(_colored_state "$_health")" \
+        "$_ready_n" "$_expected_n" "$_health_detail"
       if [ "$_follow" = 1 ] && [ "${_run_state:-}" = starting ] && [ -f "${ZBMC_RUN_DIR:-}/progress.log" ]; then
         echo "Progress (Ctrl-C stops following; QEMU keeps running):"
         tail -n +1 -f "$ZBMC_RUN_DIR/progress.log" & _tail_pid=$!
