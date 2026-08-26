@@ -68,6 +68,8 @@ static FILE *log_fp = NULL;
 static volatile unsigned long _libsess_base = 0;  /* cached by dumper; read by crash_handler */
 static void crash_handler(int sig, siginfo_t *si, void *uc);  /* fwd decl */
 static volatile int mu_lock = 0;
+uint8_t CmdGetDeviceID(const uint8_t *request, uint8_t *response_len,
+                       uint8_t response_data[15]);
 
 /*
  * NON-INTERPOSING observer: G_sUserTable is an EXPORTED libsess.so.9 symbol
@@ -190,6 +192,43 @@ static int mem_write(int fd, unsigned long addr, const void *src, size_t n) {
     return pwrite(fd, src, n, (off_t)addr) == (ssize_t)n ? 0 : -1;
 }
 
+/* Decoded from this build's libipmicmdtableapi.so.9.9.9: the GOT entries
+ * lead to the active 16-byte command table and its uint16 entry count. The
+ * library calls its handlers directly, so LD_PRELOAD symbol interposition
+ * cannot replace Get Device ID on the network path. */
+#define IPMI_CMD_TABLE_GOT_OFFSET      0x1175e0
+#define IPMI_CMD_TABLE_SIZE_GOT_OFFSET 0x117610
+
+static void patch_ipmi_command_table(int mfd) {
+    static int patched;
+    unsigned long base, table_global, table, count_global, handler, previous;
+    unsigned short count, selector;
+
+    if (patched) return;
+    base = lib_base("libipmicmdtableapi.so.9");
+    if (!base ||
+        mem_read(mfd, base + IPMI_CMD_TABLE_GOT_OFFSET, &table_global, sizeof table_global) ||
+        mem_read(mfd, table_global, &table, sizeof table) ||
+        mem_read(mfd, base + IPMI_CMD_TABLE_SIZE_GOT_OFFSET, &count_global, sizeof count_global) ||
+        mem_read(mfd, count_global, &count, sizeof count) ||
+        count == 0 || count > 1024) return;
+
+    for (unsigned int i = 0; i < count; i++) {
+        unsigned long entry = table + i * 16;
+        if (mem_read(mfd, entry, &selector, sizeof selector) || selector != 0x0601) continue;
+        if (mem_read(mfd, entry + 8, &previous, sizeof previous)) return;
+        handler = (unsigned long)CmdGetDeviceID;
+        if (mem_write(mfd, entry + 8, &handler, sizeof handler)) return;
+        patched = 1;
+        if (log_fp) {
+            fprintf(log_fp, "[patch] IPMI command 0601 handler %p -> %p (table=%p entries=%u)\n",
+                    (void *)previous, (void *)handler, (void *)table, count);
+            fflush(log_fp);
+        }
+        return;
+    }
+}
+
 /*
  * G_sUserTable INJECTOR. Ground truth (run81): the table is never populated
  * (count=0, entries=NULL) — UserInfoInit's chain doesn't run in this virtual
@@ -221,6 +260,7 @@ static void *usertable_dumper(void *arg) {
           sa.sa_sigaction = crash_handler; sa.sa_flags = SA_SIGINFO;
           sigaction(SIGSEGV,&sa,NULL); sigaction(SIGABRT,&sa,NULL);
           sigaction(SIGBUS,&sa,NULL); sigaction(SIGILL,&sa,NULL); }
+        patch_ipmi_command_table(mfd);
         unsigned long base = lib_base("libsess.so.9");
         if (!base) { (void)misses; continue; }  /* keep polling: libsess may load late / in a forked worker; never give up so EVERY libsess process gets injected */
         _libsess_base = base;   /* cache for the crash handler */
