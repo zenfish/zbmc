@@ -2,8 +2,10 @@
 set -euo pipefail
 
 patch="$(dirname "$0")/../boxes/supermicro-x10/qemu-ftgmac-rx-descriptor.patch"
+box="$(dirname "$0")/../boxes/supermicro-x10/zbmc.box"
 
 test -f "$patch"
+grep -q '/home/zen/opt/qemu-11-x10/bin/qemu-system-arm' "$box"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
 test "$(grep -c '^@@ ' "$patch")" -eq 1
 test "$(grep -Ec '^[+-][^+-]' "$patch")" -eq 3

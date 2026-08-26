@@ -59,7 +59,9 @@ X10_TAP=ztap-x10
 X10_AUX_TAP=ztap-x10-aux
 X10_NETMASK=255.0.0.0
 X10_GATEWAY=10.0.0.1
-if [ -z "${X10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11/bin/qemu-system-arm ]; then
+if [ -z "${X10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-x10/bin/qemu-system-arm ]; then
+  X10_QEMU=/home/zen/opt/qemu-11-x10/bin/qemu-system-arm
+elif [ -z "${X10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11/bin/qemu-system-arm ]; then
   X10_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
 fi
 export X10_NET_MODE X10_TAP X10_AUX_TAP X10_NETMASK X10_GATEWAY X10_QEMU
