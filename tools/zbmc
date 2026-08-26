@@ -118,7 +118,7 @@ usage(){
   echo "                    --no-wait leaves a supervised readiness watcher running"
   echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
   echo "  restart           down then blocking up"
-  echo "  status [-f]       qemu/ports/ssh/rakp/redfish health; -f follows until READY (default verb)"
+  echo "  status [-f] [-v]  concise health; -v explains checks; -f follows startup (default verb)"
   echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
   echo "  evidence [RUN_ID] show the run evidence directory and its files"
   echo "  ssh [cmd]         SSH into the box (dropbear; sysadmin/blank)"
@@ -135,7 +135,7 @@ usage(){
 }
 
 # --- status probe helpers -------------------------------------------------------------
-# Each _probe_* echoes "STATE|DISPLAY|NOTE"; STATE = ok|authfail|fail.
+# Each _probe_* echoes "STATE|DISPLAY|NOTE"; STATE = ok|authfail|fail|na.
 # _ipmi_invocation is PURE (no network) so the shown command == the probed command.
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
   if [ "$1" = pw ]; then
@@ -158,6 +158,10 @@ _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
   return 1; }
 
 _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY|NOTE
+  if command -v flock >/dev/null 2>&1; then
+    exec 9<"$BF" || { echo "fail||probe lock unavailable"; return; }
+    flock -w "$(( ${IPMI_T:-3} + 8 ))" 9 || { echo "fail||probe busy"; return; }
+  fi
   if declare -F zbmc_ipmi_health >/dev/null; then
     local r rc
     r=$(zbmc_ipmi_health 2>&1); rc=$?
@@ -173,19 +177,26 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
     echo "fail||not checked (need zipmi or ipmitool)"; return
   fi
   local has_key=0; [ -n "${IPMI_KEY:-}" ] && [ "${IPMI_KEY}" != "00" ] && has_key=1
-  _ipmi_run pw; local pw=$?
-  [ "$pw" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|"; return; }
   if [ "$has_key" = 1 ]; then
     _ipmi_run key; local ky=$?
-    [ "$ky" = 0 ] && { echo "authfail|$(_ipmi_invocation key)|password auth FAILS"; return; }
-    { [ "$pw" = 2 ] || [ "$ky" = 2 ]; } && { echo "fail||auth FAILS (password + key rejected)"; return; }
+    [ "$ky" = 0 ] && { echo "ok|$(_ipmi_invocation key)|"; return; }
+    _ipmi_run pw; local pw=$?
+    [ "$pw" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|key auth failed; password worked"; return; }
+    { [ "$ky" = 2 ] || [ "$pw" = 2 ]; } && { echo "authfail||key/password rejected"; return; }
     echo "fail||no answer (warming/down)"; return
   fi
-  [ "$pw" = 2 ] && { echo "fail||auth FAILS (password rejected)"; return; }
+  _ipmi_run pw; local pw=$?
+  [ "$pw" = 0 ] && { echo "ok|$(_ipmi_invocation pw)|"; return; }
+  [ "$pw" = 2 ] && { echo "authfail||password rejected"; return; }
   echo "fail||no answer (warming/down)"; }
 
 _probe_ssh(){
-  if timeout -s KILL 4 bash -c '. "'"$BF"'"; zbmc_ssh '\''echo up'\''' 2>/dev/null | grep -q up; then
+  local cmd='.'" '$BF'"'; zbmc_ssh '\''echo up'\'''
+  if command -v flock >/dev/null 2>&1; then
+    exec 8<"$BF" || { echo "fail||probe lock unavailable"; return; }
+    flock -w 6 8 || { echo "fail||probe busy"; return; }
+  fi
+  if timeout -s KILL 10 bash -c "$cmd" 2>/dev/null | grep -q up; then
     echo "ok|zbmc $ZBMC_IP ssh|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
@@ -201,9 +212,31 @@ _probe_redfish(){
     echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers|"
   else echo "fail||down"; fi; }
 
+_probe_webui(){
+  if declare -F zbmc_webui_health >/dev/null; then
+    local r rc
+    r=$(zbmc_webui_health 2>&1); rc=$?
+    [ "$rc" = 0 ] && { echo "ok|curl -sk https://$ZBMC_IP:${WEB_PORT:-443}/|$r"; return; }
+    echo "fail||${r:-box-specific Web-UI probe failed}"; return
+  fi
+  local url="https://$ZBMC_IP:${WEB_PORT:-443}/" code
+  code=$(timeout -s KILL 4 curl -sk --max-time 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+  case "$code" in
+    ""|000) echo "fail||no HTTPS root response" ;;
+    *) echo "ok|curl -sk $url|HTTP $code" ;;
+  esac
+}
+
 _probe_console(){
   if [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
-    echo "ok|zbmc $ZBMC_IP console|"; else echo "fail||n/a"; fi; }
+    echo "ok|zbmc $ZBMC_IP console|interactive serial"
+  elif [ -f "${LOG:-}" ]; then
+    echo "ok|zbmc $ZBMC_IP console|live log; non-interactive"
+  elif declare -F zbmc_console >/dev/null; then
+    echo "ok|zbmc $ZBMC_IP console|box console"
+  else
+    echo "na||unsupported"
+  fi; }
 
 # Allow `ZBMC_SOURCE_ONLY=1 . zbmc` to load helpers without running a verb (tests).
 [ -n "${ZBMC_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
@@ -242,8 +275,8 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   # print in registry order, STREAMING: block on each box's own completion, then flush it
   alive=0; j=0
   for n in "${names[@]}"; do
-    while [ ! -e "$td/$j.done" ]; do sleep 0.1; done
     printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
+    while [ ! -e "$td/$j.done" ]; do sleep 0.1; done
     cat "$td/$j"
     grep -qE "QEMU +: .*UP" "$td/$j" && alive=$((alive+1))
     j=$((j+1))
@@ -254,15 +287,19 @@ fi
 BF="$(find_box "$BOX")" || { echo "zbmc: unknown box '$BOX'"; echo; usage; exit 2; }
 # shellcheck disable=SC1090
 . "$BF"
-export ZBMC_IP ZBMC_HOST ZBMC_NAME
-VERB="${1:-status}"; [ $# -gt 0 ] && shift
+ZBMC_DESCRIPTOR_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:-ssh ipmi}"
+export ZBMC_IP ZBMC_HOST ZBMC_NAME ZBMC_DESCRIPTOR_REQUIRED_SERVICES
+case "${1:-}" in
+  ""|-f|--follow|-v|--verbose|-d|--debug) VERB=status ;;
+  *) VERB="$1"; shift ;;
+esac
 
 running(){ # pidfile first; then a box-specific or legacy hostfwd lookup
   local p; p=$(cat "$PIDF" 2>/dev/null) && ps -p "$p" >/dev/null 2>&1 && { echo "$p"; return 0; }
   if declare -F zbmc_running >/dev/null; then
-    p=$(zbmc_running) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+    p=$(zbmc_running) && [ -n "$p" ] && { echo "$p"; return 0; }
   fi
-  p=$(pgrep -f "hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p" > "$PIDF"; echo "$p"; return 0; }
+  p=$(pgrep -f "hostfwd=udp:${ZBMC_IP}:${IPMI_PORT:-623}-:623" | head -1) && [ -n "$p" ] && { echo "$p"; return 0; }
   return 1; }
 
 # Per-run event records, packet capture, readiness state machine, and failure explanations.
@@ -317,6 +354,7 @@ case "$VERB" in
       else shift; fi
     done
     [[ "$_deadline" =~ ^[0-9]+$ ]] || { echo "zbmc: bad deadline '$_deadline'" >&2; exit 2; }
+    _zr_set_effective_services "$([ "$do_web" = 0 ] && echo 1 || echo 0)"
     ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"
     export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND
     if p=$(running); then _zr_init attach; _zr_event QEMU reused "already running as pid $p"
@@ -372,6 +410,7 @@ case "$VERB" in
       _watch_pid=$(_zbmc_spawn_watcher "$ZBMC_RUN_ID" "$p" "$_deadline" "$ZBMC_DETAIL")
       _zr_event WATCHER active "pid $_watch_pid continues readiness checks; follow $ZBMC_RUN_DIR/progress.log"
       echo "Evidence: $ZBMC_RUN_DIR"
+      echo "Follow: zbmc $ZBMC_NAME status --follow"
     fi ;;
   down|stop)
     # kill web-bringup poller first (otherwise it lingers after qemu dies, may prompt for SSH passwords)
@@ -400,8 +439,16 @@ case "$VERB" in
       -v|--verbose) ZBMC_DETAIL=1;;
       -d|--debug) ZBMC_DETAIL=2;;
     esac; done
+    _colored_state(){
+      case "$1" in
+        READY|AVAILABLE|CONFIGURED) printf '%s%s%s' "$CG" "$1" "$CZ" ;;
+        FAILED|"AUTH FAILED"|DEGRADED) printf '%s%s%s' "$CR" "$1" "$CZ" ;;
+        STARTING) printf '%s%s%s' "$CC" "$1" "$CZ" ;;
+        *) printf '%s' "$1" ;;
+      esac
+    }
     while :; do
-      _qpid=; _running=0
+      _qpid=; _running=0; _webui_run_disabled=0
       if _qpid=$(running 2>/dev/null); then _running=1; fi
       if [ "$_running" = 1 ]; then
         _up_s=$(ps -p "$_qpid" -o etimes= 2>/dev/null | tr -d ' ')
@@ -410,88 +457,101 @@ case "$VERB" in
       else
         echo "QEMU      : ${CR}DOWN${CZ} — zbmc $ZBMC_NAME start"
       fi
-      printf "%-9s : %s\n" "Observed" "$(date '+%Y-%m-%dT%H:%M:%S%z (%Z)')"
-      [ "$ZBMC_DETAIL" -gt 1 ] && printf "%-9s : %s\n" "Observed epoch" "$(date +%s)"
+      [ "$ZBMC_DETAIL" -gt 0 ] && printf "%-9s : %s\n" "Observed" "$(date '+%Y-%m-%dT%H:%M:%S%z (%Z)')"
       if _zr_load "" 2>/dev/null; then
+        [ "$_running" = 0 ] || _webui_run_disabled="${ZBMC_WEBUI_DISABLED:-0}"
         _run_label="Last run"; [ "$_running" = 1 ] && _run_label="Current run"
-        printf "%-9s : " "$_run_label"
-        python3 - "$ZBMC_RUN_DIR" "$_running" <<'PY'
-import json, os, sys
+        _run_info=$(python3 - "$ZBMC_RUN_DIR" "$_running" <<'PY'
+import json, os, sys, time
+
 root, running = sys.argv[1], sys.argv[2] == "1"
-p = os.path.join(root, "result.json")
-if os.path.exists(p):
-    r = json.load(open(p, encoding="utf-8"))
-    tp0 = os.path.join(root, "termination.json")
-    t0 = json.load(open(tp0, encoding="utf-8")) if os.path.exists(tp0) else None
-    state0 = t0["state"] if t0 else r["state"]
-    print(f'{state0}, {r["elapsed_seconds"]}s, highest={r["highest_stage"]}')
-else:
-    print('in progress' if running else 'ended unexpectedly (no final result)')
-print(f'Evidence  : {root}')
-tp = os.path.join(root, "termination.json")
-termination = None
-if os.path.exists(tp):
+
+def load(name):
     try:
-        termination = json.load(open(tp, encoding="utf-8"))
-        print(f'Run result: {termination["state"]} — {termination["cause"]}')
-    except Exception:
-        pass
-elif os.path.exists(p) and r.get("cause"):
-    print(f'Run result: {r["state"]} — {r["cause"]}')
-events = os.path.join(root, "events.jsonl")
-if not running and os.path.exists(events):
+        with open(os.path.join(root, name), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError, TypeError):
+        return None
+
+def seconds(name, default=0):
     try:
-        last = json.loads(list(open(events, encoding="utf-8"))[-1])
-        from datetime import datetime
-        end_epoch = int(termination["ended_epoch"]) if termination else int(last["time_epoch"])
-        when = datetime.fromtimestamp(end_epoch).astimezone().isoformat(timespec="seconds")
-        end_desc = (f'{termination["state"]} — {termination["cause"]}' if termination
-                    else f'{last.get("stage", "event")} {last.get("state", "")}')
-        print(f'Run end   : {when} — {end_desc}'.rstrip())
-        if not os.path.exists(tp) and last.get("stage") == "STOPPED":
-            print(f'Run result: stopped — {last.get("message", "operator shutdown")}')
-    except Exception:
+        with open(os.path.join(root, name), encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return default
+
+def duration(value):
+    value = max(0, int(value or 0))
+    if value < 60:
+        return f"{value}s"
+    if value < 3600:
+        return f"{value // 60}m {value % 60}s"
+    return f"{value // 3600}h {(value % 3600) // 60}m"
+
+result, termination = load("result.json"), load("termination.json")
+highest = (result or {}).get("highest_stage")
+if not highest:
+    ranks = {name: rank for rank, name in enumerate(
+        ("QEMU", "L2", "CONSOLE", "FIRMWARE", "BOOTSTRAP", "SERVICES", "STABILITY", "READY"))}
+    try:
+        with open(os.path.join(root, "events.jsonl"), encoding="utf-8") as f:
+            stages = [json.loads(line).get("stage") for line in f]
+        highest = max((stage for stage in stages if stage in ranks), key=ranks.get, default=None)
+    except (OSError, ValueError, TypeError):
         pass
-hp = os.path.join(root, "health.json")
-if os.path.exists(hp):
-    h = json.load(open(hp, encoding="utf-8"))
-    from datetime import datetime, timezone
-    observed = int(h["observed_epoch"])
-    age = max(0, int(datetime.now(timezone.utc).timestamp()) - observed)
-    run_s = int(h["run_uptime_seconds"])
-    ready_path = os.path.join(root, "ready-epoch")
-    ready_s = None
-    if os.path.exists(ready_path):
-        ready_s = max(0, int(datetime.now(timezone.utc).timestamp()) - int(open(ready_path).read().strip()))
-    elif os.path.exists(os.path.join(root, "events.jsonl")):
-        for line in open(os.path.join(root, "events.jsonl"), encoding="utf-8"):
-            try:
-                event = json.loads(line)
-                if event.get("stage") == "READY" and event.get("state") == "ready":
-                    ready_s = max(0, int(datetime.now(timezone.utc).timestamp()) - int(event["time_epoch"]))
-            except Exception:
-                pass
-    ready_text = "unknown" if ready_s is None else f'{ready_s//3600:02d}:{(ready_s%3600)//60:02d}:{ready_s%60:02d}'
-    label = "Health watch" if running else "Health (historical)"
-    when = datetime.fromtimestamp(observed).astimezone().isoformat(timespec="seconds")
-    if running:
-        print(f'{label}: {h["state"]}, run age={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, ready age={ready_text}, '
-              f'last check={when}, check age={age}s')
+if running:
+    if result:
+        state = str(result.get("state", "unknown")).lower()
+        elapsed = duration(result.get("elapsed_seconds", 0))
+        if state == "ready":
+            summary = f"READY (startup took {elapsed})"
+        elif state == "timeout":
+            reached = f"; reached {highest}" if highest else ""
+            summary = f"TIMED OUT after {elapsed} ({reached.lstrip('; ')}; QEMU still running)"
+        else:
+            reached = f" (reached {highest})" if highest else ""
+            summary = f"{state.upper()} after {elapsed}{reached}"
     else:
-        print(f'{label}: {h["state"]} at {when}, run duration={run_s//3600:02d}:{(run_s%3600)//60:02d}:{run_s%60:02d}, '
-              f'check age={age}s')
+        state = "starting"
+        elapsed = duration(time.time() - seconds("start-epoch", int(time.time())))
+        reached = f"; reached {highest}" if highest else ""
+        summary = f"STARTING ({elapsed} elapsed{reached})"
+else:
+    terminal = termination or result
+    if terminal:
+        state = str(terminal.get("state", "unknown")).lower()
+        elapsed = duration(terminal.get("elapsed_seconds", (result or {}).get("elapsed_seconds", 0)))
+        reached = highest or terminal.get("highest_stage")
+        suffix = f" (had reached {reached})" if reached else ""
+        summary = f"{state.upper()} after {elapsed}{suffix}"
+    else:
+        state, summary = "unknown", "ENDED (no readable result)"
+print(f"{state}|{summary}")
 PY
+)
+        IFS='|' read -r _run_state _run_summary <<<"$_run_info"
+        printf "%-9s : %s\n" "$_run_label" "$_run_summary"
+        [ "$ZBMC_DETAIL" -gt 0 ] && printf "%-9s : %s\n" "Evidence" "$ZBMC_RUN_DIR"
+      else
+        _run_state=unknown
       fi
       # readiness: can this box boot? box-defined zbmc_ready echoes a message; rc 0=ready, 1=not.
       printf "%-9s : " "Build"
       if declare -F zbmc_ready >/dev/null; then
         _rmsg=$(zbmc_ready 2>/dev/null); _rrc=$?
       else _rmsg="unknown (no zbmc_ready)"; _rrc=1; fi
-      [ "$_rrc" = 0 ] && echo "${CG}$_rmsg${CZ}" || echo "${CR}$_rmsg${CZ}"
-      if [ "$_running" = 0 ]; then [ "$_follow" = 0 ] && break; sleep 15; continue; fi
-      printf "%-9s : " "L2"
-      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then echo "${CG}OK${CZ}  $ZBMC_IP answers ICMP"
-      else echo "${CR}no ICMP reply${CZ} from $ZBMC_IP"; fi
+      if [ "$_rrc" = 0 ]; then
+        _rmsg="${_rmsg#ready}"
+        echo "$(_colored_state READY)$_rmsg"
+      else
+        echo "$(_colored_state FAILED) ($_rmsg)"
+      fi
+      if [ "$_running" = 0 ]; then break; fi
+      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+        _l2st=ok; _l2nt="$ZBMC_IP answers ICMP"
+      else
+        _l2st=fail; _l2nt="no ICMP reply from $ZBMC_IP"
+      fi
       # capability rows — probe concurrently, collect, render. Each helper echoes STATE|DISPLAY|NOTE.
       tmp_base="$ZBMC_DIR/tmp"
       mkdir -p "$tmp_base" 2>/dev/null || tmp_base="${TMPDIR:-/tmp}"
@@ -500,74 +560,117 @@ PY
       ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &
       ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) &
       ( echo "$(_probe_redfish)" > "$tmp/redfish" ) &
+      if [ "$_webui_run_disabled" = 1 ]; then echo "na||disabled" > "$tmp/webui"
+      else ( echo "$(_probe_webui)" > "$tmp/webui" ) & fi
       ( echo "$(_probe_console)" > "$tmp/console" ) &
       wait
-      _row(){ # $1 label  $2 file
-        local st ds nt IFS='|'; read -r st ds nt < "$2"
-        printf "%-9s : " "$1"
-        case "$st" in
-          ok)       echo "${CG}OK${CZ}${ds:+  ${CC}$ds${CZ}}${nt:+  $([ "$ZBMC_DETAIL" -gt 0 ] && echo "— $nt")}" ;;
-          authfail) echo "${CR}${nt}${CZ}  → ${CG}$ds${CZ}" ;;
-          *)        echo "${CR}${nt:-fail}${CZ}" ;;
-        esac; }
-      _sshok=0; grep -q '^ok' "$tmp/ssh"  && _sshok=1
-      _ipmiok=0; grep -q '^ok' "$tmp/ipmi" && _ipmiok=1
-      _redfishok=0; grep -q '^ok' "$tmp/redfish" && _redfishok=1
-      _consoleok=0; grep -q '^ok' "$tmp/console" && _consoleok=1
-      _row SSH     "$tmp/ssh"
-      _row IPMI    "$tmp/ipmi"
-      _row Redfish "$tmp/redfish"
-      _row Console "$tmp/console"
+      IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
+      IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
+      IFS='|' read -r _redfishst _redfishds _redfishnt < "$tmp/redfish"
+      IFS='|' read -r _webuist _webuids _webuint < "$tmp/webui"
+      IFS='|' read -r _consolest _consoleds _consolent < "$tmp/console"
       rm -rf "$tmp"
-      # NC-SI: unchanged, still ssh-gated (kept from prior logic)
-      printf "%-9s : " "NC-SI"
-      if [ "$_sshok" = 1 ]; then
-        _ncsi=$(timeout -s KILL 4 bash -c '. "'"$BF"'"; zbmc_ssh '\''echo "CFG=$(zcat /proc/config.gz 2>/dev/null | grep -c "^CONFIG_NET_NCSI=y")"; dmesg 2>/dev/null | grep -i ncsi | tail -4'\''' 2>/dev/null)
-        _cfg=$(echo "$_ncsi" | sed -n 's/^CFG=//p'); _dm=$(echo "$_ncsi" | grep -iv '^CFG=')
-        if echo "$_dm" | grep -qiE 'interface up|channel.*(registered|found)|configured'; then echo "${CG}LIVE${CZ} ($(echo "$_dm" | grep -oiE 'eth[0-9]' | tail -1))"
-        elif echo "$_dm" | grep -qi 'No channel found'; then echo "${CG}stack up${CZ}, NO channel"
-        elif [ "${_cfg:-0}" != 0 ]; then echo "${CG}built-in${CZ}, idle"
-        else echo "${CR}n/a${CZ}"; fi
-      else echo "${CR}n/a${CZ} (ssh down)"; fi
-      printf "%-9s : " "Net (IP)"
-      echo "${CP}$ZBMC_IP${CZ}  (${CC}$ZBMC_NAME${CZ})"
-      printf "%-9s : " "Remediation"
-      if [ -n "${ZBMC_REMEDIATION:-}" ]; then
-        _remedy_events=
-        if [ -n "${ZBMC_RUN_DIR:-}" ] && [ -f "$ZBMC_RUN_DIR/events.jsonl" ]; then
-          _remedy_events=$(python3 - "$ZBMC_RUN_DIR/events.jsonl" <<'PY' 2>/dev/null || true
-import json, sys
-hits = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    try:
-        e = json.loads(line)
-    except Exception:
-        continue
-    text = " ".join(str(e.get(k, "")) for k in ("stage", "state", "message", "detail")).lower()
-    if any(word in text for word in ("remediation", "recovery", "recovered", "hardware-reset")):
-        hits.append(e)
-if hits:
-    last = hits[-1]
-    print(f'{len(hits)} recorded; last at +{last.get("elapsed_seconds", "?")}s: {last.get("message", "")}')
-PY
-)
+
+      _disabled(){
+        [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
+        [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
+      }
+      _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
+      _classify(){
+        local raw="$1" service="$2"
+        if _disabled "$service"; then _state=N/A; _why=disabled
+        elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
+        elif [ "$service" = console ]; then _state=AVAILABLE; _why="operator access"
+        elif ! _required "$service"; then _state=N/A; _why="not configured"
+        else
+          _why=required
+          case "$raw" in
+            ok) _state=READY ;;
+            authfail) _state="AUTH FAILED" ;;
+            *) if [ "${_run_state:-starting}" = starting ]; then _state=STARTING; else _state=FAILED; fi ;;
+          esac
         fi
-        if [ -n "$_remedy_events" ]; then echo "$_remedy_events"
-        else echo "none recorded this run; configured: $ZBMC_REMEDIATION"; fi
-      else
-        echo "none configured"
+      }
+      _classify "$_l2st" l2; _l2state=$_state; _l2why=$_why
+      _classify "$_sshst" ssh; _sshstate=$_state; _sshwhy=$_why
+      _classify "$_ipmist" ipmi; _ipmistate=$_state; _ipmiwhy=$_why
+      _classify "$_redfishst" redfish; _redfishstate=$_state; _redfishwhy=$_why
+      _classify "$_webuist" webui; _webuistate=$_state; _webuiwhy=$_why
+      _classify "$_consolest" console; _consolestate=$_state; _consolewhy=$_why
+
+      _ready_n=0; _expected_n=0; _starting_n=0; _failed_n=0; _na_n=0
+      _ready_names=; _starting_names=; _failed_names=; _na_names=
+      _add_name(){
+        local var="$1" name="$2" old
+        old="${!var:-}"
+        printf -v "$var" '%s%s' "${old:+$old, }" "$name"
+      }
+      _count(){
+        local state="$1" why="$2" name="$3"
+        if [ "$state" = N/A ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
+        [ "$state" = AVAILABLE ] && return
+        _expected_n=$((_expected_n+1))
+        case "$state" in
+          READY) _ready_n=$((_ready_n+1)); _add_name _ready_names "$name" ;;
+          STARTING) _starting_n=$((_starting_n+1)); _add_name _starting_names "$name" ;;
+          *) _failed_n=$((_failed_n+1)); _add_name _failed_names "$name" ;;
+        esac
+      }
+      _count "$_l2state" "$_l2why" L2; _count "$_sshstate" "$_sshwhy" SSH
+      _count "$_ipmistate" "$_ipmiwhy" IPMI; _count "$_redfishstate" "$_redfishwhy" Redfish
+      _count "$_webuistate" "$_webuiwhy" Web-UI
+      _count "$_consolestate" "$_consolewhy" Console
+
+      if [ "$ZBMC_DETAIL" -gt 0 ]; then
+        _row(){
+          local label="$1" state="$2" why="$3" display="$4" note="$5" detail
+          detail="$why"
+          if [ "$state" != N/A ]; then
+            [ -n "$note" ] && detail="$detail; $note"
+            [ -n "$display" ] && detail="$detail; $display"
+          fi
+          printf "%-9s : %s (%s)\n" "$label" "$(_colored_state "$state")" "$detail"
+        }
+        _row L2 "$_l2state" "$_l2why" "" "$_l2nt"
+        _row SSH "$_sshstate" "$_sshwhy" "$_sshds" "$_sshnt"
+        _row IPMI "$_ipmistate" "$_ipmiwhy" "$_ipmids" "$_ipmint"
+        _row Redfish "$_redfishstate" "$_redfishwhy" "$_redfishds" "$_redfishnt"
+        _row Web-UI "$_webuistate" "$_webuiwhy" "$_webuids" "$_webuint"
+        _row Console "$_consolestate" "$_consolewhy" "$_consoleds" "$_consolent"
+        printf "%-9s : " "NC-SI"
+        if [ "$_sshstate" = READY ]; then
+          _ncsi=$(timeout -s KILL 4 bash -c '. "'"$BF"'"; zbmc_ssh '\''zcat /proc/config.gz 2>/dev/null | grep -q "^CONFIG_NET_NCSI=y"'\''' 2>/dev/null)
+          [ $? = 0 ] && echo "$(_colored_state AVAILABLE) (kernel support present)" || echo "N/A (not present)"
+        else
+          echo "N/A (not checked; SSH unavailable)"
+        fi
+        printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$ZBMC_NAME" "$CZ"
+        if [ -n "${ZBMC_REMEDIATION:-}" ]; then
+          printf "%-9s : %s (%s)\n" "Remediation" "$(_colored_state CONFIGURED)" "$ZBMC_REMEDIATION"
+        else
+          printf "%-9s : N/A (not configured)\n" "Remediation"
+        fi
       fi
-      _overall=1; _missing=
-      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ssh '* ]] && [ "$_sshok" = 0 ] && { _overall=0; _missing="$_missing ssh"; }
-      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' ipmi '* ]] && [ "$_ipmiok" = 0 ] && { _overall=0; _missing="$_missing ipmi"; }
-      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' redfish '* ]] && [ "$_redfishok" = 0 ] && { _overall=0; _missing="$_missing redfish"; }
-      [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " == *' console '* ]] && [ "$_consoleok" = 0 ] && { _overall=0; _missing="$_missing console"; }
+
+      if [ "$_failed_n" -gt 0 ]; then _health=DEGRADED
+      elif [ "$_starting_n" -gt 0 ]; then _health=STARTING
+      else _health=READY; fi
       printf "%-9s : " "Health"
-      if [ "$_overall" = 1 ]; then echo "${CG}READY${CZ} (functional probes: ${ZBMC_REQUIRED_SERVICES:-ssh ipmi})"
-      else echo "${CR}DEGRADED${CZ} (target probes missing:${_missing})"; fi
-      [ "$_follow" = 0 ] && break
-      [ "$_overall" = 1 ] && { echo "==== READY:  zbmc $ZBMC_IP console  |  zipmi -H $ZBMC_IP ===="; break; }
-      sleep 15; echo "---- $(date +%H:%M:%S)  still booting (Ctrl-C to stop) ----"
+      printf "%s [%d/%d - %s" "$(_colored_state "$_health")" "$_ready_n" "$_expected_n" "$_ready_names"
+      [ "$_starting_n" -gt 0 ] && printf "; %s coming online" "$_starting_names"
+      [ "$_failed_n" -gt 0 ] && printf "; %s failed" "$_failed_names"
+      printf "]"
+      echo
+      if [ "$_follow" = 1 ] && [ "${_run_state:-}" = starting ] && [ -f "${ZBMC_RUN_DIR:-}/progress.log" ]; then
+        echo "Progress (Ctrl-C stops following; QEMU keeps running):"
+        tail -n +1 -f "$ZBMC_RUN_DIR/progress.log" & _tail_pid=$!
+        _watch_pid=$(cat "$ZBMC_RUN_DIR/watcher.pid" 2>/dev/null || true)
+        if [[ "$_watch_pid" =~ ^[0-9]+$ ]]; then
+          while kill -0 "$_watch_pid" 2>/dev/null; do sleep 1; done
+        fi
+        sleep 0.2; kill "$_tail_pid" 2>/dev/null || true; wait "$_tail_pid" 2>/dev/null || true
+      fi
+      break
     done ;;
   ssh)    zbmc_ssh "$@" ;;
   telnet) declare -F zbmc_telnet >/dev/null && zbmc_telnet "$@" || { nc "$ZBMC_IP" "${TELNET_PORT:-23}"; } ;;

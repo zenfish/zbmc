@@ -9,6 +9,17 @@ _zr_elapsed(){
   printf '%02d:%02d' $((_zr_s / 60)) $((_zr_s % 60))
 }
 
+_zr_set_effective_services(){ # 1 disables Web-UI for this run
+  local _zr_no_web="${1:-0}" _zr_service _zr_required=
+  for _zr_service in ${ZBMC_DESCRIPTOR_REQUIRED_SERVICES:-ssh ipmi} webui; do
+    [ "$_zr_no_web" = 1 ] && [ "$_zr_service" = webui ] && continue
+    [[ " $_zr_required " == *" $_zr_service "* ]] || _zr_required="${_zr_required:+$_zr_required }$_zr_service"
+  done
+  ZBMC_REQUIRED_SERVICES="$_zr_required"
+  ZBMC_WEBUI_DISABLED="$_zr_no_web"
+  export ZBMC_REQUIRED_SERVICES ZBMC_WEBUI_DISABLED
+}
+
 _zr_guid(){
   if command -v uuidgen >/dev/null 2>&1; then
     uuidgen | tr '[:upper:]' '[:lower:]'
@@ -63,10 +74,12 @@ _zr_manifest(){
   fi
   python3 - "$ZBMC_RUN_DIR/manifest.json" "$ZBMC_RUN_ID" "$ZBMC_RUN_START_EPOCH" \
     "$ZBMC_NAME" "$ZBMC_IP" "$BF" "$_zr_fw" "$_zr_fw_hash" "$_zr_qemu" "$_zr_qemu_path" "$_zr_qemu_hash" \
-    "${X10_FTGMAC_GUARD:-}" "${ZBMC_REMEDIATION:-}" "${ZBMC_ORIGINAL_COMMAND:-}" <<'PY'
+    "${X10_FTGMAC_GUARD:-}" "${ZBMC_REMEDIATION:-}" "${ZBMC_ORIGINAL_COMMAND:-}" \
+    "${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui}" "${ZBMC_WEBUI_DISABLED:-0}" <<'PY'
 import json, os, platform, sys
 (path, run_id, started, name, ip, box_file, firmware, firmware_sha256,
- qemu, qemu_path, qemu_sha256, ftgmac_guard, remediation, command) = sys.argv[1:]
+ qemu, qemu_path, qemu_sha256, ftgmac_guard, remediation, command,
+ required_services, webui_disabled) = sys.argv[1:]
 doc = {
     "schema": 1,
     "run_id": run_id,
@@ -79,6 +92,8 @@ doc = {
     "config": {
         "ftgmac_guard": ftgmac_guard or None,
         "remediation_configured": remediation or None,
+        "required_services": required_services.split(),
+        "webui_disabled": webui_disabled == "1",
     },
     "host": {"node": platform.node(), "system": platform.platform()},
     "command": command,
@@ -227,6 +242,35 @@ _zr_load(){ # run id, or current
   [ -n "$ZBMC_RUN_ID" ] && [ -d "$ZBMC_RUN_ROOT/$ZBMC_RUN_ID" ] || return 1
   ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
   ZBMC_RUN_START_EPOCH=$(cat "$ZBMC_RUN_DIR/start-epoch")
+  local _zr_meta _zr_services _zr_disabled
+  _zr_meta=$(python3 - "$ZBMC_RUN_DIR/manifest.json" <<'PY' 2>/dev/null
+import json, shlex, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        doc = json.load(f)
+except (OSError, ValueError, TypeError):
+    doc = {}
+config = doc.get("config") or {}
+required = config.get("required_services") or []
+if isinstance(required, str):
+    required = required.split()
+command = doc.get("command") or ""
+try:
+    command_disables_webui = "--no-web" in shlex.split(command)
+except ValueError:
+    command_disables_webui = False
+disabled = bool(config.get("webui_disabled", command_disables_webui))
+print("%s|%d" % (" ".join(required), disabled))
+PY
+)
+  _zr_services=${_zr_meta%%|*}; _zr_disabled=${_zr_meta#*|}
+  if [ -n "$_zr_services" ]; then
+    ZBMC_REQUIRED_SERVICES="$_zr_services"
+    ZBMC_WEBUI_DISABLED="${_zr_disabled:-0}"
+    export ZBMC_REQUIRED_SERVICES ZBMC_WEBUI_DISABLED
+  else
+    _zr_set_effective_services "${_zr_disabled:-0}"
+  fi
   export ZBMC_RUN_ROOT ZBMC_RUN_ID ZBMC_RUN_DIR ZBMC_RUN_START_EPOCH
 }
 
@@ -291,7 +335,7 @@ PY
 
 _zr_health_watch(){
   local _zr_pid="$1" _zr_interval="${ZBMC_HEALTH_INTERVAL:-30}" _zr_start="$ZBMC_RUN_START_EPOCH"
-  local _zr_self="${BASHPID:-$$}"
+  local _zr_self="${BASHPID:-$$}" p5=
   printf '%s\n' "$_zr_self" >"$ZBMC_RUN_DIR/health-watch.pid"
   while ps -p "$_zr_pid" >/dev/null 2>&1; do
     local _zr_now; _zr_now=$(_zr_now)
@@ -301,7 +345,13 @@ _zr_health_watch(){
     _zr_probe_service ipmi "$_zr_tmp/ipmi" & local p2=$!
     _zr_probe_service redfish "$_zr_tmp/redfish" & local p3=$!
     _zr_probe_service console "$_zr_tmp/console" & local p4=$!
+    if [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; then
+      _zr_probe_service webui "$_zr_tmp/webui" & p5=$!
+    else
+      echo 'na||disabled' >"$_zr_tmp/webui"
+    fi
     wait "$p1" "$p2" "$p3" "$p4" 2>/dev/null || true
+    [ -z "$p5" ] || wait "$p5" 2>/dev/null || true
     if declare -F zbmc_guest_snapshot >/dev/null && mkdir "$ZBMC_RUN_DIR/guest-snapshot.lock" 2>/dev/null; then
       mkdir -p "$ZBMC_RUN_DIR/guest-snapshots"
       ( printf 'sample_epoch: %s\n' "$_zr_now"; zbmc_guest_snapshot; rmdir "$ZBMC_RUN_DIR/guest-snapshot.lock" ) \
@@ -311,7 +361,7 @@ _zr_health_watch(){
 import json, os, sys
 snapshot, journal, run_id, ip, now, start, required, tmp = sys.argv[1:]
 checks = {}
-for name in ("ssh", "ipmi", "redfish", "console"):
+for name in ("ssh", "ipmi", "redfish", "webui", "console"):
     p = os.path.join(tmp, name)
     text = open(p, encoding="utf-8").read().strip() if os.path.exists(p) else "fail||missing probe"
     parts = text.split("|", 2)
@@ -338,6 +388,7 @@ _zr_probe_service(){ # service output-file
     ssh) _probe_ssh >"$2";;
     ipmi) _probe_ipmi >"$2";;
     redfish) _probe_redfish >"$2";;
+    webui) _probe_webui >"$2";;
     console) _probe_console >"$2";;
   esac
 }
@@ -345,9 +396,9 @@ _zr_probe_service(){ # service output-file
 _zr_wait_ready(){
   local _zr_pid="$1" _zr_deadline="${2:-${ZBMC_READY_DEADLINE:-900}}"
   local _zr_highest=QEMU _zr_last_probe=0 _zr_last_heartbeat=0 _zr_now_epoch _zr_elapsed_s
-  local _zr_console=0 _zr_guest=0 _zr_l2=0 _zr_ssh=0 _zr_ipmi=0 _zr_redfish=0 _zr_console_service=0
+  local _zr_console=0 _zr_guest=0 _zr_l2=0 _zr_ssh=0 _zr_ipmi=0 _zr_redfish=0 _zr_webui=0 _zr_console_service=0
   local _zr_stability="${ZBMC_STABILITY_SECONDS:-0}" _zr_stable_since=0 _zr_stable_elapsed=0
-  local _zr_required=" ${ZBMC_REQUIRED_SERVICES:-ssh ipmi} " _zr_tmp="$ZBMC_RUN_DIR/probes"
+  local _zr_required=" ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " _zr_tmp="$ZBMC_RUN_DIR/probes"
   mkdir -p "$_zr_tmp"
   if [ -r "/proc/$_zr_pid/cmdline" ]; then
     tr '\0' ' ' <"/proc/$_zr_pid/cmdline" >"$ZBMC_RUN_DIR/qemu-command.txt"
@@ -422,10 +473,17 @@ _zr_wait_ready(){
       _zr_probe_service ipmi "$_zr_tmp/ipmi" & local _zr_p2=$!
       _zr_probe_service redfish "$_zr_tmp/redfish" & local _zr_p3=$!
       _zr_probe_service console "$_zr_tmp/console" & local _zr_p4=$!
+      local _zr_p5=
+      if [[ "$_zr_required" == *' webui '* ]]; then
+        _zr_probe_service webui "$_zr_tmp/webui" & _zr_p5=$!
+      else
+        echo 'na||disabled' >"$_zr_tmp/webui"
+      fi
       wait "$_zr_p1" "$_zr_p2" "$_zr_p3" "$_zr_p4" 2>/dev/null || true
+      [ -z "$_zr_p5" ] || wait "$_zr_p5" 2>/dev/null || true
       _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
       local _zr_s _zr_d _zr_n _zr_service _zr_service_label
-      for _zr_service in ssh ipmi redfish console; do
+      for _zr_service in ssh ipmi redfish webui console; do
         IFS='|' read -r _zr_s _zr_d _zr_n <"$_zr_tmp/$_zr_service"
         if [ "$_zr_s" = ok ]; then
           local _zr_was=0
@@ -433,10 +491,12 @@ _zr_wait_ready(){
             ssh) _zr_was=$_zr_ssh; _zr_ssh=1;;
             ipmi) _zr_was=$_zr_ipmi; _zr_ipmi=1;;
             redfish) _zr_was=$_zr_redfish; _zr_redfish=1;;
+            webui) _zr_was=$_zr_webui; _zr_webui=1;;
             console) _zr_was=$_zr_console_service; _zr_console_service=1;;
           esac
           [ "$_zr_was" = 1 ] && continue
-          _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]')
+          if [ "$_zr_service" = webui ]; then _zr_service_label=WEB-UI
+          else _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]'); fi
           [ "$_zr_service" = console ] || _zr_highest=SERVICES
           _zr_event "$_zr_service_label" ready "${_zr_n:-authenticated functional probe succeeded}; ${_zr_d:-numeric endpoint $ZBMC_IP}"
           _zr_timing "$_zr_service_label" "$_zr_elapsed_s"
@@ -449,9 +509,11 @@ _zr_wait_ready(){
             ssh) _zr_was=$_zr_ssh; _zr_ssh=0;;
             ipmi) _zr_was=$_zr_ipmi; _zr_ipmi=0;;
             redfish) _zr_was=$_zr_redfish; _zr_redfish=0;;
+            webui) _zr_was=$_zr_webui; _zr_webui=0;;
             console) _zr_was=$_zr_console_service; _zr_console_service=0;;
           esac
-          _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]')
+          if [ "$_zr_service" = webui ]; then _zr_service_label=WEB-UI
+          else _zr_service_label=$(printf '%s' "$_zr_service" | tr '[:lower:]' '[:upper:]'); fi
           if [ "$_zr_was" = 1 ]; then
             _zr_stable_since=0
             _zr_event "$_zr_service_label" degraded "previously successful probe now fails: ${_zr_n:-probe failed}"
@@ -466,6 +528,7 @@ _zr_wait_ready(){
     [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_all=0
+    [[ "$_zr_required" == *' webui '* ]] && [ "$_zr_webui" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' console '* ]] && [ "$_zr_console_service" = 0 ] && _zr_all=0
     if [ "$_zr_all" = 1 ]; then
       _zr_now_epoch=$(_zr_now); _zr_elapsed_s=$((_zr_now_epoch - ZBMC_RUN_START_EPOCH))
@@ -478,7 +541,7 @@ _zr_wait_ready(){
       fi
       if [ "$_zr_stability" = 0 ] || [ "$_zr_stable_elapsed" -ge "$_zr_stability" ]; then
         _zr_highest=READY
-        _zr_event READY ready "required services (${ZBMC_REQUIRED_SERVICES:-ssh ipmi}) stable for ${_zr_stable_elapsed}s; total ${_zr_elapsed_s}s"
+        _zr_event READY ready "required services (${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui}) stable for ${_zr_stable_elapsed}s; total ${_zr_elapsed_s}s"
         _zr_timing READY "$_zr_elapsed_s"
         printf '%s\n' "$_zr_now_epoch" >"$ZBMC_RUN_DIR/ready-epoch"
         _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
@@ -496,6 +559,7 @@ _zr_wait_ready(){
       [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_missing="$_zr_missing ssh"
       [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_missing="$_zr_missing ipmi"
       [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_missing="$_zr_missing redfish"
+      [[ "$_zr_required" == *' webui '* ]] && [ "$_zr_webui" = 0 ] && _zr_missing="$_zr_missing webui"
       [[ "$_zr_required" == *' console '* ]] && [ "$_zr_console_service" = 0 ] && _zr_missing="$_zr_missing console"
       _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot timeout; _zr_capture_stop
       _zr_event FAILED timeout "readiness deadline ${_zr_deadline}s reached; QEMU remains up; missing:${_zr_missing}" "required:${ZBMC_REQUIRED_SERVICES:-ssh ipmi}"
@@ -510,6 +574,7 @@ _zr_wait_ready(){
         [ "$_zr_ssh" = 0 ] && _zr_context="$_zr_context ssh"
         [ "$_zr_ipmi" = 0 ] && _zr_context="$_zr_context ipmi"
         [ "$_zr_redfish" = 0 ] && _zr_context="$_zr_context redfish"
+        [[ "$_zr_required" == *' webui '* ]] && [ "$_zr_webui" = 0 ] && _zr_context="$_zr_context webui"
         _zr_context="; probes still pending:${_zr_context:- none}"
       fi
       [ "$_zr_stable_since" = 0 ] || _zr_context="; stability ${_zr_stable_elapsed}/${_zr_stability}s"

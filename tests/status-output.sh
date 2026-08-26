@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+fixture="$(mktemp -d)"
+trap 'rm -rf "$fixture"' EXIT
+export TEST_ROOT="$fixture/work/fake"
+export TEST_ACTIVITY_ROOT="$fixture/ipmi-active"
+
+mkdir -p "$fixture/tools" "$fixture/boxes/fake" "$TEST_ROOT/runs/run-1"
+cp "$repo/tools/zbmc" "$repo/tools/zbmc-runlib" "$fixture/tools/"
+printf 'fake 127.0.0.1\n' > "$fixture/zhosts.txt"
+cat > "$fixture/boxes/fake/zbmc.box" <<'EOF'
+ZBMC_NAME=fake
+ZBMC_DESC="status fixture"
+ZBMC_DIR="$TEST_ROOT"
+ZBMC_IP=$(_zbmc_resolve_ip fake 2 127.0.0.1)
+ZBMC_HOST=fake
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/console.log"
+IPMI_USER=root
+IPMI_PW=test
+ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi}"
+ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
+zbmc_ready(){ echo "ready (fixture)"; }
+zbmc_running(){ [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] && echo "$$"; }
+zbmc_ssh(){ echo up; }
+zbmc_ipmi_health(){
+  [ -f "$TEST_ROOT/ipmi-down" ] && { echo "no response"; return 1; }
+  mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
+  sleep .1; rmdir "$TEST_ACTIVITY_ROOT"; echo "fixture IPMI"
+}
+zbmc_redfish_health(){ echo "no HTTPS response"; return 1; }
+zbmc_webui_health(){
+  [ -f "$TEST_ROOT/webui-down" ] && { echo "no HTTPS root response"; return 1; }
+  echo "fixture Web-UI"
+}
+EOF
+
+printf 'run-1\n' > "$TEST_ROOT/current-run"
+printf '%s\n' "$(( $(date +%s) - 1200 ))" > "$TEST_ROOT/runs/run-1/start-epoch"
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
+EOF
+cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
+{"state":"stopped","elapsed_seconds":1200,"highest_stage":"READY","cause":"operator requested shutdown"}
+EOF
+
+labels(){ sed -n 's/^\([^:]*\) *:.*/\1/p' | sed 's/[[:space:]]*$//'; }
+expect(){ grep -Fq "$2" <<<"$1" || { printf 'missing: %s\n%s\n' "$2" "$1" >&2; exit 1; }; }
+
+down=$("$fixture/tools/zbmc" fake status)
+[ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
+expect "$down" "Last run  : STOPPED"
+expect "$down" "had reached READY"
+
+rm "$TEST_ROOT/runs/run-1/termination.json"
+printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
+ready=$("$fixture/tools/zbmc" fake status)
+[ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
+expect "$ready" "Current run : READY (startup took 10m 12s)"
+expect "$ready" "Health    : READY [4/4 - L2, SSH, IPMI, Web-UI]"
+
+rm "$TEST_ROOT/runs/run-1/result.json"
+printf '%s\n' "$(date +%s)" > "$TEST_ROOT/runs/run-1/start-epoch"
+printf '%s\n' '{"stage":"BOOTSTRAP","state":"ready"}' > "$TEST_ROOT/runs/run-1/events.jsonl"
+touch "$TEST_ROOT/ipmi-down"
+starting=$("$fixture/tools/zbmc" fake status)
+expect "$starting" "Current run : STARTING ("
+expect "$starting" "reached BOOTSTRAP)"
+expect "$starting" "Health    : STARTING"
+expect "$starting" "STARTING [3/4 - L2, SSH, Web-UI; IPMI coming online]"
+
+verbose=$("$fixture/tools/zbmc" fake status --verbose)
+expect "$verbose" "Observed  :"
+expect "$verbose" "SSH       : READY (required"
+expect "$verbose" "IPMI      : STARTING (required; no response)"
+expect "$verbose" "Redfish   : N/A (disabled)"
+expect "$verbose" "Web-UI    : READY (required; fixture Web-UI"
+expect "$verbose" "Console   : N/A (disabled)"
+
+shorthand=$("$fixture/tools/zbmc" fake -v)
+expect "$shorthand" "Observed  :"
+
+rm "$TEST_ROOT/ipmi-down"
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
+EOF
+expected_failure=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status)
+expect "$expected_failure" "Health    : DEGRADED"
+expect "$expected_failure" "Redfish failed]"
+
+touch "$TEST_ROOT/webui-down"
+cat > "$TEST_ROOT/runs/run-1/manifest.json" <<'EOF'
+{"command":"zbmc fake start --no-web"}
+EOF
+no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status --verbose)
+expect "$no_web" "Redfish   : FAILED (required; no HTTPS response)"
+expect "$no_web" "Web-UI    : N/A (disabled)"
+expect "$no_web" "Health    : DEGRADED [3/4 - L2, SSH, IPMI; Redfish failed]"
+runlib_no_web=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  ZBMC_DIR="$TEST_ROOT"; ZBMC_DESCRIPTOR_REQUIRED_SERVICES="ssh ipmi redfish"
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_load ""
+  printf "%s|%s\n" "$ZBMC_REQUIRED_SERVICES" "$ZBMC_WEBUI_DISABLED"
+')
+[ "$runlib_no_web" = "ssh ipmi redfish|1" ] || { echo "unexpected --no-web runlib services: $runlib_no_web" >&2; exit 1; }
+
+cat > "$TEST_ROOT/runs/run-1/manifest.json" <<'EOF'
+{"command":"zbmc fake start"}
+EOF
+runlib_default=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  ZBMC_DIR="$TEST_ROOT"; ZBMC_DESCRIPTOR_REQUIRED_SERVICES="ssh ipmi redfish"
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_load ""
+  printf "%s|%s\n" "$ZBMC_REQUIRED_SERVICES" "$ZBMC_WEBUI_DISABLED"
+')
+[ "$runlib_default" = "ssh ipmi redfish webui|0" ] || { echo "unexpected default runlib services: $runlib_default" >&2; exit 1; }
+
+runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"
+  ZBMC_NAME=fake; ZBMC_IP=127.0.0.1; WEB_PORT=443
+  zbmc_webui_health(){ echo "runlib Web-UI"; }
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_probe_service webui "$TEST_ROOT/runlib-webui"
+  cat "$TEST_ROOT/runlib-webui"
+')
+expect "$runlib_probe" "ok|curl -sk https://127.0.0.1:443/|runlib Web-UI"
+rm "$TEST_ROOT/webui-down" "$TEST_ROOT/runs/run-1/manifest.json" "$TEST_ROOT/runlib-webui"
+
+follow=$("$fixture/tools/zbmc" fake status --follow)
+expect "$follow" "Current run : READY (startup took 10m 12s)"
+
+rm "$TEST_ROOT/runs/run-1/result.json"
+: > "$TEST_ROOT/runs/run-1/progress.log"
+( sleep 1; echo '[00:01] IPMI ready' >> "$TEST_ROOT/runs/run-1/progress.log" ) & watcher=$!
+printf '%s\n' "$watcher" > "$TEST_ROOT/runs/run-1/watcher.pid"
+active_follow=$("$fixture/tools/zbmc" fake status --follow)
+expect "$active_follow" "Progress (Ctrl-C stops following; QEMU keeps running):"
+expect "$active_follow" "[00:01] IPMI ready"
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
+EOF
+
+if command -v flock >/dev/null 2>&1; then
+  "$fixture/tools/zbmc" fake status > "$fixture/status-a" & a=$!
+  "$fixture/tools/zbmc" fake status > "$fixture/status-b" & b=$!
+  wait "$a"; wait "$b"
+  expect "$(cat "$fixture/status-a")" "Health    : READY"
+  expect "$(cat "$fixture/status-b")" "Health    : READY"
+
+  rm -f "$TEST_ROOT/zbmc.pid"
+  rm -rf "$TEST_ROOT/tmp"
+  chmod a-w "$TEST_ROOT"
+  readonly_work=$(TEST_DISCOVER_RUNNING=1 "$fixture/tools/zbmc" fake status 2>&1)
+  chmod u+w "$TEST_ROOT"
+  expect "$readonly_work" "QEMU      : UP"
+  expect "$readonly_work" "Health    : READY"
+  [ ! -e "$TEST_ROOT/zbmc.pid" ] || { echo "status wrote discovered PID into ZBMC_DIR" >&2; exit 1; }
+  [[ "$readonly_work" != *"Permission denied"* ]] || { printf '%s\n' "$readonly_work" >&2; exit 1; }
+fi
+
+mkdir -p "$fixture/boxes/slow" "$fixture/work/slow"
+printf 'slow 127.0.0.1\n' >> "$fixture/zhosts.txt"
+cat > "$fixture/boxes/slow/zbmc.box" <<'EOF'
+ZBMC_NAME=slow
+ZBMC_DESC="delayed status fixture"
+ZBMC_DIR="$TEST_ROOT/../slow"
+ZBMC_IP=$(_zbmc_resolve_ip slow 3 127.0.0.1)
+ZBMC_HOST=slow
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/console.log"
+zbmc_ready(){ sleep 2; : > "$TEST_ROOT/slow-build-done"; echo "ready (slow fixture)"; }
+EOF
+"$fixture/tools/zbmc" all > "$fixture/all-output" & all_pid=$!
+for _ in $(seq 1 30); do grep -q '===== slow (2/2) =====' "$fixture/all-output" && break; sleep .1; done
+expect "$(cat "$fixture/all-output")" "===== slow (2/2) ====="
+[ ! -e "$TEST_ROOT/slow-build-done" ] || { echo "slow header printed after its status completed" >&2; exit 1; }
+wait "$all_pid"
+
+echo "status output: PASS"
