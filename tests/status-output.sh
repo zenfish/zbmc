@@ -67,6 +67,7 @@ printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
 printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
+[[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - L2, SSH, IPMI, Web-UI]"
 

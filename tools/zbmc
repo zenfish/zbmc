@@ -287,7 +287,12 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   alive=0; j=0
   for n in "${names[@]}"; do
     printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
-    while [ ! -e "$td/$j.done" ]; do sleep 0.1; done
+    _si=0; _sf='|/-\'
+    while [ ! -e "$td/$j.done" ]; do
+      if [ -t 1 ]; then printf '\r  checking %s %s' "$n" "${_sf:_si%4:1}"; _si=$((_si+1)); fi
+      sleep 0.1
+    done
+    [ -t 1 ] && printf '\r%*s\r' 64 ''
     cat "$td/$j"
     grep -qE "QEMU +: .*UP" "$td/$j" && alive=$((alive+1))
     j=$((j+1))
@@ -593,21 +598,29 @@ PY
       mkdir -p "$tmp_base" 2>/dev/null || tmp_base="${TMPDIR:-/tmp}"
       [ -w "$tmp_base" ] || tmp_base="${TMPDIR:-/tmp}"
       tmp=$(mktemp -d "${tmp_base%/}/status.XXXXXXXX" 2>/dev/null || mktemp -d "${TMPDIR:-/tmp}/zbmc-status.XXXXXXXX")
-      ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) &
-      ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) &
-      ( echo "$(_probe_redfish)" > "$tmp/redfish" ) &
+      _probe_pids=()
+      ( echo "$(_probe_ssh)"     > "$tmp/ssh" ) & _probe_pids+=("$!")
+      ( echo "$(_probe_ipmi)"    > "$tmp/ipmi" ) & _probe_pids+=("$!")
+      ( echo "$(_probe_redfish)" > "$tmp/redfish" ) & _probe_pids+=("$!")
       if [ "$_webui_run_disabled" = 1 ]; then echo "na||disabled" > "$tmp/webui"
-      else ( echo "$(_probe_webui)" > "$tmp/webui" ) & fi
-      ( echo "$(_probe_console)" > "$tmp/console" ) &
+      else ( echo "$(_probe_webui)" > "$tmp/webui" ) & _probe_pids+=("$!"); fi
+      ( echo "$(_probe_console)" > "$tmp/console" ) & _probe_pids+=("$!")
       if declare -F zbmc_ncsi_health >/dev/null && [[ " ${ZBMC_REQUIRED_SERVICES:-} " != *' ncsi '* ]]; then
         ZBMC_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:+$ZBMC_REQUIRED_SERVICES }ncsi"
       fi
       _ncsi_expected=0
       if [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' ncsi '* ]]; then
         _ncsi_expected=1
-        ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) &
+        ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) & _probe_pids+=("$!")
       fi
-      wait
+      _spinner_pid=
+      if [ -t 1 ]; then
+        ( _si=0; _sf='|/-\'; trap 'exit 0' TERM
+          while :; do printf '\r  checking services %s' "${_sf:_si%4:1}"; _si=$((_si+1)); sleep 0.1; done
+        ) & _spinner_pid=$!
+      fi
+      for _probe_pid in "${_probe_pids[@]}"; do wait "$_probe_pid"; done
+      if [ -n "$_spinner_pid" ]; then kill "$_spinner_pid" 2>/dev/null; wait "$_spinner_pid" 2>/dev/null; printf '\r%*s\r' 64 ''; fi
       IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
       IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
       IFS='|' read -r _redfishst _redfishds _redfishnt < "$tmp/redfish"
