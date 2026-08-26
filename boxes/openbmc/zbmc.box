@@ -69,6 +69,13 @@ _openbmc_retry_net_ipmi() { # qemu-pid
   return 1
 }
 
+zbmc_post_launch() { # qemu-pid
+  local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}"
+  mkdir -p "$retry_dir"
+  ( trap '' HUP; _openbmc_retry_net_ipmi "$1" ) >"$retry_dir/net-ipmi-retry.log" 2>&1 &
+  printf '%s\n' "$!" > "$retry_dir/net-ipmi-retry.pid"
+}
+
 zbmc_boot() {
   cd "$FIRMWARE_DIR" || return 1
   local MTD=evb-ast2600.static.mtd
@@ -87,12 +94,6 @@ zbmc_boot() {
     qp=$(pgrep -f "ast2600-evb.*hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
     sleep 0.5; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
-  if [ -n "$qp" ]; then
-    local retry_dir="${ZBMC_RUN_DIR:-$ZBMC_DIR}"
-    mkdir -p "$retry_dir"
-    _openbmc_retry_net_ipmi "$qp" >"$retry_dir/net-ipmi-retry.log" 2>&1 &
-    echo "$!" > "$retry_dir/net-ipmi-retry.pid"
-  fi
   echo "$qp"
 }
 zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $FIRMWARE_DIR/evb-ast2600.static.mtd"; }

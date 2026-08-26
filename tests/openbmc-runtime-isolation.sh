@@ -25,7 +25,9 @@ check_box(){
 check_box openbmc ast2600-evb
 check_box nvidia-obmc gb200nvl-bmc
 grep -Fq '_openbmc_retry_net_ipmi()' "$repo/boxes/openbmc/zbmc.box"
+grep -Fq 'zbmc_post_launch()' "$repo/boxes/openbmc/zbmc.box"
 grep -Fq 'systemctl start phosphor-ipmi-net@eth0.socket' "$repo/boxes/openbmc/zbmc.box"
+grep -Fq 'zbmc_post_launch "$p"' "$repo/tools/zbmc"
 grep -Fq '"$ZBMC_QEMU" -M gb200nvl-bmc' "$repo/boxes/nvidia-obmc/zbmc.box"
 grep -Fq 'PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi' "$repo/boxes/nvidia-obmc/zbmc.box"
 echo "OpenBMC runtime isolation and health contracts: PASS"

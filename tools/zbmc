@@ -552,6 +552,7 @@ case "$VERB" in
     echo "$qp" > "$PIDF"
       p="$qp"
       _zr_event LAUNCH complete "qemu pid $p launched for $ZBMC_IP"
+      declare -F zbmc_post_launch >/dev/null && zbmc_post_launch "$p"
     fi
     qp="$p"
     if ! _zr_capture_start; then
