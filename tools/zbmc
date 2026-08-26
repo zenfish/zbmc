@@ -678,13 +678,18 @@ result, termination = load("result.json"), load("termination.json")
 highest = (result or {}).get("highest_stage")
 if not highest:
     ranks = {name: rank for rank, name in enumerate(
-        ("QEMU", "L2", "CONSOLE", "FIRMWARE", "BOOTSTRAP", "SERVICES", "STABILITY", "READY"))}
+        ("QEMU", "ICMP", "CONSOLE", "FIRMWARE", "BOOTSTRAP", "SERVICES", "STABILITY", "READY"))}
+    ranks["L2"] = ranks["ICMP"]  # historical run evidence
     try:
         with open(os.path.join(root, "events.jsonl"), encoding="utf-8") as f:
             stages = [json.loads(line).get("stage") for line in f]
         highest = max((stage for stage in stages if stage in ranks), key=ranks.get, default=None)
     except (OSError, ValueError, TypeError):
         pass
+def display_stage(stage):
+    return "ICMP" if stage == "L2" else stage
+
+highest = display_stage(highest)
 if running:
     if result:
         state = str(result.get("state", "unknown")).lower()
@@ -746,6 +751,7 @@ print(f"{state}|{summary}")
 PY
 )
         IFS='|' read -r _run_state _run_summary <<<"$_run_info"
+        [ "$_running" != 1 ] || [ "$_run_state" != timeout ] || _run_label="Startup watch"
         printf "%-9s : %s\n" "$_run_label" "$_run_summary"
         if [ "$ZBMC_DETAIL" -gt 0 ]; then
           printf "%-9s : %s\n" "Evidence" "$ZBMC_RUN_DIR"
@@ -896,7 +902,7 @@ PY
           *) _failed_n=$((_failed_n+1)); _add_name _failed_names "$name" ;;
         esac
       }
-      _count "$_l2state" "$_l2why" L2; _count "$_sshstate" "$_sshwhy" SSH
+      _count "$_l2state" "$_l2why" ICMP; _count "$_sshstate" "$_sshwhy" SSH
       _count "$_ipmistate" "$_ipmiwhy" IPMI; _count "$_redfishstate" "$_redfishwhy" Redfish
       _count "$_webuistate" "$_webuiwhy" Web-UI
       _count "$_consolestate" "$_consolewhy" Console
@@ -921,7 +927,7 @@ PY
           [ -n "$detail" ] && printf " (%s)" "$detail"
           echo
         }
-        _row L2 "$_l2state" "$_l2why" "" "$_l2nt"
+        _row ICMP "$_l2state" "$_l2why" "" "$_l2nt"
         _row SSH "$_sshstate" "$_sshwhy" "$_sshds" "$_sshnt"
         _row IPMI "$_ipmistate" "$_ipmiwhy" "$_ipmids" "$_ipmint"
         _row Redfish "$_redfishstate" "$_redfishwhy" "$_redfishds" "$_redfishnt"

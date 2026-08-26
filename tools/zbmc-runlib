@@ -327,7 +327,7 @@ _zr_expected(){ # stage
     case "$1" in
       FIRMWARE) _zr_profile="${ZBMC_EXPECTED_FIRMWARE:-}";;
       BOOTSTRAP) _zr_profile="${ZBMC_EXPECTED_BOOTSTRAP:-}";;
-      L2) _zr_profile="${ZBMC_EXPECTED_L2:-}";;
+      ICMP|L2) _zr_profile="${ZBMC_EXPECTED_L2:-}";;
       READY) _zr_profile="${ZBMC_EXPECTED_READY:-}";;
     esac
     if [ -n "$_zr_profile" ]; then
@@ -524,9 +524,9 @@ _zr_wait_ready(){
     fi
     if [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
       _zr_l2=1
-      case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=L2;; esac
-      _zr_event L2 ready "$ZBMC_IP answers ICMP; $(_zr_expected L2)"
-      _zr_timing L2 "$_zr_elapsed_s"
+      case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=ICMP;; esac
+      _zr_event ICMP ready "$ZBMC_IP answers ICMP; $(_zr_expected ICMP)"
+      _zr_timing ICMP "$_zr_elapsed_s"
     fi
 
     if [ $((_zr_now_epoch - _zr_last_probe)) -ge 5 ] && { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }; then

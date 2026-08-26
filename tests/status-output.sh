@@ -144,8 +144,19 @@ ready=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
 [[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
-expect "$ready" "Health    : READY [4/4 - L2, SSH, IPMI, Web-UI]"
+expect "$ready" "Health    : READY [4/4 - ICMP, SSH, IPMI, Web-UI]"
 expect "$("$fixture/tools/zbmc" fake web --ui-only)" "web args: --ui-only"
+
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"timeout","elapsed_seconds":900,"highest_stage":"L2","cause":"readiness deadline reached"}
+EOF
+late_ready=$("$fixture/tools/zbmc" fake status)
+expect "$late_ready" "Startup watch : TIMED OUT after 15m 0s (reached ICMP; QEMU still running)"
+expect "$late_ready" "Health    : READY [4/4 - ICMP, SSH, IPMI, Web-UI]"
+cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'
+{"state":"ready","elapsed_seconds":612,"highest_stage":"READY","cause":""}
+EOF
+
 rm -f "$TEST_ROOT/redfish-probed"
 disabled_redfish=$(TEST_REDFISH_MARK="$TEST_ROOT/redfish-probed" "$fixture/tools/zbmc" fake status --verbose)
 [ ! -e "$TEST_ROOT/redfish-probed" ] || { echo "disabled Redfish was still probed" >&2; exit 1; }
@@ -162,12 +173,12 @@ starting=$("$fixture/tools/zbmc" fake status)
 expect "$starting" "Current run : STARTING ("
 expect "$starting" "reached BOOTSTRAP)"
 expect "$starting" "Health    : STARTING"
-expect "$starting" "STARTING [3/4 - L2, SSH, Web-UI; IPMI coming online]"
+expect "$starting" "STARTING [3/4 - ICMP, SSH, Web-UI; IPMI coming online]"
 
 verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
 expect "$verbose" $'Evidence  : '"$TEST_ROOT/runs/run-1"$'\nConsole log : '"$TEST_ROOT/runs/run-1/console.log (live)"$'\nFollow      : tail -f '"$TEST_ROOT/runs/run-1/console.log"
-expect "$verbose" "L2        : READY (127.0.0.1 answers ICMP)"
+expect "$verbose" "ICMP      : READY (127.0.0.1 answers ICMP)"
 expect "$verbose" "SSH       : READY (zbmc 127.0.0.1 ssh)"
 expect "$verbose" "IPMI      : STARTING"
 [[ "$(grep '^IPMI' <<<"$verbose")" != *"("* ]] || { printf 'starting row included probe failure detail:\n%s\n' "$verbose" >&2; exit 1; }
@@ -206,7 +217,7 @@ expect "$console_output" "current run serial output"
 
 ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
 expect "$ncsi" "NC-SI     : READY (fixture NC-SI)"
-expect "$ncsi" "Health    : STARTING [4/5 - L2, SSH, Web-UI, NC-SI; IPMI coming online]"
+expect "$ncsi" "Health    : STARTING [4/5 - ICMP, SSH, Web-UI, NC-SI; IPMI coming online]"
 
 runlib_ncsi=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"
@@ -239,13 +250,13 @@ EOF
 no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status --verbose)
 expect "$no_web" "Redfish   : FAILED (expected; no HTTPS response)"
 expect "$no_web" "Web-UI    : N/A (disabled)"
-expect "$no_web" "Health    : DEGRADED [3/4 - L2, SSH, IPMI; Redfish failed]"
+expect "$no_web" "Health    : DEGRADED [3/4 - ICMP, SSH, IPMI; Redfish failed]"
 
 printf 'fake 192.0.2.1\n' > "$fixture/zhosts.txt"
 touch "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
 printf '%s\n' '{"command":"zbmc fake start"}' > "$TEST_ROOT/runs/run-1/manifest.json"
 all_failed=$(TEST_SSH_DOWN=1 "$fixture/tools/zbmc" fake status)
-expect "$all_failed" "Health    : DEGRADED [0/4 - L2, SSH, IPMI, Web-UI failed]"
+expect "$all_failed" "Health    : DEGRADED [0/4 - ICMP, SSH, IPMI, Web-UI failed]"
 [[ "$all_failed" != *" - ;"* ]] || { printf 'malformed health detail:\n%s\n' "$all_failed" >&2; exit 1; }
 printf 'fake 127.0.0.1\n' > "$fixture/zhosts.txt"
 rm -f "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
@@ -273,7 +284,7 @@ printf '%s\n' '{"command":"zbmc fake start --no-web"}' > "$TEST_ROOT/runs/run-1/
 console_required=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
 expect "$console_required" "Health    : READY [1/1 - Console]"
 console_required_v=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
-expect "$console_required_v" "L2        : N/A (not configured)"
+expect "$console_required_v" "ICMP      : N/A (not configured)"
 
 runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"
