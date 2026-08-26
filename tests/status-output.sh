@@ -11,10 +11,12 @@ mkdir -p "$fixture/tools" "$fixture/boxes/fake" "$TEST_ROOT/runs/run-1"
 cp "$repo/tools/zbmc" "$repo/tools/zbmc-runlib" "$fixture/tools/"
 TEST_ZBMC="$fixture/tools/zbmc" bash -c '
   ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
-  sleep 30 & _spinner_pid=$!; spinner=$_spinner_pid
-  _stop_spinner
-  ! kill -0 "$spinner" 2>/dev/null
-' || { echo "spinner cleanup failed" >&2; exit 1; }
+  bash -c "sleep 30 & wait" & parent=$!
+  while ! child=$(pgrep -P "$parent"); do sleep .01; done
+  _background_pids=("$parent")
+  _stop_background
+  ! kill -0 "$parent" 2>/dev/null && ! kill -0 "$child" 2>/dev/null
+' || { echo "status background cleanup failed" >&2; exit 1; }
 printf 'fake 127.0.0.1\n' > "$fixture/zhosts.txt"
 cat > "$fixture/boxes/fake/zbmc.box" <<'EOF'
 ZBMC_NAME=fake

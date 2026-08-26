@@ -5,16 +5,21 @@
 #   zbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|shell|build|net
 # Boxes are described by zbmc.box files (register their paths in REGISTRY below).
 set -u
-_spinner_pid=
-_stop_spinner(){
-  if [ -n "${_spinner_pid:-}" ]; then
-    kill "$_spinner_pid" 2>/dev/null || true
-    wait "$_spinner_pid" 2>/dev/null || true
-    _spinner_pid=
-  fi
+_invoker_pid=$PPID
+_background_pids=()
+_kill_tree(){
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do _kill_tree "$child"; done
+  kill "$pid" 2>/dev/null || true
 }
-# Ctrl-C must stop both the probe loop and its separately forked animation.
-trap '_stop_spinner; echo; exit 130' INT TERM
+_stop_background(){
+  local pid
+  for pid in "${_background_pids[@]}"; do _kill_tree "$pid"; done
+  for pid in "${_background_pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+  _background_pids=()
+}
+_interrupt(){ _stop_background; printf '\r%*s\r\n' 64 ''; exit 130; }
+trap _interrupt HUP INT TERM
 
 # --- status colors (only when stdout is a TTY; pipes/greps stay plain) --------
 # CG green=good  CR red=bad  CP purple=IP+creds  CC cyan=box name  CD dim=progress  CZ reset
@@ -292,13 +297,17 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   else printf 'running %s%s%s on %s%d%s inmates -\n' "$CC" "$verb" "$CZ" "$CC" "$N" "$CZ"; fi
   # fan out concurrently; each box drops a .done marker when finished
   _xf=; [ "$_all_run_as_me" = 1 ] && _xf="--run-as-me"; [ "$_all_no_fix_ip" = 1 ] && _xf="$_xf --no-fix-ip"
-  i=0; for n in "${names[@]}"; do ( "$0" "$n" "$verb" $_xf >"$td/$i" 2>&1; : > "$td/$i.done" ) & i=$((i+1)); done
+  i=0; for n in "${names[@]}"; do
+    ( "$0" "$n" "$verb" $_xf >"$td/$i" 2>&1; : > "$td/$i.done" ) &
+    _background_pids+=("$!"); i=$((i+1))
+  done
   # print in registry order, STREAMING: block on each box's own completion, then flush it
   alive=0; j=0
   for n in "${names[@]}"; do
     printf '\n===== %s%s%s (%d/%d) =====\n' "$CC" "$n" "$CZ" "$((j+1))" "$N"
     _si=0; _sf='|/-\'
     while [ ! -e "$td/$j.done" ]; do
+      kill -0 "$_invoker_pid" 2>/dev/null || _interrupt
       if [ -t 1 ]; then printf '\r%s  checking %s %s%s' "$CD" "$n" "${_sf:_si%4:1}" "$CZ"; _si=$((_si+1)); fi
       sleep 0.1
     done
@@ -307,6 +316,8 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
     grep -qE "QEMU +: .*UP" "$td/$j" && alive=$((alive+1))
     j=$((j+1))
   done
+  for _pid in "${_background_pids[@]}"; do wait "$_pid" 2>/dev/null || true; done
+  _background_pids=()
   [ "$verb" = status ] && printf '\n%s%d/%d%s inmates currently alive\n' "$CG" "$alive" "$N" "$CZ"
   rm -rf "$td"; exit 0
 fi
@@ -623,14 +634,19 @@ PY
         _ncsi_expected=1
         ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) & _probe_pids+=("$!")
       fi
-      _spinner_pid=
-      if [ -t 1 ]; then
-        ( _si=0; _sf='|/-\'; trap 'exit 0' TERM
-          while :; do printf '\r%s  checking services %s%s' "$CD" "${_sf:_si%4:1}" "$CZ"; _si=$((_si+1)); sleep 0.1; done
-        ) & _spinner_pid=$!
-      fi
+      _background_pids=("${_probe_pids[@]}")
+      _si=0; _sf='|/-\'
+      while :; do
+        _probes_running=0
+        for _probe_pid in "${_probe_pids[@]}"; do kill -0 "$_probe_pid" 2>/dev/null && { _probes_running=1; break; }; done
+        [ "$_probes_running" = 1 ] || break
+        kill -0 "$_invoker_pid" 2>/dev/null || _interrupt
+        if [ -t 1 ]; then printf '\r%s  checking services %s%s' "$CD" "${_sf:_si%4:1}" "$CZ"; _si=$((_si+1)); fi
+        sleep 0.1
+      done
       for _probe_pid in "${_probe_pids[@]}"; do wait "$_probe_pid"; done
-      if [ -n "$_spinner_pid" ]; then _stop_spinner; printf '\r%*s\r' 64 ''; fi
+      _background_pids=()
+      [ -t 1 ] && printf '\r%*s\r' 64 ''
       IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
       IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
       IFS='|' read -r _redfishst _redfishds _redfishnt < "$tmp/redfish"
