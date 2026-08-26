@@ -218,13 +218,13 @@ _probe_redfish(){
   if declare -F zbmc_redfish_health >/dev/null; then
     local r rc
     r=$(zbmc_redfish_health 2>&1); rc=$?
-    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers|$r"; return; }
+    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
     echo "fail||${r:-box-specific Redfish probe failed}"; return
   fi
-  local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers"
+  local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
-  if timeout -s KILL 4 curl -sk --max-time 3 -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi "ManagerCollection\|Members"; then
-    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/Managers|"
+  if timeout -s KILL 4 curl -sk --max-time 3 -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi '"RedfishVersion"'; then
+    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
   else echo "fail||down"; fi; }
 
 _probe_webui(){
