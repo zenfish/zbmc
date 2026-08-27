@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=4d6eb9df4259343187c19f824897aba11fd27f16cef1dc9471722cde952ddb8c body-sha256=f43ec1e4a152d898761b058ebbb4b767a0d930d2250b892126ffebd496cef2cc -->
+<!-- zmd2html:auto source-sha256=8b21d7aa45d713144ee16979b33744a60649ee1b082323ed7d0e301f06acf39f body-sha256=36654868f05b6b1f051e5bf2b5945ff9ee202106be924e482cc0901f0fa170cf -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -46,12 +46,14 @@
 </div>
 
 <ul class="task-list">
-<li><label><input type="checkbox" checked="" />Inspect the failed GitHub
-Actions log.</label></li>
+<li><label><input type="checkbox" checked="" />Inspect the original and
+follow-up GitHub Actions logs.</label></li>
 <li><label><input type="checkbox" checked="" />Reproduce the new iLO5
 contract locally.</label></li>
 <li><label><input type="checkbox" checked="" />Add the missing Ubuntu
 test dependency.</label></li>
+<li><label><input type="checkbox" checked="" />Select Ubuntu's Python
+after installing its Crypto package.</label></li>
 <li><label><input type="checkbox" checked="" />Add targeted
 <code>.md</code> / <code>.html</code> arguments to
 <code>tools/sync-docs</code>.</label></li>
@@ -61,13 +63,17 @@ generated-file, and multiple-file selection.</label></li>
 contract suites and inspect the final diff.</label></li>
 </ul>
 <h2 id="review">Review</h2>
-<p>The GitHub run failed because the new iLO5 contract requires
+<p>The original GitHub run failed because the new iLO5 contract requires
 <code>Crypto.Cipher.AES</code>, while the clean Ubuntu runner installed
-only the cross-compiler. The workflow now installs Ubuntu's
-<code>python3-pycryptodome</code> package. <code>tools/sync-docs</code>
-also accepts one or more <code>.md</code> or <code>.html</code>
-selectors, preserves those selectors during post-write verification, and
-leaves its no-argument repository-wide behavior unchanged.</p>
+only the cross-compiler. The follow-up run proved that
+<code>python3-pycryptodome</code> installed successfully but the runner
+still selected a <code>/usr/local</code> Python that cannot see Ubuntu's
+module. The workflow now prepends <code>/usr/bin</code> after installing
+the package so subsequent steps use the matching system Python.</p>
+<p><code>tools/sync-docs</code> also accepts one or more
+<code>.md</code> or <code>.html</code> selectors, preserves those
+selectors during post-write verification, and leaves its no-argument
+repository-wide behavior unchanged.</p>
 <p>Verified with <code>python3 -m py_compile tools/sync-docs</code>,
 <code>bash tests/sync-docs-cli.sh</code>, targeted Markdown/HTML checks,
 <code>bash tests/run</code>, and <code>git diff --check</code>.</p>
