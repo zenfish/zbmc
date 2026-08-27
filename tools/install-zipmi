@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VENV="${ZBMC_ZIPMI_VENV:-$ROOT/work/deps/zipmi}"
+COMMIT=5f6e10c7e2fc2a5f83547170e218c9721628e406
+MARKER="$VENV/.zbmc-zipmi-commit"
+
+if [ -x "$VENV/bin/python" ] && [ "$(cat "$MARKER" 2>/dev/null || true)" = "$COMMIT" ] &&
+    "$VENV/bin/python" -c 'import cryptography, scapy, zipmi' >/dev/null 2>&1; then
+  echo "ZIPMI     READY  $COMMIT"
+  exit 0
+fi
+command -v git >/dev/null 2>&1 || { echo "git is required to install zipmi" >&2; exit 1; }
+if [ ! -x "$VENV/bin/python" ]; then
+  mkdir -p "$(dirname "$VENV")"
+  python3 -m venv "$VENV" || {
+    echo "could not create zipmi environment; on Debian: sudo apt install python3-venv" >&2
+    exit 1
+  }
+fi
+"$VENV/bin/python" -m pip --disable-pip-version-check install \
+  'scapy==2.7.0' 'cryptography==45.0.7' \
+  "git+https://github.com/zenfish/zipmi.git@$COMMIT"
+"$VENV/bin/python" -c 'import cryptography, scapy, zipmi'
+printf '%s\n' "$COMMIT" >"$MARKER"
+echo "ZIPMI     READY  $COMMIT"

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+exec "$ROOT/tools/zbmc-qemu-docker" \
+  /home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-aarch64-idrac10-usbnet-dynamic-c92932d9036a/bin/qemu-system-aarch64 "$@"

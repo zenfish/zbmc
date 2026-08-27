@@ -5,7 +5,8 @@ patch="$(dirname "$0")/../qemu/patches/ftgmac100-rx-descriptor-reuse.patch"
 box="$(dirname "$0")/../boxes/supermicro-x10/zbmc.box"
 
 test -f "$patch"
-grep -q '/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm' "$box"
+grep -q 'qemu/runtime/qemu-system-arm' "$box"
+grep -q 'ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6' "$box"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
 test "$(grep -c '^@@ ' "$patch")" -eq 1
 test "$(grep -Ec '^[+-][^+-]' "$patch")" -eq 3

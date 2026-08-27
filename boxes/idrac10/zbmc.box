@@ -30,8 +30,8 @@ LOG="$ZBMC_DIR/console.log"
 SOCK="$ZBMC_DIR/serial.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
 WORK="$ZBMC_DIR"; SERVE="$WORK/serve"
-ZBMC_QEMU=/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-aarch64-idrac10-usbnet-dynamic-c92932d9036a/bin/qemu-system-aarch64
-ZBMC_QEMU_SHA256=fb23b03fc4c8ab4c970f8d406cc6718704a7a20b7267b3436ce716e914ef5981
+ZBMC_QEMU="$(cd "$PROJ_DIR/../.." && pwd)/qemu/runtime/qemu-system-aarch64"
+ZBMC_QEMU_SHA256=c4a28a5e76492d50abc977e8f2bb57ddac48fca9e32b9350573ff67ffe9cfc45
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=npcm845-evb

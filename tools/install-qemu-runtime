@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+IMAGE=sha256:0e03b041c9014a8be084d4fa72413c8db6a9897bdabab9804a9f302dc461fa3f
+ARCHIVE=zbmc-qemu-x86_64-pinned-20260827.docker.tar
+ARCHIVE_SHA256=2184faa28653db712f9bcf37c313f126b23f9416b2ecf8df410312249f60d579
+URL="${ZBMC_QEMU_ARCHIVE_URL:-https://github.com/zenfish/zbmc/releases/download/qemu-v1-x86_64-20260827/$ARCHIVE}"
+CACHE_DIR="${ZBMC_QEMU_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zbmc}"
+cached="$CACHE_DIR/$ARCHIVE"
+
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  echo "zbmc QEMU runtime supports only x86_64 Linux" >&2
+  exit 1
+fi
+command -v docker >/dev/null 2>&1 || {
+  echo "Docker is required; on Debian: sudo apt install docker.io" >&2
+  exit 1
+}
+if docker info >/dev/null 2>&1; then
+  docker_cmd=(docker)
+elif sudo docker info >/dev/null 2>&1; then
+  docker_cmd=(sudo docker)
+else
+  echo "cannot access Docker; start it and grant this user Docker or sudo access" >&2
+  exit 1
+fi
+
+sha256() { sha256sum "$1" | awk '{print $1}'; }
+if ! "${docker_cmd[@]}" image inspect "$IMAGE" >/dev/null 2>&1; then
+  command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
+  mkdir -p "$CACHE_DIR"
+  if [ ! -f "$cached" ] || [ "$(sha256 "$cached")" != "$ARCHIVE_SHA256" ]; then
+    part="$cached.part.$$"
+    trap 'rm -f "${part:-}"' EXIT
+    echo "Downloading exact zbmc QEMU runtime (394 MiB)..."
+    curl -fL --retry 3 --output "$part" "$URL"
+    [ "$(sha256 "$part")" = "$ARCHIVE_SHA256" ] || {
+      echo "QEMU archive SHA-256 mismatch" >&2
+      exit 1
+    }
+    mv "$part" "$cached"
+    trap - EXIT
+  fi
+  "${docker_cmd[@]}" load --input "$cached" >/dev/null
+fi
+"${docker_cmd[@]}" image inspect "$IMAGE" >/dev/null 2>&1 || {
+  echo "Docker loaded the archive but the expected image ID is absent: $IMAGE" >&2
+  exit 1
+}
+
+arm_version=$("$ROOT/qemu/runtime/qemu-system-arm" --version)
+arm_machines=$("$ROOT/qemu/runtime/qemu-system-arm" -machine help)
+aarch64_machines=$("$ROOT/qemu/runtime/qemu-system-aarch64" -machine help)
+debian_version=$("$ROOT/qemu/runtime/qemu-system-arm-debian" --version)
+grep -Fq 'QEMU emulator version 11.0.0' <<<"$arm_version"
+grep -q '^supermicrox11-bmc ' <<<"$arm_machines"
+grep -q '^npcm845-evb ' <<<"$aarch64_machines"
+grep -Fq 'QEMU emulator version 10.0.11' <<<"$debian_version"
+echo "QEMU      READY  exact Docker runtime $IMAGE"

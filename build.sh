@@ -23,6 +23,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 want=(); listonly=0
 for a in "$@"; do case "$a" in --list|-l) listonly=1;; *) want+=("$a");; esac; done
 
+if [ "$listonly" = 0 ]; then
+  "$HERE/tools/install-qemu-runtime" || exit 1
+  "$HERE/tools/install-zipmi" || exit 1
+fi
+
 # stub dispatcher helpers so zbmc.box files can source without error
 _zbmc_resolve_ip() { echo "${3:-127.0.0.1}"; }; export -f _zbmc_resolve_ip
 _zbmc_lo_alias() { :; }; export -f _zbmc_lo_alias

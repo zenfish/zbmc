@@ -7,9 +7,11 @@ New to this? See the [Glossary](#glossary) at the bottom for BMC / IPMI / Redfis
 
 > **Host requirement:** zbmc v1 supports only **x86_64 Linux** (Intel or AMD). Its QEMU paths and
 > SHA-256 pins are for x86_64 executables. ARM64 systems, including Raspberry Pi and Apple Silicon,
-> and macOS are not currently supported. `build.sh` checks this before doing any work. The committed
-> `/home/zen/opt/zbmc-qemu/...` paths are from the reference host; on another x86_64 Linux host, build
-> the exact QEMU variants and approve each resulting executable once with `zbmc <box> start -q PATH`.
+> and macOS are not currently supported. `build.sh` checks this before doing any work, downloads the
+> SHA-256-pinned QEMU Docker runtime, and installs an isolated pinned `zipmi` environment.
+
+For one BMC at a time, roughly 2 GiB host RAM and 5 GiB free disk is a useful starting point. This is
+guidance only; zbmc does not reject smaller hosts.
 
 ---
 
@@ -17,16 +19,16 @@ New to this? See the [Glossary](#glossary) at the bottom for BMC / IPMI / Redfis
 
 ```bash
 # Debian 13 on x86_64
-sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler \
-  curl sshpass socat python3-pexpect pipx
+sudo apt install docker.io squashfs-tools u-boot-tools device-tree-compiler \
+  curl git sshpass socat python3-pexpect python3-venv pipx
 pipx install jefferson
 ```
 
-Confirm the extraction tools are on your PATH. The system QEMU package is sufficient only for the
-Advantech baseline; the other boxes require the exact patched builds pinned in their descriptors:
+Confirm the extraction tools are on your PATH. QEMU itself comes from the exact Docker package that
+`build.sh` downloads and verifies:
 
 ```bash
-qemu-system-arm --version   # Debian 13 package: 10.0.11 (Advantech baseline)
+docker --version
 unsquashfs -version         #   "   squashfs-tools 4.7
 dumpimage -V                #   "   u-boot-tools 2026.04
 dtc --version               #   "   dtc 1.7.2

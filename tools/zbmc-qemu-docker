@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE=sha256:0e03b041c9014a8be084d4fa72413c8db6a9897bdabab9804a9f302dc461fa3f
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+guest_binary="${1:?missing packaged QEMU path}"
+shift
+
+if docker info >/dev/null 2>&1; then
+  docker_cmd=(docker)
+elif sudo -n docker info >/dev/null 2>&1; then
+  docker_cmd=(sudo -n docker)
+else
+  echo "zbmc QEMU runtime cannot access Docker; run tools/install-qemu-runtime" >&2
+  exit 1
+fi
+
+exec "${docker_cmd[@]}" run --rm -i --network host --pid host --privileged \
+  --volume "$ROOT:$ROOT" --volume /tmp:/tmp --volume /var/tmp:/var/tmp \
+  "$IMAGE" "$guest_binary" "$@"

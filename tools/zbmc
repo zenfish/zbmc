@@ -38,7 +38,11 @@ while [ -L "$_src" ]; do
 done
 _SELF="$(cd "$(dirname "$_src")" && pwd)"
 _REPO="$(cd "$_SELF/.." && pwd)"
+if [ -z "${ZIPMI:-}" ] && [ -x "$_REPO/work/deps/zipmi/bin/python" ]; then
+  ZIPMI="$("$_REPO/work/deps/zipmi/bin/python" -c 'import site; print(site.getsitepackages()[0])')"
+fi
 ZIPMI="${ZIPMI:-$_REPO/../zipmi}"
+export ZIPMI
 ZHOSTS_FILE="${ZHOSTS_FILE:-$_REPO/zhosts.txt}"
 
 # --- user network config (zbmc.conf) ---

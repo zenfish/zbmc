@@ -14,8 +14,12 @@ submission (at least... mostly beaten... still a bit to do.)
 > **Supported host:** zbmc v1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
 > executables, paths, and SHA-256 values were produced for x86_64 Linux. ARM64 hosts such as
 > Raspberry Pi and Apple Silicon, macOS, and other operating systems are not currently supported.
-> The committed `/home/zen/opt/zbmc-qemu/...` paths identify the reference installation; another
-> x86_64 Linux host must build/install those exact QEMU variants and approve their paths with `-q`.
+> `build.sh` downloads and SHA-256-verifies the pinned 394 MiB QEMU Docker runtime, then installs
+> a pinned `zipmi` environment. Docker keeps the exact QEMU binaries identical across Linux releases.
+
+Resource sizing is guidance, not an enforced check. Individual BMCs request 128 MiB to 1 GiB of
+guest RAM; allow roughly 2 GiB host RAM and 5 GiB free disk for one-at-a-time use. Fleet timings in
+this README came from a four-core host and will be slower on smaller systems.
 
 > It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
@@ -54,10 +58,10 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 
 ```bash
 # Debian 13 on x86_64
-sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect pipx
+sudo apt install docker.io squashfs-tools u-boot-tools device-tree-compiler curl git sshpass socat net-tools python3-pexpect python3-venv pipx
 pipx install jefferson
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
-./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
+./build.sh                     # install exact QEMU/zipmi + build every ready box
 zbmc openbmc start             # boot vanilla OpenBMC (about 5 min on the reference host)
 zbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
 zbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
@@ -79,8 +83,9 @@ boot/restore/snapshot recipes + findings docs.
 
 Every box descriptor pins a QEMU executable, version, machine, and SHA-256. `zbmc` validates all four
 before launch and refuses a changed or incompatible binary. These pins are host-architecture-specific:
-the current v1 build/package path supports **x86_64 Linux only** and produces two patched QEMU 11
-artifacts plus Debian's exact QEMU 10.0.11 package:
+the current v1 build/package path supports **x86_64 Linux only** and ships two patched QEMU 11
+artifacts plus Debian's exact QEMU 10.0.11 package in one pinned Docker image. Normal users receive
+and verify this package automatically through `build.sh`; these commands reproduce it:
 
 ```bash
 tools/build-qemu --plan qemu-11-arm

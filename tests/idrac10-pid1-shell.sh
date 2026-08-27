@@ -25,8 +25,8 @@ grep -q 'target-path = "/cpus"' "$overlay"
 [ "$(grep -c 'cpu@[123] {' "$overlay")" -eq 3 ]
 [ "$(grep -c 'enable-method = "psci"' "$overlay")" -eq 3 ]
 grep -q -- '-device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1' "$box"
-grep -q '/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-aarch64-idrac10-usbnet-dynamic-c92932d9036a/bin/qemu-system-aarch64' "$box"
-grep -q 'ZBMC_QEMU_SHA256=fb23b03fc4c8ab4c970f8d406cc6718704a7a20b7267b3436ce716e914ef5981' "$box"
+grep -q 'qemu/runtime/qemu-system-aarch64' "$box"
+grep -q 'ZBMC_QEMU_SHA256=c4a28a5e76492d50abc977e8f2bb57ddac48fca9e32b9350573ff67ffe9cfc45' "$box"
 grep -q 'ZBMC_QEMU_MAJOR=11' "$box"
 grep -q 'use start --warm for snapshot' "$box"
 grep -q 'ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"' "$box"
