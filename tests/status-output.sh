@@ -57,6 +57,7 @@ zbmc_console_health(){
   [ "${TEST_CONSOLE_DOWN:-0}" = 1 ] && { echo "no serial prompt"; return 1; }
   echo "fixture console"
 }
+zbmc_console(){ [ "$#" -gt 0 ] && printf 'console args: %s\n' "$*" || cat "$CONSOLE_LOG"; }
 zbmc_web(){ printf 'web args: %s\n' "$*"; }
 if [ "${TEST_NCSI:-0}" = 1 ]; then
   zbmc_ncsi_health(){ echo "fixture NC-SI"; }
@@ -157,6 +158,7 @@ expect "$down_verbose" "Console log : N/A"
 rm "$TEST_ROOT/runs/run-1/termination.json"
 printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
 printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/qemu.pid"
+ps -o lstart= -p "$$" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > "$TEST_ROOT/runs/run-1/qemu.start"
 printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
@@ -235,6 +237,7 @@ printf 'stale descriptor log\n' > "$TEST_ROOT/console.log"
 console_output=$(timeout 1 "$fixture/tools/zbmc" fake console 2>&1 || :)
 expect "$console_output" "current run serial output"
 [[ "$console_output" != *"stale descriptor log"* ]] || { printf 'console tailed stale descriptor log:\n%s\n' "$console_output" >&2; exit 1; }
+expect "$("$fixture/tools/zbmc" fake console uname -a)" "console args: uname -a"
 
 ncsi=$(TEST_NCSI=1 "$fixture/tools/zbmc" fake status --verbose)
 expect "$ncsi" "NC-SI     : READY (fixture NC-SI)"

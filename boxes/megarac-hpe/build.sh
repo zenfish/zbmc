@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# zbmc:turnkey   <- HPE XD670 BMC (AMI MegaRAC SP-X). RESTORE-based turnkey path: fetch a warm
-#                       snapshot captured past the IPMIMain cold-boot race, so IPMI + Redfish are green
-#                       on resume. (build-from-hpm.sh is the reference "carve the DUP" path — flaky cold.)
+# zbmc:turnkey   <- HPE XD670 BMC (AMI MegaRAC SP-X). Fetches cold-boot artifacts and a matched optional
+#                   warm snapshot. Default start is cold; `start --warm` opts into the snapshot.
 #
 # Bundle (mirror only — https://git.trouble.org/zbmc/megarac-hpe/): the direct-boot kernel + dtb +
 # patched rootfs, the frozen 64MB NOR (flash at snapshot time), and the gzipped RAM state. Pinned to

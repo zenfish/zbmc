@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# zbmc:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). RESTORE-based: ships a warm snapshot, not a
-#                       from-firmware build (cold boot is a dbus-broker socket-activation lottery under
-#                       TCG; see docs/why-dell-is-hard.md). "build" = fetch the snapshot bundle + rebase.
+# zbmc:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). Fetches cold-boot artifacts and a matched optional
+#                   warm snapshot. Default start is cold; `start --warm` opts into the snapshot.
 #
 # Bundle (mirror only — https://git.trouble.org/zbmc/idrac10/): the patched kernel + gmac dtb, the
 # 256MB base SD image, a frozen qcow2 overlay, and the gzipped RAM state. boot.sh does qemu -incoming.

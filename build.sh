@@ -21,7 +21,11 @@ fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 want=(); listonly=0
-for a in "$@"; do case "$a" in --list|-l) listonly=1;; *) want+=("$a");; esac; done
+for a in "$@"; do case "$a" in --list|-l) listonly=1;; -*) echo "unknown option: $a" >&2; exit 2;; *) want+=("$a");; esac; done
+
+for box in "${want[@]:-}"; do
+  [ -z "$box" ] || [ -d "$HERE/boxes/$box" ] || { echo "unknown box: $box" >&2; exit 2; }
+done
 
 if [ "$listonly" = 0 ]; then
   "$HERE/tools/install-qemu-runtime" || exit 1
@@ -47,8 +51,8 @@ for boxdir in "$HERE"/boxes/*/; do
     continue
   fi
   if [ "$listonly" = 1 ]; then echo "buildable: $box"; continue; fi
-  # skip if already built — source zbmc.box for zbmc_ready()
-  if [ -f "$boxdir/zbmc.box" ]; then
+  # A fleet build may reuse ready output. An explicitly requested box always rebuilds.
+  if [ "${#want[@]}" -eq 0 ] && [ -f "$boxdir/zbmc.box" ]; then
     (ZBMC_DIR="$HERE/work/$box"; export ZBMC_DIR; . "$boxdir/zbmc.box"; \
      declare -F zbmc_ready >/dev/null && zbmc_ready >/dev/null 2>&1) && {
       echo "SKIP    ✓ $box  (already built)"
@@ -68,3 +72,4 @@ for b in "${failed[@]:-}";  do [ -n "$b" ] && echo "FAILED  ✗ $b   (firmware m
 for b in "${skipped[@]:-}"; do [ -n "$b" ] && echo "ref     – $b"; done
 echo
 echo "run a built box:   ./tools/zbmc <box> start   (then: ./tools/zbmc <box> console)"
+[ "${#failed[@]}" -eq 0 ]

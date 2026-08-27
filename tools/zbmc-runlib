@@ -4,14 +4,24 @@
 
 _zr_now(){ date +%s; }
 
+_zr_process_start(){
+  ps -o lstart= -p "$1" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
 _zr_record_qemu_pid(){
+  local _zr_start
+  _zr_start=$(_zr_process_start "$1") || return 1
+  [ -n "$_zr_start" ] || return 1
   printf '%s\n' "$1" >"$PIDF"
   printf '%s\n' "$1" >"$ZBMC_RUN_DIR/qemu.pid"
+  printf '%s\n' "$_zr_start" >"$ZBMC_RUN_DIR/qemu.start"
 }
 
 _zr_owns_qemu_pid(){
   [ -n "${ZBMC_RUN_DIR:-}" ] && [ -s "$ZBMC_RUN_DIR/qemu.pid" ] &&
-    [ "$(cat "$ZBMC_RUN_DIR/qemu.pid")" = "$1" ]
+    [ -s "$ZBMC_RUN_DIR/qemu.start" ] &&
+    [ "$(cat "$ZBMC_RUN_DIR/qemu.pid")" = "$1" ] &&
+    [ "$(cat "$ZBMC_RUN_DIR/qemu.start")" = "$(_zr_process_start "$1")" ]
 }
 
 _zr_elapsed(){
@@ -447,7 +457,7 @@ PY
     rm -rf "$_zr_tmp"
     sleep "$_zr_interval"
   done
-  if ! ps -p "$_zr_pid" >/dev/null 2>&1; then
+  if ! ps -p "$_zr_pid" >/dev/null 2>&1 && [ ! -f "$ZBMC_RUN_DIR/stop-requested" ]; then
     _zr_termination crashed "QEMU pid $_zr_pid exited unexpectedly"
   fi
   rm -f "$ZBMC_RUN_DIR/health-watch.pid"
@@ -652,7 +662,7 @@ _zr_wait_ready(){
         printf '%s\n' "$_zr_now_epoch" >"$ZBMC_RUN_DIR/ready-epoch"
         _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot ready
         _zr_result ready READY ''
-        ( trap '' HUP TERM; _zr_health_watch "$_zr_pid" ) </dev/null >/dev/null 2>&1 &
+        _zr_health_watch "$_zr_pid" </dev/null >/dev/null 2>&1 &
         echo "Evidence: $ZBMC_RUN_DIR"
         return 0
       fi

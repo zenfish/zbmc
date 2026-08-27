@@ -1,22 +1,19 @@
-# zbmc.box — virtual-BMC descriptor for "x14" (Supermicro X14 BMC = Phosphor OpenBMC / AST2600-ROT).
+# zbmc.box — virtual-BMC descriptor for Supermicro X14 (Phosphor OpenBMC / AST2600-ROT).
 #
-# WHAT: makes `zbmc x14 <verb>` drive the virtual Supermicro X14 BMC, exactly like `zbmc idrac10`.
-#       qemu is ast2600-evb (armv7l), bound to the real IP 10.0.8.14 (lo0 alias) with hostfwd
+# WHAT: makes `zbmc supermicro-x14 <verb>` drive the virtual Supermicro X14 BMC.
+#       qemu is ast2600-evb (armv7l), bound to the selected loopback IP with hostfwd
 #       tcp 22/443 + udp 623. Serial console is the unix socket /tmp/x14.sock; QMP /tmp/x14-qmp.sock.
 # WHY:  X14 is the OpenBMC counterpart to the Dell iDRAC boxes in this framework — one control tool.
-# BOOT: FAST PATH restores a warm QMP snapshot (svc-snap-shell.gz: IPMI + Redfish + SSH shell all
-#       working) in ~10s with a LIVE network (-incoming keeps 623/443/22 up). ZBMC_COLD=1 (or a
-#       missing snapshot) falls back to a full cold boot to an interactive shell (shell-x14.sh).
+# BOOT: default cold service boot. `start --warm` opts into the bundled QMP snapshot; a missing
+#       snapshot falls back to cold boot.
 #
 # ACCESS (unlike the iDRAC boxes, X14 is PASSWORD auth — NOT the zipmi factory IPMIKey):
-#   SSH     : ssh ADMIN@10.0.8.14  pw ADMIN  -> real Linux /bin/sh (SMASH_ENABLE=0 baked in);
+#   SSH     : ssh ADMIN@<selected-IP>  pw ADMIN  -> real Linux /bin/sh (SMASH_ENABLE=0 baked in);
 #             sudo -i (pw ADMIN) -> root.   [we use sshpass -p ADMIN, StrictHostKeyChecking=no]
-#   IPMI    : zipmi -H 10.0.8.14 -U ADMIN -P ADMIN <cmd>   (user/channel/etc. work;
+#   IPMI    : zipmi -H <selected-IP> -U ADMIN -P ADMIN <cmd>   (user/channel/etc. work;
 #             `mc info` returns 0xff — one-handler quirk — so status probes `channel info 1`).
-#   Redfish : curl -sk -u ADMIN:ADMIN https://10.0.8.14/redfish/v1/...   (served by the restore).
 #
-# Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). Root-direct model: qemu runs as root and binds
-# the box's real IP + standard ports directly. The wrapped scripts live in the X14 scratch workdir.
+# Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP.
 ZBMC_NAME=supermicro-x14
 ZBMC_DESC="Supermicro X14 OpenBMC/AST2600 - cold boot; SSH, IPMI, and Web-UI accepted"
 
@@ -24,7 +21,7 @@ ZBMC_DESC="Supermicro X14 OpenBMC/AST2600 - cold boot; SSH, IPMI, and Web-UI acc
 # Portable (clone-and-run): scripts ship in THIS box dir; snapshot + boot artifacts in work/.
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/supermicro-x14}"
-SNAP=svc-snap-shell.gz   # canonical warm snapshot: IPMI + Redfish + interactive SSH shell
+SNAP=svc-snap-full-working.gz
 ZBMC_QEMU="$(cd "$PROJ_DIR/../.." && pwd)/qemu/runtime/qemu-system-arm"
 ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6
 ZBMC_QEMU_MAJOR=11
@@ -59,18 +56,17 @@ LOG="$ZBMC_DIR/console.log"
 SOCK="$ZBMC_DIR/serial.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
 
-# boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback starts the
-# scripted service stack, then leaves its root shell on serial. Prints the qemu pid.
+# `start --warm` restores the matched snapshot. Default/fallback starts the cold scripted service stack.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$ZBMC_DIR" || return 1
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  if [ -z "${ZBMC_COLD:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
+  if [ -n "${ZBMC_WARM:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
     ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
   else
-    [ -f "$ZBMC_DIR/$SNAP" ] || echo "snapshot $SNAP missing — cold boot (scripted services)" >&2
+    [ -z "${ZBMC_WARM:-}" ] || echo "snapshot $SNAP missing - cold boot (scripted services)" >&2
     : > "$LOG"
     ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" X14_BOOT_TOKEN=qemu-x14-svc nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &
   fi
@@ -85,7 +81,7 @@ zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bi
 zbmc_ready() {
   local d="$ZBMC_DIR"
   if [ -f "$d/kernel.bin" ] && [ -f "$d/initramfs-patched.bin" ]; then
-    [ -f "$d/$SNAP" ] && { echo "ready (warm snapshot)"; return 0; }
+    [ -f "$d/$SNAP" ] && { echo "ready (cold boot; use start --warm for snapshot)"; return 0; }
     echo "ready (cold boot only — no snapshot)"; return 0
   fi
   echo "not built — need kernel.bin + initramfs-patched.bin in work/"; return 1

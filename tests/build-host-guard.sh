@@ -37,4 +37,11 @@ output=$(PATH="$fixture:$PATH" FAKE_UNAME_S=Linux FAKE_UNAME_M=x86_64 \
   "$repo/build.sh" --list)
 grep -Fxq 'buildable: advantech-asmb787' <<<"$output"
 
+if output=$(PATH="$fixture:$PATH" FAKE_UNAME_S=Linux FAKE_UNAME_M=x86_64 \
+    "$repo/build.sh" --list nonexistent 2>&1); then
+  echo "build.sh accepted an unknown box" >&2
+  exit 1
+fi
+grep -Fxq 'unknown box: nonexistent' <<<"$output"
+
 echo 'build host guard: PASS'

@@ -1,6 +1,6 @@
 # zbmc.box — virtual-BMC descriptor for "idrac10" (Dell iDRAC10, Nuvoton NPCM845 / aarch64).
-# Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). Root-direct model: qemu runs as root and binds
-# the box's real IP + standard IPMI port (10.0.9.10:623) directly — no socat/high-port hop.
+# Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP
+# and standard service ports directly.
 ZBMC_NAME=idrac10
 ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; no vendor Web-UI"
 # Portable (clone-and-run): scripts+payloads ship in THIS box dir; boot/img artifacts + the warm
@@ -9,7 +9,7 @@ ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; n
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac10}"
 
-# Real IP + /etc/hosts name (idrac10 = 10.0.9.10 in the 10.0.9.x scheme). Ports are bound directly.
+# Selected IP and /etc/hosts name. Ports are bound directly.
 ZBMC_IP=$(_zbmc_resolve_ip idrac10 31 10.0.9.10)
 ZBMC_HOST=drac10
 
@@ -35,7 +35,7 @@ ZBMC_QEMU_SHA256=c4a28a5e76492d50abc977e8f2bb57ddac48fca9e32b9350573ff67ffe9cfc4
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=npcm845-evb
-ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.

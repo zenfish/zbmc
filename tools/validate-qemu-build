@@ -75,6 +75,15 @@ for box in "${boxes[@]}"; do
   mkdir -p "$box_dir"
   printf '\n===== %s =====\n' "$box"
 
+  "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" status >"$box_dir/preflight-status.log" 2>&1 || true
+  if grep -Eq '^QEMU[[:space:]]*: UP' "$box_dir/preflight-status.log"; then
+    echo "$box: refusing validation while QEMU is already running" | tee "$box_dir/error.log" >&2
+    printf '%s\tpreflight=running\tFAIL\n' "$box" | tee -a "$run_dir/summary.tsv"
+    failures=$((failures + 1))
+    current_box=""
+    continue
+  fi
+
   set +e
   (
     "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" start --deadline "$deadline" -q "$binary" 2>&1 | tee "$box_dir/start.log"
@@ -91,18 +100,33 @@ for box in "${boxes[@]}"; do
   fi
   "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" status -v 2>&1 | tee "$box_dir/status.log"
   status_rc="${PIPESTATUS[0]}"
+  grep -Eq '^Health[[:space:]]*: READY' "$box_dir/status.log" || status_rc=1
+  evidence=$(sed -n 's/^Evidence[[:space:]]*: //p' "$box_dir/start.log" "$box_dir/status.log" | tail -1)
+  manifest_rc=1
+  if [ -n "$evidence" ] && [ -f "$evidence/manifest.json" ]; then
+    python3 - "$evidence/manifest.json" "$binary" "$expected_sha256" <<'PY'
+import json, os, sys
+manifest, binary, expected_sha256 = sys.argv[1:]
+data = json.load(open(manifest, encoding="utf-8"))
+if os.path.realpath(data.get("qemu_path") or "") != os.path.realpath(binary):
+    raise SystemExit(1)
+if data.get("qemu_sha256") != expected_sha256:
+    raise SystemExit(1)
+PY
+    manifest_rc=$?
+  fi
   "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" stop >"$box_dir/stop.log" 2>&1
   stop_rc=$?
   set -e
   current_box=""
 
   result=PASS
-  if [ "$start_rc" -ne 0 ] || [ "$status_rc" -ne 0 ] || [ "$stop_rc" -ne 0 ]; then
+  if [ "$start_rc" -ne 0 ] || [ "$status_rc" -ne 0 ] || [ "$manifest_rc" -ne 0 ] || [ "$stop_rc" -ne 0 ]; then
     result=FAIL
     failures=$((failures + 1))
   fi
-  printf '%s\tstart=%s\tstatus=%s\tstop=%s\t%s\n' \
-    "$box" "$start_rc" "$status_rc" "$stop_rc" "$result" | tee -a "$run_dir/summary.tsv"
+  printf '%s\tstart=%s\tstatus=%s\tmanifest=%s\tstop=%s\t%s\n' \
+    "$box" "$start_rc" "$status_rc" "$manifest_rc" "$stop_rc" "$result" | tee -a "$run_dir/summary.tsv"
 done
 
 printf '\nValidation evidence: %s\n' "$run_dir"

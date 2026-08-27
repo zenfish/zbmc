@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# zbmc:turnkey   <- Supermicro X14 BMC (OpenBMC/AST2600). RESTORE-based: ships a warm snapshot
-#                       captured in the scripted-daemon (qemu-x14-svc) mode, whose network survives -incoming.
+# zbmc:turnkey   <- Supermicro X14 BMC (OpenBMC/AST2600). Fetches cold-boot artifacts and a matched
+#                   optional warm snapshot. Default start is cold; `start --warm` opts into restore.
 #
 # Bundle (mirror only — https://git.trouble.org/zbmc/x14/): the direct-boot kernel + noncsi dtb +
 # patched initramfs, the CE0 NOR image, the eMMC image (rootfs on mmcblk0), and the gzipped RAM state.

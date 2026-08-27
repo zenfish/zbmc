@@ -1082,7 +1082,7 @@ PY
     if _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then
       CONSOLE_LOG="$ZBMC_RUN_DIR/console.log"
     fi
-    if declare -F zbmc_console >/dev/null; then zbmc_console
+    if declare -F zbmc_console >/dev/null; then zbmc_console "$@"
     elif _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then tail -f "$ZBMC_RUN_DIR/console.log"
     else echo "$ZBMC_NAME is up, but its current run has no console evidence — try 'ssh' or restart"; fi ;;
   build) zbmc_build ;;

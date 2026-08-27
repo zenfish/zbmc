@@ -10,11 +10,14 @@ ZBMC_RUN_DIR="$tmp/run"
 mkdir -p "$ZBMC_RUN_DIR"
 . "$repo/tools/zbmc-runlib"
 
-! _zr_owns_qemu_pid 123
-_zr_record_qemu_pid 123
-[ "$(cat "$PIDF")" = 123 ]
-_zr_owns_qemu_pid 123
-! _zr_owns_qemu_pid 456
+sleep 30 & pid=$!
+trap 'kill "$pid" 2>/dev/null || true; rm -rf "$tmp"' EXIT
+! _zr_owns_qemu_pid "$pid"
+_zr_record_qemu_pid "$pid"
+[ "$(cat "$PIDF")" = "$pid" ]
+_zr_owns_qemu_pid "$pid"
+printf '%s\n' 'not this process start' >"$ZBMC_RUN_DIR/qemu.start"
+! _zr_owns_qemu_pid "$pid"
 
 grep -Fq 'refusing to adopt unmanaged qemu pid' "$repo/tools/zbmc"
 grep -Fq 'refusing to stop unmanaged qemu pid' "$repo/tools/zbmc"
