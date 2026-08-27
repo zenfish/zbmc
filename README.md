@@ -92,6 +92,9 @@ the current v1 build/package path supports **x86_64 Linux only** and ships two p
 artifacts plus Debian's exact QEMU 10.0.11 package in one pinned Docker image. Normal users receive
 and verify this package automatically through `build.sh`; these commands reproduce it:
 
+The engineering rationale, observed failures, evidence strength, and criteria for removing a variant
+are documented in [Why zbmc Ships Multiple QEMU Builds](docs/why-multiple-qemu-builds.html).
+
 ```bash
 tools/build-qemu --plan qemu-11-arm
 tools/build-qemu qemu-11-arm

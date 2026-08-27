@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Evidence-backed rationale for the QEMU builds, patches, version pins, and consolidation rules used by zbmc.">
+  <title>Why zbmc Ships Multiple QEMU Builds</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    code, pre { font-variant-ligatures: none; }
+    :focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
+  </style>
+</head>
+<body class="bg-white text-zinc-900 antialiased">
+  <header class="border-b border-zinc-200 bg-zinc-950 text-white">
+    <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+      <p class="text-sm font-semibold text-teal-300">zbmc engineering rationale</p>
+      <h1 class="mt-3 max-w-4xl text-4xl font-bold sm:text-5xl">Why zbmc ships multiple QEMU builds</h1>
+      <p class="mt-5 max-w-3xl text-lg leading-8 text-zinc-300">
+        The release contains three emulator executables, but only two upstream QEMU versions.
+        The split follows guest architecture and demonstrated emulation fixes, not vendor branding.
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[2fr_1fr]">
+        <div>
+          <h2 class="text-2xl font-bold">The short answer</h2>
+          <p class="mt-4 leading-7 text-zinc-700">
+            Six 32-bit ARM BMCs share one patched QEMU 11 build. Dell iDRAC10 needs a different
+            AArch64 system emulator and a different USB-network patch. Advantech uses an exact stock
+            Debian QEMU 10.0.11 binary because that is the artifact under which its console-only
+            acceptance was reproduced.
+          </p>
+          <p class="mt-4 leading-7 text-zinc-700">
+            Only the architecture split and the two demonstrated patches are technical requirements.
+            Advantech's separate QEMU 10 pin is <strong>known-good, not proven necessary</strong>.
+            A clean acceptance run with the packaged QEMU 11 ARM artifact may eliminate the third
+            artifact.
+          </p>
+        </div>
+        <aside class="border-l-4 border-amber-600 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+          <strong>Terminology matters.</strong> There are three packaged executables, two source
+          architectures, two patch sets, and two QEMU versions. Calling them &ldquo;three required QEMU
+          versions&rdquo; overstates the evidence.
+        </aside>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">The release artifacts</h2>
+        <div class="mt-7 overflow-x-auto border-y border-zinc-300 bg-white">
+          <table class="w-full min-w-[980px] text-left text-sm">
+            <thead class="bg-zinc-100 text-zinc-700">
+              <tr>
+                <th class="px-4 py-3 font-semibold">Artifact</th>
+                <th class="px-4 py-3 font-semibold">Consumers</th>
+                <th class="px-4 py-3 font-semibold">Reason for the split</th>
+                <th class="px-4 py-3 font-semibold">Evidence status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-200 align-top">
+              <tr>
+                <td class="px-4 py-4">
+                  <strong>QEMU 11 ARM + FTGMAC</strong><br>
+                  <code class="text-xs">qemu-system-arm</code><br>
+                  <code class="text-xs">arm-softmmu</code>
+                </td>
+                <td class="px-4 py-4 text-zinc-700">iDRAC9, MegaRAC-HPE, NVIDIA OpenBMC, upstream OpenBMC, Supermicro X10, Supermicro X14</td>
+                <td class="px-4 py-4 text-zinc-700">These are 32-bit ARM machines. The shared FTGMAC patch prevents stale receive-descriptor state from corrupting the next packet length.</td>
+                <td class="px-4 py-4 text-zinc-700"><strong>Required behavior:</strong> verified X10 failure and decoded root cause; the patch is not independently proven necessary for every consumer. <strong>Exact QEMU 11.0.0 version:</strong> reproducibility pin, not the only version that could contain the fix.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4">
+                  <strong>QEMU 11 AArch64 + USB network</strong><br>
+                  <code class="text-xs">qemu-system-aarch64</code><br>
+                  <code class="text-xs">aarch64-softmmu</code>
+                </td>
+                <td class="px-4 py-4 text-zinc-700">Dell iDRAC10</td>
+                <td class="px-4 py-4 text-zinc-700">NPCM845 is AArch64 and therefore cannot run under the ARMv7 system emulator. Its current network route also needs QEMU's USB NIC to advertise and handle high-speed endpoints correctly.</td>
+                <td class="px-4 py-4 text-zinc-700"><strong>Architecture split:</strong> required. <strong>USB behavior:</strong> required by the current iDRAC10 boot path. <strong>Exact QEMU 11.0.0 version:</strong> reproducibility pin.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4">
+                  <strong>Debian QEMU 10.0.11</strong><br>
+                  <code class="text-xs">qemu-system-arm</code><br>
+                  <code class="text-xs">Debian 13 package</code>
+                </td>
+                <td class="px-4 py-4 text-zinc-700">Advantech ASMB-787</td>
+                <td class="px-4 py-4 text-zinc-700">This is the unmodified distribution artifact used for the successful 11m50s console-only acceptance run.</td>
+                <td class="px-4 py-4 text-zinc-700"><strong>Verified known-good.</strong> No preserved comparison proves that Advantech requires QEMU 10 or that it fails on the shared QEMU 11 ARM build.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-amber-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold text-amber-950">Why Advantech was pinned to QEMU 10</h2>
+        <div class="mt-6 grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 class="text-lg font-bold text-zinc-950">What the evidence says</h3>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Before packaging, the Advantech descriptor selected an ad hoc QEMU 11 development
+              binary. During packaging, that mutable host-local dependency was replaced by Debian
+              13's stock QEMU 10.0.11 package. The package supplied a distribution identity, exact
+              version, and executable hash, and the guest then passed its preserved console acceptance.
+            </p>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-zinc-950">What the evidence does not say</h3>
+            <p class="mt-3 leading-7 text-zinc-700">
+              The old descriptor path is not proof of an equivalent successful QEMU 11 run. There was
+              no controlled QEMU 10-versus-packaged-QEMU-11 comparison showing that QEMU 11 broke the
+              guest. Advantech's release acceptance was console-only, so choosing the stock package
+              minimized release uncertainty but did not establish a technical version boundary. Commit
+              <code>1432275</code> records the switch to the exact Debian QEMU 10.0.11 contract.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">What actually failed</h2>
+        <div class="mt-8 grid gap-8 lg:grid-cols-2">
+          <article class="border-t-4 border-teal-700 pt-5">
+            <p class="text-sm font-semibold text-teal-800">FTGMAC receive descriptors</p>
+            <h3 class="mt-2 text-xl font-bold">A browser request could panic Supermicro X10</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              QEMU reused a receive descriptor without clearing its old status and length bits. It
+              then ORed the new packet length into that stale value. The guest trusted the resulting
+              false 2047-byte descriptor length, attempted to append 2043 payload bytes, and panicked
+              in <code>skb_over_panic</code>. The emulated watchdog subsequently reset the guest while
+              the QEMU process remained alive.
+            </p>
+            <p class="mt-4 leading-7 text-zinc-700">
+              The correction clears stale status while preserving the end-of-ring bit, then writes
+              the new valid-byte count. Because FTGMAC is shared emulated hardware, the fix belongs
+              in the common ARM build rather than an X10-only executable.
+            </p>
+            <p class="mt-4 text-sm text-zinc-600">
+              Source: <a class="text-teal-800 underline" href="../qemu/patches/ftgmac100-rx-descriptor-reuse.patch">FTGMAC patch</a>.
+              Evidence: <code>work/zbmc-reliability/x10-post-ready-drop-20260826.txt</code> in the Limbo research workspace.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-fuchsia-700 pt-5">
+            <p class="text-sm font-semibold text-fuchsia-800">NPCM845 USB networking</p>
+            <h3 class="mt-2 text-xl font-bold">iDRAC10 needs a different target and device behavior</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              iDRAC10's NPCM845 guest is 64-bit AArch64, unlike the ARMv7 BMCs. That alone requires
+              <code>qemu-system-aarch64</code>. Its selected USB-network route also attaches to a
+              high-speed USB controller, while QEMU's stock USB NIC exposed only full-speed device
+              descriptors and used hard-coded 64-byte packet-boundary tests.
+            </p>
+            <p class="mt-4 leading-7 text-zinc-700">
+              The patch adds high-speed CDC/RNDIS descriptors, uses each endpoint's actual maximum
+              packet size, and installs the descriptor attach handler. It remains isolated because it
+              changes shared USB NIC behavior also used by iDRAC9; applying both patch sets to one
+              source tree has not been validated across the fleet.
+            </p>
+            <p class="mt-4 text-sm text-zinc-600">
+              Source: <a class="text-fuchsia-800 underline" href="../boxes/idrac10/qemu-usb-net-high-speed.patch">iDRAC10 USB-net patch</a>.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-950 text-white">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Why exact binaries are pinned</h2>
+        <div class="mt-7 grid gap-7 md:grid-cols-3">
+          <div class="border-t border-teal-400 pt-4">
+            <h3 class="font-semibold text-teal-300">Machine availability</h3>
+            <p class="mt-2 text-sm leading-6 text-zinc-300">A version string does not prove that a build contains <code>gb200nvl-bmc</code>, <code>npcm845-evb</code>, or the required boot ROM data.</p>
+          </div>
+          <div class="border-t border-amber-400 pt-4">
+            <h3 class="font-semibold text-amber-300">Patched behavior</h3>
+            <p class="mt-2 text-sm leading-6 text-zinc-300">Two binaries can both report QEMU 11.0.0 while only one contains the FTGMAC or USB-network correction.</p>
+          </div>
+          <div class="border-t border-fuchsia-400 pt-4">
+            <h3 class="font-semibold text-fuchsia-300">Migration state</h3>
+            <p class="mt-2 text-sm leading-6 text-zinc-300">Warm snapshots serialize device state. A different device layout can reject a stream or restore a guest with broken services.</p>
+          </div>
+        </div>
+        <p class="mt-7 max-w-4xl leading-7 text-zinc-300">
+          For that reason each box declares an executable, expected version, machine model, and
+          SHA-256. Before firmware launch, <code>zbmc</code> also starts the declared machine paused,
+          checks its QMP state, and quits it. Validation is about executable behavior, not merely a
+          pathname existing on the host.
+        </p>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">How the layout became smaller</h2>
+        <ol class="mt-6 space-y-5 border-l-2 border-zinc-300 pl-6 text-zinc-700">
+          <li><strong class="text-zinc-950">Initial state:</strong> ordinary ARM boxes used one QEMU 11 binary, while X10 used a separate QEMU 11 build carrying the FTGMAC correction.</li>
+          <li><strong class="text-zinc-950">Root-cause review:</strong> the correction was found to repair generic FTGMAC descriptor handling, not a Supermicro machine-specific feature.</li>
+          <li><strong class="text-zinc-950">Consolidation:</strong> the patch moved into the shared ARM recipe and X10 joined the other five consumers. The separate X10 release artifact was removed.</li>
+          <li><strong class="text-zinc-950">Current package:</strong> one ARM artifact, one AArch64 artifact, and the independently pinned Advantech distribution artifact are delivered in one Docker image.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">When a variant may be removed or added</h2>
+        <div class="mt-7 grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 class="text-lg font-bold text-teal-800">Remove the Advantech QEMU 10 artifact when</h3>
+            <ol class="mt-4 list-decimal space-y-3 pl-5 leading-7 text-zinc-700">
+              <li>The shared QEMU 11 ARM binary passes machine and QMP validation for <code>ast2600-evb</code>.</li>
+              <li>A fresh Advantech cold boot reaches the serial login prompt.</li>
+              <li>The console remains functional through login and command execution.</li>
+              <li>The result and timing are preserved under the run evidence directory.</li>
+            </ol>
+            <p class="mt-4 text-sm leading-6 text-zinc-600">Network services are not part of this comparison because Advantech's current acceptance contract is console-only.</p>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-amber-800">Add another QEMU artifact only when</h3>
+            <ul class="mt-4 list-disc space-y-3 pl-5 leading-7 text-zinc-700">
+              <li>The guest requires a target architecture absent from existing executables.</li>
+              <li>A required machine or ROM is absent from the existing build.</li>
+              <li>A demonstrated emulator defect needs a patch that would alter already-validated consumers.</li>
+              <li>A required warm snapshot is incompatible with the existing device-state layout.</li>
+            </ul>
+            <p class="mt-4 text-sm leading-6 text-zinc-600">A new vendor, a different firmware image, or a convenient local QEMU path is not by itself sufficient reason.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Canonical implementation records</h2>
+        <ul class="mt-6 grid gap-4 text-sm leading-6 text-zinc-700 md:grid-cols-2">
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="../qemu/recipes/qemu-11-arm.sh">QEMU 11 ARM recipe</a>: source commit, target, machines, consumers, ROM, and FTGMAC patch.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="../qemu/recipes/qemu-11-idrac10.sh">QEMU 11 iDRAC10 recipe</a>: AArch64 target, NPCM845 machine, ROM, and USB-network patch.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="../qemu/packages/debian-13-qemu-10.0.11.json">Debian QEMU manifest</a>: exact Advantech package identity and SHA-256.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="zoo-lessons.md">Zoo engineering lessons</a>: SoC machine selection, boot paths, network limitations, and snapshot behavior.</li>
+        </ul>
+        <p class="mt-8 text-sm leading-6 text-zinc-600">Last reconciled against the packaged x86_64 Linux runtime and fleet evidence on 2026-08-27.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
