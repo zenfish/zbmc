@@ -7,6 +7,24 @@ box="$(dirname "$0")/../boxes/supermicro-x10/zbmc.box"
 test -f "$patch"
 grep -q 'qemu/runtime/qemu-system-arm' "$box"
 grep -q 'ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6' "$box"
+user_mode=$(bash -c '
+  _zbmc_resolve_ip(){ echo 10.0.8.10; }
+  _zbmc_pick_port(){ echo "$2"; }
+  _zbmc_lo_alias(){ :; }
+  . "$1"
+  printf "%s|%s|%s|%s|%s" "$X10_NET_MODE" "$SSH_PORT" "$WEB_PORT" "$ZBMC_L2_REQUIRED" "$ZBMC_CAPTURE_INTERFACES"
+' bash "$box")
+[ "$user_mode" = 'user|2222|8443|0|' ]
+direct_mode=$(X10_NET_MODE=direct bash -c '
+  _zbmc_resolve_ip(){ echo 10.0.8.10; }
+  _zbmc_pick_port(){ echo "$2"; }
+  _zbmc_lo_alias(){ :; }
+  . "$1"
+  printf "%s|%s|%s|%s|%s" "$X10_NET_MODE" "$SSH_PORT" "$WEB_PORT" "$ZBMC_L2_REQUIRED" "$ZBMC_CAPTURE_INTERFACES"
+' bash "$box")
+[ "$direct_mode" = 'direct|22|443|1|br-zbmc ztap-x10 ztap-x10-aux' ]
+grep -Fq "_zbmc_lo_alias \"\$ZBMC_IP\"" "$box"
+grep -Fq "hostfwd=udp:\$ZBMC_IP:\$ZBMC_HOSTPORT-:623" "$box"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
 test "$(grep -c '^@@ ' "$patch")" -eq 1
 test "$(grep -Ec '^[+-][^+-]' "$patch")" -eq 3
