@@ -6,6 +6,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,7 @@ def run(command: list[str], root: Path) -> bytes:
     return result.stdout
 
 
-def documents(root: Path) -> dict[Path, dict[str, Path]]:
+def documents(root: Path, targets: list[str]) -> dict[Path, dict[str, Path]]:
     output = run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.md", "*.html"],
         root,
@@ -37,6 +38,17 @@ def documents(root: Path) -> dict[Path, dict[str, Path]]:
         if name.endswith(".standalone.html"):
             continue
         pairs.setdefault(path.with_suffix(""), {})[path.suffix] = path
+    if targets:
+        selected: dict[Path, dict[str, Path]] = {}
+        for target in targets:
+            path = (Path.cwd() / target).resolve()
+            if path.suffix not in {".md", ".html"}:
+                raise SystemExit(f"sync-docs: expected a .md or .html file: {target}")
+            key = path.with_suffix("")
+            if key not in pairs:
+                raise SystemExit(f"sync-docs: documentation pair not found: {target}")
+            selected[key] = pairs[key]
+        return selected
     return pairs
 
 
@@ -124,6 +136,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="create or refresh generated siblings")
     mode.add_argument("--check", action="store_true", help="fail if a generated sibling is missing or stale (default)")
+    parser.add_argument("files", nargs="*", metavar="FILE", help="limit work to these .md or .html pairs")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent.parent
@@ -139,7 +152,7 @@ def main() -> int:
             "run tools/install-pandoc-docs and add its path"
         )
 
-    pairs = documents(root)
+    pairs = documents(root, args.files)
     stale: list[tuple[Path, Path, bytes]] = []
     conflicts: list[tuple[Path, Path]] = []
     if not sys.stderr.isatty():
@@ -175,7 +188,7 @@ def main() -> int:
         for _changed, destination, _content in stale:
             print(f"wrote {destination.relative_to(root)}", flush=True)
         print(f"documentation pairs: updated ({len(stale)} changed); checking", flush=True)
-        return subprocess.run([sys.executable, __file__, "--check"], cwd=root).returncode
+        return subprocess.run([sys.executable, __file__, "--check", *args.files], cwd=Path.cwd()).returncode
     fine = len(pairs) - len(stale) - len(conflicts)
     if stale:
         verb = "has" if len(stale) == 1 else "have"
@@ -190,7 +203,8 @@ def main() -> int:
         for source, destination in conflicts:
             print(f"{source.relative_to(root)} and {destination.relative_to(root)}")
     if stale or conflicts:
-        print('\nType "./tools/sync-docs --write" to sync the docs.')
+        command = shlex.join(["./tools/sync-docs", "--write", *args.files])
+        print(f'\nType "{command}" to sync the docs.')
         if conflicts:
             if len(conflicts) == 1:
                 source, destination = conflicts[0]

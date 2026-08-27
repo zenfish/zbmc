@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=d629b413265494475e4a7ccfc70e2936efc3b5106cbe61a8e3f23574c651d7d8 body-sha256=7213acd52d734b9b5dc914a8a348f42a60caa1006a721c9fdc074687e1674be6 -->
+<!-- zmd2html:auto source-sha256=4d6eb9df4259343187c19f824897aba11fd27f16cef1dc9471722cde952ddb8c body-sha256=f43ec1e4a152d898761b058ebbb4b767a0d930d2250b892126ffebd496cef2cc -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -52,15 +52,25 @@ Actions log.</label></li>
 contract locally.</label></li>
 <li><label><input type="checkbox" checked="" />Add the missing Ubuntu
 test dependency.</label></li>
-<li><label><input type="checkbox" checked="" />Verify the contract suite
-and workflow diff.</label></li>
+<li><label><input type="checkbox" checked="" />Add targeted
+<code>.md</code> / <code>.html</code> arguments to
+<code>tools/sync-docs</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Cover single-file,
+generated-file, and multiple-file selection.</label></li>
+<li><label><input type="checkbox" checked="" />Verify focused and full
+contract suites and inspect the final diff.</label></li>
 </ul>
 <h2 id="review">Review</h2>
-<p>The iLO5 contract requires <code>Crypto.Cipher.AES</code>, but the
-clean Ubuntu runner installed only the cross-compiler. The workflow now
-installs Ubuntu's existing <code>python3-pycryptodome</code> package
-alongside it. Verification: <code>bash tests/run</code> and
-<code>git diff --check</code>.</p>
+<p>The GitHub run failed because the new iLO5 contract requires
+<code>Crypto.Cipher.AES</code>, while the clean Ubuntu runner installed
+only the cross-compiler. The workflow now installs Ubuntu's
+<code>python3-pycryptodome</code> package. <code>tools/sync-docs</code>
+also accepts one or more <code>.md</code> or <code>.html</code>
+selectors, preserves those selectors during post-write verification, and
+leaves its no-argument repository-wide behavior unchanged.</p>
+<p>Verified with <code>python3 -m py_compile tools/sync-docs</code>,
+<code>bash tests/sync-docs-cli.sh</code>, targeted Markdown/HTML checks,
+<code>bash tests/run</code>, and <code>git diff --check</code>.</p>
 </div>
 </body>
 </html>

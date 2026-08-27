@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=407d63d366fe409bda8cdc1b7d9d44694acf6304d49d84088b1cfd6d0ef9870a body-sha256=ac37cf2bc30b9db7f33f86f8b1202ed741903b2f4bd863d4fa22e722a492df76 -->
+<!-- zmd2html:auto source-sha256=aa092274d207f39c82d30dd826a02866fc482d1867dc7f8fc038cfe68a61849f body-sha256=160c74029f7ccbe48fc4c722d26a862fddd8614e185fc6ba3d1010b173a86d85 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -307,7 +307,9 @@ be overwritten. Regenerate or verify the pairs with:</p>
 <pre class="bash"><code>tools/install-pandoc-docs
 export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
 ./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
-./tools/sync-docs --write       # regenerate marked siblings, then run the same check</code></pre>
+./tools/sync-docs --write       # regenerate marked siblings, then run the same check
+./tools/sync-docs README.md      # verify one pair; .html paths and shell-expanded globs also work
+./tools/sync-docs --write README.md  # regenerate only the selected pair</code></pre>
 <p>The check shows each document on one updating terminal line, then
 lists unsynchronized files. If both sides of a pair were edited, it
 reports the conflict and leaves that pair for manual reconciliation.</p>

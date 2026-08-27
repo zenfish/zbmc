@@ -178,6 +178,8 @@ tools/install-pandoc-docs
 export PATH="$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH"
 ./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
 ./tools/sync-docs --write       # regenerate marked siblings, then run the same check
+./tools/sync-docs README.md      # verify one pair; .html paths and shell-expanded globs also work
+./tools/sync-docs --write README.md  # regenerate only the selected pair
 ```
 
 The check shows each document on one updating terminal line, then lists unsynchronized files. If both
