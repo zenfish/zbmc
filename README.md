@@ -156,13 +156,14 @@ skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
 ```
 
-## What you'll learn from the docs
+## The docs, the sweat, the tears
 
 - **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — what made
   the work difficult, which problems were inherent versus self-inflicted, what failed, what worked,
   the current limits, and the rules that should guide future changes.
 - **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why three exact QEMU
-  executables are packaged, which distinctions are required, and how the remaining QEMU 10 pin can be removed.
+  executables are packaged, which differences require separate builds, and how to test whether
+  Advantech still needs the separately packaged Debian QEMU 10 build.
 - **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)** — one box end to end:
   the "encrypted" misnomer, AMI FMH / SquashFS / JFFS2 / FIT unpacking (and the binwalk & jefferson
   traps), the exact QEMU flags and why, the IPMIMain SIGSEGV fixes, and the NC-SI networking wall in full.
