@@ -35,7 +35,9 @@ QEMU=("$QEMU_BIN" -M ast2600-evb -m 1024 -nographic
   -append "$APPEND")
 
 if [ "${BG:-}" = 1 ]; then
-  cd "$WD"; rm -f cin; mkfifo cin; : > "$CONSOLE_LOG"
+  cd "$WD"; rm -f cin; mkfifo cin
+  chgrp "${SUDO_GID:-$(id -g)}" cin; chmod 660 cin
+  : > "$CONSOLE_LOG"
   ( tail -f cin ) | "${QEMU[@]}" > "$CONSOLE_LOG" 2>&1 &
   echo "backgrounded. console -> $CONSOLE_LOG ; send input: echo 'cmd' > $WD/cin"
 else

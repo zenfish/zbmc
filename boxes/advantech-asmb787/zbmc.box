@@ -8,7 +8,7 @@
 #       platform). Unpacked from encrypted_ASMB-787_20220912.ima_enc ("encrypted" is a misnomer — it
 #       is plain XZ-SquashFS; see tools/unpack-ami).
 #
-# ACCEPTANCE (2026-08-26): retained serial login only, measured at 11m50s on the reference host.
+# ACCEPTANCE (2026-08-27): retained serial login only, measured at 9m38s on the reference host.
 # Full MegaRAC userland starts, but the 5.4.11-ami guest rejects QEMU's internal NC-SI response, so
 # external SSH, IPMI, Redfish, and Web-UI are not reachable. QEMU consumes NC-SI before the netdev;
 # an external responder cannot repair this path. Use the console.
@@ -52,7 +52,7 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
 LOG="$CONSOLE_LOG"
 SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
-# Boot artifacts if missing, then background the real init path. Reference login time: about 12 minutes.
+# Boot artifacts if missing, then background the real init path. Reference login time: about 10 minutes.
 zbmc_boot() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
   _zbmc_lo_alias "$ZBMC_IP"
