@@ -69,15 +69,20 @@ zbmc_ssh() {
   exec sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o ConnectTimeout=10 -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
 }
-# "ipmi": OEM 0x3C via ipmid D-Bus (busctl over ssh) — needs no creds/cipher and works independent of LAN.
-# IPMI-LAN also works: zipmi -H gb200 -C 17 -I lanplus ...   Usage: zbmc gb200 ipmi 0x3c 0x37 0x01
+# Standard commands use IPMI-LAN. A leading numeric NetFn preserves the direct D-Bus OEM shorthand.
+_nvidia_ipmi_lan() {
+  timeout 12 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" -C 17 -I lanplus "$@"
+}
 zbmc_ipmi() {
-  [ $# -eq 0 ] && { echo "OEM 0x3C via ipmid D-Bus (also over LAN: zipmi -C 17 -I lanplus):"; echo "  zbmc gb200 ipmi <netfn> <cmd> [data-bytes...]   e.g. 0x3c 0x37 0x01 (Get BIOS Password)"; return 2; }
-  local nf="$1" cmd="$2"; shift 2; local data="$*"; local n=0; [ -n "$data" ] && n=$(echo $data | wc -w)
+  [ $# -eq 0 ] && { echo "usage: zbmc nvidia-obmc ipmi <command>; OEM D-Bus shorthand: 0x3c 0x37 0x01"; return 2; }
+  case "$1" in 0x*|[0-9]*) ;; *) _nvidia_ipmi_lan "$@"; return;; esac
+  [ $# -ge 2 ] || { echo "numeric OEM shorthand needs <netfn> <cmd> [data-bytes...]" >&2; return 2; }
+  local nf="$1" cmd="$2"; shift 2; local data="$*" n=$#
   zbmc_ssh "busctl call xyz.openbmc_project.Ipmi.Host /xyz/openbmc_project/Ipmi xyz.openbmc_project.Ipmi.Server execute yyyaya{sv} $nf 0 $cmd $n $data 0"
 }
 zbmc_ipmi_health() {
-  local r; r=$(timeout 12 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" -C 17 -I lanplus mc info 2>&1)
+  local r; r=$(_nvidia_ipmi_lan mc info 2>&1)
   if grep -q Manufacturer <<<"$r"; then
     echo "IPMI-LAN: OK (cipher-17 RMCP+; NVIDIA OEM 0x3C over LAN — zipmi -C 17)"; return 0
   fi
