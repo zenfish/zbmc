@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/openbmc/IPMI-REDFISH-INVENTORY.html -->
+<!-- html2md:auto source=boxes/openbmc/IPMI-REDFISH-INVENTORY.html source-sha256=561fe5aefe22e5de3639c4716a6c4bf49691b344386c9b71ba2756d000ccb3a8 body-sha256=d1e6c86249c82f0a9efb81ae576ef40f6e762273a0bb66aa3c3162d81c781399 -->
 
 # openbmc — command inventory
 

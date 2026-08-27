@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac9/index.html -->
+<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=cab351670fc68e519df2cb10f23c25e2b46832264028abe682c6b3c2a908561c body-sha256=666477039278a6b1f6e59f67d07d64e5e943c56abc2b79d22bb5d87597228ce9 -->
 
 **Historical investigation record.** The phase roadmap below predates zbmc 0.1.1. Current iDRAC9 cold-boots to accepted ICMP, SSH, IPMI, and vendor Web-UI in 10m31s on the reference host; Redfish remains unavailable. Use the repository README and `./tools/zbmc idrac9 status -v`.
 

@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/README.html -->
+<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=e6d3514776ff2748a24a4674aee5c126ebf6c52ae3b45071d5c9c8d963b8f96f body-sha256=ea7b95578c195885a090e2d676f4e086b18ec797cae851e9becedca790171cff -->
 
 **Historical investigation record (2026-07-28).** Current release acceptance is ICMP plus retained IPMI. Redfish/Web-UI are unavailable, vendor SSH is absent, and the 2026-08-27 cold run took 8m07s after three automatic rerolls. Injected blank-password network shells are disabled unless requested. Use the repository README, SECURITY.md, and `zbmc megarac-hpe status -v` for current behavior.
 

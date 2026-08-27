@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto -->
+<!-- zmd2html:auto source-sha256=7b3d42244a0a5e331c4c30fc1d2b5cdd0c562055191641771aa3836c36df16c4 body-sha256=3f821575eea75bc0b1ef1ca3d74de9c565cd1c627d320c6a5bf837c13a2baf62 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -302,6 +302,9 @@ be overwritten. Regenerate or verify the pairs with:</p>
 export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
 ./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
 ./tools/sync-docs --write       # regenerate marked siblings, then run the same check</code></pre>
+<p>The check shows each document on one updating terminal line, then
+lists unsynchronized files. If both sides of a pair were edited, it
+reports the conflict and leaves that pair for manual reconciliation.</p>
 <p>The two <code>*.standalone.html</code> packaging copies remain
 HTML-only.</p>
 <p><code>./tools/zbmc -V</code> (or <code>--version</code>) prints the

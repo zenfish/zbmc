@@ -174,6 +174,9 @@ export PATH="$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH"
 ./tools/sync-docs --write       # regenerate marked siblings, then run the same check
 ```
 
+The check shows each document on one updating terminal line, then lists unsynchronized files. If both
+sides of a pair were edited, it reports the conflict and leaves that pair for manual reconciliation.
+
 The two `*.standalone.html` packaging copies remain HTML-only.
 
 `./tools/zbmc -V` (or `--version`) prints the dispatcher version.

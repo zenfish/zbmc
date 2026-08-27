@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/why-bmc-virtualization-is-hard.html -->
+<!-- html2md:auto source=docs/why-bmc-virtualization-is-hard.html source-sha256=065ed49b6966504a69c351ceb3e83653588e58b7acfc71c203e8924e35b1135a body-sha256=74b7d2f3a51ebb78b801b7b79f5a642f3717ee5becfd22b253f5b8b4170aff2b -->
 
 ## Why, oh Why?
 

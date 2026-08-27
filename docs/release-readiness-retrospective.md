@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/release-readiness-retrospective.html -->
+<!-- html2md:auto source=docs/release-readiness-retrospective.html source-sha256=7b4bab48e04f983ea5153355bad5f1468e66dc7745cf55a8f177ec4fc6059c69 body-sha256=ee679933a430c60be2ee844224dbf4ee8940b1b9038eebcd073e5ca7a5b346be -->
 
 Repository audit · 2026-08-27
 

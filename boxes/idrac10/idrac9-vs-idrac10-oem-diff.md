@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/idrac9-vs-idrac10-oem-diff.html -->
+<!-- html2md:auto source=boxes/idrac10/idrac9-vs-idrac10-oem-diff.html source-sha256=deb7838fd84794364149f04bbe5518c6402d6714863a9ee2339f72661e918d92 body-sha256=9ce88355c21a6258c01af6530ec7aad4c77bdbd0e8fc218e4175e164c9784407 -->
 
 # iDRAC9 vs iDRAC10 — OEM IPMI Command Diff
 

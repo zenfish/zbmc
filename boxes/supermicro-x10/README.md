@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/supermicro-x10/README.html -->
+<!-- html2md:auto source=boxes/supermicro-x10/README.html source-sha256=6464f1f3eb4359f3fbb22f2a5ff758de861e804db39ce9ff411dd18ddb708af6 body-sha256=5c3f7070514b49103f013afd85d22b240fce03f856f20e419fe53f85dc18dfc8 -->
 
 # Virtual Supermicro X10 BMC
 

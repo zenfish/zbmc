@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac9/OPERATING.html -->
+<!-- html2md:auto source=boxes/idrac9/OPERATING.html source-sha256=2be8cba0370ad896abb77e358227a7de3255b3e3c3ef99787509353e770febfa body-sha256=d3e87e95152497397428124f21302a944603f5391af0a6613e1a28738e3e10ea -->
 
 **Historical operating record.** This Apple Silicon/manual phase guide predates the supported x86_64 Linux dispatcher. Current iDRAC9 is cold-only with accepted ICMP, SSH, IPMI, and vendor Web-UI; Redfish is unavailable. Use the repository README and `./tools/zbmc idrac9 status -v`.
 

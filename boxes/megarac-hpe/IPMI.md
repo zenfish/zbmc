@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html -->
+<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=e45de85348942a554cc63310948d9a97838683dd101c613840d9a1c54fbab2c9 body-sha256=622b724b1d7f372b76d1122941aef7b93fff40b6d7ce87e329d34388d38f38eb -->
 
 # IPMI stack teardown — Cray XD670 (MegaRAC SP-X)
 

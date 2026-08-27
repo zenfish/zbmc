@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/why-multiple-qemu-builds.html -->
+<!-- html2md:auto source=docs/why-multiple-qemu-builds.html source-sha256=c1cedca73ca4aef3c55e07d5a30deb1a8d139b27ae58af27282d71aabdb980ec body-sha256=834c2832726e66b01df5bf23c24ab6b71d95e008c4015cedee34f52c9e29d7d3 -->
 
 ## The short answer
 

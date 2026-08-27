@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/EMULATION-STATUS.html -->
+<!-- html2md:auto source=boxes/megarac-hpe/EMULATION-STATUS.html source-sha256=41c63988c21da4f5763b0254ee3f73943df850041a57ac539b36754e49c17257 body-sha256=34bd398e5c7d377cb54790415cda8d9a667289e8c5c37943323afd9ea9685e22 -->
 
 **Historical status snapshot (2026-08-21).** It records one investigation state, not the current release contract. Current acceptance is ICMP plus retained IPMI; consult the repository README, SECURITY.md, and `zbmc megarac-hpe status -v`.
 

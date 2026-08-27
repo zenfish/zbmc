@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/idrac10-oem-reference.html -->
+<!-- html2md:auto source=boxes/idrac10/idrac10-oem-reference.html source-sha256=fa8581fb530d303a566e7d80b3bf6968573171bdac06b9e3eccb2efba416d3d0 body-sha256=20f5f47ca2e283ac0fc0399c2a28d6536c0ea64984a26a2a0c793406b9e0d660 -->
 
 # iDRAC10 — OEM IPMI Command Reference
 

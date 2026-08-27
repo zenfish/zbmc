@@ -2,8 +2,10 @@
 """Build or verify paired Markdown and HTML documentation."""
 
 import argparse
+import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +13,7 @@ import tempfile
 
 
 HTML_MARKER = "<!-- zmd2html:auto -->"
+HTML_MARKER_PREFIX = "<!-- zmd2html:auto"
 MD_MARKER_PREFIX = "<!-- html2md:auto source="
 PANDOC_VERSION = "3.7.0.2"
 
@@ -41,9 +44,23 @@ def generated(path: Path, marker: str) -> bool:
     return path.exists() and marker in path.read_text(encoding="utf-8", errors="replace")[:512]
 
 
+def digest(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def without_marker(content: bytes) -> bytes:
+    return re.sub(br"<!-- (?:zmd2html:auto|html2md:auto)[^>]*-->(?:\r?\n)*", b"", content, count=1)
+
+
 def expected(root: Path, source: Path) -> bytes:
+    source_hash = digest(source.read_bytes())
     if source.suffix == ".md":
-        return run([str(root / "tools/zmd2html"), str(source)], root)
+        output = run([str(root / "tools/zmd2html"), str(source)], root)
+        marker = (
+            f"<!-- zmd2html:auto source-sha256={source_hash} "
+            f"body-sha256={digest(without_marker(output))} -->"
+        ).encode()
+        return output.replace(HTML_MARKER.encode(), marker, 1)
     body = run(
         [
             "pandoc",
@@ -55,8 +72,26 @@ def expected(root: Path, source: Path) -> bytes:
         ],
         root,
     )
-    marker = f"<!-- html2md:auto source={source.relative_to(root).as_posix()} -->\n\n".encode()
+    marker = (
+        f"<!-- html2md:auto source={source.relative_to(root).as_posix()} "
+        f"source-sha256={source_hash} body-sha256={digest(body)} -->\n\n"
+    ).encode()
     return marker + body
+
+
+def changes_since_sync(source: Path, destination: Path) -> tuple[bool, bool]:
+    if not destination.exists():
+        return True, False
+    content = destination.read_bytes()
+    marker = re.search(
+        rb"source-sha256=([0-9a-f]{64}) body-sha256=([0-9a-f]{64})",
+        content[:1024],
+    )
+    if not marker:
+        return True, False
+    source_changed = digest(source.read_bytes()) != marker.group(1).decode()
+    destination_changed = digest(without_marker(content)) != marker.group(2).decode()
+    return source_changed, destination_changed
 
 
 def authority(files: dict[str, Path]) -> tuple[Path, Path]:
@@ -68,7 +103,7 @@ def authority(files: dict[str, Path]) -> tuple[Path, Path]:
         return html, html.with_suffix(".md")
     assert md and html
     md_generated = generated(md, MD_MARKER_PREFIX)
-    html_generated = generated(html, HTML_MARKER)
+    html_generated = generated(html, HTML_MARKER_PREFIX)
     if html_generated and not md_generated:
         return md, html
     if md_generated and not html_generated:
@@ -104,26 +139,69 @@ def main() -> int:
             "run tools/install-pandoc-docs and add its path"
         )
 
-    stale: list[Path] = []
-    for files in documents(root).values():
-        source, destination = authority(files)
+    pairs = documents(root)
+    stale: list[tuple[Path, Path, bytes]] = []
+    conflicts: list[tuple[Path, Path]] = []
+    if not sys.stderr.isatty():
+        print("checking documentation pairs...", file=sys.stderr, flush=True)
+    for files in pairs.values():
+        try:
+            source, destination = authority(files)
+        except SystemExit:
+            md, html = files.get(".md"), files.get(".html")
+            if md and html:
+                conflicts.append((md, html))
+                continue
+            raise
+        if sys.stderr.isatty():
+            sys.stderr.write(f"\r\033[Kchecking: {source.relative_to(root)}")
+            sys.stderr.flush()
         content = expected(root, source)
         if destination.exists() and destination.read_bytes() == content:
             continue
-        stale.append(destination)
+        source_changed, destination_changed = changes_since_sync(source, destination)
+        if source_changed and destination_changed:
+            conflicts.append((source, destination))
+            continue
+        changed = source if source_changed else destination
+        stale.append((changed, destination, content))
         if args.write:
             replace(destination, content)
-            print(f"wrote {destination.relative_to(root)}", flush=True)
+    if sys.stderr.isatty():
+        sys.stderr.write("\r\033[K")
+        sys.stderr.flush()
 
     if args.write:
-        print(f"documentation pairs: updated ({len(stale)} changed)", flush=True)
+        for _changed, destination, _content in stale:
+            print(f"wrote {destination.relative_to(root)}", flush=True)
+        print(f"documentation pairs: updated ({len(stale)} changed); checking", flush=True)
         return subprocess.run([sys.executable, __file__, "--check"], cwd=root).returncode
+    fine = len(pairs) - len(stale) - len(conflicts)
     if stale:
-        print("sync-docs: missing or stale generated files:", file=sys.stderr)
-        for path in stale:
-            print(f"  {path.relative_to(root)}", file=sys.stderr)
+        verb = "has" if len(stale) == 1 else "have"
+        print(f"{fine}/{len(pairs)} were fine, {len(stale)} {verb} changed and not synced:")
+        for changed, _destination, _content in stale:
+            print(changed.relative_to(root))
+    elif conflicts:
+        print(f"{fine}/{len(pairs)} were fine.")
+    if conflicts:
+        verb = "has" if len(conflicts) == 1 else "have"
+        print(f"\n{len(conflicts)} {verb} changed in both source docs!\n")
+        for source, destination in conflicts:
+            print(f"{source.relative_to(root)} and {destination.relative_to(root)}")
+    if stale or conflicts:
+        print('\nType "./tools/sync-docs --write" to sync the docs.')
+        if conflicts:
+            if len(conflicts) == 1:
+                source, destination = conflicts[0]
+                print(
+                    "You'll have to figure out how to sync "
+                    f"{source.relative_to(root)} and {destination.relative_to(root)} manually."
+                )
+            else:
+                print("You'll have to figure out how to sync the conflicting pairs manually.")
         return 1
-    print("documentation pairs: current (0 changed)")
+    print(f"{len(pairs)}/{len(pairs)} were fine; all documentation pairs are synced.")
     return 0
 
 

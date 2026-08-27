@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/index.html -->
+<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=59efe11038025c84f07c33366a89d203225fbfbb966f0770e10964c77e38bcc9 body-sha256=f6bd154da78cef43c76cada1956cf4157fc832715366286f49e2f11c5e54eadd -->
 
 # zbmc iDRAC10
 

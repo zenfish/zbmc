@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac9/boot-architecture.html -->
+<!-- html2md:auto source=boxes/idrac9/boot-architecture.html source-sha256=ae9bee400d44f4b140a54e074235142c53c91f78ec16627c4fadac6be473d73b body-sha256=502df64e18603cf72674acb6d819b256012a93e729f9224d046bd804d1be5d6d -->
 
 phd · bmc · dell · idrac9-virtual
 
