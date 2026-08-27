@@ -42,8 +42,8 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 | **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 11m50s |
 | **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | partial - about 6m15s to the last working service |
 | **megarac-hpe** | retained IPMI; Redfish/Web-UI observed but unstable; vendor SSH absent | partial - IPMI has no reliable cold READY time |
-| **supermicro-x14** | ICMP, SSH, IPMI, Web-UI; Redfish not configured | pass - 4m20s |
-| **supermicro-x10** | SSH, IPMI, Redfish, Web-UI plus 60s stable hold; ICMP in direct-LAN mode | pass - 2m38s user-net / 3m40s direct-LAN |
+| **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
+| **supermicro-x10** | user-net (default): forwarded SSH, IPMI, Redfish, Web-UI; direct-LAN: the same plus guest ICMP; 60s stable hold | pass - 2m38s user-net / 3m11s direct-LAN |
 | **idrac9** | ICMP, SSH, IPMI; Redfish and Web-UI are not accepted in the P4 boot | pass - 12m48s |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 

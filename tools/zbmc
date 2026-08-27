@@ -656,7 +656,7 @@ case "$VERB" in
         ZBMC_DIR="$7"; ZBMC_HOST="$8"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
-          if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; zbmc_web; exit; fi
+          if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
           sleep 8
         done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" \
         </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
