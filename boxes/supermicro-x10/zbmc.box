@@ -54,6 +54,21 @@ IPMI_PORT=623
 X10_NET_MODE="${X10_NET_MODE:-user}"
 X10_TAP=ztap-x10
 X10_AUX_TAP=ztap-x10-aux
+_x10_forwarded_port() {
+  local guest_port="$1" line rule port
+  line=$(pgrep -af "^[^ ]*/qemu-system-arm .*hostfwd=udp:$ZBMC_IP:$ZBMC_HOSTPORT-:623" | head -1) || return 1
+  line=${line//,/ }
+  for rule in $line; do
+    case "$rule" in
+      hostfwd=tcp:"$ZBMC_IP":*-:"$guest_port")
+        port=${rule#hostfwd=tcp:$ZBMC_IP:}
+        echo "${port%-:$guest_port}"
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
 if [ "$X10_NET_MODE" = direct ]; then
   SSH_PORT=22
   WEB_PORT=443
@@ -63,8 +78,8 @@ if [ "$X10_NET_MODE" = direct ]; then
   ZBMC_CAPTURE_INTERFACES="br-zbmc $X10_TAP $X10_AUX_TAP"
 else
   X10_NET_MODE=user
-  SSH_PORT=$(_zbmc_pick_port 22 2222 10022)
-  WEB_PORT=$(_zbmc_pick_port 443 8443 6443 10443)
+  SSH_PORT=$(_x10_forwarded_port 22 || _zbmc_pick_port 22 2222 10022)
+  WEB_PORT=$(_x10_forwarded_port 443 || _zbmc_pick_port 443 8443 6443 10443)
   X10_NETMASK=255.255.255.0
   X10_GATEWAY=10.0.2.2
   ZBMC_L2_REQUIRED=0

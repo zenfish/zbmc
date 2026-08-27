@@ -15,6 +15,15 @@ user_mode=$(bash -c '
   printf "%s|%s|%s|%s|%s" "$X10_NET_MODE" "$SSH_PORT" "$WEB_PORT" "$ZBMC_L2_REQUIRED" "$ZBMC_CAPTURE_INTERFACES"
 ' bash "$box")
 [ "$user_mode" = 'user|2222|8443|0|' ]
+active_mode=$(bash -c '
+  _zbmc_resolve_ip(){ echo 10.0.8.10; }
+  _zbmc_pick_port(){ echo "$3"; }
+  _zbmc_lo_alias(){ :; }
+  pgrep(){ printf "%s\n" "123 /qemu-system-arm -net user,hostfwd=udp:10.0.8.10:623-:623,hostfwd=tcp:10.0.8.10:2222-:22,hostfwd=tcp:10.0.8.10:6443-:443,hostname=qemu"; }
+  . "$1"
+  printf "%s|%s" "$SSH_PORT" "$WEB_PORT"
+' bash "$box")
+[ "$active_mode" = '2222|6443' ]
 direct_mode=$(X10_NET_MODE=direct bash -c '
   _zbmc_resolve_ip(){ echo 10.0.8.10; }
   _zbmc_pick_port(){ echo "$2"; }

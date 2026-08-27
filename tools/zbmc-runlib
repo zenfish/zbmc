@@ -537,7 +537,7 @@ _zr_wait_ready(){
         _zr_guest=1
       fi
     fi
-    if [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+    if [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
       _zr_l2=1
       case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=ICMP;; esac
       _zr_event ICMP ready "$ZBMC_IP answers ICMP; $(_zr_expected ICMP)"

@@ -856,7 +856,9 @@ PY
         echo "$(_colored_state FAILED) ($_rmsg)"
       fi
       if [ "$_running" = 0 ]; then break; fi
-      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+      if [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then
+        _l2st=na; _l2nt=
+      elif ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
         _l2st=ok; _l2nt="$ZBMC_IP answers ICMP"
       else
         _l2st=fail; _l2nt="no ICMP reply from $ZBMC_IP"
@@ -921,8 +923,8 @@ PY
       _classify(){
         local raw="$1" service="$2"
         if _disabled "$service"; then _state=N/A; _why=disabled
-        elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
         elif [ "$service" = l2 ] && [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then _state=N/A; _why="not configured"
+        elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
         elif [ "$service" = console ]; then
           if [ "$raw" = ok ]; then _state=AVAILABLE; _why="operator access"
           elif _required console; then
