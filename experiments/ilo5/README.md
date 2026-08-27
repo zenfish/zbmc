@@ -7,6 +7,9 @@ This is the next zoo target, but it is **not yet a `zbmc` fleet box**. The prese
 The newest local firmware package that the published Airbus keys fully decrypt is iLO 5 v2.41. Its `bootloader1_main.raw` and `kernel_main.bin` are byte-identical to v2.33, the version used to develop the Renode model.
 
 ```bash
+python3 -m venv work/deps/ilo5-python
+work/deps/ilo5-python/bin/pip install pycryptodome==3.23.0
+export PATH="$PWD/work/deps/ilo5-python/bin:$PATH"
 ./tools/install-renode-runtime --write
 ./tools/unpack-ilo5 /full/path/ilo5_241_linux.rpm
 ./tools/unpack-ilo5 --write /full/path/ilo5_241_linux.rpm work/ilo5-241

@@ -15,8 +15,10 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install test dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu python3-pycryptodome
-          echo /usr/bin >> "$GITHUB_PATH"
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu python3-venv
+          /usr/bin/python3 -m venv work/ci-python
+          work/ci-python/bin/pip install pycryptodome==3.23.0
+          echo "$PWD/work/ci-python/bin" >> "$GITHUB_PATH"
       - name: Install pinned document converter
         run: |
           tools/install-pandoc-docs

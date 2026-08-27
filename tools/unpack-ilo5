@@ -30,7 +30,7 @@ sha256() {
 bad=0
 for tool in git python3; do need "$tool" || bad=1; done
 python3 -c 'from Crypto.Cipher import AES' 2>/dev/null || {
-  echo "missing Python Crypto module (Debian: apt install python3-pycryptodome)" >&2
+  echo "missing Python Crypto module (install PyPI pycryptodome in the active Python environment)" >&2
   bad=1
 }
 case "$IN" in

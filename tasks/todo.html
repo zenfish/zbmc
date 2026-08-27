@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=8b21d7aa45d713144ee16979b33744a60649ee1b082323ed7d0e301f06acf39f body-sha256=36654868f05b6b1f051e5bf2b5945ff9ee202106be924e482cc0901f0fa170cf -->
+<!-- zmd2html:auto source-sha256=7af253c7c5f12fce5b1702ccb0aa66c8f86403eba07af0a07858153d9af466a5 body-sha256=6fa9c7600b0da9651ecc9c39f0f63e600503387988e1fe3ab6c552ef6df90c93 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -50,10 +50,9 @@
 follow-up GitHub Actions logs.</label></li>
 <li><label><input type="checkbox" checked="" />Reproduce the new iLO5
 contract locally.</label></li>
-<li><label><input type="checkbox" checked="" />Add the missing Ubuntu
-test dependency.</label></li>
-<li><label><input type="checkbox" checked="" />Select Ubuntu's Python
-after installing its Crypto package.</label></li>
+<li><label><input type="checkbox" checked="" />Replace Ubuntu's
+incompatible <code>Cryptodome</code> package with an isolated PyPI
+<code>Crypto</code> environment.</label></li>
 <li><label><input type="checkbox" checked="" />Add targeted
 <code>.md</code> / <code>.html</code> arguments to
 <code>tools/sync-docs</code>.</label></li>
@@ -64,12 +63,13 @@ contract suites and inspect the final diff.</label></li>
 </ul>
 <h2 id="review">Review</h2>
 <p>The original GitHub run failed because the new iLO5 contract requires
-<code>Crypto.Cipher.AES</code>, while the clean Ubuntu runner installed
-only the cross-compiler. The follow-up run proved that
-<code>python3-pycryptodome</code> installed successfully but the runner
-still selected a <code>/usr/local</code> Python that cannot see Ubuntu's
-module. The workflow now prepends <code>/usr/bin</code> after installing
-the package so subsequent steps use the matching system Python.</p>
+<code>Crypto.Cipher.AES</code>, while the clean runner lacked that
+module. Two follow-up runs proved Ubuntu's
+<code>python3-pycryptodome</code> package was installed and its Python
+selected, but Debian-family packaging exposes <code>Cryptodome</code>,
+not the upstream toolbox's <code>Crypto</code> namespace. CI now creates
+an isolated venv with pinned PyPI <code>pycryptodome</code> 3.23.0, and
+the iLO5 reproduction guide uses the same dependency boundary.</p>
 <p><code>tools/sync-docs</code> also accepts one or more
 <code>.md</code> or <code>.html</code> selectors, preserves those
 selectors during post-write verification, and leaves its no-argument

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=28cdcd89f05f7c7ebeb59119faf3c0ea32886de77a332723313566528930ae7d body-sha256=94cea6757cde4a7d28a31d9e10fa350b09859ea6d47a275b0c72f1b67edc452e -->
+<!-- zmd2html:auto source-sha256=74e9f3d059ad084f53f68fbf0d80cf10ded69ed1297f46aa4a87aebdb6faf21e body-sha256=eabf0e85b858788eb56ede707b0cd9a1322bf5cebf43f34febbe8eb0278171d5 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>HPE iLO 5: Renode experiment</title>
@@ -56,7 +56,10 @@ run.</p>
 fully decrypt is iLO 5 v2.41. Its <code>bootloader1_main.raw</code> and
 <code>kernel_main.bin</code> are byte-identical to v2.33, the version
 used to develop the Renode model.</p>
-<pre class="bash"><code>./tools/install-renode-runtime --write
+<pre class="bash"><code>python3 -m venv work/deps/ilo5-python
+work/deps/ilo5-python/bin/pip install pycryptodome==3.23.0
+export PATH=&quot;$PWD/work/deps/ilo5-python/bin:$PATH&quot;
+./tools/install-renode-runtime --write
 ./tools/unpack-ilo5 /full/path/ilo5_241_linux.rpm
 ./tools/unpack-ilo5 --write /full/path/ilo5_241_linux.rpm work/ilo5-241
 ./experiments/ilo5/run-renode work/ilo5-241/modules</code></pre>
