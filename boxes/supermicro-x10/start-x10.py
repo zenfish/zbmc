@@ -78,7 +78,7 @@ if os.path.exists(GDB_SOCK):
 # to stdio). -display none suppresses the GUI; -monitor none avoids the monitor
 # prompt on stdio.
 qemu_cmd = [
-    "sudo", "-n", QEMU,
+    "sudo", "-n", "env", "ZBMC_QEMU_DOCKER_DETACH=1", QEMU,
     "-m", "128", "-M", "supermicrox11-bmc",
     "-display", "none", "-monitor", "none",
     "-qmp", f"unix:{QMP_SOCK},server=on,wait=off",
