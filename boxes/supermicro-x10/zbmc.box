@@ -63,8 +63,8 @@ if [ "$X10_NET_MODE" = direct ]; then
   ZBMC_CAPTURE_INTERFACES="br-zbmc $X10_TAP $X10_AUX_TAP"
 else
   X10_NET_MODE=user
-  SSH_PORT=$(_zbmc_pick_port 22 2222)
-  WEB_PORT=$(_zbmc_pick_port 443 8443)
+  SSH_PORT=$(_zbmc_pick_port 22 2222 10022)
+  WEB_PORT=$(_zbmc_pick_port 443 8443 6443 10443)
   X10_NETMASK=255.255.255.0
   X10_GATEWAY=10.0.2.2
   ZBMC_L2_REQUIRED=0
