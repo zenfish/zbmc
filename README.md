@@ -42,13 +42,18 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 | **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | partial - about 6m15s to the last working service |
 | **megarac-hpe** | IPMI; Redfish/Web-UI observed but unstable; SSH absent | partial - no reliable READY time |
 | **supermicro-x14** | ICMP, SSH, IPMI, Web-UI; Redfish not configured | pass - 4m20s |
-| **supermicro-x10** | ICMP, SSH, IPMI, Redfish, Web-UI plus 60s stable hold | pass - 3m40s |
+| **supermicro-x10** | SSH, IPMI, Redfish, Web-UI plus 60s stable hold; ICMP in direct-LAN mode | pass - 2m38s user-net / 3m40s direct-LAN |
 | **idrac9** | ICMP, SSH, IPMI, Web-UI; Redfish not configured in the P4 boot | pass - 12m48s |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 
 `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. 
 Warm snapshots are explicit with `zbmc <name> start --warm` because QEMU machine-version drift can 
 invalidate a checkpoint.
+
+Supermicro X10 defaults to QEMU user networking so it works on cloud and other hosts that cannot
+bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTPS ports are shown by
+`zbmc supermicro-x10 status -v`. Set `X10_NET_MODE=direct` in `zbmc.conf` only when the selected X10
+address is routable on the host LAN; direct mode adds ICMP and TAP packet capture.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 

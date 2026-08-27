@@ -172,7 +172,7 @@ _zr_capture_start(){
     socat -u UDP-LISTEN:"$ZBMC_SYSLOG_PORT",reuseaddr,fork - \
       >"$ZBMC_RUN_DIR/syslog-udp.log" 2>"$ZBMC_RUN_DIR/syslog-collector.log" &
     printf '%s\n' "$!" >"$ZBMC_RUN_DIR/syslog-collector.pid"
-    _zr_event SYSLOG active "Debby UDP syslog collector listening on port $ZBMC_SYSLOG_PORT"
+    _zr_event SYSLOG active "host UDP syslog collector listening on port $ZBMC_SYSLOG_PORT"
   elif [ -n "${ZBMC_SYSLOG_PORT:-}" ]; then
     _zr_event SYSLOG skipped 'socat unavailable; syslog packet capture remains in host pcap'
   fi

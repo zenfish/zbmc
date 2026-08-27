@@ -3,6 +3,7 @@ set -euo pipefail
 
 patch="$(dirname "$0")/../qemu/patches/ftgmac100-rx-descriptor-reuse.patch"
 box="$(dirname "$0")/../boxes/supermicro-x10/zbmc.box"
+driver="$(dirname "$0")/../boxes/supermicro-x10/start-x10.py"
 
 test -f "$patch"
 grep -q 'qemu/runtime/qemu-system-arm' "$box"
@@ -34,6 +35,7 @@ direct_mode=$(X10_NET_MODE=direct bash -c '
 [ "$direct_mode" = 'direct|22|443|1|br-zbmc ztap-x10 ztap-x10-aux' ]
 grep -Fq "_zbmc_lo_alias \"\$ZBMC_IP\"" "$box"
 grep -Fq "hostfwd=udp:\$ZBMC_IP:\$ZBMC_HOSTPORT-:623" "$box"
+grep -Fq '"10.0.0.24" if NET_MODE == "direct" else "10.0.2.2"' "$driver"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
 test "$(grep -c '^@@ ' "$patch")" -eq 1
 test "$(grep -Ec '^[+-][^+-]' "$patch")" -eq 3

@@ -56,6 +56,7 @@ GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP if NET_MODE == "direct" else "1
 NETMASK = os.environ.get("X10_NETMASK", "255.0.0.0" if NET_MODE == "direct" else "255.255.255.0")
 GATEWAY = os.environ.get("X10_GATEWAY", "10.0.0.1" if NET_MODE == "direct" else "10.0.2.2")
 IFACE = os.environ.get("X10_IFACE", "eth1" if NET_MODE == "direct" else "eth0")
+SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.0.24" if NET_MODE == "direct" else "10.0.2.2")
 import shutil as _sh
 QEMU     = os.environ.get("X10_QEMU",
            _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
@@ -241,10 +242,10 @@ if GUEST_IP not in child.before:
     print(f"NET_CONFIG_FAILED final assignment missing on {IFACE}", flush=True)
     qemu_proc.kill(); sys.exit(1)
 
-# Preserve both a bounded local ring and a Debby-side copy when the legacy
+# Preserve both a bounded local ring and a host-side copy when the legacy
 # BusyBox logging tools are present.  The remote stream is supplemental: it can
 # disappear with the network, while the guest ring remains available on serial.
-child.sendline("if [ -x /sbin/syslogd ]; then killall syslogd 2>/dev/null; /sbin/syslogd -C256 -l 8 -L -R 10.0.0.24:5514 2>/dev/null || /sbin/syslogd -C256 -l 8 -L 2>/dev/null; fi")
+child.sendline(f"if [ -x /sbin/syslogd ]; then killall syslogd 2>/dev/null; /sbin/syslogd -C256 -l 8 -L -R {SYSLOG_HOST}:5514 2>/dev/null || /sbin/syslogd -C256 -l 8 -L 2>/dev/null; fi")
 child.expect(r"/ #", timeout=10)
 child.sendline("if command -v klogd >/dev/null 2>&1; then killall klogd 2>/dev/null; klogd -c 8 2>/dev/null; fi; logger -p daemon.debug 'ZBMC instrumentation logging enabled'")
 child.expect(r"/ #", timeout=10)
