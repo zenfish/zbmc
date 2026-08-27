@@ -4,11 +4,13 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/repo/tools" "$tmp/repo/boxes"
+cp "$repo/tools/zbmc" "$tmp/repo/tools/zbmc"
 printf 'openbmc 10.0.7.10\n' >"$tmp/zhosts.txt"
 
 resolve(){
   ZBMC_SOURCE_ONLY=1 ZHOSTS_FILE="$tmp/zhosts.txt" bash -c \
-    '. "$1/tools/zbmc"; _zbmc_resolve_ip openbmc 10 192.0.2.10' _ "$repo"
+    '. "$1/tools/zbmc"; _zbmc_resolve_ip openbmc 10 192.0.2.10' _ "$tmp/repo"
 }
 
 [ "$(resolve)" = 10.0.7.10 ]
