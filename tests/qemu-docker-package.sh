@@ -146,7 +146,7 @@ EOF
 chmod +x "$fixture/bin/uname" "$fixture/bin/timeout" "$fixture/bin/install" "$fixture/bin/docker"
 
 manifest_tag() {
-  python3 - "$@" <<'PY'
+  python3 - "$repo/qemu/Dockerfile" "$@" <<'PY'
 import hashlib
 import pathlib
 import sys
@@ -159,6 +159,8 @@ for manifest in sys.argv[1:]:
 print(f"zbmc-qemu:{digest.hexdigest()}")
 PY
 }
+
+grep -Fq 'FROM debian:13-slim@sha256:' "$repo/qemu/Dockerfile"
 
 export DOCKER_LOG="$fixture/docker.log" TIMEOUT_LOG="$fixture/timeout.log"
 export DIST_SHA="$dist_sha" DIST_DATA_SHA="$dist_data_sha"

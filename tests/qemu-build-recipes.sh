@@ -26,6 +26,15 @@ grep -Fq "$repo/qemu/patches/ftgmac100-rx-descriptor-reuse.patch" <<<"$arm_plan"
 grep -Fq 'Machines    : ast2600-evb gb200nvl-bmc npcm750-evb supermicrox11-bmc' <<<"$arm_plan"
 grep -Fq 'Boxes       : idrac9 megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14' <<<"$arm_plan"
 
+common_path='ZBMC_QEMU=/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm'
+common_sha='ZBMC_QEMU_SHA256=ed299dae28d00252854335939380a1d9410f284fc3b918833fc783e5e6ca682c'
+for box in idrac9 megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14; do
+  grep -Fxq "$common_path" "$repo/boxes/$box/zbmc.box"
+  grep -Fxq "$common_sha" "$repo/boxes/$box/zbmc.box"
+done
+grep -Fxq 'ZBMC_QEMU=/usr/bin/qemu-system-arm' "$repo/boxes/advantech-asmb787/zbmc.box"
+grep -Fxq 'ZBMC_QEMU_SHA256=584e8a49021e62dabb14ada6407230c8f632cfcade42ef049d19c346ab1314b2' "$repo/boxes/advantech-asmb787/zbmc.box"
+
 python3 - "$repo/qemu/packages/debian-13-qemu-10.0.11.json" <<'PY'
 import json
 import sys

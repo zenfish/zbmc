@@ -41,7 +41,7 @@ docker_run() {
 for manifest in "$@"; do
   [ -f "$manifest" ] || { echo "manifest not found: $manifest" >&2; exit 2; }
 done
-manifest_digest="$(python3 - "$@" <<'PY'
+manifest_digest="$(python3 - "$ROOT/qemu/Dockerfile" "$@" <<'PY'
 import hashlib
 import pathlib
 import sys
