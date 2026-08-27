@@ -23,16 +23,18 @@ IPMI_USER=root
 IPMI_PW=0penBmc
 IPMI_KEY=00
 IPMI_OPTS="-C 17"   # gb200 net-ipmid offers cipher-17 only
-SSH_PORT=$(_zbmc_pick_port 22 2222)
-WEB_PORT=$(_zbmc_pick_port 443 8443)
+SSH_PORT=22
+WEB_PORT=443
 IPMI_PORT=623
 
-PIDF=/tmp/zbmc-nvidia-obmc.pid
-LOG=/tmp/zbmc-nvidia-obmc-console.log
-SOCK=/tmp/zbmc-nvidia-obmc-serial.sock
-CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
-ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+PIDF="$ZBMC_DIR/zbmc-nvidia-obmc.pid"
+LOG="$ZBMC_DIR/nvidia-obmc-console.log"
+SOCK="$ZBMC_DIR/nvidia-obmc-serial.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/nvidia-obmc-uart.log}"
+ZBMC_QEMU=/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm
+ZBMC_QEMU_SHA256=ed299dae28d00252854335939380a1d9410f284fc3b918833fc783e5e6ca682c
 ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=gb200nvl-bmc
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 
@@ -47,7 +49,7 @@ zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
   : > "$LOG"; $SUDO rm -f "$SOCK" 2>/dev/null
   # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
-  $SUDO nohup "$ZBMC_QEMU" -M gb200nvl-bmc -smp 2 -m 1G \
+  $SUDO nohup "$ZBMC_QEMU" -M gb200nvl-bmc -smp 2 -m 1G -display none \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
     -net nic,macaddr=3c:6d:66:14:c8:7a -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \

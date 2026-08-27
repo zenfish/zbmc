@@ -16,7 +16,7 @@ check_box(){
   [ "$runtime" != "$firmware" ]
   [[ " $required " == *' webui '* ]]
   if [ -n "$machine" ]; then
-    [ "$qemu" = /home/zen/opt/qemu-11/bin/qemu-system-arm ]
+    [ "$qemu" = /home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm ]
     [ "$major" = 11 ]
     [ "$actual_machine" = "$machine" ]
   fi

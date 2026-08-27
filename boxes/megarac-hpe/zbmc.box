@@ -51,8 +51,10 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/megarac-hpe}"
 # separate guest-sshd bug, not a slirp issue — see header.)
 ZBMC_IP=$(_zbmc_resolve_ip megarac-hpe 40 10.0.6.66)
 ZBMC_HOST=megarac-hpe
-ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU=/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm
+ZBMC_QEMU_SHA256=ed299dae28d00252854335939380a1d9410f284fc3b918833fc783e5e6ca682c
 ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_QEMU_RESTART_GRACE=15
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
@@ -67,14 +69,14 @@ IPMI_OPTS=""
 IPMI_T=20        # RMCP+ RAKK under armv7 emulation is slow; short timeouts look dead
 SSH_USER=sysadmin
 SSH_PW=
-SSH_PORT=$(_zbmc_pick_port 22 2222)
+SSH_PORT=22
 TELNET_PORT=$(_zbmc_pick_port 23 2323)
 IPMI_PORT=623
-WEB_PORT=$(_zbmc_pick_port 443 8443)
+WEB_PORT=443
 
-PIDF=/tmp/zbmc-megarac-hpe.pid
-LOG="$ZBMC_DIR/svc.log"
-CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
+PIDF="$ZBMC_DIR/zbmc.pid"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
+LOG="$CONSOLE_LOG"
 SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
 # boot: background the service boot (real init + net) bound to the box's real IP on standard ports
@@ -155,7 +157,7 @@ zbmc_ipmi() {
 }
 zbmc_ipmi_health() {
   if zbmc_ipmi mc info | grep -q 'GIGA-BYTE\|Manufacturer'; then
-    echo "AUTH OK (zipmi RMCP+ admin/superuser; Gigabyte MfgID 15370)"; return 0
+    echo "AUTH OK (zipmi RMCP+; Gigabyte MfgID 15370)"; return 0
   else echo "no answer (still booting? RMCP+ is slow under emulation — IPMI_T=$IPMI_T)"; return 1; fi
 }
 # ssh: dropbear on port 22, sysadmin/blank (musl soft-float ARMv5T static; -B blank-pw flag).
