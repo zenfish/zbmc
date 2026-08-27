@@ -1,102 +1,72 @@
 ---
 name: megarac-virtualize
-description: Use when you have an AMI MegaRAC (SP-X, ASPEED AST2500/AST2600) BMC firmware image and want to unpack it and boot it under QEMU as a virtual BMC for security research — covers the "encrypted" misnomer, FMH/SquashFS/JFFS2 extraction, the IPMIMain SIGSEGV fix, mtdparts matching, and the NC-SI networking wall. Also triggers on "virtualize a BMC", "boot vendor firmware in qemu", "unpack .ima/.ima_enc/MegaRAC firmware".
+description: Use when unpacking or adapting authorized AMI MegaRAC SP-X firmware for zbmc. Covers raw FMH images versus HPM.1 wrappers, safe extraction and repacking, per-firmware /conf and IPMIMain reconstruction, AST2600 NC-SI limits, injected-access labeling, and current Advantech/HPE acceptance.
 ---
 
-# Virtualizing an AMI MegaRAC BMC under QEMU
+# Virtualize AMI MegaRAC firmware
 
-You have a vendor BMC firmware image (AMI MegaRAC SP-X on an ASPEED AST2600, e.g. Advantech ASMB-xxx,
-HPE Cray XD670, many Gigabyte/Supermicro boards). Goal: unpack it and boot it under QEMU `ast2600-evb`
-to a console/root shell so the OOB stack (IPMI, Redfish, web UI) can be researched without hardware.
+For current boxes, use the packaged x86_64 Linux runtime and descriptor:
 
-Read [`from-firmware-to-bare-metal.md`](../../docs/from-firmware-to-bare-metal.md) for the full field
-report with exact bytes and dead-ends. This skill is the checklist.
+```bash
+./build.sh advantech-asmb787   # or: megarac-hpe
+sudo ./tools/zbmc advantech-asmb787 start
+./tools/zbmc advantech-asmb787 status -v
+./tools/zbmc advantech-asmb787 console
+```
 
-## When to use
-- Input is an AMI MegaRAC firmware blob (`.ima`, `.ima_enc`, `.bin`, `.hpm`, or a raw flash dump).
-- You want a bootable virtual BMC, not just to read files out of the image.
-- Prefer this over generic "run binwalk" — MegaRAC has specific traps binwalk silently fails on.
+Do not launch an arbitrary `qemu-system-arm`. The descriptors pin and validate the exact executable,
+version, SHA-256, machine, and QMP startup. Do not expose a patched MegaRAC guest outside an isolated lab.
 
-## Prerequisites
-`qemu-system-arm` (≥8, tested on 11.0.0), `squashfs-tools` (unsquashfs/mksquashfs), `u-boot-tools`
-(dumpimage), `jefferson` (pip, JFFS2), `dtc`, `python3`. The `tools/unpack-ami` script in this repo
-codifies the extraction.
+## Classify the input first
 
-## Workflow
+- Linear `.ima`, `.ima_enc`, `.img`, or raw `.bin`: use `tools/unpack-ami`. An `encrypted` filename is
+  often a production-label misnomer; distinguish compression from encryption by structure and magic,
+  not entropy alone.
+- PICMG HPM.1 `.hpm`: it is a wrapper, not a linear NOR image. Follow
+  `boxes/megarac-hpe/build-from-hpm.sh` to carve verified regions and reconstruct flash. Never truncate
+  or attach the HPM itself as NOR.
+- Scan for FMH `$MODULE$`, SquashFS `hsqs`, JFFS2 `85 19`, and FIT/DTB `d0 0d fe ed`. `binwalk found
+  nothing` is not evidence that the filesystems are absent.
 
-### 1. Identify — do NOT trust the extension or `file(1)`
-- `.ima_enc` / "encrypted" is usually a **misnomer**. Verify: dump the first 256 bytes (ARM vectors +
-  U-Boot markers like `0xdeadbeef` = plaintext) and compute a **per-MB entropy profile**. A solid
-  ~8.0 bits/byte *everywhere* = maybe encrypted; ~8.0 in one region with plaintext elsewhere =
-  **compressed**, not encrypted. Compression and AES look identical on entropy alone — distinguish by
-  finding magic bytes inside.
+`tools/unpack-ami` writes `fw-blobs/`, extracted trees under `fw-filesystems/`, JFFS2 output under
+`fw-jffs2/`, FIT material under `fw-fit/`, and `MANIFEST.txt`. Install Jefferson with `pipx`, not a
+system `pip`, on PEP 668 Debian hosts.
 
-### 2. Unpack — scan magics yourself, don't rely on binwalk
-- **Never trust "binwalk found nothing"** — degraded signature DBs skip SquashFS. Scan for magics:
-  `hsqs` (SquashFS LE), `sqsh` (BE), `0x1985` = bytes `85 19` (JFFS2), `d00dfeed` (FIT/DTB),
-  `$MODULE$` (AMI FMH header, 64 KB-aligned).
-- **SquashFS**: read exact size from `bytes_used` at superblock offset `0x28` (u64 LE), compressor at
-  `0x14` (u16); carve and `unsquashfs`. FMH module payloads start `0x10000` after the `$MODULE$` header.
-- **JFFS2**: `jefferson` auto-detects endianness **per file** and guesses **big-endian on the whole
-  image → 0 nodes**. Carve the single JFFS2 region out first (it's usually LE) then run jefferson on it.
-  No `--little-endian` flag exists; isolation is the fix.
-- Just run `tools/unpack-ami <fw>` — it does all of the above and emits `rootfs/`, `www/`, JFFS2 trees,
-  the FIT, and any signing key.
+## Reconstruct the minimum environment
 
-### 3. Extract the kernel + DTB from the FIT
-- QEMU's `-kernel` **cannot unpack a FIT** (`d00dfeed`). Use dumpimage:
-  ```
-  dumpimage -l osimage.itb                          # find image indices
-  dumpimage -T flat_dt -p 0 -o kernel.Image osimage.itb   # index 0 = Linux kernel
-  dumpimage -T flat_dt -p 1 -o board.dtb    osimage.itb   # index 1 = the *_a1 dtb
-  ```
+1. Extract the kernel and DTB from a FIT with `dumpimage`; QEMU `-kernel` cannot unpack the FIT.
+2. Determine partition numbering from the image's own mount configuration. MegaRAC often mounts by
+   `mtdblockN`, so names alone are insufficient.
+3. Seed `/conf` only after its backing filesystem is mounted and before its first consumer. Create the
+   exact `/conf/BMC -> BMC1/<platform>` target required by that firmware.
+4. Disable only hardware interfaces proven absent from the emulated machine. Advantech and HPE require
+   different KCS/interface masks; there is no universal `IPMI.conf` edit.
+5. Repack from a clean output with `mksquashfs ... -noappend`. Keep the original filesystem immutable.
+6. Copy the canonical flash to a per-run image before launch. MegaRAC writes `/conf`; attaching the
+   baseline writable destroys reproducibility.
 
-### 4. Patch the rootfs for IPMIMain (or it SIGSEGV/reboot-loops)
-Two fixes (see `box/qemu-patch-rootfs.sh`), both from Ghidra RE of IPMIMain:
-- **`/conf/BMC` symlink**: IPMIMain opens literal `/conf/BMC/IPMI.conf`. Inject into
-  `etc/init.d/ipmistack` (before each IPMIMain launch): seed `/conf` from `/etc/defconfig`, then
-  `ln -sfn BMC1/<platform> /conf/BMC`, gated on a `/conf/AMI` sentinel.
-- **Trim `IPMI.conf`** to hardware QEMU models — keep LAN/UDS/KCS; set
-  `SUPPORT_SMM_IFC=0 SUPPORT_SOL_IFC=0` (and SERIAL/SMBUS/BT/IPMB=0), and `NM_IPMB_BUS=0xFF`
-  (else the Node-Manager guard self-stops). Repack with `mksquashfs … -comp xz -all-root`.
+The retained vendor component versus substitute distinction is mandatory. `/conf` seeding, interface
+masking, and board-state reconstruction can preserve the vendor IPMIMain path. HPE's direct root console,
+SMASH replacement, blank-password Dropbear, and unauthenticated telnet are injected operator-access
+substitutions; they do not prove vendor SSH, SMASH, or authentication behavior.
 
-### 5. Boot
-- Machine `-M ast2600-evb`, console **`ttyS4`** (AST2600 = UART5), **`maxcpus=1`** (CPU1 faults).
-- **Flash size must be EXACT**: QEMU's `m25p80` for `w25q512jv` wants precisely 64 MiB — `truncate -s
-  67108864 mtdflash.bin` (vendor images are often a few hundred bytes over).
-- **mtdparts numbering must match `/etc/dupfstab`** (MegaRAC's `mountallapp` mounts by `mtdblockN`, not
-  name). If your image is a linear NOR, point partitions at real offsets with `@offset` so each lands on
-  its filesystem magic. Read `/etc/dupfstab` in the rootfs to get the required order.
-  ```
-  qemu-system-arm -M ast2600-evb -m 1024 -nographic \
-    -kernel kernel.Image -dtb board.dtb -initrd rootfs.sqfs \
-    -drive file=mtdflash.bin,format=raw,if=mtd \
-    -net nic -net user,hostfwd=tcp::PORT-:443,hostfwd=udp::PORT-:623 \
-    -append "console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs \
-             ramdisk_size=131072 mtdparts=<...> maxcpus=1 rootwait"
-  ```
-- Expect a `login:` in ~2 min; default MegaRAC console cred is often `sysadmin` / `superuser` (uid 0).
+## Network and acceptance
 
-### 6. Network — check the kernel version FIRST
-MegaRAC's ftgmac is usually **NC-SI** (`use-ncsi` in DTB). Important facts:
-- **QEMU already implements the NC-SI responder internally** — it does NOT forward `0x88F8` frames to any
-  netdev. So an *external* NC-SI responder is impossible; don't build one. Verify with a socket-netdev
-  sniff (you'll see zero frames).
-- Whether the link comes up is a **guest-kernel** property. Newer AMI kernels (~5.4.184) negotiate with
-  QEMU's responder and get a slirp DHCP lease → SSH/Redfish/IPMI work. Older ones (~5.4.11) have a
-  customised driver that forces NC-SI and rejects QEMU's response
-  (`NCSI: Handler for packet type 0x82 returned -19`) → link never comes up.
-- **Diagnose frame-traversal before trying fixes**: `ip addr add 10.0.2.15/24 dev eth0; ping 10.0.2.2`.
-  TX errors / 100% loss = frames aren't leaving the MAC; stop editing the DTB and look at the kernel.
-- Things that do **not** work on the older-kernel case (don't repeat): stripping `use-ncsi`, adding
-  `fixed-link`, enabling the RGMII MAC, `usb-net` (AST2600 EHCI is high-speed-only → full-speed usb-net
-  hangs). Booting the rootfs on a newer kernel gets link-up but then panics in `aspeed_udma_request_chan`
-  (AMI `ast8250` serial driver hardcodes UART-DMA QEMU doesn't model).
-- If you hit the older-kernel wall, ship the box **console-only** and treat network as a kernel-patch /
-  custom-QEMU sub-project. Console access (root shell, all services) is still a complete local surface.
+QEMU's current AST2600 FTGMAC handles NC-SI internally and does not forward NC-SI frames to the netdev.
+An external responder cannot repair this path. Diagnose kernel link negotiation separately from service
+startup, protocol reachability, authentication, and functional behavior.
 
-## Red flags (stop and rethink)
-- "binwalk found nothing" → you skipped SquashFS; scan magics manually.
-- IPMIMain crash-loops → you skipped the `/conf/BMC` symlink or left absent-hw interfaces enabled.
-- eth0 "up" but nothing reachable → NC-SI/kernel wall; don't chase iptables or host ports.
-- About to write an NC-SI responder → QEMU already has one; the issue is the guest kernel.
+Current measured boundaries:
+
+- Advantech ASMB-787: retained serial login only; about 11m50s on the reference host. Vendor userland
+  starts, but external SSH/IPMI/Redfish/Web-UI are not accepted because the old guest rejects QEMU's
+  NC-SI response.
+- HPE XD670 MegaRAC: partial. Retained vendor IPMI works; Redfish/Web-UI are unstable; SSH is absent;
+  there is no reliable full-service READY time. Cold IPMIMain startup may reroll after `MsgHndlr` faults.
+
+Console access proves local operator access, not external management functionality. Accept a service
+only through its declared functional probe and preserve the run evidence and console log.
+
+Read [From Firmware Blob to Bare Metal](../../docs/from-firmware-to-bare-metal.md) for the Advantech
+field report and [Why Virtualizing BMC Firmware Was Hard](../../docs/why-bmc-virtualization-is-hard.html)
+for the evidence taxonomy and current fleet limits.
