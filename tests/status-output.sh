@@ -156,6 +156,7 @@ expect "$down_verbose" "Console log : N/A"
 
 rm "$TEST_ROOT/runs/run-1/termination.json"
 printf '%s\n' "$$" > "$TEST_ROOT/zbmc.pid"
+printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/qemu.pid"
 printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
@@ -373,7 +374,7 @@ if command -v flock >/dev/null 2>&1; then
   chmod a-w "$TEST_ROOT"
   readonly_work=$(TEST_DISCOVER_RUNNING=1 "$fixture/tools/zbmc" fake status 2>&1)
   chmod u+w "$TEST_ROOT"
-  expect "$readonly_work" "QEMU      : UP"
+  expect "$readonly_work" "QEMU      : UP (UNMANAGED)"
   expect "$readonly_work" "Health    : READY"
   [ ! -e "$TEST_ROOT/zbmc.pid" ] || { echo "status wrote discovered PID into ZBMC_DIR" >&2; exit 1; }
   [[ "$readonly_work" != *"Permission denied"* ]] || { printf '%s\n' "$readonly_work" >&2; exit 1; }

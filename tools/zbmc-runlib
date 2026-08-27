@@ -4,6 +4,16 @@
 
 _zr_now(){ date +%s; }
 
+_zr_record_qemu_pid(){
+  printf '%s\n' "$1" >"$PIDF"
+  printf '%s\n' "$1" >"$ZBMC_RUN_DIR/qemu.pid"
+}
+
+_zr_owns_qemu_pid(){
+  [ -n "${ZBMC_RUN_DIR:-}" ] && [ -s "$ZBMC_RUN_DIR/qemu.pid" ] &&
+    [ "$(cat "$ZBMC_RUN_DIR/qemu.pid")" = "$1" ]
+}
+
 _zr_elapsed(){
   local _zr_s=$(( $(_zr_now) - ${ZBMC_RUN_START_EPOCH:-$(_zr_now)} ))
   printf '%02d:%02d' $((_zr_s / 60)) $((_zr_s % 60))
@@ -482,7 +492,7 @@ _zr_wait_ready(){
       done
       if [ -n "$_zr_replacement" ]; then
         _zr_pid="$_zr_replacement"
-        printf '%s\n' "$_zr_pid" >"$PIDF"
+        _zr_record_qemu_pid "$_zr_pid"
         _zr_event QEMU rerolled "launcher replaced pid $_zr_old_pid with $_zr_pid"
         continue
       fi
