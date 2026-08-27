@@ -59,7 +59,7 @@ zbmc_boot() {
     ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV bash "$PROJ_DIR/restore-megarac-hpe.sh" >/dev/null 2>&1   # ~4s to green
   else
     [ -z "${ZBMC_WARM:-}" ] || echo "no compatible snapshot - cold retry (flaky; minutes)" >&2
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" >>"$LOG" 2>&1 || return 1
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" env $PENV TRIES="${TRIES:-6}" bash "$PROJ_DIR/start-megarac-hpe-green.sh" || return 1
   fi
   local n=0 qp=; while [ $n -lt 40 ]; do
     qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1); [ -n "$qp" ] && break

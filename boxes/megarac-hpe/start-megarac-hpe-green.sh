@@ -55,9 +55,12 @@ for t in $(seq 1 "$TRIES"); do
     fi
     # Internal init markers are incomplete on otherwise functional boots. Every
     # 15 seconds, use the same external protocol evidence zbmc status relies on.
-    if [ $((i % 5)) = 0 ] && timeout -s KILL 35 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
-         -H "$IP" -p "$IPMI_PORT" -U admin -P superuser -t 20 mc info 2>/dev/null | grep -q Manufacturer; then
-      ok=1; break
+    if [ $((i % 5)) = 0 ]; then
+      if timeout -s KILL 35 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+           -H "$IP" -p "$IPMI_PORT" -U admin -P superuser -t 20 mc info 2>/dev/null | grep -q Manufacturer; then
+        ok=1; break
+      fi
+      echo "[green] attempt $t: waiting for authenticated IPMI ($((i * 3))s)" >&2
     fi
   done
   if [ "$ok" = 1 ]; then

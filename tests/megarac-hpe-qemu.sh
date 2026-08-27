@@ -18,6 +18,8 @@ for script in boot.sh boot-megarac-hpe.sh boot-megarac-hpe-svc.sh restore-megara
 done
 grep -Fq "IPMIMain is terminating because of SIGSEGV" "$box/start-megarac-hpe-green.sh"
 grep -Fq 'python3 -m zipmi.cli.zipmi' "$box/start-megarac-hpe-green.sh"
+grep -Fq 'waiting for authenticated IPMI' "$box/start-megarac-hpe-green.sh"
+! grep -Fq 'start-megarac-hpe-green.sh" >>"$LOG" 2>&1' "$box/zbmc.box"
 ! grep -Fq 'redfish/v1/' "$box/start-megarac-hpe-green.sh"
 
 echo "MegaRAC-HPE QEMU contract: PASS"
