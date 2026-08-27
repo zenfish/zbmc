@@ -98,7 +98,7 @@ zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boo
 zbmc_ready() {
   local d="$ZBMC_DIR"
   if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/img/sd.img" ]; then
-    [ -f "$d/ckpt/state.gz" ] && { echo "ready (warm snapshot)"; return 0; }
+    [ -f "$d/ckpt/state.gz" ] && { echo "ready (cold boot; use start --warm for snapshot)"; return 0; }
     echo "ready (cold boot only)"; return 0
   fi
   echo "not built — need boot/Image.boot-patched + img/sd.img"; return 1

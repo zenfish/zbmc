@@ -126,7 +126,7 @@ usage(){
   echo "  (just the box and reserved IP:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
-  echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web] [-q PATH|--qemu-path PATH]"
+  echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web] [--warm] [-q PATH|--qemu-path PATH]"
   echo "                    boot and wait through functional readiness (default); record evidence"
   echo "                    --no-wait leaves a supervised readiness watcher running"
   echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
@@ -534,6 +534,7 @@ case "$VERB" in
       --build)  zbmc_build || exit 1;;
       --no-web) do_web=0;;
       --no-wait) _wait=0;;
+      --warm) ZBMC_WARM=1;;
       -v|--verbose) ZBMC_DETAIL=1;;
       -d|--debug) ZBMC_DETAIL=2;;
       --deadline=*) _deadline="${a#*=}";;
@@ -548,7 +549,7 @@ case "$VERB" in
     [[ "$_deadline" =~ ^[0-9]+$ ]] || { echo "zbmc: bad deadline '$_deadline'" >&2; exit 2; }
     _zr_set_effective_services "$([ "$do_web" = 0 ] && echo 1 || echo 0)"
     ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"
-    export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND
+    export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND ZBMC_WARM
     if p=$(running); then
       _zr_load "" 2>/dev/null || _zr_init attach
       _zr_event QEMU reused "already running as pid $p"

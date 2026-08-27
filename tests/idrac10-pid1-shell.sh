@@ -24,6 +24,8 @@ grep -q 'target-path = "/cpus"' "$overlay"
 [ "$(grep -c 'enable-method = "psci"' "$overlay")" -eq 3 ]
 grep -q -- '-device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1' "$box"
 grep -q '/home/zen/opt/qemu-11-idrac10/bin/qemu-system-aarch64' "$box"
+grep -q 'use start --warm for snapshot' "$box"
+grep -q -- '--warm) ZBMC_WARM=1' "$(dirname "$0")/../tools/zbmc"
 grep -q '^+static const USBDescDevice desc_device_net_high' "$qemu_patch"
 [ "$(grep -c '^+.*wMaxPacketSize.*= 0x200' "$qemu_patch")" -eq 4 ]
 [ "$(grep -c '^+.*bInterval.*= 9' "$qemu_patch")" -eq 2 ]
