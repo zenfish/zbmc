@@ -51,22 +51,24 @@ ZHOSTS_FILE="${ZHOSTS_FILE:-$_REPO/zhosts.txt}"
 export ZBMC_POOL="${ZBMC_POOL:-}"
 
 # _zbmc_resolve_ip BOX_NAME POOL_OCTET DEFAULT_IP
-# zhosts.txt is canonical. Legacy config remains as a fallback for old clones.
+# Explicit deployment config overrides the repository's default address map.
 _zbmc_resolve_ip(){
-  local mapped=
-  if [ -f "$ZHOSTS_FILE" ]; then
+  local mapped= varname="ZBMC_IP_$(echo "$1" | tr '-' '_')"
+  local override="${!varname:-}"
+  if [ -n "$override" ]; then
+    echo "$override"
+  elif [ -n "${ZBMC_POOL:-}" ]; then
+    echo "${ZBMC_POOL}.$2"
+  elif [ -f "$ZHOSTS_FILE" ]; then
     mapped=$(awk -v n="$1" '$1 == n { print $2; exit }' "$ZHOSTS_FILE")
     if [ -z "$mapped" ]; then
       echo "zbmc: $1 has no address in $ZHOSTS_FILE" >&2
       return 1
     fi
-    echo "$mapped"; return 0
+    echo "$mapped"
+  else
+    echo "$3"
   fi
-  local varname="ZBMC_IP_$(echo "$1" | tr '-' '_')"
-  local override="${!varname:-}"
-  if [ -n "$override" ]; then echo "$override"
-  elif [ -n "${ZBMC_POOL:-}" ]; then echo "${ZBMC_POOL}.$2"
-  else echo "$3"; fi
 }
 export -f _zbmc_resolve_ip
 
@@ -155,7 +157,7 @@ usage(){
   echo "  build             rebuild the boot image"
   echo "  rename <newname>  rename the box (dispatch name + host alias; qemu machine/image untouched)"
   echo
-  echo "  Address map: $ZHOSTS_FILE (generated commands always use numeric IPs)"
+  echo "  Address priority: per-box override > pool > $ZHOSTS_FILE > descriptor default"
 }
 
 # --- status probe helpers -------------------------------------------------------------
