@@ -6,7 +6,7 @@ RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical se
 
 Invaluable for testing [zipmi](https://github.com/zenfish/zipmi) on a variety of BMCs.
 
-This is my own working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
+This is my own working zoo plus the tools, per-box boot recipes, a full field write-up, and an agent
 skill so others can reproduce it on their own images. C&C very welcome, as are new recipes/methods/improvements
 on what I have here. This turned out to be a bit more black magic than I'd anticipated beating these into
 submission (at least... mostly beaten... still a bit to do.)
