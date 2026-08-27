@@ -57,10 +57,15 @@ fi
 run_dir="$OUTPUT_ROOT/$build_id/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$run_dir"
 current_box=""
+start_job=""
 cleanup() {
   [ -z "$current_box" ] || "${sudo_cmd[@]}" "$ZBMC_TOOL" "$current_box" stop >/dev/null 2>&1 || true
+  if [ -n "$start_job" ]; then
+    kill -TERM "$start_job" >/dev/null 2>&1 || true
+    wait "$start_job" >/dev/null 2>&1 || true
+  fi
 }
-trap 'cleanup; exit 130' INT TERM
+trap 'cleanup; exit 130' HUP INT TERM
 
 printf 'Build    : %s\nBinary   : %s\nEvidence : %s\n' "$build_id" "$binary" "$run_dir"
 failures=0
@@ -71,8 +76,19 @@ for box in "${boxes[@]}"; do
   printf '\n===== %s =====\n' "$box"
 
   set +e
-  "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" start --deadline "$deadline" -q "$binary" 2>&1 | tee "$box_dir/start.log"
-  start_rc="${PIPESTATUS[0]}"
+  (
+    "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" start --deadline "$deadline" -q "$binary" 2>&1 | tee "$box_dir/start.log"
+    printf '%s\n' "${PIPESTATUS[0]}" >"$box_dir/start.rc"
+  ) &
+  start_job=$!
+  wait "$start_job"
+  start_wait_rc=$?
+  start_job=""
+  if [ -f "$box_dir/start.rc" ]; then
+    start_rc="$(cat "$box_dir/start.rc")"
+  else
+    start_rc="$start_wait_rc"
+  fi
   "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" status -v 2>&1 | tee "$box_dir/status.log"
   status_rc="${PIPESTATUS[0]}"
   "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" stop >"$box_dir/stop.log" 2>&1

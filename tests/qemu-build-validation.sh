@@ -41,4 +41,39 @@ summary="$(find "$fixture/evidence" -name summary.tsv -type f)"
 grep -Fq $'one\tstart=0\tstatus=0\tstop=0\tPASS' "$summary"
 grep -Fq $'two\tstart=0\tstatus=0\tstop=0\tPASS' "$summary"
 
+hup_zbmc="$fixture/hup-zbmc"
+cat >"$hup_zbmc" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$CALLS"
+case "$2" in
+  start)
+    printf '%s\n' "$$" >"$START_PID"
+    trap 'exit 0' TERM
+    while :; do sleep 1; done
+    ;;
+  stop)
+    kill -TERM "$(cat "$START_PID")" 2>/dev/null || true
+    ;;
+esac
+EOF
+chmod +x "$hup_zbmc"
+
+: >"$fixture/hup-calls"
+CALLS="$fixture/hup-calls" START_PID="$fixture/start.pid" ZBMC_TOOL="$hup_zbmc" \
+  ZBMC_VALIDATE_RUN_AS_ME=1 QEMU_VALIDATION_ROOT="$fixture/hup-evidence" \
+  "$repo/tools/validate-qemu-build" "$fixture/manifest.json" one >/dev/null 2>&1 &
+validator_pid=$!
+for _ in {1..50}; do
+  grep -Fq "one start --deadline 1200 -q $qemu" "$fixture/hup-calls" && break
+  sleep 0.1
+done
+grep -Fq "one start --deadline 1200 -q $qemu" "$fixture/hup-calls"
+kill -HUP "$validator_pid"
+set +e
+wait "$validator_pid"
+hup_rc=$?
+set -e
+[ "$hup_rc" -eq 130 ]
+grep -Fx 'one stop' "$fixture/hup-calls"
+
 echo 'QEMU build fleet validation: PASS'

@@ -3,10 +3,10 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 tool="$repo/tools/build-qemu"
-expected=$'qemu-11-arm\nqemu-11-idrac10\nqemu-11-x10'
+expected=$'qemu-11-arm\nqemu-11-idrac10'
 [ "$($tool --list)" = "$expected" ]
 
-for recipe in qemu-11-arm qemu-11-idrac10 qemu-11-x10; do
+for recipe in qemu-11-arm qemu-11-idrac10; do
   plan="$($tool --plan "$recipe")"
   grep -Fq '98b060da3a4f92b2a994ead5b16a87e783baf77c (v11.0.0)' <<<"$plan"
   grep -Fq 'Build host  : x86_64-linux' <<<"$plan"
@@ -22,11 +22,9 @@ grep -Fq 'Data files  : npcm8xx_bootrom.bin' <<<"$idrac_plan"
 
 arm_plan="$($tool --plan qemu-11-arm)"
 grep -Fq 'Data files  : npcm7xx_bootrom.bin' <<<"$arm_plan"
-
-x10_plan="$($tool --plan qemu-11-x10)"
-grep -Fq "$repo/boxes/supermicro-x10/qemu-ftgmac-rx-descriptor.patch" <<<"$x10_plan"
-grep -Fq 'Machines    : supermicrox11-bmc' <<<"$x10_plan"
-grep -Fq 'Data files  : none' <<<"$x10_plan"
+grep -Fq "$repo/qemu/patches/ftgmac100-rx-descriptor-reuse.patch" <<<"$arm_plan"
+grep -Fq 'Machines    : ast2600-evb gb200nvl-bmc npcm750-evb supermicrox11-bmc' <<<"$arm_plan"
+grep -Fq 'Boxes       : idrac9 megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14' <<<"$arm_plan"
 
 python3 - "$repo/qemu/packages/debian-13-qemu-10.0.11.json" <<'PY'
 import json
