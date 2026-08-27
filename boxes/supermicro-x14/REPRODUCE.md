@@ -5,7 +5,7 @@ external SSH shell + IPMI + Redfish. Everything except the vendor firmware is in
 the firmware `.bin` is proprietary (not redistributed) — you supply it.
 
 ## 0. Prereqs
-- macOS/Linux. `qemu-system-arm` (with the `aspeed`/`ast2600-evb` machine — Homebrew qemu has it).
+- x86_64 Linux. Use the exact patched `qemu-system-arm` pinned in `zbmc.box`.
 - `dumpimage` (u-boot-tools), `unsquashfs` (squashfs-tools), `mke2fs`, `xz`, `cpio`, `python3`.
 - `ipmitool`, `sshpass`, `socat`, `curl` to drive it.
 
@@ -40,7 +40,7 @@ dtc -I dts -O dtb -o x14-noncsi.dtb x14.dts
 ## 3. Extract the rootfs (squashfs @ flash 0x00D40000)
 ```
 dd if=$F of=rootfs.sqsh bs=4096 skip=$((0x00D40000/4096)) count=$((55*1024*1024/4096))
-unsquashfs -d rootfs rootfs.sqsh      # case-sensitive FS needed (macOS: use a case-sensitive volume)
+unsquashfs -d rootfs rootfs.sqsh
 ```
 (Full teardown + the SAA 252-command analysis: `bmc/supermicro/x14sbsc/teardown/extract.sh` + `X14-*-TEARDOWN.html`.)
 

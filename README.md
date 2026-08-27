@@ -11,6 +11,12 @@ submission (at least... mostly beaten... still a bit to do.)
 
 > **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `zbmc openbmc start`.
 
+> **Supported host:** zbmc v1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
+> executables, paths, and SHA-256 values were produced for x86_64 Linux. ARM64 hosts such as
+> Raspberry Pi and Apple Silicon, macOS, and other operating systems are not currently supported.
+> The committed `/home/zen/opt/zbmc-qemu/...` paths identify the reference installation; another
+> x86_64 Linux host must build/install those exact QEMU variants and approve their paths with `-q`.
+
 > It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
 > aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the
@@ -47,8 +53,9 @@ Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs
 Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**. The short version:
 
 ```bash
-# deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc curl sshpass socat && pipx install jefferson && pip3 install pexpect
-# deps (Debian): sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect pipx && pipx install jefferson
+# Debian 13 on x86_64
+sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect pipx
+pipx install jefferson
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
 ./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
 zbmc openbmc start             # boot vanilla OpenBMC (about 5 min on the reference host)
@@ -71,8 +78,9 @@ boot/restore/snapshot recipes + findings docs.
 ## Exact QEMU builds and Docker package
 
 Every box descriptor pins a QEMU executable, version, machine, and SHA-256. `zbmc` validates all four
-before launch and refuses a changed or incompatible binary. The v1 build/package path targets x86_64
-Linux and produces two patched QEMU 11 artifacts plus Debian's exact QEMU 10.0.11 package:
+before launch and refuses a changed or incompatible binary. These pins are host-architecture-specific:
+the current v1 build/package path supports **x86_64 Linux only** and produces two patched QEMU 11
+artifacts plus Debian's exact QEMU 10.0.11 package:
 
 ```bash
 tools/build-qemu --plan qemu-11-arm
@@ -94,7 +102,7 @@ live repository, so this is exact-artifact packaging rather than a byte-for-byte
 
 ## Network configuration
 
-By default, each box binds to a lo0 alias in the **10.0.{6,7,8,9}.x** range (macOS loopback),
+By default, each box binds to a Linux loopback alias in the **10.0.{6,7,8,9}.x** range,
 broken out by vendor family:
 
 | Subnet | Vendor | Boxes |

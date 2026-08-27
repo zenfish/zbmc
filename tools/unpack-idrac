@@ -42,7 +42,7 @@ IN="${1:?usage: unpack-idrac <DUP.BIN|.EXE|firmimg.dN> [OUTDIR]  (--help)}"
 IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"   # absolutise
 
 for t in unzip tar unsquashfs dumpimage shasum; do
-  command -v "$t" >/dev/null || warn "missing tool: $t (some steps may skip) -- brew install squashfs-tools u-boot-tools"
+  command -v "$t" >/dev/null || warn "missing tool: $t (some steps may skip) -- install squashfs-tools u-boot-tools"
 done
 
 STEM="$(basename "$IN")"; STEM="${STEM%.*}"
@@ -86,7 +86,7 @@ PY
   # --- fallback: 7z + tar (iDRAC9 shell self-extractor) ---
   if [ "$_zip_ok" -eq 0 ]; then
     warn "zip extraction failed; trying 7z+tar (iDRAC9-style shell self-extractor)"
-    command -v 7z >/dev/null || die "7z not found (brew install p7zip)"
+    command -v 7z >/dev/null || die "7z not found (install p7zip-full)"
     say "Stage 1a(alt) — 7z x DUP -> tar archive"
     7z x "$IN" -o"$OUT/fw-dup-payload" -y >/dev/null 2>&1 || die "7z extraction failed"
     _tar=$(find "$OUT/fw-dup-payload" -maxdepth 1 -type f ! -name '*.zip' | head -1)

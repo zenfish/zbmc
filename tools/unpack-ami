@@ -36,7 +36,7 @@ IN="${1:?usage: unpack-ami <image.ima|.ima_enc|.img|.bin> [OUTDIR]  (--help)}"
 [ -f "$IN" ] || die "input not found: $IN"
 IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"
 
-command -v unsquashfs >/dev/null || warn "no unsquashfs (brew install squashfs-tools) -- squashfs stage will fail"
+command -v unsquashfs >/dev/null || warn "no unsquashfs (install squashfs-tools) -- squashfs stage will fail"
 
 STEM="$(basename "$IN")"; STEM="${STEM%.*}"
 OUT="${2:-$(dirname "$IN")/${STEM}.unpacked}"
@@ -191,7 +191,7 @@ PY
   done
   [ "${#FIT[@]}" -eq 0 ] && sub "(no FIT images)"
 else
-  warn "dumpimage not installed (brew install u-boot-tools) -- skipping FIT listing"
+  warn "dumpimage not installed (install u-boot-tools) -- skipping FIT listing"
 fi
 
 # --- Stage 4: sanity -- warn if a big high-entropy region carried NO fs ------

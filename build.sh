@@ -9,6 +9,15 @@
 #         ./build.sh advantech-asmb787   # just one box
 #         ./build.sh --list       # show each box's status without building
 set -uo pipefail
+
+host_os="$(uname -s)"
+host_arch="$(uname -m)"
+if [ "$host_os" != Linux ] || [ "$host_arch" != x86_64 ]; then
+  echo "zbmc v1 supports only x86_64 Linux; detected $host_os/$host_arch." >&2
+  echo "The pinned QEMU executables and hashes are host-architecture-specific." >&2
+  exit 1
+fi
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 want=(); listonly=0

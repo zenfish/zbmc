@@ -5,26 +5,28 @@ on. One box — **`advantech-asmb787`** — is fully turnkey (its firmware ships
 
 New to this? See the [Glossary](#glossary) at the bottom for BMC / IPMI / Redfish / MegaRAC / etc.
 
+> **Host requirement:** zbmc v1 supports only **x86_64 Linux** (Intel or AMD). Its QEMU paths and
+> SHA-256 pins are for x86_64 executables. ARM64 systems, including Raspberry Pi and Apple Silicon,
+> and macOS are not currently supported. `build.sh` checks this before doing any work. The committed
+> `/home/zen/opt/zbmc-qemu/...` paths are from the reference host; on another x86_64 Linux host, build
+> the exact QEMU variants and approve each resulting executable once with `zbmc <box> start -q PATH`.
+
 ---
 
 ## 0. Install the tools
 
 ```bash
-# macOS
-brew install qemu squashfs-tools u-boot-tools dtc curl sshpass socat && pipx install jefferson
-pip3 install pexpect
-
-# Debian / Ubuntu
+# Debian 13 on x86_64
 sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler \
   curl sshpass socat python3-pexpect pipx
 pipx install jefferson
 ```
 
-Then just confirm each one is installed and runs — **any recent version is fine**, you're only checking
-they're on your PATH:
+Confirm the extraction tools are on your PATH. The system QEMU package is sufficient only for the
+Advantech baseline; the other boxes require the exact patched builds pinned in their descriptors:
 
 ```bash
-qemu-system-arm --version   # this repo was tested with 11.0
+qemu-system-arm --version   # Debian 13 package: 10.0.11 (Advantech baseline)
 unsquashfs -version         #   "   squashfs-tools 4.7
 dumpimage -V                #   "   u-boot-tools 2026.04
 dtc --version               #   "   dtc 1.7.2
@@ -38,8 +40,8 @@ If a command prints its version/help, you're good. If it says "command not found
 ## 1. Clone
 
 ```bash
-git clone git@github.com:zenfish/zbmc-lab.git
-cd zbmc-lab
+git clone git@github.com:zenfish/zbmc.git
+cd zbmc
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH" # find pipx tools and type 'zbmc' instead of './tools/zbmc'
 ```
 
