@@ -49,7 +49,7 @@ zbmc_boot() {
   # snapshot=on -> writes go to a throwaway overlay, the built image stays pristine.
   $SUDO nohup "$ZBMC_QEMU" -M gb200nvl-bmc -smp 2 -m 1G \
     -drive file="$MTD",format=raw,if=mtd,snapshot=on \
-    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
+    -net nic,macaddr=3c:6d:66:14:c8:7a -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=qemu \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
     -serial chardev:serial0 -serial null >"$LOG" 2>&1 &
   local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
