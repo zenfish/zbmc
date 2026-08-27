@@ -28,22 +28,25 @@
     <section class="border-b border-zinc-200">
       <div class="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[2fr_1fr]">
         <div>
-          <h2 class="text-2xl font-bold">The honest answer</h2>
+          <h2 class="text-2xl font-bold">Why, oh Why?</h2>
           <p class="mt-4 leading-7 text-zinc-700">
-            Part of the difficulty was inherent. BMC firmware is built for a particular SoC and
-            motherboard, not for a generic virtual computer. It expects boot ROMs, flash geometry,
+            BMC firmware is specialized. It's built for a particular SoC and
+            motherboard, not for a generic virtual computer. It expects - knows - particular
+            boot ROMs, flash geometry,
             device trees, watchdogs, sideband networking, persistent configuration, and management
-            peripherals that QEMU may model differently or not model at all.
+            peripherals that QEMU may understand, model differently, or not model at all.
           </p>
           <p class="mt-4 leading-7 text-zinc-700">
-            Part was self-inflicted. The zoo began as a set of successful experiments: mutable QEMU
+            Part was - ahem - self-inflicted. The zoo began as a set of (mostly successful) experiments:
+            mutable QEMU
             builds, host-specific paths, old processes, implicit network assumptions, sparse evidence,
             and status output that confused startup history with current health. Turning those
-            experiments into a reproducible tool exposed every accidental dependency.
+            experiments into a reproducible tool exposed seemingly every conceivable accidental dependency
+            (I'm sure there are many more, lol.)
           </p>
         </div>
         <aside class="border-l-4 border-amber-600 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
-          <strong>The key distinction:</strong> a booting image is not necessarily a working BMC.
+          <strong>The key:</strong> a booting image is not necessarily a working BMC.
           Boot, service startup, protocol reachability, authentication, and useful command behavior
           are separate acceptance stages.
         </aside>
@@ -64,7 +67,8 @@
         <p class="mt-5 max-w-4xl leading-7 text-zinc-700">
           A failure at any boundary often looked identical from outside: a long timeout. Progress
           required preserving serial output and testing each boundary independently rather than
-          interpreting every timeout as one problem.
+          interpreting every timeout as one problem. It also drove an at least conceptual monitoring
+          and instrumentation ideology that tried to track and identify issues at each of the levels.
         </p>
       </div>
     </section>
@@ -172,6 +176,86 @@
       </div>
     </section>
 
+    <section class="border-b border-zinc-200 bg-cyan-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">What we supplied, and what that proves</h2>
+        <p class="mt-4 max-w-4xl leading-7 text-zinc-700">
+          The decisive distinction is not simply real versus fake. It is whether the vendor
+          component remained in the path while we supplied its missing environment, or whether we
+          replaced the component itself. The first can tell us something meaningful about the vendor
+          component. The second proves only the integration around our substitute.
+        </p>
+        <div class="mt-7 overflow-x-auto border-y border-cyan-300 bg-white">
+          <table class="w-full min-w-[980px] text-left text-sm">
+            <thead class="bg-cyan-950 text-cyan-100">
+              <tr><th class="px-4 py-3">Technique</th><th class="px-4 py-3">What zbmc actually supplied</th><th class="px-4 py-3">What remained real</th><th class="px-4 py-3">Evidence boundary</th></tr>
+            </thead>
+            <tbody class="divide-y divide-cyan-100 align-top text-zinc-700">
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Model the expected board</td>
+                <td class="px-4 py-4">QEMU machine and device changes supplied missing SoC behavior; iDRAC10 also received a USB-network device-tree overlay.</td>
+                <td class="px-4 py-4">The vendor kernel, drivers, and userland consumed the modeled devices.</td>
+                <td class="px-4 py-4">Validates those components against the model, not against every electrical or timing property of the physical board.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Reconstruct persistent board state</td>
+                <td class="px-4 py-4">MegaRAC received its factory <code>/conf</code> tree and <code>/conf/BMC</code> platform link. iDRAC9 and iDRAC10 received configuration-database defaults, writable persistence paths, a root IPMI identity, channel access, and network values normally created elsewhere in the appliance. iDRAC9 also stages borrowed platform topology files so its sensor and I2C consumers do not crash.</td>
+                <td class="px-4 py-4">Vendor configuration managers and management daemons read the reconstructed state through their normal database and D-Bus paths.</td>
+                <td class="px-4 py-4">Exercises real consumers with synthetic initial state; it does not prove the missing factory-provisioning, credential-vault, or topology-generation paths.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Disable hardware that does not exist</td>
+                <td class="px-4 py-4">The X14 DTB disabled absent NC-SI NICs. MegaRAC configuration disabled serial, SOL, BT, SMM, SMBus, IPMB, or KCS paths that otherwise left corrupt interface tables or restart loops.</td>
+                <td class="px-4 py-4">The remaining vendor stack, including its LAN management path, continued to run.</td>
+                <td class="px-4 py-4">Proves only the retained interfaces. A disabled peripheral is explicitly outside the virtual box's claim.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Rebuild startup orchestration</td>
+                <td class="px-4 py-4">Scripts created runtime directories, mounted writable state, started D-Bus and object mappers in order, and supplied socket-activation file descriptors. The X14 service boot starts selected vendor daemons without the full vendor systemd sequence; iDRAC10 pre-binds the IPv6 UDP/623 socket that <code>fullfw</code> expects on file descriptor 3.</td>
+                <td class="px-4 py-4">Named vendor daemons remain in the path where stated: <code>fullfw</code>, <code>ipmid</code>, <code>netipmid</code>, and <code>bmcweb</code>.</td>
+                <td class="px-4 py-4">Useful evidence about those daemons, but not proof that the original boot ordering, watchdogs, or complete service graph work unchanged.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Shim a missing dependency or behavior</td>
+                <td class="px-4 py-4">iDRAC10's fake journal accepts and discards the logging connection required by <code>dbus-broker-launch</code>. Its preload shim replaces broken System V shared memory and semaphores with file-backed state; it also injects user lookup, privilege, HMAC-key, power and health state, and selected IPMI command handlers.</td>
+                <td class="px-4 py-4"><code>cfgmgrd</code> and <code>fullfw</code> still parse requests and run the vendor transport and dispatcher around those interposed behaviors.</td>
+                <td class="px-4 py-4">This is hybrid vendor-backed IPMI, not unmodified Dell IPMI. It cannot establish Dell's storage, concurrency, authorization, state reporting, or every command path. iDRAC10 therefore remains partial.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Replace operator access</td>
+                <td class="px-4 py-4">MegaRAC-HPE injects Dropbear and <code>mini_telnetd</code>, redirects its missing SMASH program to <code>/bin/sh</code>, clears the emulated <code>sysadmin</code> password, and provides a direct root console.</td>
+                <td class="px-4 py-4">These paths provide access to the running vendor userland and its real management daemons.</td>
+                <td class="px-4 py-4">They prove neither vendor SSH or SMASH behavior nor the appliance's normal authentication policy.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Align synthetic identity</td>
+                <td class="px-4 py-4">NVIDIA's QEMU NIC is configured with the MAC address that its firmware adopts during boot; otherwise user-network forwards remain attached to the discarded DHCP identity.</td>
+                <td class="px-4 py-4">The firmware still configures the interface and serves SSH, IPMI, Redfish, and the Web-UI.</td>
+                <td class="px-4 py-4">The alignment is verified, but the tracked files do not establish where the firmware obtained that value. Direct-L2 use still requires isolation to avoid duplicates.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Replace an endpoint</td>
+                <td class="px-4 py-4">iDRAC10's Apache setup serves a static JSON document at <code>/redfish/v1/</code> because the vendor Redfish dependency graph is not running.</td>
+                <td class="px-4 py-4">Vendor Apache and TLS terminate the request; the Redfish response does not come from the vendor Redfish service.</td>
+                <td class="px-4 py-4">Proves HTTPS routing to a synthetic ServiceRoot only. It is labeled static and cannot establish vendor Redfish behavior.</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-4 font-semibold text-zinc-950">Keep a no-mock control</td>
+                <td class="px-4 py-4">The upstream OpenBMC box boots its complete flash image. zbmc only retries the image's own <code>phosphor-ipmi-net@eth0.socket</code> after SSH becomes reachable.</td>
+                <td class="px-4 py-4">Its tested SSH, IPMI, Redfish, and Web-UI services remain upstream components without synthetic databases or replacement endpoints.</td>
+                <td class="px-4 py-4">This clean baseline helps distinguish general QEMU or orchestration failures from the compatibility work required by vendor appliances.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-6 border-l-4 border-cyan-700 pl-5 leading-7 text-zinc-800">
+          <strong>Working rule:</strong> preserve the vendor component whenever possible and supply
+          only the narrowest missing dependency. When a component or behavior is replaced, label the
+          substitute and exclude the replaced behavior from the acceptance claim.
+        </p>
+      </div>
+    </section>
+
     <section class="border-b border-zinc-200 bg-zinc-950 text-white">
       <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
         <h2 class="text-2xl font-bold">The self-inflicted problems</h2>
@@ -210,6 +294,7 @@
           <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Infer requirements from one successful binary</h3><p class="mt-2 text-sm leading-6 text-zinc-700">A known-good artifact is not proof that its version is required. Advantech's QEMU 10 pin is documented accordingly.</p></div>
           <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Debug without preserving the run</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Uncaptured console output and commands made failures impossible to compare. Every launch now creates an evidence directory.</p></div>
           <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Force a fully static QEMU build</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Debian lacked the required static pixman, mount, and slirp library closure. Exact dynamically linked binaries inside a pinned Docker image provided the portable boundary instead.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Put a fake NC-SI responder outside QEMU</h3><p class="mt-2 text-sm leading-6 text-zinc-700">This remained an abandoned idea, not an implementation. QEMU consumes the NC-SI traffic inside its FTGMAC model before the netdev, so an external responder cannot repair the incompatible Advantech path.</p></div>
         </div>
       </div>
     </section>
@@ -242,7 +327,7 @@
               <tr><td class="px-4 py-4 font-semibold">supermicro-x10</td><td class="px-4 py-4">SSH, IPMI, Redfish, Web-UI, 60s stable hold; focused post-fix browser regression rerun remains inconclusive</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">2m38s user-net; 3m40s direct</td></tr>
               <tr><td class="px-4 py-4 font-semibold">idrac9</td><td class="px-4 py-4">ICMP, SSH, IPMI, Web-UI; Redfish not configured; USB-net warm restore is network-dead</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">12m48s</td></tr>
               <tr><td class="px-4 py-4 font-semibold">advantech-asmb787</td><td class="px-4 py-4">Serial login; external networking remains unresolved, with the old NC-SI path the leading explanation</td><td class="px-4 py-4 text-teal-800">Console pass</td><td class="px-4 py-4">11m50s</td></tr>
-              <tr><td class="px-4 py-4 font-semibold">idrac10</td><td class="px-4 py-4">ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td><td class="px-4 py-4 text-amber-800">Partial</td><td class="px-4 py-4">About 6m15s to last working service</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">idrac10</td><td class="px-4 py-4">ICMP, SSH, hybrid IPMI through vendor <code>fullfw</code> with auth, state, and selected command interposition; static Redfish ServiceRoot; no vendor Web-UI</td><td class="px-4 py-4 text-amber-800">Partial</td><td class="px-4 py-4">About 6m15s to last working service</td></tr>
               <tr><td class="px-4 py-4 font-semibold">megarac-hpe</td><td class="px-4 py-4">IPMI; Redfish and Web-UI observed but unstable; SSH absent</td><td class="px-4 py-4 text-amber-800">Partial</td><td class="px-4 py-4">No reliable READY time</td></tr>
             </tbody>
           </table>
@@ -260,6 +345,7 @@
           <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">MegaRAC-HPE:</strong> service stability remains incomplete and SSH is absent.</li>
           <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Runtime identity:</strong> PID and host-forward fallback can still adopt an older matching QEMU process when local run metadata is absent.</li>
           <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Rebuild closure:</strong> executables are exact and packaged, but Debian apt dependencies are not preserved as a byte-for-byte offline source-build closure.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Compatibility-source closure:</strong> iDRAC10's tracked <code>fake-journal</code> and <code>prebind-v2</code> are binaries without source here. X14 documentation describes a committed DTS and patched init source that are not present; only the hash-pinned built artifacts are tracked.</li>
           <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Physical fidelity:</strong> a declared pass does not prove sensors, power control, host interfaces, or every peripheral match real hardware.</li>
           <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Performance:</strong> cold-start timing remains host-load-sensitive under TCG.</li>
         </ul>
@@ -278,6 +364,7 @@
           <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">6. Define retirement tests.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Every compatibility pin or workaround needs evidence that can eventually remove it.</p></li>
           <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">7. Keep operator state truthful.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Current health, startup history, configured capabilities, and console access must remain distinct.</p></li>
           <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">8. Checkpoint completed work.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Commit verified logical units so parallel investigation cannot strand or obscure working changes.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">9. Label every substitute.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Record what remained vendor code, what environment was reconstructed, what behavior was interposed, and which claims the substitute cannot support.</p></li>
         </ol>
       </div>
     </section>
