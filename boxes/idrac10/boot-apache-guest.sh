@@ -4,15 +4,19 @@
 # WHAT:   Runs inside QEMU npcm845-evb guest (init=/usr/bin/sh) to bring up Apache HTTPS
 #         with static JSON for Redfish endpoints (/redfish/v1/ served from /tmp/rf_root.json).
 # WHEN:   Called by host expect script after filesystems are mounted + network is configured.
-# HOW:    1. Download + run setup-apache.sh from host (http://10.0.2.2:8080/)
-#         2. Write static Redfish JSON files to /tmp/
-#         3. Wait for kernel CSPRNG to initialize (crng init done) via blocking /dev/random read
+# HOW:    1. Wait for kernel CSPRNG initialization via a blocking /dev/random read
+#         2. Download + run setup-apache.sh from host (http://10.0.2.2:8091/)
+#         3. Write static Redfish JSON files to /tmp/
 #         4. Start Apache HTTPS on port 443
 #         5. Poll for port up, report APACHE_READY or APACHE_FAILED
 # OUTPUT: Final line is "APACHE_READY" (success) or "APACHE_FAILED" (timeout/crash)
 #         Apache error log at /tmp/apache-err.log
 
-HOST_URL="http://10.0.2.2:8080"
+HOST_URL="${HOST_URL:-http://10.0.2.2:8091}"
+
+echo "=== WAITING FOR CSPRNG (crng init done) ==="
+head -c 1 /dev/random > /dev/null
+echo "=== CSPRNG READY ==="
 
 echo "=== DOWNLOADING SETUP SCRIPT ==="
 wget -q --timeout=15 "${HOST_URL}/setup-apache.sh" -O /tmp/s.sh || {
@@ -35,12 +39,6 @@ echo "=== WRITING REDFISH STATIC JSON ==="
 printf '{"v1":"/redfish/v1/"}\n' > /tmp/rf_v.json
 printf '{"@odata.context":"/redfish/v1/$metadata#ServiceRoot.ServiceRoot","@odata.id":"/redfish/v1/","@odata.type":"#ServiceRoot.v1_17_1.ServiceRoot","Id":"RootService","Name":"Root Service","RedfishVersion":"1.21.0","UUID":"00000000-0000-0000-0000-000000000000","Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"},"Managers":{"@odata.id":"/redfish/v1/Managers"},"SessionService":{"@odata.id":"/redfish/v1/SessionService"},"AccountService":{"@odata.id":"/redfish/v1/AccountService"},"UpdateService":{"@odata.id":"/redfish/v1/UpdateService"},"CertificateService":{"@odata.id":"/redfish/v1/CertificateService"},"Links":{"Sessions":{"@odata.id":"/redfish/v1/SessionService/Sessions"}}}\n' > /tmp/rf_root.json
 echo "=== STATIC JSON READY ==="
-
-echo "=== WAITING FOR CSPRNG (crng init done) ==="
-# /dev/random blocks in Linux 5.6+ until the CSPRNG is initialized.
-# Without this, Apache mod_ssl can block or crash before entropy is ready.
-head -c 1 /dev/random > /dev/null
-echo "=== CSPRNG READY ==="
 
 echo "=== STARTING APACHE ==="
 nohup /usr/sbin/httpd -f /etc/apache2/httpd.conf -DFOREGROUND \

@@ -19,13 +19,17 @@ SOCK="$W/rserial.sock"; QMP="$W/rqmp.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$W/console-uart.log}"
 TRIES="${RESTORE_TRIES:-3}"
 [ -f "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-live-ckpt.sh first" >&2; exit 1; }
-PORT="${1:-7623}"; BIND="${2:-}"
+PORT="${1:-7623}"; BIND="${2:-}"; SSH_PORT="${3:-22}"
 # real-IP (root) path also forwards tcp:22 -> guest sshd (baked into state.gz); the guest sshd
 # binds :22 on $BIND, coexisting with the Mac's wildcard *:22 (specific-IP bind wins for that IP).
-if [ -n "$BIND" ]; then HOSTFWD="hostfwd=udp:${BIND}:${PORT}-:623,hostfwd=tcp:${BIND}:22-:22"; VIP="$BIND"; else HOSTFWD="hostfwd=udp::${PORT}-:623"; VIP=127.0.0.1; fi
+if [ -n "$BIND" ]; then HOSTFWD="hostfwd=udp:${BIND}:${PORT}-:623,hostfwd=tcp:${BIND}:${SSH_PORT}-:22"; VIP="$BIND"; else HOSTFWD="hostfwd=udp::${PORT}-:623"; VIP=127.0.0.1; fi
 # privileged port (<1024) or explicit bind IP -> need root (matches zbmc root-direct model)
 SUDO=""; { [ "$PORT" -lt 1024 ] || [ -n "$BIND" ]; } && [ "$(id -u)" -ne 0 ] && SUDO="sudo -n"
 set +x 2>/dev/null   # keep any inherited xtrace/PS4 out of the console log
+if [ -z "${IDRAC10_QEMU:-}" ] && [ -x /home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64 ]; then
+  IDRAC10_QEMU=/home/zen/opt/qemu-11-aarch64/bin/qemu-system-aarch64
+fi
+IDRAC10_QEMU="${IDRAC10_QEMU:-qemu-system-aarch64}"
 
 # Live progress -> STDERR (which the caller redirects into the console log). Kept off
 # STDOUT so `QPID=$(restore_once)` and `ok=$(verify)` capture only the pid / the count.
@@ -35,7 +39,7 @@ restore_once() {   # launch qemu -incoming, resume, echo the pid (or empty on QM
   $SUDO pkill -9 -f "$W/rserial.sock" 2>/dev/null || true
   $SUDO pkill -9 -f "$HOSTFWD" 2>/dev/null || true
   sleep 1; $SUDO rm -f "$SOCK" "$QMP" 2>/dev/null; rm -f "$SOCK" "$QMP" 2>/dev/null || true
-  $SUDO nohup qemu-system-aarch64 -M npcm845-evb -m 1G \
+  $SUDO nohup "$IDRAC10_QEMU" -M npcm845-evb -m 1G \
     -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"$HOSTFWD" \

@@ -3,7 +3,8 @@
 #
 # WHAT:   Runs inside QEMU npcm845-evb guest (init=/usr/bin/sh).
 #         Boots dbus-broker via systemd-socket-activate (creates socket on bind,
-#         spawns broker on first client connect), then aim → fullfw → wait UDP 623.
+#         spawns broker on first client connect), then aim -> dcmgr -> cfgmgrd ->
+#         fullfw -> wait UDP 623.
 # OUTPUT: IPMI_READY (UDP 623 up) or IPMI_FAILED
 
 set -e
@@ -89,6 +90,17 @@ echo "shmmni: $(cat /proc/sys/kernel/shmmni 2>/dev/null || echo MISSING)"
 # ipcmk hangs when shmget() blocks (kernel lock contention with /dev/shm tmpfs).
 # Skip the test — shim handles shmget() via mmap instead.
 
+echo "=== FIRMWARE TMPFILES ==="
+# dcmgr/cfgmgrd use Dell's data-abstraction locks while creating their POSIX SHM
+# objects. The normal systemd boot creates these from the firmware tmpfiles rules.
+systemd-tmpfiles --create --prefix=/run/data-abs
+for lock in datacache_Config_CfgGroup.lock key_map.lock; do
+    [ -e "/run/data-abs/$lock" ] || {
+        echo "IPMI_FAILED: firmware tmpfiles missing /run/data-abs/$lock"
+        exit 1
+    }
+done
+
 echo "=== SHM SHIM ==="
 # SYSV shmget() fails on npcm845-evb QEMU (ipcmk confirms broken).
 # Load LD_PRELOAD shim that replaces shmget/shmat/shmdt/shmctl with
@@ -96,7 +108,7 @@ echo "=== SHM SHIM ==="
 wget -q --timeout=15 "${HOST_URL}/shm-shim.so" -O /tmp/shm-shim.so
 chmod +x /tmp/shm-shim.so
 ls -la /tmp/shm-shim.so
-export LD_PRELOAD=/tmp/shm-shim.so
+SHM_PRELOAD=/tmp/shm-shim.so
 # Can't self-test with ipcmk (shmget hangs in this kernel even with shim for non-shim path).
 # Constructor writes /tmp/shm-shim-loaded when any process loads the shim.
 rm -f /tmp/shm-shim-loaded
@@ -177,7 +189,8 @@ for attempt in $(seq 1 8); do
     done
     if [ $ok -eq 1 ]; then echo "DBUS UP (attempt $attempt, PID=$SACPID)"; break; fi
     echo "DBUS attempt $attempt failed (abort?); retrying. log tail:"; tail -2 /tmp/dbus.log 2>/dev/null
-    kill $SACPID 2>/dev/null; SACPID=0
+    kill $SACPID 2>/dev/null || true
+    SACPID=0
 done
 if [ ! -S /run/dbus/system_bus_socket ] || [ $SACPID -eq 0 ]; then
     echo "DBUS NEVER CAME UP after retries:"; cat /tmp/dbus.log 2>/dev/null
@@ -186,7 +199,7 @@ fi
 
 # --- AIM (creates /tmp/ec SHM; first D-Bus client → triggers broker spawn) ---
 echo "=== STARTING AIM ==="
-HOME=/flash/data0 /usr/bin/aim > /tmp/aim.log 2>&1 &
+env HOME=/flash/data0 LD_PRELOAD="$SHM_PRELOAD" /usr/bin/aim > /tmp/aim.log 2>&1 &
 AIMPID=$!
 echo "AIM PID=$AIMPID"
 
@@ -206,7 +219,7 @@ fi
 # Replaces the LD_PRELOAD config-read shims (now #if 0 in shm-shim.c).
 # fullfw reads Users.N#{UserName,IPMIKey,Enable,IpmiLanPrivilege} over D-Bus
 # from com.dell.idrac.CfgMgr, backed by SQLite CfgCurrentValues.db.
-echo "=== STARTING CFGMGRD ==="
+echo "=== PREPARING CFGMGRD ==="
 export IMAGE=idrac-image                     # cfgdb-setup.sh gate (etc/yocto-image.env)
 # /var/lib is a symlink → /mnt/persistent_data/data0/var/lib (dangling). Create the
 # target so it resolves, else mkdir on the cfgdb tree fails. Everything here is
@@ -279,47 +292,59 @@ echo "seeded Users.2 rows: $(sqlite3 /var/run/cfgdb/CfgCurrentValues.db "SELECT 
 # waiting for entropy → never claims the bus name. Redirect /dev/hwrng → /dev/urandom
 # (non-blocking) so its first RNG choice succeeds and it never touches /dev/random.
 mount --bind /dev/urandom /dev/hwrng 2>/dev/null || { rm -f /dev/hwrng 2>/dev/null; ln -sf /dev/urandom /dev/hwrng; }
-# Dirs cfgmgrd/suptlib expect (from strace): OMDataEngine IPC, cfg-encrypt key store,
-# oem persistent store. Missing → ENOENT retries.
+# Dirs cfgmgrd/suptlib expect: OMDataEngine IPC, cfg-encrypt key store, and the
+# OEM persistent store. Missing paths cause ENOENT retries.
 mkdir -p /var/run/dm/.ipc /var/lib/cfgmgr/cv/keys /flash/data0/oem_ps 2>/dev/null || true
-# strace the loop BODY (reads/stats/waits between omreg opens) to see the missing
-# resource; cfgmgrd logs only to the discarded journal so stdout/stderr are empty.
-strace -f -e trace=openat,read,close,newfstatat,stat,access,connect,sendmsg,recvmsg,nanosleep,clock_nanosleep,futex \
-    -o /tmp/cfgmgrd-strace.log /usr/sbin/cfgmgrd > /tmp/cfgmgrd.log 2>&1 &
+
+# Firmware ordering: dcmgr.service is Before=cfgmgr.service. The service-user
+# launch exits in this minimal init environment; the verified live sequence runs
+# both daemons as root, like AIM and fullfw here.
+echo "=== STARTING DCMGR ==="
+setsid env LD_PRELOAD="$SHM_PRELOAD" /usr/bin/dcmgr > /tmp/dcmgr.log 2>&1 &
+DCMGRPID=$!
+echo "DCMGR PID=$DCMGRPID"
+
+echo "=== STARTING CFGMGRD ==="
+setsid env LD_PRELOAD="$SHM_PRELOAD" /usr/sbin/cfgmgrd > /tmp/cfgmgrd.log 2>&1 &
 CFGPID=$!
-echo "CFGMGRD (straced) PID=$CFGPID"
-for i in $(seq 1 30); do
-    /usr/bin/busctl --system list 2>/dev/null | grep -q 'com.dell.idrac.CfgMgr' \
-        && { echo "CFGMGR NAME UP (iter $i)"; break; }
-    kill -0 $CFGPID 2>/dev/null || { echo "cfgmgrd/strace EXITED EARLY (iter $i)"; break; }
-    sleep 0.5
+echo "CFGMGRD PID=$CFGPID"
+
+# Name ownership is too early: cfgmgrd can claim D-Bus before its datacache and
+# attribute tree are usable. Gate fullfw on the state it consumes: live CfgGroup
+# SHM plus a functional internal GetAttribute returning the seeded root user.
+echo "=== WAITING FOR CFGMGRD READINESS ==="
+CFG_READY=0
+for i in $(seq 1 120); do
+    kill -0 "$DCMGRPID" 2>/dev/null || {
+        echo "IPMI_FAILED: dcmgr exited before cfgmgrd became ready"
+        cat /tmp/dcmgr.log 2>/dev/null || true
+        exit 1
+    }
+    kill -0 "$CFGPID" 2>/dev/null || {
+        echo "IPMI_FAILED: cfgmgrd exited before becoming ready"
+        cat /tmp/cfgmgrd.log 2>/dev/null || true
+        exit 1
+    }
+    if [ -s /dev/shm/datacache_Config_CfgGroup ]; then
+        cfg_user=$(PAGER=cat SYSTEMD_PAGER=cat SYSTEMD_COLORS=0 \
+            timeout 3 busctl --no-pager --system call com.dell.idrac.CfgMgrInternal \
+            /com/dell/idrac/CfgMgr/CfgInternalInterface \
+            com.dell.idrac.Config.CfgInternalInterface GetAttribute s \
+            'idrac.embedded.1#Users.2#UserName' 2>/dev/null || true)
+        if [ "$cfg_user" = 'is 0 "root"' ]; then
+            CFG_READY=1
+            echo "CFGMGRD READY (iter $i): $cfg_user"
+            break
+        fi
+    fi
+    sleep 1
 done
-# Settle: cfgmgrd claims the name before it finishes building its attribute tree
-# from the 12624 rows. fullfw's early serial/LAN reads (IPMISerial#BaudRate etc.)
-# hit the 'name not active' window → SerNonVolatileConfigInit aborts → fd=3 never
-# registers with epoll → RMCP silent. Wait until cfgmgrd actually SERVES a seeded
-# key before starting fullfw.
-echo "--- settling cfgmgrd (fixed delay; name-owned re-check) ---"
-sleep 8   # let cfgmgrd finish building its attribute tree before fullfw reads
-busctl --system list 2>/dev/null | grep -q 'com.dell.idrac.CfgMgr' \
-    && echo "cfgmgrd still owns name after settle" || echo "cfgmgrd LOST name after settle"
-echo "--- cfgmgrd alive? ---"; kill -0 $CFGPID 2>/dev/null && echo ALIVE || echo DEAD
-# GROUND TRUTH: does cfgmgrd actually SERVE Users.2#UserName='root'? PSMgrReadAttr
-# builds this key (lowercase) and calls CfgGetAttribute->CfgMgrInternal.GetAttribute.
-echo "--- DB direct (case-folded) ---"
-sqlite3 /var/run/cfgdb/CfgCurrentValues.db \
-  "SELECT AttributeKey,AttributeValue FROM CfgValueTableTmpfs WHERE UPPER(AttributeKey)=UPPER('idrac.embedded.1#Users.2#UserName');" 2>&1
-echo "--- cfgmgrd D-Bus introspect (GetAttribute signature) ---"
-busctl --system introspect com.dell.idrac.CfgMgrInternal /com/dell/idrac/CfgMgr/CfgInternalInterface \
-  com.dell.idrac.Config.CfgInternalInterface 2>&1 | grep -iE "GetAttribute|method" | head -8
-echo "--- cfgmgrd live GetAttribute(Users.2#UserName), sig=s ---"
-timeout 8 busctl --system call com.dell.idrac.CfgMgrInternal \
-  /com/dell/idrac/CfgMgr/CfgInternalInterface com.dell.idrac.Config.CfgInternalInterface \
-  GetAttribute s 'idrac.embedded.1#Users.2#UserName' 2>&1 | head -3
-echo "--- busctl CfgMgr? ---"; /usr/bin/busctl --system list 2>&1 | grep -i cfgmgr || echo "no CfgMgr on bus"
-echo "--- cfgmgrd.log ---"; cat /tmp/cfgmgrd.log 2>/dev/null
-echo "--- cfgmgrd strace tail (last 70) ---"; tail -70 /tmp/cfgmgrd-strace.log 2>/dev/null || echo "(no strace)"
-echo "--- omreg open count in full strace ---"; grep -c omreg.cfg /tmp/cfgmgrd-strace.log 2>/dev/null
+if [ "$CFG_READY" -ne 1 ]; then
+    echo "IPMI_FAILED: cfgmgrd readiness deadline reached"
+    ls -l /dev/shm/datacache_Config_CfgGroup 2>/dev/null || true
+    cat /tmp/dcmgr.log /tmp/cfgmgrd.log 2>/dev/null || true
+    exit 1
+fi
 
 # --- FULLFW via prebind (AF_INET6 dual-stack) ---
 # prebind-v2: creates AF_INET6 dual-stack UDP socket (:::623) as fd=3.
@@ -332,17 +357,17 @@ wget -q --timeout=15 "${HOST_URL}/prebind" -O /tmp/prebind
 chmod +x /tmp/prebind
 rm -f /tmp/shm-shim-loaded
 # setsid → new session so fullfw survives the serial-console HUP when boot-live.sh
-# disconnects (live-iterate reconnects later to pkill+relaunch). LD_PRELOAD is
-# inherited from L99. $! would be setsid's (short-lived) pid, so find fullfw via pgrep.
-setsid env HOME=/flash/data0 /tmp/prebind /bin/fullfw > /tmp/fullfw.log 2>&1 &
-sleep 2
-# match by cmdline, not comm: fullfw ignores SIGTERM AND renames its comm after
-# init (so `pgrep -x fullfw` misses it; live-iterate must `pkill -9 -f /bin/fullfw`).
-FWPID=$(pgrep -f /bin/fullfw | head -1)
+# disconnects. This is the script's only fullfw launch; retain its pid directly
+# instead of enumerating the process table during vendor daemon initialization.
+setsid env HOME=/flash/data0 LD_PRELOAD="$SHM_PRELOAD" \
+    /tmp/prebind /bin/fullfw > /tmp/fullfw.log 2>&1 &
+FWPID=$!
 echo "FULLFW PID=$FWPID"
-[ -f /tmp/shm-shim-loaded ] && echo "SHIM IN FULLFW: YES" || echo "SHIM IN FULLFW: NO (LD_PRELOAD not active)"
-echo "=== SHIM CALLS (first 200 lines) ==="
-cat /tmp/shim-calls.log 2>/dev/null | head -200 || echo "(no shim-calls.log)"
+
+# Preserve preload-hook proof in the per-run QEMU serial log.
+( while [ ! -e /tmp/shim-calls.log ]; do sleep 1; done
+  tail -n +1 -f /tmp/shim-calls.log > /dev/ttyS0
+) &
 
 # prebind binds UDP 623 before exec'ing fullfw → socket appears immediately
 for i in $(seq 1 30); do
@@ -360,55 +385,6 @@ if ! grep -qiE ':026[Ff]' /proc/net/udp /proc/net/udp6 2>/dev/null; then
     echo "UDP 623 never appeared"; cat /tmp/fullfw.log 2>/dev/null
     echo "IPMI_FAILED"; exit 1
 fi
-
-# fullfw daemonizes → writes to /dev/console (bind-mounted to /tmp/console.log)
-# "ialized successfully, sec_id=10" = RMCP LAN stack ready
-echo "waiting for fullfw PostInit..."
-# Strace epoll_ctl across all fullfw threads: shows epoll_ctl(epfd, EPOLL_CTL_ADD, 3, ...)
-# when the IPMI LAN stack registers fd=3 (UDP 623) with the event loop.
-# Attach after 3s (prebind->exec complete). Run for 90s.
-( sleep 3
-  strace -p $FWPID -f -e trace=epoll_ctl -o /tmp/fw-strace-epollctl.log -T -tt 2>/dev/null &
-  STPID=$!
-  sleep 90
-  kill $STPID 2>/dev/null
-) &
-# Also strace fd=3 recvfrom/sendto after epoll_ctl window to see if fullfw reads packets.
-( sleep 95
-  strace -p $FWPID -f -P 3 -o /tmp/fw-strace-fd3.log -T -tt 2>/dev/null &
-  STPID2=$!
-  sleep 60
-  kill $STPID2 2>/dev/null
-) &
-for i in $(seq 1 180); do
-    if grep -qE 'IPMI initial|ialized successfully' /tmp/console-full.log 2>/dev/null; then
-        echo "fullfw PostInit done (iter $i)"
-        cat /tmp/console-full.log 2>/dev/null | grep -E 'IPMI|ialized|error|fail' | head -20
-        break
-    fi
-    if [ $((i % 15)) -eq 0 ]; then
-        syscall=$(cat /proc/$FWPID/syscall 2>/dev/null || echo unknown)
-        threads=$(ls /proc/$FWPID/task/ 2>/dev/null | wc -l)
-        console_lines=$(wc -l < /tmp/console-full.log 2>/dev/null || echo 0)
-        echo "PostInit: iter $i/180 console-full=$console_lines lines fw-syscall=$syscall threads=$threads"
-        # Show fd3 strace so far
-        echo "--- fd3 strace (last 10 lines) ---"
-        tail -10 /tmp/fw-strace-fd3.log 2>/dev/null || echo "(none yet)"
-        echo "---"
-    fi
-    sleep 1
-done
-echo "=== sockbind strace (first 80 lines) ==="
-head -80 /tmp/fw-strace-sockbind.log 2>/dev/null || echo "(no sockbind strace output)"
-echo "=== epoll strace (first 40 lines) ==="
-head -40 /tmp/fw-strace-epollctl.log 2>/dev/null || echo "(no epoll strace output)"
-
-echo "--- fullfw log ---"
-cat /tmp/fullfw.log 2>/dev/null || true
-echo "--- console-full.log (cumulative daemon output) ---"
-cat /tmp/console-full.log 2>/dev/null || echo "(empty)"
-echo "=== /proc/net/udp ==="
-cat /proc/net/udp 2>/dev/null || true
 # --- SSH bring-up: enable root pubkey ssh on the virtual BMC (gets baked into the snapshot) ---
 # WHY: /etc/ssh symlinks to an unmounted persistent partition (no host keys); root's login shell
 # resolves via NSS libnss_avct to the restricted rcdmShell; and sshd's privsep child reads

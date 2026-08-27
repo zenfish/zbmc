@@ -25,12 +25,19 @@ real_line="$(grep -n 'found = real_fn(message, out);' <<<"$wrapper" | cut -d: -f
 replace_line="$(grep -n 'out->handler =' <<<"$wrapper" | head -1 | cut -d: -f1)"
 [ "$real_line" -lt "$replace_line" ]
 
-zig cc -shared -fPIC -o "$shim" "$source_file" \
-    -target aarch64-linux-gnu -ldl -lpthread -O2
+if command -v zig >/dev/null 2>&1; then
+    zig cc -shared -fPIC -o "$shim" "$source_file" \
+        -target aarch64-linux-gnu -ldl -lpthread -O2
+elif command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+    aarch64-linux-gnu-gcc -shared -fPIC -o "$shim" "$source_file" -ldl -lpthread -O2
+else
+    echo "need zig or aarch64-linux-gnu-gcc" >&2; exit 1
+fi
+objdump="$(command -v aarch64-linux-gnu-objdump || command -v objdump)"
 
-/usr/bin/objdump -t "$shim" | grep -Eq '[[:space:]]RequestHandleTableSearch$'
+"$objdump" -t "$shim" | grep -Eq '[[:space:]]RequestHandleTableSearch$'
 
-disassembly="$(/usr/bin/objdump -d "$shim")"
+disassembly="$("$objdump" -d "$shim")"
 for symbol in RequestHandleTableSearch CmdGetDeviceID shim_get_chassis_status; do
     awk -v symbol="$symbol" '
         $0 ~ "<" symbol ">:" {
