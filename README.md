@@ -10,11 +10,11 @@ on what I have here.
 
 > **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `zbmc openbmc start`.
 
-> **Private on purpose.** It aggregates vendor firmware and documents fleet-shared *default* credentials
+> It aggregates vendor firmware and documents fleet-shared *default* credentials
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
 > aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the
-> value here is *documenting the danger*. Still, no live/customer secrets, no private keys, and **no
-> extracted rootfs trees** are committed (they're huge and regenerable from firmware anyway).
+> value here is *documenting the danger*. Still, no live/customer secrets, no private keys, and no
+> extracted rootfs trees are here (they're rather large huge and regenerate from firmware anyway).
 
 ## The animals
 
@@ -34,9 +34,10 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 | **supermicro-x10** | ICMP, SSH, IPMI, Redfish, Web-UI plus 60s stable hold | pass - 3m40s |
 | **idrac9** | ICMP, SSH, IPMI, Web-UI; Redfish not configured in the P4 boot | pass - 12m48s |
 
-These times were measured with one BMC at a time on a small four-core host. `zbmc` learns timing profiles
-from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit with
-`zbmc <name> start --warm` because QEMU machine-version drift can invalidate a checkpoint.
+These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 
+`zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. 
+Warm snapshots are explicit with `zbmc <name> start --warm` because QEMU machine-version drift can 
+invalidate a checkpoint.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 
