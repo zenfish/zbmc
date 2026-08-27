@@ -1,5 +1,9 @@
 # Virtual iDRAC9 — STATE & RESUME NOTES
 
+> **Historical investigation record.** The supported package is now cold-only with accepted SSH and IPMI.
+> Redfish/Web-UI experiments below are preserved as evidence, not current acceptance. Use the repository
+> README and `./tools/zbmc idrac9 status -v`.
+
 **Updated:** 2026-07-16. Read this FIRST to pick the project back up cold. Detail lives in the
 companion docs cited below; this is the map + how-to-resume.
 

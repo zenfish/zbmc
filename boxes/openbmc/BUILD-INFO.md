@@ -1,4 +1,7 @@
-# Vanilla evb-ast2600 OpenBMC — build record
+# Vanilla evb-ast2600 OpenBMC — historical build record
+
+> This records the earlier local BitBake source build. The current turnkey downloader pins a different
+> derived image; consult `firmware/download-fw.sh` for its current SHA-256 and source URL.
 
 - **Image:** evb-ast2600.static.mtd (64 MiB, sha256 ab6b4c6317f6cd08f15cae8e8663ae06f0429671f9c69d9220898357c998ac35)
 - **Source:** github.com/openbmc/openbmc @ 5d179dab3c66c8b89e059eeb17b038a2beb435d3 (3.1.0-dev-294-g5d179dab3c)

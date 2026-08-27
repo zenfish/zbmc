@@ -12,10 +12,10 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
-NOTE: This license covers the scripts and documentation in this repository ONLY.
-The firmware image under firmware/ is the property of its respective vendor
-(Advantech / American Megatrends) and is redistributed for interoperability and
-security-research purposes; it is NOT licensed under the terms above.
+NOTE: This license covers original scripts and documentation in this repository only.
+Vendor firmware, derived firmware artifacts, packaged QEMU executables, and other
+third-party binaries retain their respective rights and are not licensed under the
+terms above unless explicitly stated.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

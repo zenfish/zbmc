@@ -9,6 +9,10 @@ The goal was a *zoo denizen*: a virtual BMC you can `start`, `console` into, and
 one — for security research on the OOB management stack (IPMI, Redfish, the web UI) without owning the
 physical board.
 
+> **Historical field report (2026-08-23).** The Apple Silicon commands below record the original
+> investigation. The supported v1 release is x86_64 Linux and uses the tracked QEMU package plus
+> `./build.sh advantech-asmb787`; see the current fleet table in the repository README.
+
 > **TL;DR outcome:** full MegaRAC userland boots, IPMIMain is stable, all services (redis, lighttpd,
 > Redfish, event/task) come up, and you get a **root console** (`sysadmin` / `superuser`). External
 > network (SSH/Redfish/IPMI over host ports) is blocked by a kernel-driver-vs-QEMU incompatibility that
@@ -176,7 +180,7 @@ where MegaRAC's central daemon, **IPMIMain**, comes in. It reliably **SIGSEGV'd 
 
 This exact failure had been solved before on a sibling box (the HPE Cray XD670, same MegaRAC SP-X /
 `ast2600evb_ami` platform), via Ghidra RE. The two fixes ported cleanly and live in
-[`box/qemu-patch-rootfs.sh`](../box/qemu-patch-rootfs.sh):
+[`boxes/advantech-asmb787/qemu-patch-rootfs.sh`](../boxes/advantech-asmb787/qemu-patch-rootfs.sh):
 
 **Fix 1 — the `/conf/BMC` symlink.** IPMIMain opens the *literal* path `/conf/BMC/IPMI.conf` to build
 its per-interface state table `g_BMCInfo[]`. On real hardware, platform detection creates
@@ -322,19 +326,19 @@ DMA-serial open in ASMB-787's init) are documented as a parked, multi-session su
 ```
 tools/unpack-ami            one-command AMI MegaRAC unpacker (the gotchas above, codified)
 tools/zbmc                  the "zoo" dispatcher: zbmc <box> start|console|status|...
-box/qemu-patch-rootfs.sh    the two IPMIMain fixes (conf/BMC symlink + IPMI.conf trim)
-box/boot-asmb787-svc.sh     the exact QEMU invocation (mtdparts, ttyS4, hostfwd)
-box/build.sh                firmware -> {kernel.Image, dtb, rootfs.sqfs, mtdflash.bin} in ~35s
-box/zbmc.box               the box descriptor (creds, ports, verbs)
+boxes/advantech-asmb787/qemu-patch-rootfs.sh  the two IPMIMain fixes
+boxes/advantech-asmb787/boot-asmb787-svc.sh   the exact QEMU invocation
+boxes/advantech-asmb787/build.sh              firmware -> boot artifacts
+boxes/advantech-asmb787/zbmc.box              the box descriptor
 firmware/…ima_enc           the source of truth
 ```
 
 Quickstart:
 
 ```bash
-./box/build.sh                       # regenerate artifacts from the firmware
-WD=./work BG=1 ./box/boot-asmb787-svc.sh
-tail -f ./work/svc.log               # login: sysadmin / superuser  (uid 0)
+./build.sh advantech-asmb787
+sudo ./tools/zbmc advantech-asmb787 start
+./tools/zbmc advantech-asmb787 status -v
 ```
 
 ## 6. Lessons worth carrying to the next BMC

@@ -11,10 +11,17 @@
 
 <div class="max-w-4xl mx-auto px-6 py-10">
 
+  <aside class="mb-8 border-l-4 border-amber-600 bg-amber-50 p-4 text-sm text-amber-950">
+    <strong>Historical investigation record (2026-07-28).</strong> Current release acceptance is retained
+    IPMI only. Redfish/Web-UI are unstable, vendor SSH is absent, cold boot is the default, and injected
+    blank-password network shells are disabled unless explicitly requested. Use the repository README,
+    SECURITY.md, and <code>zbmc megarac-hpe status -v</code> for current behavior.
+  </aside>
+
   <header class="mb-8 border-b border-slate-200 pb-6">
     <h1 class="text-3xl font-bold text-slate-900">Virtual HPE Cray XD670 BMC</h1>
     <p class="mt-2 text-lg text-slate-600">AMI <b>MegaRAC SP-X</b> (Linux 5.4.184-ami) on Aspeed <b>AST2600</b>, emulated with <code>qemu-system-arm -M ast2600-evb</code>.</p>
-    <p class="mt-1 text-sm text-slate-500">Firmware: <code>XD670_BMC_v1.27_signed.bin.hpm</code> · zoo box <code>zbmc cray</code> · 2026-07-28</p>
+    <p class="mt-1 text-sm text-slate-500">Firmware: <code>XD670_BMC_v1.27_signed.bin.hpm</code> · zoo box <code>zbmc megarac-hpe</code> · 2026-07-28</p>
   </header>
 
   <section class="mb-8">
@@ -75,7 +82,7 @@
     </div>
     <div class="bg-emerald-50 border border-emerald-200 rounded p-4 mt-3">
       <p class="font-semibold text-emerald-800">Reliable via warm snapshot (~4s restore)</p>
-      <p class="text-sm text-emerald-900">IPMIMain hits a nondeterministic message-handler race on cold boot (central-MsgHndlr NULL-deref on an early client message; <code>maxcpus=1</code>/unloaded host don't remove it) — a good roll is fully green, a bad roll crash-loops. Good boots are the minority, so we capture <b>one</b> green instance with a warm QMP snapshot and always restore it (x14 pattern): <code>snapshot-cray.sh</code> → <code>cray-snap.gz</code>+<code>cray-snap-flash.bin</code>; <code>restore-cray.sh</code> (used by <code>zbmc cray start</code>) brings it back <b>green in ~4s</b> — no reroll. <code>start-cray-green.sh</code> health-rerolls a cold boot to <em>build</em> the snapshot (or <code>ZBMC_COLD=1</code> to force cold). Snapshot files (~180&nbsp;MB) live in the workdir, not git — regenerate with <code>zbmc cray snapshot</code> on a green boot.</p>
+      <p class="text-sm text-emerald-900">IPMIMain hits a nondeterministic message-handler race on cold boot (central-MsgHndlr NULL-deref on an early client message; <code>maxcpus=1</code>/unloaded host don't remove it) — a good roll is fully green, a bad roll crash-loops. This paragraph records the historical snapshot-first experiment; current starts are cold by default and <code>zbmc megarac-hpe start --warm</code> is explicit.</p>
       <p class="text-sm text-emerald-900 mt-2"><b>Address:</b> loopback <code>127.0.0.1</code> — IPMI <code>:5623</code>, Redfish <code>:5443</code>, ssh <code>:5022</code>. (Real-IP lo0-alias hostfwd serves Redfish/TCP fine, but qemu SLIRP mangles RMCP+'s multi-packet UDP on an alias, so IPMI-623 only stays reliable on loopback.) Verified: <code>ipmitool -I lanplus -H 127.0.0.1 -p 5623 -U admin -P superuser mc info</code> → Gigabyte MfgID 15370; <code>curl -sk -u admin:superuser https://127.0.0.1:5443/redfish/v1/Managers</code> → real JSON.</p>
     </div>
   </section>
@@ -87,7 +94,7 @@
 ./boot-cray.sh               # raw root shell (init=/bin/sh)
 ./boot-cray-svc.sh           # full init + networking (console login sysadmin/superuser)
 
-zbmc cray console            # via the zoo dispatcher</pre>
+zbmc megarac-hpe console     # via the zoo dispatcher</pre>
   </section>
 
   <footer class="text-xs text-slate-400 border-t border-slate-200 pt-4">

@@ -1,167 +1,180 @@
 # Getting Started
 
-Go from a fresh clone to a **running virtual server management controller (BMC)** you have a root shell
-on. One box — **`advantech-asmb787`** — is fully turnkey (its firmware ships in this repo), so start there.
+This guide takes a fresh x86_64 Linux host from clone to a functional virtual BMC. Start with the
+upstream `openbmc` image: it is the clean control in this repository and has accepted SSH, IPMI,
+Redfish, and Web-UI paths.
 
-New to this? See the [Glossary](#glossary) at the bottom for BMC / IPMI / Redfish / MegaRAC / etc.
+## Host boundary
 
-> **Host requirement:** zbmc v1 supports only **x86_64 Linux** (Intel or AMD). Its QEMU paths and
-> SHA-256 pins are for x86_64 executables. ARM64 systems, including Raspberry Pi and Apple Silicon,
-> and macOS are not currently supported. `build.sh` checks this before doing any work, downloads the
-> SHA-256-pinned QEMU Docker runtime, and installs an isolated pinned `zipmi` environment.
+zbmc v1 supports **x86_64 Linux only**. The packaged QEMU executables and their SHA-256 contracts do
+not run on ARM64, Raspberry Pi, Apple Silicon, macOS, or other operating systems. `build.sh` rejects an
+unsupported host before downloading anything.
 
-For one BMC at a time, roughly 2 GiB host RAM and 5 GiB free disk is a useful starting point. This is
-guidance only; zbmc does not reject smaller hosts.
+For one BMC at a time, roughly 2 GiB RAM and 5 GiB free disk is a useful starting point. Those are
+operator guidelines, not enforced limits. Cold boot is CPU- and load-sensitive.
 
----
+## 1. Install host packages
 
-## 0. Install the tools
+On Debian 13:
 
 ```bash
-# Debian 13 on x86_64
-sudo apt install docker.io squashfs-tools u-boot-tools device-tree-compiler \
-  curl git sshpass socat python3-pexpect python3-venv pipx
+sudo apt update
+sudo apt install docker.io curl git ca-certificates \
+  squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
+  expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
+  iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
 pipx install jefferson
 ```
 
-Confirm the extraction tools are on your PATH. QEMU itself comes from the exact Docker package that
-`build.sh` downloads and verifies:
+Start Docker if the package did not do so:
 
 ```bash
-docker --version
-unsquashfs -version         #   "   squashfs-tools 4.7
-dumpimage -V                #   "   u-boot-tools 2026.04
-dtc --version               #   "   dtc 1.7.2
-jefferson --help            #   "   jefferson (any)
+sudo systemctl enable --now docker
+sudo docker info
 ```
 
-If a command prints its version/help, you're good. If it says "command not found", re-check step 0.
+`build.sh` can use Docker directly or through `sudo`; membership in the `docker` group is optional.
+Docker group membership is effectively root access, so do not add it only to avoid typing `sudo`.
 
----
-
-## 1. Clone
+## 2. Clone and select the tools
 
 ```bash
-git clone git@github.com:zenfish/zbmc.git
+git clone https://github.com/zenfish/zbmc.git
 cd zbmc
-export PATH="$HOME/.local/bin:$PWD/tools:$PATH" # find pipx tools and type 'zbmc' instead of './tools/zbmc'
+export PATH="$PWD/tools:$HOME/.local/bin:$PATH"
 ```
 
-## 2. Build the boot image
+The project has one supported branch: `main`.
 
-`build.sh` turns firmware into the files QEMU boots (kernel, device tree, root filesystem, flash image).
-It builds every box that's ready to build; right now that's the one whose firmware ships in the repo.
+## 3. Build the first box
 
 ```bash
-./build.sh                  # builds advantech-asmb787 into work/advantech-asmb787/  (~35s)
+./build.sh openbmc
 ```
 
-Output tells you what built and what didn't:
+The first build:
 
-```
-BUILT   ✓ advantech-asmb787   -> work/advantech-asmb787/
-ref     – idrac9   (reference recipe — supply firmware + adapt boxes/idrac9/; see docs/zoo-lessons.md)
-...
-```
+1. Downloads and SHA-256-verifies the pinned QEMU Docker archive.
+2. Loads and validates the exact QEMU 11 ARM/AArch64 and Debian QEMU 10.0.11 executables.
+3. Installs an isolated, pinned `zipmi` environment under `work/deps/`.
+4. Downloads and verifies the selected firmware or boot bundle.
+5. Builds or stages artifacts under `work/openbmc/`.
 
-## 3. Run it — with `zbmc`
+Build everything with `./build.sh`. Preview the registry without downloading or building with
+`./build.sh --list`.
 
-`zbmc` is the one control tool for every box: start, log in, check status, stop. This is the easy path.
+## 4. Start and follow it
 
 ```bash
-zbmc advantech-asmb787 start
+sudo ./tools/zbmc openbmc start
 ```
-Boots the box in the background (builds first if needed). Takes ~2 minutes under emulation.
-(Cold boxes take ~2 min to services; warm-snapshot boxes like idrac10 / supermicro-x14 resume in ~15–30 s. A loaded host is slower.)
+
+`start` validates the descriptor's QEMU path, SHA-256, exact version, machine, and QMP startup before
+launching firmware. It then reports each startup stage and waits for the box's declared functional
+services. OpenBMC took about five minutes on the four-core reference host.
+
+To return immediately while the readiness watcher continues:
 
 ```bash
-zbmc advantech-asmb787 console 'uname -a; id'
+sudo ./tools/zbmc openbmc start --no-wait
+./tools/zbmc openbmc status --follow
 ```
-Runs a command on the box's serial console and prints the output. **It logs you in automatically** the
-first time (as `sysadmin` / `superuser`, which is uid 0 — root). Run it again with any command.
+
+Ctrl-C stops following; it does not stop QEMU. The readiness watcher and permanent console capture
+continue in the run evidence directory.
+
+## 5. Use the BMC
 
 ```bash
-zbmc advantech-asmb787 console
+./tools/zbmc openbmc status
+./tools/zbmc openbmc status -v
+./tools/zbmc openbmc ssh 'uname -a'
+./tools/zbmc openbmc ipmi mc info
+./tools/zbmc openbmc web
+./tools/zbmc openbmc console
 ```
-With no command, this attaches to the **live console** (a `tail -f`). Press Ctrl-C to detach — the box
-keeps running.
+
+The upstream OpenBMC image uses `root` / `0penBmc`. `status` reports current functional health;
+`status -v` adds the exact probe commands, run evidence directory, console log, and follow command.
+Redfish (`/redfish/v1/`) and the vendor Web-UI root are separate checks.
+
+Stop it with:
 
 ```bash
-zbmc advantech-asmb787 status      # is QEMU up? which ports?
-zbmc advantech-asmb787 stop        # shut it down
-zbmc list                          # every box in this repo
+sudo ./tools/zbmc openbmc stop
 ```
 
-That's it. `zbmc <box> start` → `zbmc <box> console` is the whole loop.
+zbmc refuses to start around, or stop, a QEMU process that is not owned by the selected run evidence.
+An externally discovered process is reported as `UP (UNMANAGED)` and must be handled explicitly.
 
----
+## 6. Addresses
 
-## 4. What you just booted
-
-A complete, running **Advantech ASMB-787** server BMC — the same firmware image that runs on the real
-board — inside QEMU. Its full software stack is up (the web server, the IPMI service, the Redfish API,
-the event/task daemons), and you have a **root shell** on its console. You can poke at exactly the
-software a real BMC exposes to the network, without owning the hardware.
-
-**One limitation for this particular box:** access is **console-only**. Its network services are running,
-but they aren't reachable from your host over SSH/Redfish/IPMI, because this firmware's (older) kernel
-can't bring its emulated network interface up under QEMU. The full story is in
-[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md). Other boxes in the zoo *do*
-have working network access — see below.
-
----
-
-## 5. Under the hood (optional)
-
-`zbmc` is a thin wrapper. If you'd rather drive QEMU yourself, the box's own scripts do the same thing:
+The default addresses are in `zhosts.txt` and shown by `zbmc list`. To relocate them, copy
+`zbmc.conf.example` to the gitignored `zbmc.conf` and set a pool or individual address:
 
 ```bash
-WD=./work/advantech-asmb787 BG=1 ./boxes/advantech-asmb787/boot.sh   # boot in background
-tail -f ./work/advantech-asmb787/svc.log                            # watch it; Ctrl-C at 'login:'
-# the console is a fifo — write commands to it, read output from the log:
-printf 'sysadmin\n'  > ./work/advantech-asmb787/cin; sleep 1        # username
-printf 'superuser\n' > ./work/advantech-asmb787/cin; sleep 1        # password
-printf 'id\n'        > ./work/advantech-asmb787/cin; sleep 1
-tail ./work/advantech-asmb787/svc.log
-pkill -f 'mtdflash-run'                                              # stop
+cp zbmc.conf.example zbmc.conf
+
+# Edit zbmc.conf:
+ZBMC_POOL=10.250.0
+# ZBMC_IP_openbmc=192.168.1.100
 ```
 
-Use `zbmc` unless you're debugging the boot itself.
+Address priority is: per-box `ZBMC_IP_<name>`, then `ZBMC_POOL`, then `ZHOSTS_FILE`, then the descriptor
+default. Set `ZHOSTS_FILE=/absolute/path/zhosts.txt` in `zbmc.conf` when a deployment needs a complete
+site-specific map.
 
----
+Supermicro X10 defaults to portable QEMU user networking. Its forwarded ports appear in `status -v`.
+Set `X10_NET_MODE=direct` only on an isolated lab LAN that routes the selected address and permits the
+guest MAC.
 
-## 6. The other boxes
+## 7. Choose another box
 
-`boxes/<name>/` holds the recipe + findings for every BMC in the zoo (Dell iDRAC9/10, Supermicro X14,
-NVIDIA GB200, HPE Cray, vanilla OpenBMC). These are **reference recipes** — their firmware is too large
-for GitHub (fetch it with `./firmware/download-fw.sh`) and their scripts are written against the author's
-build tree, so they're not one-command runnable from a clone yet. Read them alongside
-[docs/zoo-lessons.md](docs/zoo-lessons.md), which explains each box's SoC, boot method, network trick, and
-gotchas. `advantech-asmb787` is the fully worked, runnable example to learn the pattern from.
+```bash
+./tools/zbmc list
+./build.sh supermicro-x14
+sudo ./tools/zbmc supermicro-x14 start
+```
 
----
+The current measured acceptance boundary is in the README fleet table. Important exceptions:
+
+- `advantech-asmb787` is console-only and took about 11m50s on the reference host.
+- `idrac10` and `megarac-hpe` are bounded partials. READY means their narrower declared acceptance
+  contract passed; it does not promote substituted or unstable services to retained vendor behavior.
+- `idrac9` must cold-boot. Its USB network does not survive warm migration.
+- `idrac10` is cold-only. Its former packaged checkpoint carried stale shared state and is no longer a
+  supported release path.
+- `megarac-hpe` and `supermicro-x14` use a compatible bundled snapshot only with `--warm`.
+- MegaRAC's injected blank-password SSH/telnet paths are not forwarded unless
+  `ZBMC_INSECURE_LAB_ACCESS=1` is explicitly set on an isolated host.
+
+A startup-watch timeout means the readiness deadline ended; it does not mean QEMU died. Run `status`
+again for current health and `explain` for the recorded startup outcome:
+
+```bash
+./tools/zbmc supermicro-x14 status -v
+./tools/zbmc supermicro-x14 explain
+./tools/zbmc supermicro-x14 evidence
+```
+
+## Evidence and trust boundary
+
+These images contain vendor default credentials and lab-only adaptations. Some boxes reconstruct
+missing board state while retaining vendor services; others interpose or replace a narrow endpoint.
+A working substitute does not prove the replaced vendor component. Read
+[Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.html) before using a box as
+security evidence, and keep patched guests on an isolated research host.
+The Docker runtime uses host networking and writable work mounts. It packages exact QEMU builds but is
+not a containment boundary. Read [SECURITY.md](SECURITY.md) before exposing any guest beyond the host.
 
 ## Glossary
 
-| Term | Plain English |
-|------|---------------|
-| **BMC** | Baseboard Management Controller — a small always-on computer on a server board that runs its own OS and lets you manage the server (power, console, sensors, firmware) remotely, even while the server is off. |
-| **MegaRAC** | AMI's commercial BMC firmware (AMI = American Megatrends Inc.). Many vendors ship a rebadged MegaRAC. **SP-X** is one of AMI's MegaRAC product generations. Advantech ASMB-787 and HPE Cray XD670 both run MegaRAC SP-X. |
-| **OpenBMC** | The open-source BMC firmware stack (Linux Foundation / "Phosphor"). Supermicro X14, NVIDIA GB200, and the vanilla baseline box run it. |
-| **userland** | The normal programs and services that run on top of the Linux kernel (as opposed to the kernel itself). "Full userland is up" = all the BMC's services started. |
-| **IPMI / RMCP+** | The classic remote-management protocol (power control, sensors, users). **RMCP+** is the authenticated IPMI-2.0 network variant; **RAKP** is its login handshake. |
-| **Redfish** | The modern REST/JSON management API that's replacing IPMI. |
-| **NC-SI** | Network Controller Sideband Interface — lets the BMC share the host server's physical network port. The reason `advantech-asmb787` is console-only under QEMU. |
-| **AST2600 / NPCM750** | The actual chips (SoCs) BMCs run on — ASPEED AST2500/2600 and Nuvoton NPCM750/845. QEMU emulates them (`ast2600-evb`, `npcm750-evb`, …). |
-| **`zbmc`** | The control tool in this repo — `zbmc <box> start|console|status|stop` for every box. |
-
-## Troubleshooting
-
-- **`Could not set up host forwarding rule 'udp:...:6623'`** — a previous QEMU still holds the port.
-  `pkill -f 'mtdflash-run'` (or `lsof -tnP -iUDP:6623 | xargs kill -9`), then start again.
-- **`login:` never appears** — give it the full ~2 min under emulation; check the box's `svc.log` for a
-  kernel panic. A heavily-loaded host boots slower.
-- **`console` prints nothing** — the box was still booting; wait for `login:` in `status`/`svc.log`, then
-  re-run. `zbmc` logs in for you once the prompt is up.
-- **`firmware not found`** — run from the repo root; `firmware/…ima_enc` must be present (it's a normal
-  committed file — this repo does not use git-lfs).
+| Term | Meaning |
+|---|---|
+| BMC | The server's independent management computer. |
+| IPMI / RMCP+ | Classic authenticated remote-management protocol. |
+| Redfish | REST/JSON management API rooted at `/redfish/v1/`. |
+| Web-UI | Vendor browser interface; distinct from Redfish. |
+| NC-SI | Sideband protocol used by a BMC to share a host NIC. |
+| QMP | QEMU Machine Protocol, used for validation, control, and compatible snapshots. |
+| `READY` | Every service declared for that run passed its functional probe. |

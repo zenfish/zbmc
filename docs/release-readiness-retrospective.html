@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zbmc Release-Readiness Retrospective</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-100 text-zinc-900">
+  <main class="mx-auto max-w-5xl px-5 py-10 sm:px-8">
+    <header class="border-b border-zinc-300 pb-7">
+      <p class="text-sm font-semibold uppercase tracking-wide text-red-700">Repository audit · 2026-08-27</p>
+      <h1 class="mt-2 text-4xl font-bold">zbmc release-readiness retrospective</h1>
+      <p class="mt-4 max-w-3xl text-lg text-zinc-700">A critical review of the dispatcher, eight box
+        contracts, QEMU package, security boundaries, tests, and documentation after the fleet redesign.</p>
+    </header>
+
+    <section class="py-8">
+      <h2 class="text-2xl font-bold">Verdict</h2>
+      <p class="mt-3 text-zinc-700">The redesign produced a usable research fleet, but the first release
+        candidate had contract drift: descriptors, status, startup, historical notes, and build recipes did
+        not always agree. The audit corrected the shared control paths and narrowed acceptance to behavior
+        demonstrated by each box. This remains isolated-lab software, not a secure multi-user service.</p>
+    </section>
+
+    <section class="border-y border-zinc-300 py-8">
+      <h2 class="text-2xl font-bold">What changed in the redesign</h2>
+      <div class="mt-5 grid gap-6 md:grid-cols-2">
+        <div><h3 class="font-bold">One dispatcher</h3><p class="mt-1 text-zinc-700">A descriptor registry,
+          common lifecycle, exact QEMU validation, functional probes, evidence capture, console logs, and
+          operator-focused status replaced independent session scripts.</p></div>
+        <div><h3 class="font-bold">Exact runtime</h3><p class="mt-1 text-zinc-700">Three x86_64 Linux QEMU
+          executables are hash-pinned in one Docker package. Docker gives artifact consistency, not
+          containment.</p></div>
+        <div><h3 class="font-bold">Evidence first</h3><p class="mt-1 text-zinc-700">Each run records its
+          manifest, events, probes, console, captures, startup result, and termination independently.</p></div>
+        <div><h3 class="font-bold">Explicit acceptance</h3><p class="mt-1 text-zinc-700">A box reaches READY
+          only when the services declared by its descriptor pass. Redfish, vendor Web-UI, console, and NC-SI
+          are separate capabilities.</p></div>
+      </div>
+    </section>
+
+    <section class="py-8">
+      <h2 class="text-2xl font-bold">Audit corrections</h2>
+      <table class="mt-5 w-full border-collapse text-left text-sm">
+        <thead><tr class="border-b-2 border-zinc-400"><th class="py-2 pr-4">Area</th><th class="py-2">Correction</th></tr></thead>
+        <tbody class="divide-y divide-zinc-300">
+          <tr><td class="py-3 pr-4 font-semibold">Process ownership</td><td class="py-3">Fresh checkouts no longer adopt old QEMU processes. PID plus process-start identity gates reuse and stop.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Shutdown</td><td class="py-3">Operator stops remain STOPPED instead of racing the health watcher into CRASHED.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Validation</td><td class="py-3">Candidate-QEMU testing refuses running boxes and verifies the path and hash written to run evidence.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Readiness</td><td class="py-3">The runtime no longer appends Web-UI or NC-SI behind the descriptor's back. ICMP startup and status policy agree.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Builds</td><td class="py-3">Unknown boxes and failed builds return nonzero; both <code>build</code> and <code>start --build</code> run the tracked turnkey recipe.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Probe concurrency</td><td class="py-3">Root watchers and unprivileged status commands share host-wide SSH/IPMI locks, preventing self-inflicted probe failures.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Networking</td><td class="py-3">Direct-LAN setup rolls back partial mutation and deletes only TAPs it created.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Local control</td><td class="py-3">QMP/GDB sockets are no longer world-writable; X10 GDB is opt-in; Docker no longer uses privileged or host-PID mode.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Credentials</td><td class="py-3">iDRAC10 generates a per-installation SSH key. MegaRAC's injected blank-password network shells are opt-in.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Mutable bases</td><td class="py-3">X14 NOR and eMMC bases use QEMU snapshot writes, preserving downloaded artifacts.</td></tr>
+          <tr><td class="py-3 pr-4 font-semibold">Documentation</td><td class="py-3">Current operator contracts are separated from dated investigation records and mirror-only provenance is stated plainly.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="border-y border-zinc-300 py-8">
+      <h2 class="text-2xl font-bold">What worked, and what did not</h2>
+      <p class="mt-3 text-zinc-700"><strong>Worked:</strong> exact QEMU pins, descriptor-driven launch,
+        permanent serial capture, functional protocol probes, cold boot as the default, immutable base
+        images, and supplying missing board environment while retaining vendor components.</p>
+      <p class="mt-3 text-zinc-700"><strong>Did not work:</strong> treating every HTTP response as equivalent,
+        silently calling discovered capabilities required, assuming snapshots were portable, adopting a
+        process from a loose command-line match, trusting artifact presence as rebuild validity, and letting
+        historical successes read as current guarantees.</p>
+      <p class="mt-3 border-l-4 border-red-700 pl-4 font-medium">The important distinction is not “real versus
+        fake.” It is whether the vendor component was preserved and supplied its missing environment, or the
+        component itself was replaced. Those results prove different things.</p>
+    </section>
+
+    <section class="py-8">
+      <h2 class="text-2xl font-bold">Current acceptance boundary</h2>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full min-w-[720px] border-collapse text-left text-sm">
+          <thead><tr class="border-b-2 border-zinc-400"><th class="py-2 pr-3">Box</th><th class="py-2 pr-3">Accepted</th><th class="py-2 pr-3">Reference cold time</th><th class="py-2">Boundary</th></tr></thead>
+          <tbody class="divide-y divide-zinc-300">
+            <tr><td class="py-3 font-mono">openbmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>5m01s</td><td>Clean control</td></tr>
+            <tr><td class="py-3 font-mono">nvidia-obmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>4m50s</td><td>OpenBMC with firmware MAC adaptation</td></tr>
+            <tr><td class="py-3 font-mono">supermicro-x10</td><td>SSH, IPMI, Redfish, Web-UI</td><td>2m38s user-net</td><td>Research license interposition</td></tr>
+            <tr><td class="py-3 font-mono">supermicro-x14</td><td>ICMP, SSH, IPMI, Web-UI</td><td>4m20s</td><td>Scripted service environment</td></tr>
+            <tr><td class="py-3 font-mono">idrac9</td><td>ICMP, SSH, IPMI</td><td>12m48s</td><td>Cold-only P4 boot</td></tr>
+            <tr><td class="py-3 font-mono">idrac10</td><td>ICMP, SSH, hybrid IPMI, static Redfish</td><td>about 6m15s</td><td>Partial; static HTTP substitute</td></tr>
+            <tr><td class="py-3 font-mono">megarac-hpe</td><td>IPMI</td><td>load-sensitive</td><td>Partial; injected network shells disabled</td></tr>
+            <tr><td class="py-3 font-mono">advantech-asmb787</td><td>Serial console</td><td>11m50s</td><td>External NC-SI path unmodeled</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="border-t border-zinc-300 pt-8">
+      <h2 class="text-2xl font-bold">Remaining release risks</h2>
+      <ul class="mt-4 list-disc space-y-2 pl-5 text-zinc-700">
+        <li>Several proprietary and derived artifacts are mirror-only; hashes establish identity, not redistribution authority. Reachable Git history still contains the former 67,109,128-byte Advantech firmware blob.</li>
+        <li>iDRAC9 still uses a deliberately shared research login key paired with its prebuilt image.</li>
+        <li>Snapshot bundles require a documented scrub/rebuild process before they can be treated as identity-neutral.</li>
+        <li>Some historical helper binaries lack complete source/build provenance.</li>
+        <li>Run manifests identify the selected QEMU exactly but do not yet enumerate every boot artifact consumed by every box.</li>
+        <li>Live boot verification remains host- and load-sensitive; shell contract tests cannot replace a fleet run.</li>
+      </ul>
+      <p class="mt-5 text-sm text-zinc-600">Current operational guidance: <a class="underline" href="../GETTING-STARTED.md">Getting Started</a> ·
+        threat boundary: <a class="underline" href="../SECURITY.md">Security Policy</a> · runtime truth: <code>./tools/zbmc &lt;box&gt; status -v</code>.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,9 +1,14 @@
 # Why the Dell iDRACs Are Hard (and how the turnkey boxes cheat)
 
+> **Historical field note.** The snapshot conclusions below describe an earlier investigation state.
+> Current release behavior is different: iDRAC9 is cold-only, and iDRAC10 now cold-boots by default from
+> fetched artifacts, deterministically generated cfgdb defaults, and a per-installation SSH key. The old
+> shared iDRAC10 checkpoint is no longer fetched or accepted by `start --warm`. See `README.md` and
+> `SECURITY.md` for the current contract.
+
 A field note on failure. The OpenBMC boxes in this zoo (`openbmc`, `nvidia-obmc`) boot in one command;
-the Dell iDRACs took weeks and still only run from a **warm snapshot**, not from firmware. This documents
-*why* — because the wall is more instructive than the win, and because the path to doing it "properly"
-(build-from-DUP) is wide open for anyone who wants it.
+the Dell iDRACs took weeks. This preserves why earlier snapshot-first approaches were attempted and what
+they taught us; it is not the current operator guide.
 
 ## The turnkey boxes cheat
 
@@ -40,7 +45,7 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
 - **The dbus-broker socket-activation lottery.** Cold boot **hangs roughly 2 times in 3** under a single
   TCG vCPU — nondeterministically. This is the real killer: you cannot ship a `build.sh` that "just boots"
   when a third of boots wedge.
-- **Warm snapshot is the only reliable path.** Cold-boot *retrying until services + IPMI answer*, then QMP
+- **Historical snapshot path.** Cold-boot *retrying until services + IPMI answer*, then QMP
   `stop` + `migrate exec:gzip` → `state.gz`. Restore with `-incoming` over a **frozen qcow2 overlay**
   (NOT `snapshot=on` on the base, or the disk and the migrated RAM diverge and it corrupts). On resume you
   must **loop QMP `cont` until the vCPU reports `running`** — a single `cont` leaves it half-migrated with
@@ -50,8 +55,8 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
   the session library, and (more durably) a real `cfgmgrd` fed a seeded `CfgCurrentValues.db` (username
   must be 16-byte `MemCmp`-padded, the privilege nibble lives at a raw offset, the HMAC key at entry+0x11).
 
-That's why `boxes/idrac10` ships a **snapshot bundle** (kernel + gmac DTB + 256 MB SD image + frozen
-overlay + 71 MB RAM state) fetched from the mirror, and `zbmc idrac10 start` does restore-not-build.
+That approach explained the earlier snapshot bundle. The current package deliberately does not fetch it:
+ordinary `zbmc idrac10 start` cold-boots, while `start --warm` fails with an explicit unsupported message.
 
 ## iDRAC9 — one notch easier, one notch worse
 

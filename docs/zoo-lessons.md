@@ -1,5 +1,11 @@
 # The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU
 
+> **Historical investigation record (2026-08).** This document preserves the experiments and terminology
+> used during bring-up; its per-box table is not the current release contract. Use the fleet table in
+> `README.md`, each `boxes/<name>/zbmc.box`, and live `status -v` output for current behavior. In particular,
+> iDRAC10 is cold-only in the supported package, X14 does not accept Redfish, and MegaRAC-HPE accepts
+> retained IPMI only.
+
 Cross-box patterns distilled from virtualizing nine BMCs across four vendors and three RTOS/Linux stacks
 (Dell iDRAC9/10, Supermicro X14, HPE Cray XD670, Advantech ASMB-787, NVIDIA GB200NVL, vanilla OpenBMC,
 Romulus, HPE iLO5). If you're trying to boot a vendor BMC image under an emulator, read this first — most

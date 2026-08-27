@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+for test in "$repo"/tests/*.sh; do
+  printf '\n===== %s =====\n' "$(basename "$test")"
+  bash "$test"
+done

@@ -1,54 +1,55 @@
-# zbmc-lab — a zoo of virtual BMCs under QEMU
+# zbmc — a zoo of virtual BMCs under QEMU
 
 Boot real vendor **BMC** (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher
 (`zbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
 RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
 
 This is my own working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
-skill so others can reproduce it on their own images. C&C very welcome, as are new recipies/methods/improvements
+skill so others can reproduce it on their own images. C&C very welcome, as are new recipes/methods/improvements
 on what I have here. This turned out to be a bit more black magic than I'd anticipated beating these into
 submission (at least... mostly beaten... still a bit to do.)
 
-> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `zbmc openbmc start`.
+> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `sudo ./tools/zbmc openbmc start`.
 
 > **Supported host:** zbmc v1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
 > executables, paths, and SHA-256 values were produced for x86_64 Linux. ARM64 hosts such as
 > Raspberry Pi and Apple Silicon, macOS, and other operating systems are not currently supported.
-> `build.sh` downloads and SHA-256-verifies the pinned 394 MiB QEMU Docker runtime, then installs
+> `build.sh` downloads and SHA-256-verifies the pinned QEMU Docker runtime, then installs
 > a pinned `zipmi` environment. Docker keeps the exact QEMU binaries identical across Linux releases.
 
 Resource sizing is guidance, not an enforced check. Individual BMCs request 128 MiB to 1 GiB of
 guest RAM; allow roughly 2 GiB host RAM and 5 GiB free disk for one-at-a-time use. Fleet timings in
 this README came from a four-core host and will be slower on smaller systems.
 
-> It aggregates vendor firmware and documents fleet-shared *default* credentials
-> that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
-> aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the
-> value here is *documenting the danger*. Still, no live/customer secrets, no private keys, and no
-> extracted rootfs trees are here (they're rather large and regenerate from firmware anyway).
+> It aggregates vendor and research firmware and documents fleet-shared *default* credentials
+> (calvin, factory IPMIKeys, CredVault keys, etc.). Those
+> aren't repo secrets — they are already present in the source firmware or published research bundles; the
+> value here is *documenting the danger*. The tracked tree contains no live/customer secrets or private
+> keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
 
 ## The animals
 
-`zbmc list` shows these; run any with `zbmc <name> start`. Firmware isn't committed - `build.sh`
-fetches it via `firmware/download-fw.sh` (**vendor download first, git.trouble.org mirror as fallback**,
-all SHA-256-verified). The table records exact-build acceptance measured on the four-core Debby host;
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the
+current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source
+listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records
+exact-build acceptance measured on the four-core Debby host;
 it is a reproducibility baseline, not a promise that every vendor service is complete.
 
 | `zbmc` name | Accepted function | Exact-build result / measured cold start |
 |-------------|-------------------|------------------------------------------|
 | **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m01s |
 | **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m50s |
-| **advantech-asmb787** | retained serial login; external network remains WIP | pass - 11m50s |
+| **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 11m50s |
 | **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | partial - about 6m15s to the last working service |
-| **megarac-hpe** | IPMI; Redfish/Web-UI observed but unstable; SSH absent | partial - no reliable READY time |
+| **megarac-hpe** | retained IPMI; Redfish/Web-UI observed but unstable; vendor SSH absent | partial - IPMI has no reliable cold READY time |
 | **supermicro-x14** | ICMP, SSH, IPMI, Web-UI; Redfish not configured | pass - 4m20s |
 | **supermicro-x10** | SSH, IPMI, Redfish, Web-UI plus 60s stable hold; ICMP in direct-LAN mode | pass - 2m38s user-net / 3m40s direct-LAN |
-| **idrac9** | ICMP, SSH, IPMI, Web-UI; Redfish not configured in the P4 boot | pass - 12m48s |
+| **idrac9** | ICMP, SSH, IPMI; Redfish and Web-UI are not accepted in the P4 boot | pass - 12m48s |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 
 `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. 
-Warm snapshots are explicit with `zbmc <name> start --warm` because QEMU machine-version drift can 
-invalidate a checkpoint.
+Warm snapshots are explicit for MegaRAC-HPE and X14 with `start --warm` because QEMU machine-version
+drift can invalidate a checkpoint. iDRAC9 and the supported iDRAC10 package path are cold-only.
 
 Supermicro X10 defaults to QEMU user networking so it works on cloud and other hosts that cannot
 bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTPS ports are shown by
@@ -64,26 +65,28 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 
 ```bash
 # Debian 13 on x86_64
-sudo apt install docker.io squashfs-tools u-boot-tools device-tree-compiler curl git sshpass socat net-tools python3-pexpect python3-venv pipx
+sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
+  device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
+  netcat-openbsd iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
 pipx install jefferson
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
 ./build.sh                     # install exact QEMU/zipmi + build every ready box
-zbmc openbmc start             # boot vanilla OpenBMC (about 5 min on the reference host)
-zbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
-zbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
-zbmc openbmc web               # Redfish ServiceRoot
+sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 5 min on the reference host)
+./tools/zbmc openbmc ssh 'uname -a'
+./tools/zbmc openbmc ipmi mc info
+./tools/zbmc openbmc web
 ```
 
-No firmware is committed — `build.sh` fetches what a box needs via `firmware/download-fw.sh`:
+No firmware is present in the current checkout; `build.sh` fetches what a box needs via the applicable
+box recipe or `firmware/download-fw.sh`:
 
 ```bash
 ./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh openbmc
 ```
 
-Each image is tried at the **vendor's public download first** (iDRAC9 pulls direct + checksum-verifies
-from `dl.dell.com`), then falls back to the **project mirror at git.trouble.org**, and is **SHA-256
-verified** either way. The reference (non-turnkey) boxes under `boxes/<name>/` also ship their
-boot/restore/snapshot recipes + findings docs.
+Every fetched artifact is SHA-256 verified. `firmware/download-fw.sh` reports whether the source is a
+vendor URL or the project mirror; several derived boot bundles are mirror-only because they contain the
+documented emulation adaptations. See [SECURITY.md](SECURITY.md) for the trust and provenance boundary.
 
 ## Exact QEMU builds and Docker package
 
@@ -113,6 +116,8 @@ tools/validate-qemu-build --deadline 1200 /absolute/path/qemu-manifest.json box-
 The Docker base image and package version are pinned, and the packager verifies executable/data hashes
 and QMP startup for every declared machine before export. Debian apt dependencies still resolve from the
 live repository, so this is exact-artifact packaging rather than a byte-for-byte offline source rebuild.
+The runtime uses host networking and writable work mounts for QEMU; Docker is packaging, not a security
+boundary. It does not use privileged mode or the host PID namespace.
 
 ## Network configuration
 
@@ -142,7 +147,7 @@ ZBMC_IP_idrac9=172.16.0.99
 ZBMC_IP_openbmc=192.168.1.100
 ```
 
-Priority: per-box `ZBMC_IP_<name>` > pool > built-in default.
+Priority: per-box `ZBMC_IP_<name>` > pool > `ZHOSTS_FILE` > descriptor default.
 Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
 
 ## Layout
@@ -161,6 +166,8 @@ firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble
 - **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — what made
   the work difficult, which problems were inherent versus self-inflicted, what failed, what worked,
   the current limits, and the rules that should guide future changes.
+- **[docs/release-readiness-retrospective.html](docs/release-readiness-retrospective.html)** — the
+  repository-wide 2026-08-27 audit, corrected contracts, verification, and remaining release risks.
 - **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why three exact QEMU
   executables are packaged, which differences require separate builds, and how to test whether
   Advantech still needs the separately packaged Debian QEMU 10 build.
