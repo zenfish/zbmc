@@ -163,13 +163,13 @@ firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble
 
 ## The docs, the sweat, the tears
 
-- **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — what made
-  the work difficult, which problems were inherent versus self-inflicted, what failed, what worked,
-  the current limits, and the rules that should guide future changes.
+- **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — why was
+  it so difficult, which problems were inherent versus self-inflicted, what failed, what worked,
+  the current limits, and the rules that hopefully will guide future endeavors.
 - **[docs/release-readiness-retrospective.html](docs/release-readiness-retrospective.html)** — the
   repository-wide 2026-08-27 audit, corrected contracts, verification, and remaining release risks.
-- **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why three exact QEMU
-  executables are packaged, which differences require separate builds, and how to test whether
+- **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why multiple QEMU
+  executables were stuffed in here, which differences require separate builds, and how to test whether
   Advantech still needs the separately packaged Debian QEMU 10 build.
 - **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)** — one box end to end:
   the "encrypted" misnomer, AMI FMH / SquashFS / JFFS2 / FIT unpacking (and the binwalk & jefferson
