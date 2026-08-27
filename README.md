@@ -14,7 +14,7 @@ on what I have here.
 > that ship inside publicly-downloadable firmware (calvin, factory IPMIKeys, CredVault keys, etc.). Those
 > aren't repo secrets — they're already on the internet inside the vendors' own DUP/HPM downloads; the
 > value here is *documenting the danger*. Still, no live/customer secrets, no private keys, and no
-> extracted rootfs trees are here (they're rather large huge and regenerate from firmware anyway).
+> extracted rootfs trees are here (they're rather large and regenerate from firmware anyway).
 
 ## The animals
 
