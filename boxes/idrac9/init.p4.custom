@@ -230,11 +230,35 @@ sleep 2
   # has propagated (metadata DBLocation=2 -> EMMC -> tmpfs -> shm), it caches an empty table and
   # every RAKP1 -> 0x0d "unauthorized name", even though racadm later shows root. Gating fullfw
   # on a live root read makes RAKP-accept-root reproducible on a clean boot.
-  for w in $(seq 1 30); do
-    [ "$(timeout 8 racadm get iDRAC.Users.2.UserName 2>/dev/null | grep -i 'UserName=' | cut -d= -f2 | tr -d '\r')" = "root" ] && break
+  # Make the root user visible on the fast/runtime path before fullfw snapshots
+  # its in-memory IPMI user table. racadm can time out under the single-core
+  # emulation load even when cfgdb already has root, so use sqlite as the gate.
+  export USER=root LOGNAME=root LC_USERNAME=root REMOTE_USERNAME=root RACADM_ACCESS=0x1FF
+  _cfg_db=/var/run/cfgdb/CfgCurrentValues.db
+  _cfg_user() {
+    sqlite3 "$_cfg_db" \
+      "select AttributeValue from CfgValueTableTmpfs where GroupName='Users' and GroupIndex=2 and AttributeName='UserName' limit 1;" 2>/dev/null
+  }
+  for w in $(seq 1 180); do
+    sqlite3 "$_cfg_db" \
+      "pragma busy_timeout=5000; update CfgValueTableTmpfs set AttributeValue='root' where GroupName='Users' and GroupIndex=2 and AttributeName='UserName';" \
+      >/tmp/pre-fullfw-root-set.log 2>&1 || true
+    [ "$(_cfg_user | tr -d '\r')" = "root" ] && break
     sleep 2
   done
-  echo "  pre-fullfw gate: $(timeout 8 racadm get iDRAC.Users.2.UserName 2>/dev/null | grep -i 'UserName=')"
+  _pre_fullfw_user="UserName=$(_cfg_user | tr -d '\r')"
+  echo "  pre-fullfw gate: $_pre_fullfw_user"
+  echo "$_pre_fullfw_user" | grep -qi 'UserName=root' || {
+    echo "  pre-fullfw gate FAILED: not starting fullfw with an empty/non-root cached user table"
+    echo "==VIRTDBG-END=="
+    exit 1
+  }
+  _old_fullfw="$(ps -ef | awk '/\/bin\/fullfw/ && !/awk/{print $2}')"
+  if [ -n "$_old_fullfw" ]; then
+    echo "  killing stale fullfw before clean start: $_old_fullfw"
+    kill -9 $_old_fullfw 2>/dev/null || true
+    sleep 2
+  fi
   # MEASURE (2): strace fullfw startup -> what does it OPEN to read the IPMI user table?
   # bind [::]:623 = IPv6 DUAL-STACK (NOT 0.0.0.0). fullfw's UDPCreateInstance does an unconditional
   # setsockopt(IPV6_RECVPKTINFO) that returns -1 on an AF_INET socket -> RMCPCreateSocketInstance
@@ -272,6 +296,14 @@ sleep 2
   echo "  ff.out tail:"; tail -12 /tmp/ff.out 2>/dev/null | sed 's/^/    /'
   echo "  -- journal LAN/ipv4 errors (libtcpi LANIPConfig) --"
   journalctl -b --no-pager 2>/dev/null | grep -iE 'ipv4|LANIP|tcpi|Failed to read|not expecting NIC|RMCP|VLANLinkUp' | tail -10 | sed 's/^/    /'
+  # P4 is the IPMI/fullfw boot. Redfish belongs to the separate P6 path. Starting
+  # the Redfish FCGI stack here has been observed to wedge/restart services under
+  # emulation after fullfw binds UDP/623, taking SSH with it before IPMI can be
+  # evaluated cleanly. Keep the default P4 run focused on IPMI health.
+  echo "## REDFISH skipped in P4 IPMI boot ##"
+  echo "==VIRTDBG-END=="
+  exit 0
+
   # ---- REDFISH bring-up (coexists with IPMI on this P4 boot) ----
   # RE (2026-08-15): the redfish 500 was NEVER fcgiodata load-fragility (prior verdict) — it was the
   # MISSING fcgi-auth AUTHORIZER on :4300. httpd's mod_authnz_fcgi proxies the Basic-auth check to
@@ -312,8 +344,17 @@ EOS
 $BB chmod +x /newroot/run/dbg.sh
 
 U=/newroot/run/systemd/system
-$BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/dbus.socket.d
-printf '[Manager]\nLogLevel=info\n' > $U/system.conf.d/zz.conf
+E=/newroot/etc/systemd/system.conf.d
+$BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/dbus.socket.d $E
+# Do not arm the emulated NPCM hardware watchdog. Under QEMU the guest has been
+# observed to reboot while the long-running virt debug/fullfw/Redfish bring-up is
+# still active, with the console showing:
+#   Hardware watchdog 'npcm_wdt'
+#   Set hardware watchdog to 1min 26s.
+# followed by a fresh Phase-4 init banner while QEMU stays alive. That makes
+# readiness nondeterministic and masks the actual IPMI/Redfish state.
+printf '[Manager]\nLogLevel=info\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $U/system.conf.d/zz.conf
+printf '[Manager]\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $E/zz-zbmc-watchdog.conf
 # The datamgr->populator chain starts populators via systemd, pulling in the eMMC-persistence
 # services (early-mount, setup-flash) which mount /flash/data0 READ-ONLY over our tmpfs -> lmcfg
 # unreadable -> racadm SWC0242. Drop-in no-op (not mask) keeps dependents' ordering satisfied

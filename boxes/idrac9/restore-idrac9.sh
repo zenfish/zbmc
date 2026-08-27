@@ -15,8 +15,8 @@ QB=./qemu-system-arm-patched
 K=915f32f49a97456d0d6d66eee5ed84c894b414af
 W="${HOME}/phd/tmp/idrac9-virtual/ckpt"
 STATE="${STATE:-$W/state-p4.gz}"; FROZEN="$W/overlay-frozen.qcow2"
-QMP=/tmp/zbmc-idrac9-rqmp.sock
-CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-/tmp/zbmc-idrac9-console.log}"
+QMP="$W/rqmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$W/console.log}"
 [ -s "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -s "$FROZEN" ] || { echo "no frozen overlay at $FROZEN — run ./boot-p4-ckpt.sh first" >&2; exit 1; }
 [ -x "$QB" ] || { echo "patched qemu missing ($QB) — build-qemu-patched.sh" >&2; exit 1; }
@@ -34,10 +34,10 @@ $SUDO nohup "$QB" -M npcm750-evb -m 1G -display none \
   -netdev "user,id=n1,$HF" -device usb-net,netdev=n1,bus=usb-bus.0,id=nic0 \
   -rtc base=2020-09-20T05:00:00,clock=vm \
   -qmp unix:"$QMP",server,nowait -serial "file:$CONSOLE_LOG" \
-  -incoming "exec:gzip -dc < $STATE" >/tmp/zbmc-idrac9-rqemu.log 2>&1 &
+  -incoming "exec:gzip -dc < $STATE" >$W/rqemu.log 2>&1 &
 QPID=$!
 for i in $(seq 1 30); do $SUDO test -S "$QMP" && break; sleep 0.5; done
-$SUDO test -S "$QMP" || { echo "QMP never appeared:"; $SUDO tail -3 /tmp/zbmc-idrac9-rqemu.log; exit 1; }
+$SUDO test -S "$QMP" || { echo "QMP never appeared:"; $SUDO tail -3 $W/rqemu.log; exit 1; }
 QEMU_NO_UNPLUG=1 $SUDO python3 ckpt.py restore-finish "$QMP" 2>&1 | sed 's/^/[restore] /'
 # usb-net re-enumeration after resume is slower than gmac — poll up to ~90s
 ip=0
@@ -47,4 +47,4 @@ for t in $(seq 1 18); do
   [ "$ip" -ge 1 ] && break
 done
 echo "RESTORE OK: ipmi=$ip ($VIP:$SP; pid $QPID; kill: $SUDO kill $QPID)"
-[ "$ip" -ge 1 ] || echo "  (IPMI 0 — usb-net may need longer, or vmstate/overlay drift; check /tmp/zbmc-idrac9-rqemu.log)"
+[ "$ip" -ge 1 ] || echo "  (IPMI 0 — usb-net may need longer, or vmstate/overlay drift; check $W/rqemu.log)"
