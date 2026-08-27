@@ -26,7 +26,7 @@ Everything below ran on:
 | QEMU | `qemu-system-arm` **11.0.0** (Homebrew) |
 | squashfs-tools | unsquashfs / mksquashfs **4.7** |
 | u-boot-tools | dumpimage **2026.04** |
-| jefferson | (pip) — JFFS2 extractor |
+| jefferson | (pipx) — JFFS2 extractor |
 | dtc | **1.7.2** (device-tree compiler) |
 | binwalk | **3.1.0** |
 | python | 3.x |

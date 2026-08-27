@@ -16,8 +16,8 @@ pip3 install pexpect
 
 # Debian / Ubuntu
 sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler \
-  curl sshpass socat python3-pip python3-pexpect
-pip3 install jefferson
+  curl sshpass socat python3-pexpect pipx
+pipx install jefferson
 ```
 
 Then just confirm each one is installed and runs — **any recent version is fine**, you're only checking
@@ -40,7 +40,7 @@ If a command prints its version/help, you're good. If it says "command not found
 ```bash
 git clone git@github.com:zenfish/zbmc-lab.git
 cd zbmc-lab
-export PATH="$PWD/tools:$PATH"     # so you can type 'zbmc' instead of './tools/zbmc'
+export PATH="$HOME/.local/bin:$PWD/tools:$PATH" # find pipx tools and type 'zbmc' instead of './tools/zbmc'
 ```
 
 ## 2. Build the boot image

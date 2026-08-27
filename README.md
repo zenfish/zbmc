@@ -47,8 +47,8 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 
 ```bash
 # deps (macOS): brew install qemu squashfs-tools u-boot-tools dtc curl sshpass socat && pipx install jefferson && pip3 install pexpect
-# deps (Debian): sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect python3-pip && pip3 install jefferson
-export PATH="$PWD/tools:$PATH"
+# deps (Debian): sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect pipx && pipx install jefferson
+export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
 ./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
 zbmc openbmc start             # boot vanilla OpenBMC (about 5 min on the reference host)
 zbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell

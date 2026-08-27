@@ -163,7 +163,7 @@ PY
   done
   [ "$NJ" -eq 0 ] && sub "(no JFFS2 partitions carved)"
 else
-  warn "jefferson not installed (pip install jefferson) -- skipping JFFS2 carve"
+  warn "jefferson not installed (pipx install jefferson) -- skipping JFFS2 carve"
   sub "(JFFS2 conf/subext partitions not extracted)"
 fi
 

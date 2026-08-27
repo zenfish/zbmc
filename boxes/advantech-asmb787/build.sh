@@ -9,7 +9,7 @@
 #        the root squashfs is unsquashed, patched for qemu (qemu-patch-rootfs.sh), repacked ->
 #        mtdflash = the raw 64MB NOR image (firmware truncated to the FMC chip size).
 # RUN  : ./box/build.sh [WORKDIR]   (default WORKDIR = ~/phd/tmp/asmb787 or ./work)
-# NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage (u-boot-tools), jefferson (pip),
+# NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage (u-boot-tools), jefferson (pipx),
 #        python3, dtc (optional). tools/unpack-ami must be on PATH or alongside.
 # zbmc:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
 set -euo pipefail
