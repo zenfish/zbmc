@@ -300,8 +300,8 @@ writer. Edit the side without an <code>html2md:auto</code> or
 be overwritten. Regenerate or verify the pairs with:</p>
 <pre class="bash"><code>tools/install-pandoc-docs
 export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
-./tools/sync-docs --write       # regenerate marked siblings
-./tools/sync-docs --check       # verify pairs and same-format links; also runs in CI</code></pre>
+./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
+./tools/sync-docs --write       # regenerate marked siblings, then run the same check</code></pre>
 <p>The two <code>*.standalone.html</code> packaging copies remain
 HTML-only.</p>
 <p><code>./tools/zbmc -V</code> (or <code>--version</code>) prints the

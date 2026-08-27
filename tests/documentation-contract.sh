@@ -60,7 +60,7 @@ if wrong_format:
     raise SystemExit("cross-format documentation links:\n" + "\n".join(wrong_format))
 PY
 
-"$repo/tools/sync-docs" --check
+"$repo/tools/sync-docs"
 
 grep -Fq 'sudo ./tools/zbmc openbmc start' "$repo/README.md"
 grep -Fq 'sudo ./tools/zbmc openbmc start' "$repo/GETTING-STARTED.md"

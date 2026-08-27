@@ -170,8 +170,8 @@ the marked side is generated and will be overwritten. Regenerate or verify the p
 ```bash
 tools/install-pandoc-docs
 export PATH="$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH"
-./tools/sync-docs --write       # regenerate marked siblings
-./tools/sync-docs --check       # verify pairs and same-format links; also runs in CI
+./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
+./tools/sync-docs --write       # regenerate marked siblings, then run the same check
 ```
 
 The two `*.standalone.html` packaging copies remain HTML-only.

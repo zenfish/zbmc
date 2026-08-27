@@ -86,9 +86,9 @@ def replace(path: Path, content: bytes) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
+    mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="create or refresh generated siblings")
-    mode.add_argument("--check", action="store_true", help="fail if a generated sibling is missing or stale")
+    mode.add_argument("--check", action="store_true", help="fail if a generated sibling is missing or stale (default)")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent.parent
@@ -113,14 +113,17 @@ def main() -> int:
         stale.append(destination)
         if args.write:
             replace(destination, content)
-            print(f"wrote {destination.relative_to(root)}")
+            print(f"wrote {destination.relative_to(root)}", flush=True)
 
-    if stale and args.check:
+    if args.write:
+        print(f"documentation pairs: updated ({len(stale)} changed)", flush=True)
+        return subprocess.run([sys.executable, __file__, "--check"], cwd=root).returncode
+    if stale:
         print("sync-docs: missing or stale generated files:", file=sys.stderr)
         for path in stale:
             print(f"  {path.relative_to(root)}", file=sys.stderr)
         return 1
-    print(f"documentation pairs: {'updated' if stale else 'current'} ({len(stale)} changed)")
+    print("documentation pairs: current (0 changed)")
     return 0
 
 
