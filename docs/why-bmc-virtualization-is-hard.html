@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An evidence-backed retrospective on the firmware, emulation, networking, service, and tooling problems encountered while building zbmc.">
+  <title>Why Virtualizing BMC Firmware Was Hard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    code, pre { font-variant-ligatures: none; }
+    :focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
+  </style>
+</head>
+<body class="bg-white text-zinc-900 antialiased">
+  <header class="border-b border-zinc-200 bg-zinc-950 text-white">
+    <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+      <p class="text-sm font-semibold text-teal-300">zbmc engineering retrospective</p>
+      <h1 class="mt-3 max-w-4xl text-4xl font-bold sm:text-5xl">Why virtualizing BMC firmware was hard</h1>
+      <p class="mt-5 max-w-4xl text-lg leading-8 text-zinc-300">
+        Booting a kernel was only the first boundary. A useful virtual BMC required vendor firmware,
+        emulated hardware, network transport, service state, authentication, and operator tooling to
+        agree at the same time.
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[2fr_1fr]">
+        <div>
+          <h2 class="text-2xl font-bold">The honest answer</h2>
+          <p class="mt-4 leading-7 text-zinc-700">
+            Part of the difficulty was inherent. BMC firmware is built for a particular SoC and
+            motherboard, not for a generic virtual computer. It expects boot ROMs, flash geometry,
+            device trees, watchdogs, sideband networking, persistent configuration, and management
+            peripherals that QEMU may model differently or not model at all.
+          </p>
+          <p class="mt-4 leading-7 text-zinc-700">
+            Part was self-inflicted. The zoo began as a set of successful experiments: mutable QEMU
+            builds, host-specific paths, old processes, implicit network assumptions, sparse evidence,
+            and status output that confused startup history with current health. Turning those
+            experiments into a reproducible tool exposed every accidental dependency.
+          </p>
+        </div>
+        <aside class="border-l-4 border-amber-600 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+          <strong>The key distinction:</strong> a booting image is not necessarily a working BMC.
+          Boot, service startup, protocol reachability, authentication, and useful command behavior
+          are separate acceptance stages.
+        </aside>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Six boundaries had to hold</h2>
+        <ol class="mt-7 grid border-y border-zinc-300 bg-white text-sm font-semibold sm:grid-cols-2 lg:grid-cols-6">
+          <li class="border-b border-zinc-200 px-4 py-5 sm:border-r lg:border-b-0"><span class="block text-teal-800">1</span><span class="mt-1 block">Firmware extraction</span></li>
+          <li class="border-b border-zinc-200 px-4 py-5 lg:border-b-0 lg:border-r"><span class="block text-teal-800">2</span><span class="mt-1 block">Boot and storage</span></li>
+          <li class="border-b border-zinc-200 px-4 py-5 sm:border-r lg:border-b-0"><span class="block text-teal-800">3</span><span class="mt-1 block">Emulated devices</span></li>
+          <li class="border-b border-zinc-200 px-4 py-5 lg:border-b-0 lg:border-r"><span class="block text-teal-800">4</span><span class="mt-1 block">Network path</span></li>
+          <li class="border-b border-zinc-200 px-4 py-5 sm:border-b-0 sm:border-r"><span class="block text-teal-800">5</span><span class="mt-1 block">Vendor services</span></li>
+          <li class="px-4 py-5"><span class="block text-teal-800">6</span><span class="mt-1 block">Functional probes</span></li>
+        </ol>
+        <p class="mt-5 max-w-4xl leading-7 text-zinc-700">
+          A failure at any boundary often looked identical from outside: a long timeout. Progress
+          required preserving serial output and testing each boundary independently rather than
+          interpreting every timeout as one problem.
+        </p>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">The inherent problems</h2>
+        <div class="mt-8 grid gap-8 lg:grid-cols-2">
+          <article class="border-t-4 border-teal-700 pt-5">
+            <p class="text-sm font-semibold text-teal-800">Firmware and boot</p>
+            <h3 class="mt-2 text-xl font-bold">Vendor images are board appliances</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              A vendor image may contain SPL, U-Boot, a signed FIT, OP-TEE or root-of-trust stages,
+              kernel, device trees, read-only root filesystems, writable configuration partitions,
+              and recovery images. QEMU often cannot complete the physical secure-boot chain, so the
+              usable path is a direct-kernel boot with carefully extracted kernel, DTB, initramfs,
+              flash, or SD/eMMC images.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Small mismatches are fatal: a forced kernel command line ignores <code>-append</code>, an
+              SD image must be padded to a power of two, an eMMC root partition must retain its exact
+              GPT index, and AMI MTD partition names must match scripts inside the firmware.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-fuchsia-700 pt-5">
+            <p class="text-sm font-semibold text-fuchsia-800">Emulated hardware</p>
+            <h3 class="mt-2 text-xl font-bold">QEMU is part of the hardware contract</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              The zoo spans ARMv7 ASPEED and NPCM750 guests plus AArch64 NPCM845. Each needs the
+              correct system emulator, board model, ROM data, UART order, storage controller, and NIC.
+              A QEMU version string alone does not identify those behaviors.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Two emulator defects became release artifacts: recycled FTGMAC receive descriptors
+              could panic Supermicro X10 after normal browser traffic, while iDRAC10's USB NIC needed
+              high-speed descriptors and endpoint-aware packet framing. The complete rationale is in
+              <a class="text-fuchsia-800 underline" href="why-multiple-qemu-builds.html">Why zbmc Ships Multiple QEMU Builds</a>.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-amber-600 pt-5">
+            <p class="text-sm font-semibold text-amber-800">Network last mile</p>
+            <h3 class="mt-2 text-xl font-bold">A visible NIC was not necessarily a usable NIC</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              BMC NICs frequently depend on NC-SI sideband behavior rather than ordinary Ethernet.
+              QEMU's FTGMAC model handles NC-SI internally, so an external responder cannot repair an
+              incompatible guest driver. MegaRAC's newer kernel negotiates; Advantech's older kernel
+              rejects the observed response, and its current acceptance remains console-only.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Other boxes required USB networking, firmware-derived MAC addresses, loopback aliases,
+              TAP bridges, or QEMU user networking. TCP services could work while RMCP+ UDP failed.
+              A path working from the QEMU host did not prove that a browser on another machine had a
+              route to it.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-cyan-700 pt-5">
+            <p class="text-sm font-semibold text-cyan-800">Vendor userland</p>
+            <h3 class="mt-2 text-xl font-bold">Services expected the missing motherboard</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              Management daemons depend on D-Bus, socket activation, configuration databases, users,
+              symlinks, sensor inventories, IPMB buses, and hardware interfaces. A daemon could bind
+              UDP/623 yet never answer an IPMI command, or an HTTPS listener could exist while the
+              vendor Web-UI and Redfish had different health.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Some services needed bounded emulation-specific preparation: seed configuration,
+              disable impossible hardware interfaces, create runtime directories, or start the right
+              socket-activated process. These changes had to preserve the vendor protocol path rather
+              than replace it with a superficial port listener.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-red-700 pt-5">
+            <p class="text-sm font-semibold text-red-800">Timing and state</p>
+            <h3 class="mt-2 text-xl font-bold">Slow TCG execution exposed races</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              Cold boots took minutes on a four-core host. Single-vCPU emulation exposed D-Bus and
+              service-ordering races that physical hardware rarely presents. A fixed readiness
+              deadline could expire even though QEMU and the guest continued toward healthy service.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Warm snapshots made some boxes reliable, but they were not universal. Migration streams
+              depend on QEMU device-state layout, storage must match captured RAM, and iDRAC9's USB NIC
+              does not recover correctly after restore.
+            </p>
+          </article>
+
+          <article class="border-t-4 border-zinc-600 pt-5">
+            <p class="text-sm font-semibold text-zinc-700">Observability</p>
+            <h3 class="mt-2 text-xl font-bold">The useful failure was usually inside serial output</h3>
+            <p class="mt-4 leading-7 text-zinc-700">
+              Without an always-on serial log, a failed network probe only said that a service was not
+              reachable. It did not reveal whether the kernel panicked, a getty needed a newline, a
+              database lookup failed, or a watchdog reset the guest.
+            </p>
+            <p class="mt-3 leading-7 text-zinc-700">
+              Per-run console logs, event timelines, packet captures, debug traces, and exact commands
+              turned transient failures into evidence that could be compared across emulator builds.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-950 text-white">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">The self-inflicted problems</h2>
+        <div class="mt-7 overflow-x-auto border-y border-zinc-700">
+          <table class="w-full min-w-[980px] text-left text-sm">
+            <thead class="bg-zinc-900 text-zinc-300">
+              <tr><th class="px-4 py-3">Inherited condition</th><th class="px-4 py-3">Why it hurt</th><th class="px-4 py-3">Replacement</th><th class="px-4 py-3">State</th></tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800 align-top text-zinc-300">
+              <tr><td class="px-4 py-4 font-semibold text-white">Known-good local QEMU binaries</td><td class="px-4 py-4">Their version output did not disclose patches, ROMs, or build provenance.</td><td class="px-4 py-4">Pinned recipes, manifests, hashes, Docker package, machine discovery, and QMP smoke tests.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Host-specific paths and setup</td><td class="px-4 py-4">A fresh clone could build firmware yet fail because QEMU or zipmi was absent.</td><td class="px-4 py-4"><code>build.sh</code> provisions and validates the packaged runtime before reporting success.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Status mixed history with health</td><td class="px-4 py-4">A timed-out startup watcher looked like a crashed or currently unhealthy BMC.</td><td class="px-4 py-4">Separate QEMU state, startup-watch outcome, and live functional Health probes.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Fleet-wide parallel probing</td><td class="px-4 py-4">Eight concurrent SSH, HTTPS, and RMCP+ checks created false failures on the test host.</td><td class="px-4 py-4">Sequential fleet status by default; explicit <code>--fast-check</code> for parallel probes.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Direct LAN assumptions</td><td class="px-4 py-4">A bridge that worked on Debby could not carry an arbitrary guest MAC and address on a cloud network.</td><td class="px-4 py-4">X10 defaults to QEMU user networking; direct TAP mode is explicit.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Process-local forwarded ports</td><td class="px-4 py-4">Detached watchers reselected ports after QEMU occupied the originals.</td><td class="px-4 py-4">Recover active forwards from the running QEMU command before selecting new ports.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Docker attached to SSH lifetime</td><td class="px-4 py-4">Terminal hangup delivered SIGHUP through the container runtime and killed QEMU.</td><td class="px-4 py-4">Detach the container, wait independently, ignore HUP, and retain explicit interrupt cleanup.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">iDRAC10 serial shell called SSH</td><td class="px-4 py-4">The operator was attached to the PID 1 shell; exiting it panicked the guest kernel.</td><td class="px-4 py-4">Use authenticated TCP/22 for <code>ssh</code>, reserve serial for <code>console</code>, and supervise the debug shell.</td><td class="px-4 py-4 text-teal-300">Corrected</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Unmonitored parallel investigations</td><td class="px-4 py-4">Work appeared to stall, conclusions moved ahead of preserved evidence, and the operator had to request progress repeatedly.</td><td class="px-4 py-4">Give independent tracks explicit checkpoints, report concrete evidence, label inference, and commit each verified logical unit.</td><td class="px-4 py-4 text-cyan-300">Process rule</td></tr>
+              <tr><td class="px-4 py-4 font-semibold text-white">Fallback process discovery</td><td class="px-4 py-4">A fresh checkout can adopt an older QEMU process when its host-forward signature matches.</td><td class="px-4 py-4">Run and process identity still need stronger correlation than PID/signature fallback.</td><td class="px-4 py-4 text-amber-300">Open</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Approaches that failed</h2>
+        <div class="mt-8 grid gap-x-10 gap-y-8 md:grid-cols-2">
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Treat a boot marker as readiness</h3><p class="mt-2 text-sm leading-6 text-zinc-700">A kernel or shell can be alive while IPMI, SSH, Redfish, and the vendor UI are absent. Acceptance moved to authenticated functional probes.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Use one generic service policy</h3><p class="mt-2 text-sm leading-6 text-zinc-700">The boxes expose different real capabilities. Each descriptor now declares its health denominator; undeclared or disabled functions are N/A.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Interpret timeout as death</h3><p class="mt-2 text-sm leading-6 text-zinc-700">The original deadline is historical. Live QEMU and service probes determine current health.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Assume a listening port is a service</h3><p class="mt-2 text-sm leading-6 text-zinc-700">UDP/623 or TCP/443 can be bound while requests fail. Probes perform authentication and useful protocol operations.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Treat Redfish and Web-UI as one feature</h3><p class="mt-2 text-sm leading-6 text-zinc-700">They may share HTTPS but have different routes, dependencies, and failures. They are checked independently.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Use snapshots as a universal cure</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Snapshots preserve races only when RAM, disk, device state, and network migration all remain compatible.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Infer requirements from one successful binary</h3><p class="mt-2 text-sm leading-6 text-zinc-700">A known-good artifact is not proof that its version is required. Advantech's QEMU 10 pin is documented accordingly.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Debug without preserving the run</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Uncaptured console output and commands made failures impossible to compare. Every launch now creates an evidence directory.</p></div>
+          <div class="border-l-4 border-red-700 pl-5"><h3 class="font-bold">Force a fully static QEMU build</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Debian lacked the required static pixman, mount, and slirp library closure. Exact dynamically linked binaries inside a pinned Docker image provided the portable boundary instead.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">What ultimately worked</h2>
+        <div class="mt-8 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Per-box contracts</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Each descriptor owns its machine, boot method, network, credentials, probes, expected services, and timing policy.</p></div>
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Exact emulator artifacts</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Paths, versions, machines, ROMs, patches, and hashes are validated before firmware launch.</p></div>
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Functional health</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Health reflects commands that work now, not only ICMP, open ports, or old startup state.</p></div>
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Permanent console evidence</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Verbose status exposes the serial log and exact <code>tail -f</code> command for the active run.</p></div>
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Causal comparison</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Working and failing binaries, packets, descriptors, and service traces were compared before assigning root cause.</p></div>
+          <div class="border-t-2 border-teal-700 pt-4"><h3 class="font-bold">Evidence labels</h3><p class="mt-2 text-sm leading-6 text-zinc-700">Verified, decoded, historical, inferred, and unknown claims remain distinct instead of becoming folklore.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Current fleet boundary</h2>
+        <p class="mt-4 max-w-4xl leading-7 text-zinc-700">These are the release acceptance results, not claims of perfect physical-hardware equivalence.</p>
+        <div class="mt-7 overflow-x-auto border-y border-zinc-300">
+          <table class="w-full min-w-[940px] text-left text-sm">
+            <thead class="bg-zinc-100 text-zinc-700"><tr><th class="px-4 py-3">Box</th><th class="px-4 py-3">Accepted function</th><th class="px-4 py-3">Result</th><th class="px-4 py-3">Measured time</th></tr></thead>
+            <tbody class="divide-y divide-zinc-200 align-top">
+              <tr><td class="px-4 py-4 font-semibold">openbmc</td><td class="px-4 py-4">ICMP, SSH, IPMI, Redfish, Web-UI; cold timing remains load-sensitive</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">5m01s</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">nvidia-obmc</td><td class="px-4 py-4">ICMP, SSH, IPMI, Redfish, Web-UI; cipher 17 only; modeled FRU MAC requires isolation on direct L2</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">4m50s</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">supermicro-x14</td><td class="px-4 py-4">ICMP, SSH, IPMI, Web-UI; Redfish not configured; service-oriented boot is not full vendor parity</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">4m20s</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">supermicro-x10</td><td class="px-4 py-4">SSH, IPMI, Redfish, Web-UI, 60s stable hold; focused post-fix browser regression rerun remains inconclusive</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">2m38s user-net; 3m40s direct</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">idrac9</td><td class="px-4 py-4">ICMP, SSH, IPMI, Web-UI; Redfish not configured; USB-net warm restore is network-dead</td><td class="px-4 py-4 text-teal-800">Pass</td><td class="px-4 py-4">12m48s</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">advantech-asmb787</td><td class="px-4 py-4">Serial login; external networking remains unresolved, with the old NC-SI path the leading explanation</td><td class="px-4 py-4 text-teal-800">Console pass</td><td class="px-4 py-4">11m50s</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">idrac10</td><td class="px-4 py-4">ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td><td class="px-4 py-4 text-amber-800">Partial</td><td class="px-4 py-4">About 6m15s to last working service</td></tr>
+              <tr><td class="px-4 py-4 font-semibold">megarac-hpe</td><td class="px-4 py-4">IPMI; Redfish and Web-UI observed but unstable; SSH absent</td><td class="px-4 py-4 text-amber-800">Partial</td><td class="px-4 py-4">No reliable READY time</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-amber-50">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold text-amber-950">Remaining limits</h2>
+        <ul class="mt-6 grid gap-5 leading-7 text-zinc-700 md:grid-cols-2">
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Host support:</strong> the packaged v1 runtime is x86_64 Linux only.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Advantech:</strong> external networking remains unresolved; its old NC-SI behavior is the leading explanation, and the separate QEMU 10 artifact still needs a controlled QEMU 11 retirement test.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">iDRAC10:</strong> SSH and IPMI work, but the Redfish result is static and the vendor Web-UI is absent.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">MegaRAC-HPE:</strong> service stability remains incomplete and SSH is absent.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Runtime identity:</strong> PID and host-forward fallback can still adopt an older matching QEMU process when local run metadata is absent.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Rebuild closure:</strong> executables are exact and packaged, but Debian apt dependencies are not preserved as a byte-for-byte offline source-build closure.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Physical fidelity:</strong> a declared pass does not prove sensors, power control, host interfaces, or every peripheral match real hardware.</li>
+          <li class="border-t border-amber-300 pt-3"><strong class="text-zinc-950">Performance:</strong> cold-start timing remains host-load-sensitive under TCG.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="border-b border-zinc-200 bg-zinc-950 text-white">
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Rules moving forward</h2>
+        <ol class="mt-7 grid gap-x-10 gap-y-6 md:grid-cols-2">
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">1. Preserve the run.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Keep exact commands, console output, manifests, packets, and observation time before changing the system.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">2. Test boundaries separately.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Boot, reachability, authentication, and command behavior are different facts.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">3. Compare before patching.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Diff the last working artifact and the failing candidate before assigning a firmware cause.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">4. Keep evidence strength visible.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Do not promote a reported, historical, or inferred explanation to verified fact.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">5. Add variants reluctantly.</span><p class="mt-2 text-sm leading-6 text-zinc-300">A new QEMU artifact needs an architecture, machine, patch-isolation, or migration requirement.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">6. Define retirement tests.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Every compatibility pin or workaround needs evidence that can eventually remove it.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">7. Keep operator state truthful.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Current health, startup history, configured capabilities, and console access must remain distinct.</p></li>
+          <li class="border-t border-teal-500 pt-4"><span class="font-semibold text-teal-300">8. Checkpoint completed work.</span><p class="mt-2 text-sm leading-6 text-zinc-300">Commit verified logical units so parallel investigation cannot strand or obscure working changes.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section>
+      <div class="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+        <h2 class="text-2xl font-bold">Where the detail lives</h2>
+        <ul class="mt-6 grid gap-4 text-sm leading-6 text-zinc-700 md:grid-cols-2">
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="why-multiple-qemu-builds.html">Why zbmc Ships Multiple QEMU Builds</a>: exact artifact, patch, version-pin, and consolidation rationale.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="zoo-lessons.md">The BMC Zoo: Engineering Lessons</a>: per-SoC boot, storage, network, snapshot, and historical userland findings; the fleet table above controls current acceptance.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="from-firmware-to-bare-metal.md">From Firmware to Bare Metal</a>: one Advantech image from extraction through the NC-SI wall.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="why-dell-is-hard.md">Why Dell Is Hard</a>: iDRAC boot chains, networking, snapshots, and management-service dependencies.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="../tests/status-output.sh">Status regression test</a>: operator states, fleet serialization, and evidence-path behavior.</li>
+          <li class="border-t border-zinc-300 pt-3"><a class="font-semibold text-teal-800 underline" href="../tests/qemu-build-validation.sh">QEMU validation test</a>: manifest, machine, QMP, and fleet acceptance contracts.</li>
+        </ul>
+        <p class="mt-8 text-sm leading-6 text-zinc-600">Last reconciled against the packaged x86_64 Linux runtime and fleet evidence on 2026-08-27.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

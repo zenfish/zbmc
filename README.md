@@ -56,6 +56,7 @@ bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTP
 address is routable on the host LAN; direct mode adds ICMP and TAP packet capture.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
+The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.html).
 
 ## Quickstart
 
@@ -150,13 +151,18 @@ Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
 build.sh      build every ready box's boot artifacts into work/<box>/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
 boxes/<name>/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
-docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box)
+docs/         engineering rationale, per-box deep dives, and cross-box lessons
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
 ```
 
 ## What you'll learn from the docs
 
+- **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — what made
+  the work difficult, which problems were inherent versus self-inflicted, what failed, what worked,
+  the current limits, and the rules that should guide future changes.
+- **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why three exact QEMU
+  executables are packaged, which distinctions are required, and how the remaining QEMU 10 pin can be removed.
 - **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)** — one box end to end:
   the "encrypted" misnomer, AMI FMH / SquashFS / JFFS2 / FIT unpacking (and the binwalk & jefferson
   traps), the exact QEMU flags and why, the IPMIMain SIGSEGV fixes, and the NC-SI networking wall in full.
