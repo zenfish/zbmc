@@ -18,22 +18,25 @@ on what I have here.
 
 ## The animals
 
-`zbmc list` shows these; run any with `zbmc <name> start`. **Seven are turnkey from a clone**; the rest are
-reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
-(**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
+`zbmc list` shows these; run any with `zbmc <name> start`. Firmware isn't committed - `build.sh`
+fetches it via `firmware/download-fw.sh` (**vendor download first, git.trouble.org mirror as fallback**,
+all SHA-256-verified). The table records exact-build acceptance measured on the four-core Debby host;
+it is a reproducibility baseline, not a promise that every vendor service is complete.
 
-| `zbmc` name | Description | Turnkey? · boot |
-|-------------|-------------|:----------------:|
-| **openbmc** | Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live | ✅ turnkey (net) · ~2 min |
-| **nvidia-obmc** | Nvidia GB200NVL BMC (OpenBMC/AST2600) — NVIDIA OEM IPMI 0x3C; ipmi-LAN works (cipher-17 only) + busctl | ✅ turnkey (net) · ~2 min |
-| **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) · ~2 min |
-| **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) · ~20 s |
-| **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — warm-snapshot restore; IPMI 2.0 RMCP+ + authed Redfish (admin/superuser) | ✅ turnkey (snap) · ~20 s |
-| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN); ssh resets over slirp | ✅ turnkey (snap) · ~20 s |
-| **supermicro-x10** | Supermicro X10 BMC (ATEN/AST2400, FW 3.93) — cold boot; IPMI cipher suites 0–14 (RC4/MD5 oracle); Redfish via license bypass; OOB license keygen | ✅ turnkey (cold) · ~60 s |
-| **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe · — |
+| `zbmc` name | Accepted function | Exact-build result / measured cold start |
+|-------------|-------------------|------------------------------------------|
+| **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m01s |
+| **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m50s |
+| **advantech-asmb787** | retained serial login; external network remains WIP | pass - 11m50s |
+| **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | partial - about 6m15s to the last working service |
+| **megarac-hpe** | IPMI; Redfish/Web-UI observed but unstable; SSH absent | partial - no reliable READY time |
+| **supermicro-x14** | ICMP, SSH, IPMI, Web-UI; Redfish not configured | pass - 4m20s |
+| **supermicro-x10** | ICMP, SSH, IPMI, Redfish, Web-UI plus 60s stable hold | pass - 3m40s |
+| **idrac9** | ICMP, SSH, IPMI, Web-UI; Redfish not configured in the P4 boot | pass - 12m48s |
 
-**Boot times** are approximate on an unloaded host — a busy machine (or a dozen stray qemus) is much slower. Two classes: **cold** boxes build/boot the firmware fresh (~2 min to services); **warm-snapshot** boxes (idrac10, supermicro-x14) resume a captured RAM state (~15–30 s).
+These times were measured with one BMC at a time on a small four-core host. `zbmc` learns timing profiles
+from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit with
+`zbmc <name> start --warm` because QEMU machine-version drift can invalidate a checkpoint.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
 
@@ -46,7 +49,7 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 # deps (Debian): sudo apt install qemu-system-arm squashfs-tools u-boot-tools device-tree-compiler curl sshpass socat net-tools python3-pexpect python3-pip && pip3 install jefferson
 export PATH="$PWD/tools:$PATH"
 ./build.sh                     # fetch firmware (vendor/mirror) + build every ready box
-zbmc openbmc start             # boot vanilla OpenBMC (~2 min)
+zbmc openbmc start             # boot vanilla OpenBMC (about 5 min on the reference host)
 zbmc openbmc ssh 'uname -a'    # root / 0penBmc — a real shell
 zbmc openbmc ipmi mc info      # RMCP+ (cipher 17)
 zbmc openbmc web               # Redfish ServiceRoot
@@ -63,6 +66,30 @@ from `dl.dell.com`), then falls back to the **project mirror at git.trouble.org*
 verified** either way. The reference (non-turnkey) boxes under `boxes/<name>/` also ship their
 boot/restore/snapshot recipes + findings docs.
 
+## Exact QEMU builds and Docker package
+
+Every box descriptor pins a QEMU executable, version, machine, and SHA-256. `zbmc` validates all four
+before launch and refuses a changed or incompatible binary. The v1 build/package path targets x86_64
+Linux and produces two patched QEMU 11 artifacts plus Debian's exact QEMU 10.0.11 package:
+
+```bash
+tools/build-qemu --plan qemu-11-arm
+tools/build-qemu qemu-11-arm
+tools/build-qemu qemu-11-idrac10
+
+tools/package-qemu-docker /absolute/path/zbmc-qemu.docker.tar \
+  /absolute/path/debian-13-qemu-10.0.11.json \
+  /absolute/path/qemu-11-arm-manifest.json \
+  /absolute/path/qemu-11-idrac10-manifest.json
+
+docker load -i /absolute/path/zbmc-qemu.docker.tar
+tools/validate-qemu-build --deadline 1200 /absolute/path/qemu-manifest.json box-name
+```
+
+The Docker base image and package version are pinned, and the packager verifies executable/data hashes
+and QMP startup for every declared machine before export. Debian apt dependencies still resolve from the
+live repository, so this is exact-artifact packaging rather than a byte-for-byte offline source rebuild.
+
 ## Network configuration
 
 By default, each box binds to a lo0 alias in the **10.0.{6,7,8,9}.x** range (macOS loopback),
@@ -74,7 +101,7 @@ broken out by vendor family:
 | 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |
 | 10.0.8.x | Supermicro | supermicro-x10 (.10), supermicro-x14 (.14) |
 | 10.0.9.x | Dell iDRAC | idrac9 (.9), idrac10 (.10) |
-| 127.0.0.1 | Advantech | advantech-asmb787 (high ports, no lo0 alias) |
+| configured pool `.50` | Advantech | advantech-asmb787 |
 
 If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf.example`
 to `zbmc.conf` (gitignored) and set **one** of:
