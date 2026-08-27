@@ -29,9 +29,10 @@ done
 EOF
   chmod +x "$path"
 }
-good="$fixture/qemu-11"; bad_version="$fixture/qemu-10"; bad_machine="$fixture/qemu-no-aspeed"; bad_start="$fixture/qemu-start-fails"
+good="$fixture/qemu-11"; bad_version="$fixture/qemu-10"; bad_minor="$fixture/qemu-11.1"; bad_machine="$fixture/qemu-no-aspeed"; bad_start="$fixture/qemu-start-fails"
 make_qemu "$good" 11.0.0 ast2600-evb
 make_qemu "$bad_version" 10.2.0 ast2600-evb
+make_qemu "$bad_minor" 11.1.0 ast2600-evb
 make_qemu "$bad_machine" 11.0.0 virt
 make_qemu "$bad_start" 11.0.0 ast2600-evb broken
 
@@ -43,6 +44,7 @@ ZBMC_IP=127.0.0.1
 ZBMC_HOST=fake
 ZBMC_QEMU=$bad_version
 ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
 PIDF="\$ZBMC_DIR/zbmc.pid"
 LOG="\$ZBMC_DIR/console.log"
@@ -85,6 +87,9 @@ if run start --run-as-me --no-wait >/dev/null 2>&1; then exit 1; fi
 run start --run-as-me --no-wait -q "$good" >/dev/null
 wait_for_boot
 grep -Fx "ZBMC_QEMU=$good" "$fixture/boxes/fake/zbmc.box" >/dev/null
+if command -v sha256sum >/dev/null 2>&1; then good_sha=$(sha256sum "$good" | awk '{print $1}')
+else good_sha=$(shasum -a 256 "$good" | awk '{print $1}'); fi
+grep -Fx "ZBMC_QEMU_SHA256=$good_sha" "$fixture/boxes/fake/zbmc.box" >/dev/null
 grep -Fx "$good" "$TEST_ROOT/booted" >/dev/null
 stop_fake; rm -f "$TEST_ROOT/booted"
 run start --run-as-me --no-wait >/dev/null
@@ -96,6 +101,8 @@ grep -Fx "$good" "$TEST_ROOT/snapshotted" >/dev/null
 run restore --run-as-me
 grep -Fx "$good" "$TEST_ROOT/restored" >/dev/null
 if run start --run-as-me --no-wait -q "$bad_machine" >/dev/null 2>&1; then exit 1; fi
+grep -Fx "ZBMC_QEMU=$good" "$fixture/boxes/fake/zbmc.box" >/dev/null
+if run start --run-as-me --no-wait -q "$bad_minor" >/dev/null 2>&1; then exit 1; fi
 grep -Fx "ZBMC_QEMU=$good" "$fixture/boxes/fake/zbmc.box" >/dev/null
 if run start --run-as-me --no-wait -q "$bad_start" >/dev/null 2>&1; then exit 1; fi
 grep -Fx "ZBMC_QEMU=$good" "$fixture/boxes/fake/zbmc.box" >/dev/null
@@ -113,13 +120,10 @@ run snapshot --run-as-me -q "$good" >/dev/null
 grep -Fx "$good" "$TEST_ROOT/snapshotted" >/dev/null
 run restore --run-as-me >/dev/null
 grep -Fx "$good" "$TEST_ROOT/restored" >/dev/null
-python3 - "$fixture/boxes/fake/zbmc.box" <<'PY'
-import pathlib, sys
-path = pathlib.Path(sys.argv[1])
-path.write_text("\n".join(line for line in path.read_text().splitlines()
-                           if not line.startswith("ZBMC_QEMU")) + "\n")
-PY
+printf '\n# changed after approval\n' >>"$good"
 rm -f "$TEST_ROOT/booted"
-run start --run-as-me --no-wait >/dev/null
+if run start --run-as-me --no-wait >/dev/null 2>&1; then exit 1; fi
+[ ! -e "$TEST_ROOT/booted" ]
+run start --run-as-me --no-wait -q "$good" >/dev/null
 wait_for_boot
 stop_fake

@@ -1,0 +1,10 @@
+QEMU_UPSTREAM_COMMIT=98b060da3a4f92b2a994ead5b16a87e783baf77c
+QEMU_UPSTREAM_TAG=v11.0.0
+QEMU_UPSTREAM_VERSION=11.0.0
+QEMU_BUILD_HOST=x86_64-linux
+QEMU_TARGET_LIST=aarch64-softmmu
+QEMU_BINARY=qemu-system-aarch64
+QEMU_VARIANT=aarch64-idrac10-usbnet
+QEMU_MACHINES=(npcm845-evb)
+QEMU_BOXES=(idrac10)
+QEMU_PATCHES=("$ROOT/boxes/idrac10/qemu-usb-net-high-speed.patch")

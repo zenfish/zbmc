@@ -406,16 +406,34 @@ if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
   exit 1
 fi
 
-_zbmc_validate_qemu(){ # path, descriptor-declared major, descriptor-declared machine
-  local qemu="$1" version
+_zbmc_sha256(){
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
+  else shasum -a 256 "$1" | awk '{print $1}'; fi
+}
+
+_zbmc_validate_qemu(){ # path, descriptor-declared version, descriptor-declared machine, expected hash
+  local qemu="$1" expected_sha="${2:-}" version required actual_sha
   [ -n "${ZBMC_QEMU_MACHINE:-}" ] || { echo "$ZBMC_NAME: no QEMU compatibility contract" >&2; return 1; }
-  [ -n "${ZBMC_QEMU_MAJOR:-}" ] || { echo "$ZBMC_NAME: no required QEMU major version" >&2; return 1; }
+  required="${ZBMC_QEMU_VERSION:-${ZBMC_QEMU_MAJOR:-}}"
+  [ -n "$required" ] || { echo "$ZBMC_NAME: no required QEMU version" >&2; return 1; }
   case "$qemu" in *$'\n'*) echo "$ZBMC_NAME: invalid QEMU path" >&2; return 1;; esac
   if [[ "$qemu" != */* ]]; then qemu="$(command -v "$qemu" || true)"; fi
   [ -x "$qemu" ] || { echo "$ZBMC_NAME: QEMU is not executable: $qemu" >&2; return 1; }
-  version="$("$qemu" --version 2>/dev/null | sed -n '1s/^QEMU emulator version \([0-9][0-9]*\)\..*/\1/p')"
-  [ "$version" = "$ZBMC_QEMU_MAJOR" ] || {
-    echo "$ZBMC_NAME: need QEMU $ZBMC_QEMU_MAJOR.x, got ${version:-unknown}: $qemu" >&2
+  if [ -n "$expected_sha" ]; then
+    actual_sha="$(_zbmc_sha256 "$qemu")"
+    [ "$actual_sha" = "$expected_sha" ] || {
+      echo "$ZBMC_NAME: QEMU changed at approved path: $qemu" >&2
+      echo "$ZBMC_NAME: use -q $qemu to approve SHA-256 $actual_sha" >&2
+      return 1
+    }
+  fi
+  version="$("$qemu" --version 2>/dev/null | sed -n '1s/^QEMU emulator version \([0-9][0-9.]*\).*/\1/p')"
+  if [ -n "${ZBMC_QEMU_VERSION:-}" ]; then
+    [ "$version" = "$required" ]
+  else
+    [ "${version%%.*}" = "$required" ]
+  fi || {
+    echo "$ZBMC_NAME: need QEMU $required, got ${version:-unknown}: $qemu" >&2
     return 1
   }
   "$qemu" -machine help 2>/dev/null | awk -v machine="$ZBMC_QEMU_MACHINE" '$1 == machine { found=1 } END { exit !found }' || {
@@ -479,29 +497,31 @@ PY
 }
 
 _zbmc_persist_qemu(){ # descriptor path, already-validated executable
-  python3 - "$1" "$2" <<'PY'
+  python3 - "$1" "$2" "$(_zbmc_sha256 "$2")" <<'PY'
 import pathlib, shlex, sys
 
 path = pathlib.Path(sys.argv[1])
-qemu = sys.argv[2]
+values = {"ZBMC_QEMU": sys.argv[2], "ZBMC_QEMU_SHA256": sys.argv[3]}
 lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-line = "ZBMC_QEMU=" + shlex.quote(qemu) + "\n"
-for index, current in enumerate(lines):
-    if current.startswith("ZBMC_QEMU="):
-        lines[index] = line
-        break
-else:
-    lines.append(line)
+for name, value in values.items():
+    line = name + "=" + shlex.quote(value) + "\n"
+    for index, current in enumerate(lines):
+        if current.startswith(name + "="):
+            lines[index] = line
+            break
+    else:
+        lines.append(line)
 path.write_text("".join(lines), encoding="utf-8")
 PY
 }
 
 _zbmc_select_qemu(){
   [ -n "${ZBMC_QEMU:-}${ZBMC_QEMU_OVERRIDE:-}" ] || return 0
-  local selected="${ZBMC_QEMU_OVERRIDE:-${ZBMC_QEMU:-}}"
+  local selected="${ZBMC_QEMU_OVERRIDE:-${ZBMC_QEMU:-}}" expected_sha="${ZBMC_QEMU_SHA256:-}"
   [ -n "$selected" ] || { echo "$ZBMC_NAME: no approved QEMU path; use -q PATH once" >&2; return 1; }
-  selected="$(_zbmc_validate_qemu "$selected")" || return 1
-  if [ -n "$ZBMC_QEMU_OVERRIDE" ] && [ "$selected" != "${ZBMC_QEMU:-}" ]; then
+  [ -z "$ZBMC_QEMU_OVERRIDE" ] || expected_sha=
+  selected="$(_zbmc_validate_qemu "$selected" "$expected_sha")" || return 1
+  if [ -n "$ZBMC_QEMU_OVERRIDE" ]; then
     _zbmc_persist_qemu "$BF" "$selected" || { echo "$ZBMC_NAME: could not store approved QEMU path in $BF" >&2; return 1; }
   fi
   ZBMC_QEMU="$selected"; QEMU="$selected"

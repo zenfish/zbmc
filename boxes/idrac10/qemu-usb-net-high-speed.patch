@@ -1,7 +1,11 @@
 diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
+index 568a6ff..2aa9c3b 100644
 --- a/hw/usb/dev-network.c
 +++ b/hw/usb/dev-network.c
-@@ -188,1 +188,76 @@
+@@ -186,6 +186,81 @@ static const USBDescIface desc_iface_rndis[] = {
+     }
+ };
+ 
 +
 +static const USBDescIface desc_iface_rndis_high[] = {
 +    {
@@ -78,7 +82,12 @@ diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
 +    }
 +};
  static const USBDescIface desc_iface_cdc[] = {
-@@ -266,1 +341,79 @@
+     {
+         /* CDC Control Interface */
+@@ -264,6 +339,84 @@ static const USBDescIface desc_iface_cdc[] = {
+     }
+ };
+ 
 +
 +static const USBDescIface desc_iface_cdc_high[] = {
 +    {
@@ -158,7 +167,12 @@ diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
 +    }
 +};
  static const USBDescDevice desc_device_net = {
-@@ -292,1 +445,27 @@
+     .bcdUSB                        = 0x0200,
+     .bDeviceClass                  = USB_CLASS_COMM,
+@@ -290,6 +443,32 @@ static const USBDescDevice desc_device_net = {
+     },
+ };
+ 
 +
 +static const USBDescDevice desc_device_net_high = {
 +    .bcdUSB                        = 0x0200,
@@ -186,13 +200,16 @@ diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
 +    },
 +};
  static const USBDesc desc_net = {
-@@ -300,5 +479,6 @@ static const USBDesc desc_net = {
+     .id = {
+         .idVendor          = RNDIS_VENDOR_NUM,
+@@ -300,6 +479,7 @@ static const USBDesc desc_net = {
          .iSerialNumber     = STRING_SERIALNUMBER,
      },
      .full = &desc_device_net,
 +    .high = &desc_device_net_high,
      .str  = usb_net_stringtable,
  };
+ 
 @@ -1187,7 +1367,8 @@ static void usb_net_handle_datain(USBNetState *s, USBPacket *p)
      usb_packet_copy(p, &s->in_buf[s->in_ptr], len);
      s->in_ptr += len;
@@ -203,7 +220,9 @@ diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
          /* no short packet necessary */
          usb_net_reset_in_buf(s);
      }
-@@ -1219,5 +1400,6 @@ static void usb_net_handle_dataout(USBNetState *s, USBPacket *p)
+@@ -1217,7 +1398,8 @@ static void usb_net_handle_dataout(USBNetState *s, USBPacket *p)
+     s->out_ptr += sz;
+ 
      if (!is_rndis(s)) {
 -        if (p->iov.size % 64 || p->iov.size == 0) {
 +        if (p->iov.size % p->ep->max_packet_size ||
@@ -211,7 +230,9 @@ diff --git a/hw/usb/dev-network.c b/hw/usb/dev-network.c
              qemu_send_packet(qemu_get_queue(s->nic), s->out_buf, s->out_ptr);
              s->out_ptr = 0;
          }
-@@ -1419,5 +1601,6 @@ static void usb_net_class_initfn(ObjectClass *klass, const void *data)
+@@ -1417,6 +1599,7 @@ static void usb_net_class_initfn(ObjectClass *klass, const void *data)
+     USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
+ 
      uc->realize        = usb_net_realize;
 +    uc->handle_attach  = usb_desc_attach;
      uc->product_desc   = "QEMU USB Network Interface";

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ZBMC_TOOL="${ZBMC_TOOL:-$ROOT/tools/zbmc}"
+OUTPUT_ROOT="${QEMU_VALIDATION_ROOT:-$ROOT/work/qemu-validation}"
+deadline=1200
+
+usage() {
+  echo "usage: $0 [--deadline SEC] MANIFEST [BOX ...]"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --deadline) [ $# -ge 2 ] || { usage >&2; exit 2; }; deadline="$2"; shift 2 ;;
+    --deadline=*) deadline="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+manifest="${1:-}"
+[ -f "$manifest" ] || { echo "manifest not found: $manifest" >&2; exit 2; }
+shift
+[[ "$deadline" =~ ^[0-9]+$ ]] || { echo "bad deadline: $deadline" >&2; exit 2; }
+
+mapfile -t metadata < <(python3 - "$manifest" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1]))
+for value in (data["build_id"], data["binary"], data["binary_sha256"]):
+    print(value)
+for box in data["boxes"]:
+    print(box)
+PY
+)
+build_id="${metadata[0]}"
+binary="${metadata[1]}"
+expected_sha256="${metadata[2]}"
+boxes=("${metadata[@]:3}")
+[ $# -eq 0 ] || boxes=("$@")
+[ -x "$binary" ] || { echo "QEMU binary is not executable: $binary" >&2; exit 1; }
+actual_sha256="$(sha256sum "$binary" | awk '{print $1}')"
+[ "$actual_sha256" = "$expected_sha256" ] || {
+  echo "QEMU binary hash mismatch: $binary" >&2
+  exit 1
+}
+
+if [ "${ZBMC_VALIDATE_RUN_AS_ME:-0}" = 1 ] || [ "$EUID" -eq 0 ]; then
+  sudo_cmd=()
+else
+  sudo_cmd=(sudo)
+fi
+
+run_dir="$OUTPUT_ROOT/$build_id/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$run_dir"
+current_box=""
+cleanup() {
+  [ -z "$current_box" ] || "${sudo_cmd[@]}" "$ZBMC_TOOL" "$current_box" stop >/dev/null 2>&1 || true
+}
+trap 'cleanup; exit 130' INT TERM
+
+printf 'Build    : %s\nBinary   : %s\nEvidence : %s\n' "$build_id" "$binary" "$run_dir"
+failures=0
+for box in "${boxes[@]}"; do
+  current_box="$box"
+  box_dir="$run_dir/$box"
+  mkdir -p "$box_dir"
+  printf '\n===== %s =====\n' "$box"
+
+  set +e
+  "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" start --deadline "$deadline" -q "$binary" 2>&1 | tee "$box_dir/start.log"
+  start_rc="${PIPESTATUS[0]}"
+  "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" status -v 2>&1 | tee "$box_dir/status.log"
+  status_rc="${PIPESTATUS[0]}"
+  "${sudo_cmd[@]}" "$ZBMC_TOOL" "$box" stop >"$box_dir/stop.log" 2>&1
+  stop_rc=$?
+  set -e
+  current_box=""
+
+  result=PASS
+  if [ "$start_rc" -ne 0 ] || [ "$status_rc" -ne 0 ] || [ "$stop_rc" -ne 0 ]; then
+    result=FAIL
+    failures=$((failures + 1))
+  fi
+  printf '%s\tstart=%s\tstatus=%s\tstop=%s\t%s\n' \
+    "$box" "$start_rc" "$status_rc" "$stop_rc" "$result" | tee -a "$run_dir/summary.tsv"
+done
+
+printf '\nValidation evidence: %s\n' "$run_dir"
+[ "$failures" -eq 0 ]

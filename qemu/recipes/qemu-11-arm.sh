@@ -1,0 +1,10 @@
+QEMU_UPSTREAM_COMMIT=98b060da3a4f92b2a994ead5b16a87e783baf77c
+QEMU_UPSTREAM_TAG=v11.0.0
+QEMU_UPSTREAM_VERSION=11.0.0
+QEMU_BUILD_HOST=x86_64-linux
+QEMU_TARGET_LIST=arm-softmmu
+QEMU_BINARY=qemu-system-arm
+QEMU_VARIANT=arm
+QEMU_MACHINES=(ast2600-evb gb200nvl-bmc npcm750-evb)
+QEMU_BOXES=(idrac9 megarac-hpe nvidia-obmc openbmc supermicro-x14)
+QEMU_PATCHES=()

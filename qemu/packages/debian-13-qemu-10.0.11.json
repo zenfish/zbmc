@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "kind": "distribution-package",
+  "build_id": "debian-13-qemu-10.0.11-amd64",
+  "distribution": "Debian 13",
+  "host_architecture": "amd64",
+  "package": "qemu-system-arm",
+  "package_version": "1:10.0.11+ds-0+deb13u1",
+  "binary": "/usr/bin/qemu-system-arm",
+  "binary_version": "QEMU emulator version 10.0.11 (Debian 1:10.0.11+ds-0+deb13u1)",
+  "binary_sha256": "584e8a49021e62dabb14ada6407230c8f632cfcade42ef049d19c346ab1314b2",
+  "machines": [
+    "ast2600-evb"
+  ],
+  "boxes": [
+    "advantech-asmb787"
+  ]
+}

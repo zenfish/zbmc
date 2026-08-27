@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RECIPES="$ROOT/qemu/recipes"
+SOURCE="${QEMU_SOURCE:-/home/zen/src/vendor/qemu-11.0.0}"
+WORK_ROOT="${QEMU_WORK_ROOT:-/home/zen/src/vendor/zbmc-qemu-builds}"
+INSTALL_ROOT="${QEMU_INSTALL_ROOT:-/home/zen/opt/zbmc-qemu}"
+JOBS="${JOBS:-4}"
+
+usage() {
+  cat <<EOF
+usage: $0 --list
+       $0 [--plan] RECIPE
+
+environment overrides:
+  QEMU_SOURCE       upstream QEMU Git repository [$SOURCE]
+  QEMU_WORK_ROOT    clean worktrees and build logs [$WORK_ROOT]
+  QEMU_INSTALL_ROOT versioned install prefixes [$INSTALL_ROOT]
+  JOBS              parallel make jobs [$JOBS]
+EOF
+}
+
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+list_recipes() {
+  local recipe
+  for recipe in "$RECIPES"/*.sh; do
+    [ -e "$recipe" ] || continue
+    basename "$recipe" .sh
+  done
+}
+
+mode=build
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --list) list_recipes; exit 0 ;;
+    --plan) mode=plan; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; break ;;
+    -*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+name="${1:-}"
+recipe="$RECIPES/$name.sh"
+[ -f "$recipe" ] || { echo "unknown QEMU recipe: $name" >&2; usage >&2; exit 2; }
+
+# Recipes are executable shell fragments kept beside this driver. They set only
+# build identity, targets, machines, boxes, and ordered patch paths.
+# shellcheck source=/dev/null
+source "$recipe"
+
+: "${QEMU_UPSTREAM_COMMIT:?recipe missing QEMU_UPSTREAM_COMMIT}"
+: "${QEMU_UPSTREAM_TAG:?recipe missing QEMU_UPSTREAM_TAG}"
+: "${QEMU_UPSTREAM_VERSION:?recipe missing QEMU_UPSTREAM_VERSION}"
+: "${QEMU_BUILD_HOST:?recipe missing QEMU_BUILD_HOST}"
+: "${QEMU_TARGET_LIST:?recipe missing QEMU_TARGET_LIST}"
+: "${QEMU_BINARY:?recipe missing QEMU_BINARY}"
+: "${QEMU_VARIANT:?recipe missing QEMU_VARIANT}"
+version="$QEMU_UPSTREAM_VERSION"
+short_commit="${QEMU_UPSTREAM_COMMIT:0:8}"
+patch_records=()
+if [ "${#QEMU_PATCHES[@]}" -eq 0 ]; then
+  patch_id=vanilla
+else
+  patch_hashes=""
+  for patch in "${QEMU_PATCHES[@]}"; do
+    [ -f "$patch" ] || { echo "missing patch: $patch" >&2; exit 1; }
+    hash="$(sha256 "$patch")"
+    patch_hashes+="$hash"$'\n'
+    patch_records+=("$patch|$hash")
+  done
+  if command -v sha256sum >/dev/null 2>&1; then
+    patch_id="$(printf '%s' "$patch_hashes" | sha256sum | cut -c1-12)"
+  else
+    patch_id="$(printf '%s' "$patch_hashes" | shasum -a 256 | cut -c1-12)"
+  fi
+fi
+
+build_id="qemu-${version}-${short_commit}-${QEMU_VARIANT}-dynamic-${patch_id}"
+worktree="$WORK_ROOT/$build_id"
+prefix="$INSTALL_ROOT/$build_id"
+binary="$prefix/bin/$QEMU_BINARY"
+log="$WORK_ROOT/$build_id.build.log"
+inputs="$WORK_ROOT/$build_id.inputs"
+
+print_plan() {
+  printf 'Build ID    : %s\n' "$build_id"
+  printf 'Source      : %s\n' "$SOURCE"
+  printf 'Upstream    : %s (%s)\n' "$QEMU_UPSTREAM_COMMIT" "$QEMU_UPSTREAM_TAG"
+  printf 'Build host  : %s\n' "$QEMU_BUILD_HOST"
+  printf 'Linkage     : dynamic\n'
+  printf 'Worktree    : %s\n' "$worktree"
+  printf 'Inputs      : %s\n' "$inputs"
+  printf 'Install     : %s\n' "$prefix"
+  printf 'Target      : %s\n' "$QEMU_TARGET_LIST"
+  printf 'Binary      : %s\n' "$binary"
+  printf 'Machines    : %s\n' "${QEMU_MACHINES[*]}"
+  printf 'Boxes       : %s\n' "${QEMU_BOXES[*]}"
+  if [ "${#patch_records[@]}" -eq 0 ]; then
+    printf 'Patches     : none\n'
+  else
+    local record
+    for record in "${patch_records[@]}"; do
+      printf 'Patch       : %s (%s)\n' "${record%%|*}" "${record##*|}"
+    done
+  fi
+}
+
+print_plan
+[ "$mode" = plan ] && exit 0
+
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  echo "QEMU v1 builds require an x86_64 Linux host" >&2
+  exit 1
+fi
+git -C "$SOURCE" rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "QEMU source is not a Git repository: $SOURCE" >&2
+  exit 1
+}
+git -C "$SOURCE" cat-file -e "$QEMU_UPSTREAM_COMMIT^{commit}"
+[ "$(git -C "$SOURCE" rev-parse "$QEMU_UPSTREAM_TAG^{commit}")" = "$QEMU_UPSTREAM_COMMIT" ] || {
+  echo "$QEMU_UPSTREAM_TAG does not resolve to $QEMU_UPSTREAM_COMMIT" >&2
+  exit 1
+}
+[ "$(git -C "$SOURCE" show "$QEMU_UPSTREAM_COMMIT:VERSION" | tr -d '\r\n')" = "$version" ] || {
+  echo "$QEMU_UPSTREAM_COMMIT is not QEMU $version" >&2
+  exit 1
+}
+[ ! -e "$worktree" ] || { echo "refusing to reuse existing worktree: $worktree" >&2; exit 1; }
+[ ! -e "$prefix" ] || { echo "refusing to overwrite existing install: $prefix" >&2; exit 1; }
+[ ! -e "$inputs" ] || { echo "refusing to reuse existing inputs: $inputs" >&2; exit 1; }
+
+mkdir -p "$WORK_ROOT" "$INSTALL_ROOT"
+exec > >(tee "$log") 2>&1
+
+git -C "$SOURCE" worktree add --detach "$worktree" "$QEMU_UPSTREAM_COMMIT"
+mkdir "$inputs"
+patch_snapshots=()
+i=0
+for patch in "${QEMU_PATCHES[@]}"; do
+  i=$((i + 1))
+  snapshot="$inputs/$(printf '%02d' "$i")-$(basename "$patch")"
+  install -m 0644 "$patch" "$snapshot"
+  patch_snapshots+=("$snapshot")
+done
+for patch in "${patch_snapshots[@]}"; do
+  git -C "$worktree" apply --check "$patch"
+  git -C "$worktree" apply "$patch"
+done
+git -C "$worktree" diff --check
+
+mkdir "$worktree/build"
+configure=("$worktree/configure" "--target-list=$QEMU_TARGET_LIST" "--prefix=$prefix" --disable-werror --disable-docs --disable-tools)
+(
+  cd "$worktree/build"
+  "${configure[@]}"
+  make -j"$JOBS" "$QEMU_BINARY"
+  install -Dm0755 "$QEMU_BINARY" "$binary"
+)
+
+version_line="$($binary --version | head -1)"
+case "$version_line" in
+  *" $version"*) ;;
+  *) echo "installed binary version mismatch: $version_line" >&2; exit 1 ;;
+esac
+machine_help="$($binary -machine help)"
+for machine in "${QEMU_MACHINES[@]}"; do
+  grep -Fq "$machine" <<<"$machine_help" || { echo "installed binary lacks machine: $machine" >&2; exit 1; }
+done
+binary_sha256="$(sha256 "$binary")"
+
+meta="$prefix/share/zbmc-qemu"
+mkdir -p "$meta/patches"
+installed_patch_records=()
+i=0
+for record in "${patch_records[@]}"; do
+  snapshot="${patch_snapshots[$i]}"; i=$((i + 1))
+  patch="${record%%|*}"
+  hash="${record##*|}"
+  installed="$meta/patches/$(printf '%02d' "$i")-$(basename "$patch")"
+  install -m 0644 "$snapshot" "$installed"
+  installed_patch_records+=("$patch|$hash|$installed")
+done
+install -m 0644 "$log" "$meta/build.log"
+
+python3 - "$meta/manifest.json" "$ROOT" "$name" "$build_id" "$SOURCE" \
+  "$QEMU_UPSTREAM_COMMIT" "$QEMU_UPSTREAM_TAG" "$QEMU_TARGET_LIST" "$prefix" \
+  "$binary" "$binary_sha256" "$version_line" "${QEMU_MACHINES[*]}" "${QEMU_BOXES[*]}" \
+  "${installed_patch_records[@]}" <<'PY'
+import datetime
+import json
+import pathlib
+import sys
+
+(out, root, recipe, build_id, source, commit, tag, target, prefix, binary,
+ binary_sha256, version_line, machines, boxes, *patches) = sys.argv[1:]
+entries = []
+for item in patches:
+    source_path, sha256, installed_path = item.split("|", 2)
+    entries.append({
+        "source": str(pathlib.Path(source_path).resolve()),
+        "sha256": sha256,
+        "installed": str(pathlib.Path(installed_path).resolve()),
+    })
+manifest = {
+    "schema": 1,
+    "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "recipe": recipe,
+    "recipe_root": str(pathlib.Path(root).resolve()),
+    "build_id": build_id,
+    "source_repository": str(pathlib.Path(source).resolve()),
+    "upstream_commit": commit,
+    "upstream_tag": tag,
+    "target_list": target,
+    "install_prefix": str(pathlib.Path(prefix).resolve()),
+    "binary": str(pathlib.Path(binary).resolve()),
+    "binary_sha256": binary_sha256,
+    "binary_version": version_line,
+    "linkage": "dynamic",
+    "machines": machines.split(),
+    "boxes": boxes.split(),
+    "patches": entries,
+}
+pathlib.Path(out).write_text(json.dumps(manifest, indent=2) + "\n")
+PY
+
+cat >"$meta/VERSION" <<EOF
+build_id=$build_id
+upstream_commit=$QEMU_UPSTREAM_COMMIT
+upstream_tag=$QEMU_UPSTREAM_TAG
+binary=$binary
+binary_sha256=$binary_sha256
+manifest=$meta/manifest.json
+EOF
+
+echo "Built $binary"
+echo "Manifest: $meta/manifest.json"
+echo "Version : $meta/VERSION"
