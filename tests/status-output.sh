@@ -34,7 +34,9 @@ ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi}"
 ZBMC_L2_REQUIRED="${TEST_L2_REQUIRED:-1}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
 zbmc_ready(){ echo "ready (fixture)"; }
-zbmc_running(){ [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] && echo "$$"; }
+zbmc_running(){
+  if [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] || [ "${TEST_FLEET_ORDER:-0}" = 1 ]; then echo "$$"; fi
+}
 zbmc_ssh(){
   [ "${TEST_SSH_DOWN:-0}" = 1 ] && { echo "no response"; return 1; }
   echo up
