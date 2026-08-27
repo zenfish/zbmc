@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
-  echo "usage: $0 OUTPUT.oci MANIFEST..."
+  echo "usage: $0 OUTPUT.tar MANIFEST..."
 }
 
 sha256() {
@@ -17,22 +17,23 @@ output="${1:-}"
 shift
 [ $# -gt 0 ] || { usage >&2; exit 2; }
 if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
-  echo "QEMU v1 OCI images require an x86_64 Linux host" >&2
+  echo "QEMU v1 Docker images require an x86_64 Linux host" >&2
   exit 1
 fi
-command -v podman >/dev/null 2>&1 || { echo "podman is required" >&2; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
 [ ! -e "$output" ] || { echo "refusing to overwrite: $output" >&2; exit 1; }
 context="$output.context"
 [ ! -e "$context" ] || { echo "refusing to overwrite: $context" >&2; exit 1; }
-mkdir -p "$context/artifacts" "$context/manifests"
-install -m 0644 "$ROOT/qemu/Containerfile" "$context/Containerfile"
+mkdir -p "$context/rootfs" "$context/manifests"
+install -m 0644 "$ROOT/qemu/Dockerfile" "$context/Dockerfile"
 
 debian_version=
 smoke_rows=()
+hash_rows=()
 for manifest in "$@"; do
   [ -f "$manifest" ] || { echo "manifest not found: $manifest" >&2; exit 2; }
   mapfile -t fields < <(python3 - "$manifest" <<'PY'
-import json, pathlib, sys
+import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 print(data.get("kind", "source-build"))
 print(data["build_id"])
@@ -51,23 +52,41 @@ PY
     debian_version="$package_version"
     image_binary="/usr/bin/$(basename "$binary")"
   else
-    mkdir -p "$context/artifacts/$build_id"
-    image_binary="/opt/zbmc-qemu/$build_id/$(basename "$binary")"
-    install -m 0755 "$binary" "$context/artifacts/$build_id/$(basename "$binary")"
+    image_binary="$binary"
+    install -Dm0755 "$binary" "$context/rootfs$binary"
+    while IFS='|' read -r data_path data_sha; do
+      [ -n "$data_path" ] || continue
+      [ -f "$data_path" ] || { echo "QEMU data file not found: $data_path" >&2; exit 1; }
+      [ "$(sha256 "$data_path")" = "$data_sha" ] || { echo "QEMU data hash mismatch: $data_path" >&2; exit 1; }
+      install -Dm0644 "$data_path" "$context/rootfs$data_path"
+    done < <(python3 - "$manifest" <<'PY'
+import json, sys
+for item in json.load(open(sys.argv[1], encoding="utf-8")).get("data_files", []):
+    print(f'{item["installed"]}|{item["sha256"]}')
+PY
+)
   fi
+  hash_rows+=("$image_binary|$expected_sha")
   for machine in $machines; do smoke_rows+=("$image_binary|$machine"); done
 done
 [ -n "$debian_version" ] || { echo "a Debian package manifest is required" >&2; exit 1; }
 
 tag="zbmc-qemu:$(date -u +%Y%m%d%H%M%S)"
-podman build --arch amd64 --build-arg "QEMU_DEBIAN_VERSION=$debian_version" -t "$tag" "$context"
+docker build --platform linux/amd64 --build-arg "QEMU_DEBIAN_VERSION=$debian_version" -t "$tag" "$context"
+for row in "${hash_rows[@]}"; do
+  binary="${row%%|*}" expected_sha="${row##*|}"
+  actual_sha="$(docker run --rm "$tag" sha256sum "$binary" | awk '{print $1}')"
+  [ "$actual_sha" = "$expected_sha" ] || { echo "Docker binary hash mismatch: $binary" >&2; exit 1; }
+  printf 'Docker hash : %s: PASS\n' "$binary"
+done
 for row in "${smoke_rows[@]}"; do
   binary="${row%%|*}" machine="${row##*|}"
-  podman run --rm "$tag" "$binary" -machine help | awk -v machine="$machine" '$1 == machine { found=1 } END { exit !found }'
+  docker run --rm "$tag" "$binary" -machine help | awk -v machine="$machine" '$1 == machine { found=1 } END { exit !found }'
   qmp="$(printf '%s\n' '{"execute":"qmp_capabilities"}' '{"execute":"quit"}' \
-    | podman run --rm -i "$tag" "$binary" -M "$machine" -nodefaults -display none -S -qmp stdio)"
+    | docker run --rm -i "$tag" "$binary" -M "$machine" -nodefaults -display none -S -qmp stdio)"
   grep -q '"QMP"' <<<"$qmp"
-  printf 'OCI smoke: %s -M %s: PASS\n' "$binary" "$machine"
+  printf 'Docker smoke: %s -M %s: PASS\n' "$binary" "$machine"
 done
-podman save --format oci-archive -o "$output" "$tag"
-printf 'OCI archive : %s\nSHA-256    : %s\nBuild input : %s\n' "$output" "$(sha256 "$output")" "$context"
+docker save -o "$output" "$tag"
+printf 'Docker archive: %s\nImage         : %s\nSHA-256       : %s\nBuild input   : %s\n' \
+  "$output" "$tag" "$(sha256 "$output")" "$context"

@@ -7,4 +7,5 @@ QEMU_BINARY=qemu-system-arm
 QEMU_VARIANT=arm
 QEMU_MACHINES=(ast2600-evb gb200nvl-bmc npcm750-evb)
 QEMU_BOXES=(idrac9 megarac-hpe nvidia-obmc openbmc supermicro-x14)
+QEMU_DATA_FILES=(npcm7xx_bootrom.bin)
 QEMU_PATCHES=()

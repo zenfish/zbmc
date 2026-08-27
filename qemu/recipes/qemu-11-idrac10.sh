@@ -7,4 +7,5 @@ QEMU_BINARY=qemu-system-aarch64
 QEMU_VARIANT=aarch64-idrac10-usbnet
 QEMU_MACHINES=(npcm845-evb)
 QEMU_BOXES=(idrac10)
+QEMU_DATA_FILES=(npcm8xx_bootrom.bin)
 QEMU_PATCHES=("$ROOT/boxes/idrac10/qemu-usb-net-high-speed.patch")

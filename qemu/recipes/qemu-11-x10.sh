@@ -7,4 +7,5 @@ QEMU_BINARY=qemu-system-arm
 QEMU_VARIANT=arm-x10-ftgmac
 QEMU_MACHINES=(supermicrox11-bmc)
 QEMU_BOXES=(supermicro-x10)
+QEMU_DATA_FILES=()
 QEMU_PATCHES=("$ROOT/boxes/supermicro-x10/qemu-ftgmac-rx-descriptor.patch")

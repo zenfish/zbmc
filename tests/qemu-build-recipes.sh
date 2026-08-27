@@ -18,10 +18,15 @@ done
 idrac_plan="$($tool --plan qemu-11-idrac10)"
 grep -Fq "$repo/boxes/idrac10/qemu-usb-net-high-speed.patch" <<<"$idrac_plan"
 grep -Fq 'Machines    : npcm845-evb' <<<"$idrac_plan"
+grep -Fq 'Data files  : npcm8xx_bootrom.bin' <<<"$idrac_plan"
+
+arm_plan="$($tool --plan qemu-11-arm)"
+grep -Fq 'Data files  : npcm7xx_bootrom.bin' <<<"$arm_plan"
 
 x10_plan="$($tool --plan qemu-11-x10)"
 grep -Fq "$repo/boxes/supermicro-x10/qemu-ftgmac-rx-descriptor.patch" <<<"$x10_plan"
 grep -Fq 'Machines    : supermicrox11-bmc' <<<"$x10_plan"
+grep -Fq 'Data files  : none' <<<"$x10_plan"
 
 python3 - "$repo/qemu/packages/debian-13-qemu-10.0.11.json" <<'PY'
 import json

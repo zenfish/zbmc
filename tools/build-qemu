@@ -65,6 +65,7 @@ source "$recipe"
 : "${QEMU_TARGET_LIST:?recipe missing QEMU_TARGET_LIST}"
 : "${QEMU_BINARY:?recipe missing QEMU_BINARY}"
 : "${QEMU_VARIANT:?recipe missing QEMU_VARIANT}"
+declare -p QEMU_DATA_FILES >/dev/null 2>&1 || { echo "recipe missing QEMU_DATA_FILES" >&2; exit 1; }
 version="$QEMU_UPSTREAM_VERSION"
 short_commit="${QEMU_UPSTREAM_COMMIT:0:8}"
 patch_records=()
@@ -105,6 +106,11 @@ print_plan() {
   printf 'Binary      : %s\n' "$binary"
   printf 'Machines    : %s\n' "${QEMU_MACHINES[*]}"
   printf 'Boxes       : %s\n' "${QEMU_BOXES[*]}"
+  if [ "${#QEMU_DATA_FILES[@]}" -eq 0 ]; then
+    printf 'Data files  : none\n'
+  else
+    printf 'Data files  : %s\n' "${QEMU_DATA_FILES[*]}"
+  fi
   if [ "${#patch_records[@]}" -eq 0 ]; then
     printf 'Patches     : none\n'
   else
@@ -178,6 +184,21 @@ for machine in "${QEMU_MACHINES[@]}"; do
 done
 binary_sha256="$(sha256 "$binary")"
 
+installed_data_records=()
+for data_file in "${QEMU_DATA_FILES[@]}"; do
+  source_data="$worktree/pc-bios/$data_file"
+  installed_data="$prefix/share/qemu/$data_file"
+  [ -f "$source_data" ] || { echo "QEMU data file not found: $source_data" >&2; exit 1; }
+  install -Dm0644 "$source_data" "$installed_data"
+  installed_data_records+=("$data_file|$(sha256 "$installed_data")|$installed_data")
+done
+
+for machine in "${QEMU_MACHINES[@]}"; do
+  qmp="$(printf '%s\n' '{"execute":"qmp_capabilities"}' '{"execute":"quit"}' \
+    | "$binary" -M "$machine" -nodefaults -display none -S -qmp stdio)"
+  grep -q '"QMP"' <<<"$qmp" || { echo "installed QEMU failed QMP startup: $machine" >&2; exit 1; }
+done
+
 meta="$prefix/share/zbmc-qemu"
 mkdir -p "$meta/patches"
 installed_patch_records=()
@@ -195,14 +216,16 @@ install -m 0644 "$log" "$meta/build.log"
 python3 - "$meta/manifest.json" "$ROOT" "$name" "$build_id" "$SOURCE" \
   "$QEMU_UPSTREAM_COMMIT" "$QEMU_UPSTREAM_TAG" "$QEMU_TARGET_LIST" "$prefix" \
   "$binary" "$binary_sha256" "$version_line" "${QEMU_MACHINES[*]}" "${QEMU_BOXES[*]}" \
-  "${installed_patch_records[@]}" <<'PY'
+  "${installed_patch_records[@]}" -- "${installed_data_records[@]}" <<'PY'
 import datetime
 import json
 import pathlib
 import sys
 
 (out, root, recipe, build_id, source, commit, tag, target, prefix, binary,
- binary_sha256, version_line, machines, boxes, *patches) = sys.argv[1:]
+ binary_sha256, version_line, machines, boxes, *records) = sys.argv[1:]
+separator = records.index("--")
+patches, data_files = records[:separator], records[separator + 1:]
 entries = []
 for item in patches:
     source_path, sha256, installed_path = item.split("|", 2)
@@ -211,8 +234,16 @@ for item in patches:
         "sha256": sha256,
         "installed": str(pathlib.Path(installed_path).resolve()),
     })
+data_entries = []
+for item in data_files:
+    name, sha256, installed_path = item.split("|", 2)
+    data_entries.append({
+        "name": name,
+        "sha256": sha256,
+        "installed": str(pathlib.Path(installed_path).resolve()),
+    })
 manifest = {
-    "schema": 1,
+    "schema": 2,
     "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "recipe": recipe,
     "recipe_root": str(pathlib.Path(root).resolve()),
@@ -228,6 +259,7 @@ manifest = {
     "linkage": "dynamic",
     "machines": machines.split(),
     "boxes": boxes.split(),
+    "data_files": data_entries,
     "patches": entries,
 }
 pathlib.Path(out).write_text(json.dumps(manifest, indent=2) + "\n")

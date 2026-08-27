@@ -5,4 +5,5 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends qemu-system-arm="$QEMU_DEBIAN_VERSION" \
  && rm -rf /var/lib/apt/lists/*
 
-COPY artifacts/ /opt/zbmc-qemu/
+COPY rootfs/ /
+COPY manifests/ /opt/zbmc-qemu/manifests/
