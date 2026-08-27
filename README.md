@@ -9,7 +9,9 @@ skill so others can reproduce it on their own images. C&C very welcome, as are n
 on what I have here. This turned out to be a bit more black magic than I'd anticipated beating these into
 submission (at least... mostly beaten... still a bit to do.)
 
-> **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `sudo ./tools/zbmc openbmc start`.
+> TLDR; → clone this repo → `./build.sh` → `sudo ./tools/zbmc list` # list possibles -> `sudo ./tools/zbmc openbmc start` # run one
+
+There's a [GETTING-STARTED.md](GETTING-STARTED.md) doc that walks through the process in more detail.
 
 > **Supported host:** zbmc 0.1.1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
 > executables, paths, and SHA-256 values were produced for x86_64 Linux. ARM64 hosts such as
@@ -27,7 +29,7 @@ this README came from a four-core host and will be slower on smaller systems.
 > value here is *documenting the danger*. The tracked tree contains no live/customer secrets or private
 > keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
 
-## The animals
+## The denizens/animals
 
 `zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the
 current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7b3d42244a0a5e331c4c30fc1d2b5cdd0c562055191641771aa3836c36df16c4 body-sha256=3f821575eea75bc0b1ef1ca3d74de9c565cd1c627d320c6a5bf837c13a2baf62 -->
+<!-- zmd2html:auto source-sha256=8e4b801959d954b7cba7ffafe6aad2e583a5f3e998c6d2f3dec56b2aba969c1b body-sha256=524832893560faebfe921d52f5de5aa9856a1f53a64b8931566a45f594cd9202 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -57,11 +57,12 @@ recipes/methods/improvements on what I have here. This turned out to be
 a bit more black magic than I'd anticipated beating these into
 submission (at least... mostly beaten... still a bit to do.)</p>
 <blockquote>
-<p><strong>New here? → <a
-href="GETTING-STARTED.html">GETTING-STARTED.md</a></strong> — clone →
-<code>./build.sh</code> →
-<code>sudo ./tools/zbmc openbmc start</code>.</p>
+<p>TLDR; → clone this repo → <code>./build.sh</code> →
+<code>sudo ./tools/zbmc list</code> # list possibles -&gt;
+<code>sudo ./tools/zbmc openbmc start</code> # run one</p>
 </blockquote>
+<p>There's a <a href="GETTING-STARTED.html">GETTING-STARTED.md</a> doc
+that walks through the process in more detail.</p>
 <blockquote>
 <p><strong>Supported host:</strong> zbmc 0.1.1 runs only on
 <strong>x86_64 Linux</strong> (Intel or AMD). The pinned QEMU
@@ -86,7 +87,7 @@ live/customer secrets or private keys. Some fetched lab bundles include
 deliberately shared research identities; see <a
 href="SECURITY.html">SECURITY.md</a>.</p>
 </blockquote>
-<h2 id="the-animals">The animals</h2>
+<h2 id="the-denizensanimals">The denizens/animals</h2>
 <p><code>zbmc list</code> shows these; run any with
 <code>sudo ./tools/zbmc &lt;name&gt; start</code>. Firmware isn't
 present in the current tree. <code>build.sh</code> fetches
