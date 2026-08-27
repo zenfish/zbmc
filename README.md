@@ -57,7 +57,7 @@ bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTP
 address is routable on the host LAN; direct mode adds ICMP and TAP packet capture.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md).
-The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.html).
+The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
 ## Quickstart
 
@@ -97,7 +97,7 @@ artifacts plus Debian's exact QEMU 10.0.11 package in one pinned Docker image. N
 and verify this package automatically through `build.sh`; these commands reproduce it:
 
 The engineering rationale, observed failures, evidence strength, and criteria for removing a variant
-are documented in [Why zbmc Ships Multiple QEMU Builds](docs/why-multiple-qemu-builds.html).
+are documented in [Why zbmc Ships Multiple QEMU Builds](docs/why-multiple-qemu-builds.md).
 
 ```bash
 tools/build-qemu --plan qemu-11-arm
@@ -164,12 +164,14 @@ firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble
 Every documentation source has both a GitHub-friendly Markdown form and a styled HTML form. Existing
 Markdown remains authoritative where it existed first; existing hand-authored HTML remains authoritative
 for the reverse-engineering reports. Markdown-to-HTML uses the vendored `zmd2html`; HTML-to-Markdown uses
-Pandoc 3.7.0.2 with its GFM writer. Regenerate or verify the pairs with:
+Pandoc 3.7.0.2 with its GFM writer. Edit the side without an `html2md:auto` or `zmd2html:auto` marker;
+the marked side is generated and will be overwritten. Regenerate or verify the pairs with:
 
 ```bash
 tools/install-pandoc-docs
 export PATH="$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH"
-tools/sync-docs --write       # or: --check
+./tools/sync-docs --write       # regenerate marked siblings
+./tools/sync-docs --check       # verify pairs and same-format links; also runs in CI
 ```
 
 The two `*.standalone.html` packaging copies remain HTML-only.
@@ -178,12 +180,12 @@ The two `*.standalone.html` packaging copies remain HTML-only.
 
 ## The docs, the sweat, the tears
 
-- **[docs/why-bmc-virtualization-is-hard.html](docs/why-bmc-virtualization-is-hard.html)** — why was
+- **[docs/why-bmc-virtualization-is-hard.md](docs/why-bmc-virtualization-is-hard.md)** — why was
   it so difficult, which problems were inherent versus self-inflicted, what failed, what worked,
   the current limits, and the rules that hopefully will guide future endeavors.
-- **[docs/release-readiness-retrospective.html](docs/release-readiness-retrospective.html)** — the
+- **[docs/release-readiness-retrospective.md](docs/release-readiness-retrospective.md)** — the
   repository-wide 2026-08-27 audit, corrected contracts, verification, and remaining release risks.
-- **[docs/why-multiple-qemu-builds.html](docs/why-multiple-qemu-builds.html)** — why multiple QEMU
+- **[docs/why-multiple-qemu-builds.md](docs/why-multiple-qemu-builds.md)** — why multiple QEMU
   executables were stuffed in here, which differences require separate builds, and how to test whether
   Advantech still needs the separately packaged Debian QEMU 10 build.
 - **[docs/from-firmware-to-bare-metal.md](docs/from-firmware-to-bare-metal.md)** — one box end to end:

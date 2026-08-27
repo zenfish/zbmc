@@ -163,7 +163,7 @@ again for current health and `explain` for the recorded startup outcome:
 These images contain vendor default credentials and lab-only adaptations. Some boxes reconstruct
 missing board state while retaining vendor services; others interpose or replace a narrow endpoint.
 A working substitute does not prove the replaced vendor component. Read
-[Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.html) before using a box as
+[Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md) before using a box as
 security evidence, and keep patched guests on an isolated research host.
 The Docker runtime uses host networking and writable work mounts. It packages exact QEMU builds but is
 not a containment boundary. Read [SECURITY.md](SECURITY.md) before exposing any guest beyond the host.

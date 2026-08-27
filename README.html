@@ -295,10 +295,13 @@ and a styled HTML form. Existing Markdown remains authoritative where it
 existed first; existing hand-authored HTML remains authoritative for the
 reverse-engineering reports. Markdown-to-HTML uses the vendored
 <code>zmd2html</code>; HTML-to-Markdown uses Pandoc 3.7.0.2 with its GFM
-writer. Regenerate or verify the pairs with:</p>
+writer. Edit the side without an <code>html2md:auto</code> or
+<code>zmd2html:auto</code> marker; the marked side is generated and will
+be overwritten. Regenerate or verify the pairs with:</p>
 <pre class="bash"><code>tools/install-pandoc-docs
 export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
-tools/sync-docs --write       # or: --check</code></pre>
+./tools/sync-docs --write       # regenerate marked siblings
+./tools/sync-docs --check       # verify pairs and same-format links; also runs in CI</code></pre>
 <p>The two <code>*.standalone.html</code> packaging copies remain
 HTML-only.</p>
 <p><code>./tools/zbmc -V</code> (or <code>--version</code>) prints the
@@ -307,16 +310,16 @@ dispatcher version.</p>
 tears</h2>
 <ul>
 <li><strong><a
-href="docs/why-bmc-virtualization-is-hard.html">docs/why-bmc-virtualization-is-hard.html</a></strong>
+href="docs/why-bmc-virtualization-is-hard.html">docs/why-bmc-virtualization-is-hard.md</a></strong>
 — why was it so difficult, which problems were inherent versus
 self-inflicted, what failed, what worked, the current limits, and the
 rules that hopefully will guide future endeavors.</li>
 <li><strong><a
-href="docs/release-readiness-retrospective.html">docs/release-readiness-retrospective.html</a></strong>
+href="docs/release-readiness-retrospective.html">docs/release-readiness-retrospective.md</a></strong>
 — the repository-wide 2026-08-27 audit, corrected contracts,
 verification, and remaining release risks.</li>
 <li><strong><a
-href="docs/why-multiple-qemu-builds.html">docs/why-multiple-qemu-builds.html</a></strong>
+href="docs/why-multiple-qemu-builds.html">docs/why-multiple-qemu-builds.md</a></strong>
 — why multiple QEMU executables were stuffed in here, which differences
 require separate builds, and how to test whether Advantech still needs
 the separately packaged Debian QEMU 10 build.</li>

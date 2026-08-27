@@ -89,7 +89,7 @@ snapshots with `start --warm`. Re-run every declared functional probe after rest
 5. Start with `--no-wait`, follow with `status --follow`, and inspect the recorded console log.
 6. Add one focused regression test for the compatibility or lifecycle rule introduced.
 
-Read [Why Virtualizing BMC Firmware Was Hard](../../docs/why-bmc-virtualization-is-hard.html) for the
-evidence model and [Why zbmc Ships Multiple QEMU Builds](../../docs/why-multiple-qemu-builds.html) for
+Read [Why Virtualizing BMC Firmware Was Hard](../../docs/why-bmc-virtualization-is-hard.md) for the
+evidence model and [Why zbmc Ships Multiple QEMU Builds](../../docs/why-multiple-qemu-builds.md) for
 runtime provenance. `docs/zoo-lessons.md` preserves useful engineering history; verify every operational
 claim against the current descriptor and tests before reuse.

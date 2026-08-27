@@ -10,13 +10,14 @@ import re
 import subprocess
 import sys
 
-root = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[1]).resolve()
 documents = [root / path for path in subprocess.check_output(
     ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.md", "*.html"],
     cwd=root,
     text=True,
 ).splitlines()]
 missing = []
+wrong_format = []
 
 class HTMLLinks(HTMLParser):
     def __init__(self):
@@ -45,8 +46,18 @@ for document in documents:
             continue
         if not path.exists():
             missing.append(f"{document.relative_to(root)} -> {target}")
+            continue
+        if path.suffix in (".md", ".html") and path.suffix != document.suffix:
+            preferred = path.with_suffix(document.suffix)
+            if preferred.exists():
+                wrong_format.append(
+                    f"{document.relative_to(root)} -> {target}; "
+                    f"prefer {preferred.relative_to(root)}"
+                )
 if missing:
     raise SystemExit("missing documentation links:\n" + "\n".join(missing))
+if wrong_format:
+    raise SystemExit("cross-format documentation links:\n" + "\n".join(wrong_format))
 PY
 
 "$repo/tools/sync-docs" --check

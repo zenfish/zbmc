@@ -69,5 +69,5 @@ Console access proves local operator access, not external management functionali
 only through its declared functional probe and preserve the run evidence and console log.
 
 Read [From Firmware Blob to Bare Metal](../../docs/from-firmware-to-bare-metal.md) for the Advantech
-field report and [Why Virtualizing BMC Firmware Was Hard](../../docs/why-bmc-virtualization-is-hard.html)
+field report and [Why Virtualizing BMC Firmware Was Hard](../../docs/why-bmc-virtualization-is-hard.md)
 for the evidence taxonomy and current fleet limits.
