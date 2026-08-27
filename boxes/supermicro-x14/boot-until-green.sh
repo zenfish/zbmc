@@ -24,7 +24,7 @@ systemd.mask=systemd-networkd-wait-online.service systemd.mask=com.Supermicro.Le
 
 for try in $(seq 1 "$MAX"); do
   echo "=== attempt $try/$MAX ==="
-  sudo -n pkill -9 -f "ast2600-evb" 2>/dev/null; sleep 2
+  sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null; sleep 2
   if [ "$try" -gt 1 ] && sudo -n test -f "$CONSOLE_LOG"; then
     sudo -n cp -f "$CONSOLE_LOG" "$(dirname "$CONSOLE_LOG")/console-attempt-$((try-1)).log"
   fi

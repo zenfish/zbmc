@@ -83,8 +83,6 @@ qemu_cmd = [
     "-m", "128", "-M", "supermicrox11-bmc",
     "-display", "none", "-monitor", "none",
     "-qmp", f"unix:{QMP_SOCK},server=on,wait=off",
-    "-gdb", f"unix:{GDB_SOCK},server=on,wait=off",
-    "-perfmap",
     "-d", QEMU_DEBUG,
     "-D", DEBUG_FILE,
     "-trace", "enable=ftgmac100_*",
@@ -93,6 +91,8 @@ qemu_cmd = [
     "-serial", "chardev:ser0",
     "-drive", f"file={RUN},format=raw,if=mtd",
 ]
+if os.environ.get("ZBMC_X10_GDB") == "1":
+    qemu_cmd += ["-gdb", f"unix:{GDB_SOCK},server=on,wait=off", "-perfmap"]
 if QEMU_PLUGIN:
     qemu_cmd += ["-plugin", QEMU_PLUGIN]
 if FTGMAC_GUARD:
@@ -131,8 +131,13 @@ print(f"RUN_ID {RUN_ID}", flush=True)
 # root-owned; socat/zbmc shell need user access).
 for _ in range(30):
     if os.path.exists(SOCK):
-        for control_sock in (SOCK, QMP_SOCK, GDB_SOCK):
-            subprocess.run(["sudo", "-n", "chmod", "777", control_sock], check=False)
+        control_socks = [SOCK, QMP_SOCK]
+        if os.environ.get("ZBMC_X10_GDB") == "1":
+            control_socks.append(GDB_SOCK)
+        operator_gid = os.environ.get("SUDO_GID", str(os.getgid()))
+        for control_sock in control_socks:
+            subprocess.run(["sudo", "-n", "chown", f"root:{operator_gid}", control_sock], check=False)
+            subprocess.run(["sudo", "-n", "chmod", "660", control_sock], check=False)
         break
     time.sleep(0.5)
 else:

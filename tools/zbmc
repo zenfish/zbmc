@@ -625,8 +625,9 @@ case "$VERB" in
       echo "Baseline capture failed; QEMU remains up for diagnosis. Evidence: $ZBMC_RUN_DIR" >&2
       exit 1
     fi
-    # auto-bring-up web once SSH is reachable (box needs ~6-15 min to boot). --no-web skips.
-    if [ "$do_web" = 1 ]; then
+    # Bring up a configured HTTP service once SSH is reachable. --no-web disables only Web-UI;
+    # Redfish remains independent and may use the same box hook.
+    if [[ " $ZBMC_REQUIRED_SERVICES " == *' redfish '* ]] || { [ "$do_web" = 1 ] && [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; }; then
       nohup bash -c '. "'"$BF"'"; qp="'"$qp"'"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
@@ -1085,7 +1086,10 @@ PY
     if declare -F zbmc_console >/dev/null; then zbmc_console "$@"
     elif _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then tail -f "$ZBMC_RUN_DIR/console.log"
     else echo "$ZBMC_NAME is up, but its current run has no console evidence — try 'ssh' or restart"; fi ;;
-  build) zbmc_build ;;
+  build)
+    _box_builder="$(dirname "$BF")/build.sh"
+    if [ -x "$_box_builder" ]; then bash "$_box_builder" "$ZBMC_DIR"
+    else zbmc_build; fi ;;
   shell)    declare -F zbmc_shell    >/dev/null && zbmc_shell    "$@" || { echo "zbmc: '$ZBMC_NAME' has no shell verb"; exit 2; } ;;
   snapshot|restore)
     _qemu_args=()

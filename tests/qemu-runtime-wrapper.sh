@@ -19,12 +19,18 @@ chmod +x "$fixture/docker"
 export DOCKER_LOG="$fixture/docker.log" PATH="$fixture:$PATH"
 
 ZBMC_QEMU_DOCKER_DETACH=1 "$repo/tools/zbmc-qemu-docker" /qemu -M fixture
-grep -Fq 'run --rm --network host --pid host --privileged' "$DOCKER_LOG"
+grep -Fq 'run --rm --network host' "$DOCKER_LOG"
+! grep -Fq -- '--privileged' "$DOCKER_LOG"
+! grep -Fq -- '--pid host' "$DOCKER_LOG"
 grep -Fq -- '--detach sha256:0e03b041c9014a8be084d4fa72413c8db6a9897bdabab9804a9f302dc461fa3f /qemu -M fixture' "$DOCKER_LOG"
 grep -Fxq 'wait fixture-container' "$DOCKER_LOG"
 
 : >"$DOCKER_LOG"
 "$repo/tools/zbmc-qemu-docker" /qemu --version
 grep -Fq -- '-i sha256:0e03b041c9014a8be084d4fa72413c8db6a9897bdabab9804a9f302dc461fa3f /qemu --version' "$DOCKER_LOG"
+
+: >"$DOCKER_LOG"
+"$repo/tools/zbmc-qemu-docker" /qemu -netdev tap,id=n0,ifname=ztap0
+grep -Fq -- '--device /dev/net/tun --cap-add NET_ADMIN' "$DOCKER_LOG"
 
 echo 'QEMU runtime wrapper lifecycle: PASS'

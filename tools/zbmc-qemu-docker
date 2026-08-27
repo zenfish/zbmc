@@ -15,8 +15,14 @@ else
   exit 1
 fi
 
-docker_args=(run --rm --network host --pid host --privileged
+docker_args=(run --rm --network host
   --volume "$ROOT:$ROOT" --volume /tmp:/tmp --volume /var/tmp:/var/tmp)
+for arg in "$@"; do
+  if [[ "$arg" == *ifname=* ]]; then
+    docker_args+=(--device /dev/net/tun --cap-add NET_ADMIN)
+    break
+  fi
+done
 if [ "${ZBMC_QEMU_DOCKER_DETACH:-0}" = 1 ]; then
   cid=$("${docker_cmd[@]}" "${docker_args[@]}" --detach "$IMAGE" "$guest_binary" "$@")
   trap '"${docker_cmd[@]}" stop -t 3 "$cid" >/dev/null 2>&1 || true' INT TERM

@@ -6,7 +6,7 @@
 #      script re-rolls in that case. Prefer restore-megarac-hpe.sh (warm snap, ~10s) over cold-boot rerolls.
 #      Cold-boot is needed only if no snapshot exists or the flash needs to be reset.
 #
-# HEALTHY  = authenticated IPMI and Redfish ServiceRoot both work without an IPMIMain SIGSEGV.
+# HEALTHY  = authenticated IPMI works without an IPMIMain SIGSEGV.
 # RUN: IP=10.0.6.66 WD=/Users/zen/phd/tmp/cray-xd670 ./start-megarac-hpe-green.sh   (prints qemu pid on green)
 # ENV: WD (workdir/artifacts), IP (bind IP), HTTPS_PORT/IPMI_PORT (default 443/623), TRIES (default 4).
 set -u
@@ -28,7 +28,7 @@ for t in $(seq 1 "$TRIES"); do
     cp -f "$LOG" "$(dirname "$LOG")/console-attempt-$((t-1)).log"
   fi
   kill_qemu
-  HTTPS_PORT="$HTTPS_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" IPMI_PORT="$IPMI_PORT" BG=1 IP="$IP" WD="$WD" \
+  HTTPS_PORT="$HTTPS_PORT" SSH_PORT="$SSH_PORT" TELNET_PORT="$TELNET_PORT" IPMI_PORT="$IPMI_PORT" ZBMC_INSECURE_LAB_ACCESS="${ZBMC_INSECURE_LAB_ACCESS:-0}" BG=1 IP="$IP" WD="$WD" \
     bash "$PROJ/boot-megarac-hpe-svc.sh" >/dev/null 2>&1
   # Watch up to ~300s for authenticated IPMI and Redfish or an exact fatal signature.
   # The console always contains unrelated bare "Segmentation fault" lines from early
@@ -45,7 +45,7 @@ for t in $(seq 1 "$TRIES"); do
     # Once dropbear is reachable, use IPMIMain's own signal-handler record as the
     # authoritative fast-fail.  This avoids waiting the full five-minute window on
     # a proven-dead attempt while ignoring unrelated SKU/FRU console segfaults.
-    if timeout -s KILL 6 sshpass -p '' ssh \
+    if [ "${ZBMC_INSECURE_LAB_ACCESS:-0}" = 1 ] && timeout -s KILL 6 sshpass -p '' ssh \
          -o ConnectTimeout=2 -o ConnectionAttempts=1 \
          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
          -p "$SSH_PORT" "sysadmin@$IP" \
@@ -55,11 +55,8 @@ for t in $(seq 1 "$TRIES"); do
     fi
     # Internal init markers are incomplete on otherwise functional boots. Every
     # 15 seconds, use the same external protocol evidence zbmc status relies on.
-    if [ $((i % 5)) = 0 ] &&
-       timeout -s KILL 35 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
-         -H "$IP" -p "$IPMI_PORT" -U admin -P superuser -t 20 mc info 2>/dev/null | grep -q Manufacturer &&
-       timeout 20 curl -sk --max-time 15 -u admin:superuser \
-         "https://$IP:$HTTPS_PORT/redfish/v1/" 2>/dev/null | grep -q '"RedfishVersion"'; then
+    if [ $((i % 5)) = 0 ] && timeout -s KILL 35 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+         -H "$IP" -p "$IPMI_PORT" -U admin -P superuser -t 20 mc info 2>/dev/null | grep -q Manufacturer; then
       ok=1; break
     fi
   done

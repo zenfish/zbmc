@@ -10,14 +10,15 @@ apache_boot="$(dirname "$0")/../boxes/idrac10/boot-apache-guest.sh"
 apache_setup="$(dirname "$0")/../boxes/idrac10/setup-apache.sh"
 sh -n "$script"
 sh -n "$apache_boot" "$apache_setup"
-grep -q 'PasswordAuthentication yes' "$script"
+grep -q 'PasswordAuthentication no' "$script"
+grep -q 'operator.pub' "$script"
 tail -n 12 "$script" | grep -q '^while :; do$'
 tail -n 12 "$script" | grep -q '^    /bin/sh || true$'
 if tail -n 12 "$script" | grep -q '^exit '; then
     echo "boot script still exits to PID 1" >&2
     exit 1
 fi
-grep -A5 '^zbmc_ssh()' "$box" | grep -q 'sshpass'
+grep -A5 '^zbmc_ssh()' "$box" | grep -q 'ssh/operator'
 grep -A5 '^zbmc_console()' "$box" | grep -q 'socat'
 ! grep -q 'pkill .*fullfw' "$driver"
 grep -q 'usb@f0828100' "$overlay"
@@ -28,8 +29,10 @@ grep -q -- '-device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1' "$box"
 grep -q 'qemu/runtime/qemu-system-aarch64' "$box"
 grep -q 'ZBMC_QEMU_SHA256=c4a28a5e76492d50abc977e8f2bb57ddac48fca9e32b9350573ff67ffe9cfc45' "$box"
 grep -q 'ZBMC_QEMU_MAJOR=11' "$box"
-grep -q 'use start --warm for snapshot' "$box"
+grep -q 'warm restore is not a supported packaged path' "$box"
 grep -q 'ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"' "$box"
+grep -q 'payload/cfgdb-defaults.sql' "$box"
+grep -q 'ssh/operator' "$box"
 grep -q 'boot-apache-guest.sh setup-apache.sh' "$box"
 grep -q 'mc info 2>&1' "$box"
 grep -q 'http://10.0.2.2:8091/boot-apache-guest.sh' "$box"

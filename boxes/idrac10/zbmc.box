@@ -3,8 +3,8 @@
 # and standard service ports directly.
 ZBMC_NAME=idrac10
 ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; no vendor Web-UI"
-# Portable (clone-and-run): scripts+payloads ship in THIS box dir; boot/img artifacts + the warm
-# ckpt live in work/idrac10 (symlinked here for dogfood; a clone fetches/rebuilds them). Build deps:
+# Portable (clone-and-run): scripts ship in this box dir; fetched boot/img/payload artifacts and the
+# generated operator key live in work/idrac10. Build deps:
 # zig (shm-shim), expect, socat, python.
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/idrac10}"
@@ -41,7 +41,7 @@ ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
 # real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
-  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" shm-shim.c boot-fullfw-guest.sh boot-apache-guest.sh setup-apache.sh prebind-v2 boot-idrac10.exp qemu-usb-net-overlay.dts fake-journal udp-echo cfgdb-defaults.sql; do
+  for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" "$ZBMC_DIR/payload/cfgdb-defaults.sql" "$ZBMC_DIR/ssh/operator" "$ZBMC_DIR/ssh/operator.pub" shm-shim.c boot-fullfw-guest.sh boot-apache-guest.sh setup-apache.sh prebind-v2 boot-idrac10.exp qemu-usb-net-overlay.dts fake-journal udp-echo; do
     [ -e "$f" ] || { echo "missing $f — idrac10 not built" >&2; return 1; }
   done
   command -v dtc >/dev/null && command -v fdtoverlay >/dev/null || {
@@ -52,21 +52,7 @@ zbmc_boot() {
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
-  # Warm snapshots are QEMU-machine-version specific. Keep restore opt-in so a stale checkpoint
-  # cannot prevent the portable cold boot from starting. Make a compatible one with snapshot.
-  if [ -n "${ZBMC_WARM:-}" ] && [ -f "$WORK/ckpt/state.gz" ]; then
-    : > "$LOG"
-    # ponytail: restore+verify can take minutes (5 IPMI probes x up to 3 re-restores). Run it
-    # DETACHED like the cold path so `start` returns at once; `zbmc status -f` follows to READY.
-    # Redirect wraps the whole subshell so it can't hold the $(zbmc_boot) pipe open (bash gotcha).
-    ( set +x   # keep the caller's xtrace/PS4 out of the console log
-      ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"
-      grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
-    # report the qemu pid the moment it's up (restore launches it before verifying), then detach
-    local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
-    echo "$qp"
-    return 0
-  fi
+  [ -z "${ZBMC_WARM:-}" ] || { echo "idrac10: warm restore is not a supported packaged path; use cold start" >&2; return 1; }
   mkdir -p "$WORK" "$SERVE"
   # rebuild shm-shim + sync guest payloads
   if command -v zig >/dev/null 2>&1; then
@@ -78,7 +64,9 @@ zbmc_boot() {
     return 1
   fi
   cp "$SERVE/shm-shim.so" "$ZBMC_DIR/shm-shim.so"
-  cp boot-fullfw-guest.sh boot-apache-guest.sh setup-apache.sh fake-journal udp-echo cfgdb-defaults.sql "$SERVE/"
+  cp boot-fullfw-guest.sh boot-apache-guest.sh setup-apache.sh fake-journal udp-echo "$SERVE/"
+  cp "$ZBMC_DIR/payload/cfgdb-defaults.sql" "$SERVE/"
+  cp "$ZBMC_DIR/ssh/operator.pub" "$SERVE/"
   cp prebind-v2 "$SERVE/prebind"
   dtc -Wno-interrupts_property -@ -I dts -O dtb \
     -o "$WORK/qemu-usb-net.dtbo" qemu-usb-net-overlay.dts || return 1
@@ -107,9 +95,8 @@ zbmc_boot() {
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
 zbmc_ready() {
   local d="$ZBMC_DIR"
-  if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/img/sd.img" ]; then
-    [ -f "$d/ckpt/state.gz" ] && { echo "ready (cold boot; use start --warm for snapshot)"; return 0; }
-    echo "ready (cold boot only)"; return 0
+  if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/boot/qemu-gmac.dtb" ] && [ -f "$d/img/sd.img" ] && [ -f "$d/payload/cfgdb-defaults.sql" ]; then
+    [ -f "$d/ssh/operator" ] && [ -f "$d/payload/cfgdb-defaults.sql" ] && { echo "ready (cold boot)"; return 0; }
   fi
   echo "not built — need boot/Image.boot-patched + img/sd.img"; return 1
 }
@@ -117,15 +104,14 @@ zbmc_ready() {
 # Pays the dbus lottery ONCE; afterwards `zbmc idrac10 start` restores it in ~seconds. Arg: max boot tries.
 zbmc_snapshot() { WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/boot-live-ckpt.sh" "${1:-4}"; }
 # restore: bring the warm snapshot up on the real IP:623 (what `start` does automatically when a snap exists).
-zbmc_restore()  { WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP"; }
+zbmc_restore()  { WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP" "$SSH_PORT" "$WEB_PORT"; }
 # Serial console works on BOTH warm-restore and cold boot (the old "vmstate gap" was a wrong socket path:
 # the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
 # $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the
 # running box. qemu runs as root so the socket is root-owned -> sudo.
 _zbmc_sock(){ local s; for s in $(ls -t "$WORK/ckpt/rserial.sock" "$SOCK" 2>/dev/null); do [ -S "$s" ] && { echo "$s"; return; }; done; }
 zbmc_ssh() {
-  command -v sshpass >/dev/null || { echo "sshpass missing"; return 1; }
-  exec sshpass -p "$IPMI_PW" ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password \
+  exec ssh -i "$ZBMC_DIR/ssh/operator" -o IdentitiesOnly=yes -o PreferredAuthentications=publickey \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR \
     -p "$SSH_PORT" "root@$ZBMC_IP" "$@"
 }

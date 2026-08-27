@@ -17,7 +17,7 @@ IP="${ZBMC_IP:-10.0.8.14}"
 STATE=ckpt/state.gz
 [ -f "$STATE" ] || { echo "no checkpoint at $STATE — run a cold boot + checkpoint.py first"; exit 1; }
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
-sudo -n pkill -9 -f "ast2600-evb" 2>/dev/null || true; sleep 1
+sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 1
 
 QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
 exec sudo "$QEMU" \

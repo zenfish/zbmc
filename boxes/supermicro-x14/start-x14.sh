@@ -43,7 +43,7 @@ QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system
 # ensure the loopback alias exists (idempotent)
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 # free the port if a stale instance is around
-sudo pkill -9 -f "ast2600-evb" 2>/dev/null || true; sleep 1
+sudo pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 1
 
 # The kernel-side fixes that make the vendor image boot under qemu ast2600-evb:
 #   maxcpus=1                    ast2600-evb needs 2 CPUs but CPU1 bringup faults; cap in kernel

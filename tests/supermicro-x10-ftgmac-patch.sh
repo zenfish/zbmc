@@ -36,6 +36,9 @@ direct_mode=$(X10_NET_MODE=direct bash -c '
 grep -Fq "_zbmc_lo_alias \"\$ZBMC_IP\"" "$box"
 grep -Fq "hostfwd=udp:\$ZBMC_IP:\$ZBMC_HOSTPORT-:623" "$box"
 grep -Fq '"10.0.0.24" if NET_MODE == "direct" else "10.0.2.2"' "$driver"
+grep -Fq 'os.environ.get("ZBMC_X10_GDB") == "1"' "$driver"
+grep -Fq '"chmod", "660"' "$driver"
+! grep -Fq '"chmod", "777"' "$driver"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
 test "$(grep -c '^@@ ' "$patch")" -eq 1
 test "$(grep -Ec '^[+-][^+-]' "$patch")" -eq 3

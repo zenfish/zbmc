@@ -30,9 +30,8 @@ _zr_elapsed(){
 }
 
 _zr_set_effective_services(){ # 1 disables Web-UI for this run
-  local _zr_no_web="${1:-0}" _zr_service _zr_required= _zr_detected=webui
-  declare -F zbmc_ncsi_health >/dev/null && _zr_detected="$_zr_detected ncsi"
-  for _zr_service in ${ZBMC_DESCRIPTOR_REQUIRED_SERVICES:-ssh ipmi} $_zr_detected; do
+  local _zr_no_web="${1:-0}" _zr_service _zr_required=
+  for _zr_service in ${ZBMC_DESCRIPTOR_REQUIRED_SERVICES:-ssh ipmi}; do
     [ "$_zr_no_web" = 1 ] && [ "$_zr_service" = webui ] && continue
     [[ " $_zr_required " == *" $_zr_service "* ]] || _zr_required="${_zr_required:+$_zr_required }$_zr_service"
   done
@@ -640,6 +639,7 @@ _zr_wait_ready(){
     fi
 
     local _zr_all=1
+    [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_all=0
@@ -672,6 +672,7 @@ _zr_wait_ready(){
 
     if [ "$_zr_elapsed_s" -ge "$_zr_deadline" ]; then
       local _zr_missing=
+      [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && _zr_missing="$_zr_missing icmp"
       [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_missing="$_zr_missing ssh"
       [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_missing="$_zr_missing ipmi"
       [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_missing="$_zr_missing redfish"

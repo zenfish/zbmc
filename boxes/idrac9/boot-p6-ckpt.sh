@@ -22,7 +22,7 @@ QMP=/tmp/zbmc-idrac9-qmp.sock
 export SSH_HOST=127.0.0.1 SSH_PORT=2222
 [ -x "$QB" ] || { echo "patched qemu missing — build-qemu-patched.sh" >&2; exit 1; }
 DTB=boot/p4.dtb; [ -f "$DTB" ] || DTB=boot/p2uni.dtb
-pkill -9 -f 'qemu-system-arm' 2>/dev/null || true; sleep 1
+pkill -9 -f 'qemu-system-arm.*zbmc-idrac9-qmp.sock' 2>/dev/null || true; sleep 1
 rm -f "$QMP" /tmp/zbmc-idrac9-ttyS1.sock /tmp/idrac9-p6boot.log 2>/dev/null || true
 
 echo "[1] cold-boot P6 (patched qemu, wildcard 2222/6623/6443)"

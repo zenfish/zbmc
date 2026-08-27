@@ -13,6 +13,8 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
+HOSTFWD="hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623"
+[ "${ZBMC_INSECURE_LAB_ACCESS:-0}" != 1 ] || HOSTFWD="$HOSTFWD,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$TELNET_PORT-:23"
 SNAP="${SNAP:-$WD/cray-snap.gz}"; SNAPFLASH="${SNAPFLASH:-$WD/cray-snap-flash.bin}"
 [ -f "$SNAP" ] && [ -f "$SNAPFLASH" ] || { echo "no snapshot ($SNAP / $SNAPFLASH) — run snapshot-megarac-hpe.sh on a green boot first" >&2; exit 1; }
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -29,7 +31,7 @@ $SUDO "$QEMU_BIN" -M ast2600-evb -m 1024 -display none -no-reboot \
   -incoming "exec:gunzip -c < $SNAP" \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -drive "file=$WD/cray-restore-flash.bin,format=raw,if=mtd" \
-  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$TELNET_PORT-:23,hostfwd=udp:$IP:$IPMI_PORT-:623,hostfwd=tcp:$IP:${ASD_PORT:-5123}-:5123,hostname=megarac-hpe" \
+  -net nic -net "user,$HOSTFWD,hostname=megarac-hpe" \
   -append "$APPEND" >> "$WD/restore-console.log" 2>&1 &
 QP=$!
 disown $QP 2>/dev/null || true

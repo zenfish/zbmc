@@ -394,12 +394,12 @@ fi
 # Subshell with `set +e` so a failure here can never abort the fullfw bring-up (script runs set -e).
 ( set +e
   mkdir -p /mnt/persistent_data/data0/etc/ssh /run/sshd
-  printf '%s\n' 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDccPy7TeQu44Q9UWxcS88v44QBMjVulE48Zn+xV4GF+FTFU4/uvZDtBODZmzGBLNMKICqyuQn+xeWij9GNT7KNTnvj/Yyk7MWGhnFrYCGeXjATJu4PQQvcystDiRcXUzzrhh+pkm6m/5Bb2fDXZscVSgVMpH/NCyp0n/SMi4JPuNt0M/I7CnUEzvhIHVAI35Cfc7MOLgARVjvzUwYc5joSlNdQOFcB72MhGVX0UDX+ezBDiW9GAsAyU/XUumh0XDpKGF3ljj3gSSBRIDYpud4Uujqa2RtXEai9F/mSHYhhYYjUYF9M00x1LMps0MOv3ztaBILD7p+o8XrQRw9q1ez3' > /tmp/.idrac_ak
+  wget -q --timeout=30 "${HOST_URL}/operator.pub" -O /tmp/.idrac_ak
   chmod 644 /tmp/.idrac_ak
   ssh-keygen -A 2>/dev/null
   printf 'passwd: files avct ucache systemd\ngroup: files avct ucache systemd\nshadow: files\nhosts: files dns\n' > /tmp/nss.conf
   mount --bind /tmp/nss.conf /etc/nsswitch.conf 2>/dev/null
-  printf 'Port 22\nPermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\nAuthorizedKeysFile /tmp/.idrac_ak\nStrictModes no\nUsePAM no\nPidFile /run/sshd.pid\n' > /run/sshd/sshd_config
+  printf 'Port 22\nPermitRootLogin prohibit-password\nPasswordAuthentication no\nPubkeyAuthentication yes\nAuthorizedKeysFile /tmp/.idrac_ak\nStrictModes no\nUsePAM no\nPidFile /run/sshd.pid\n' > /run/sshd/sshd_config
   /sbin/sshd -f /run/sshd/sshd_config 2>/dev/null && echo "SSHD_READY (root@:22 -> /bin/sh)"
 ) || true
 # --- end SSH bring-up ---
