@@ -43,8 +43,10 @@ SSH_PW=superuser
 SSH_PORT=22
 IPMI_PORT=623
 WEB_PORT=443
-ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
-ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU=/usr/bin/qemu-system-arm
+ZBMC_QEMU_SHA256=584e8a49021e62dabb14ada6407230c8f632cfcade42ef049d19c346ab1314b2
+ZBMC_QEMU_MAJOR=10
+ZBMC_QEMU_VERSION=10.0.11
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_REQUIRED_SERVICES=console
 ZBMC_L2_REQUIRED=0
@@ -91,6 +93,7 @@ zbmc_console() {
   printf '%s\n' "$*" > "$SOCK"; sleep 2; tail -n 25 "$CONSOLE_LOG"
 }
 zbmc_console_health() {
+  [ -p "$SOCK" ] && printf '\n' > "$SOCK"
   grep -q 'login:' "$CONSOLE_LOG" 2>/dev/null && { echo "serial login prompt observed"; return 0; }
   echo "waiting for serial login prompt"; return 1
 }

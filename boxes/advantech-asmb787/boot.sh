@@ -17,7 +17,7 @@ _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
 WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo (build.sh writes here)
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${IP:-127.0.0.1}"
-HTTPS_PORT="${HTTPS_PORT:-6443}"; SSH_PORT="${SSH_PORT:-6022}"; IPMI_PORT="${IPMI_PORT:-6623}"
+HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; IPMI_PORT="${IPMI_PORT:-623}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 
 # mtdparts numbering MUST match /etc/dupfstab: mtdblock1=/conf, mtdblock3=/usr/local/www, mtdblock4=/dre.
