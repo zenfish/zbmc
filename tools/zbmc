@@ -152,9 +152,9 @@ usage(){
 # _ipmi_invocation is PURE (no network) so the shown command == the probed command.
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
   if [ "$1" = pw ]; then
-    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P ${IPMI_PW:-}${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P '<password>'${IPMI_OPTS:+ $IPMI_OPTS}"
   else
-    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -K ${IPMI_KEY:-}${IPMI_OPTS:+ $IPMI_OPTS}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -K '<key>'${IPMI_OPTS:+ $IPMI_OPTS}"
   fi; }
 
 _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
@@ -220,13 +220,13 @@ _probe_redfish(){
   if declare -F zbmc_redfish_health >/dev/null; then
     local r rc
     r=$(zbmc_redfish_health 2>&1); rc=$?
-    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
+    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:'<password>' https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
     echo "fail||${r:-box-specific Redfish probe failed}"; return
   fi
   local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/" probe_timeout="${ZBMC_HTTP_PROBE_TIMEOUT:-6}"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
   if timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_timeout" -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi '"RedfishVersion"'; then
-    echo "ok|curl -sk -u ${IPMI_USER:-}:${IPMI_PW:-} https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
+    echo "ok|curl -sk -u ${IPMI_USER:-}:'<password>' https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
   else echo "fail||down"; fi; }
 
 _probe_webui(){
@@ -239,8 +239,9 @@ _probe_webui(){
   local url="https://$ZBMC_IP:${WEB_PORT:-443}/" code probe_timeout="${ZBMC_HTTP_PROBE_TIMEOUT:-6}"
   code=$(timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_timeout" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
   case "$code" in
+    2??|3??) echo "ok|curl -sk $url|HTTP $code from $(hostname -s)" ;;
     ""|000) echo "fail||no HTTPS root response" ;;
-    *) echo "ok|curl -sk $url|HTTP $code from $(hostname -s)" ;;
+    *) echo "fail||HTTP $code from $(hostname -s)" ;;
   esac
 }
 
@@ -263,7 +264,7 @@ _probe_console(){
     echo "fail||${r:-box-specific console probe failed}"; return
   elif [ -n "${SOCK:-}" ] && { [ -S "$SOCK" ] || [ -p "$SOCK" ]; }; then
     echo "ok|zbmc $ZBMC_IP console|interactive serial"
-  elif [ -f "${LOG:-}" ]; then
+  elif [ -f "${ZBMC_CONSOLE_LOG:-}" ] || [ -f "${LOG:-}" ]; then
     echo "ok|zbmc $ZBMC_IP console|live log; non-interactive"
   elif declare -F zbmc_console >/dev/null; then
     echo "ok|zbmc $ZBMC_IP console|box console"
@@ -911,7 +912,13 @@ PY
         if _disabled "$service"; then _state=N/A; _why=disabled
         elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
         elif [ "$service" = l2 ] && [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then _state=N/A; _why="not configured"
-        elif [ "$service" = console ]; then _state=AVAILABLE; _why="operator access"
+        elif [ "$service" = console ]; then
+          if [ "$raw" = ok ]; then _state=AVAILABLE; _why="operator access"
+          elif _required console; then
+            _why=required
+            if [ "${_run_state:-starting}" = starting ]; then _state=STARTING; else _state=FAILED; fi
+          else _state=N/A; _why=unsupported
+          fi
         elif ! _required "$service"; then _state=N/A; _why="not configured"
         else
           _why=required

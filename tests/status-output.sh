@@ -51,6 +51,10 @@ zbmc_webui_health(){
   [ -f "$TEST_ROOT/webui-down" ] && { echo "no HTTPS root response"; return 1; }
   echo "fixture Web-UI"
 }
+zbmc_console_health(){
+  [ "${TEST_CONSOLE_DOWN:-0}" = 1 ] && { echo "no serial prompt"; return 1; }
+  echo "fixture console"
+}
 zbmc_web(){ printf 'web args: %s\n' "$*"; }
 if [ "${TEST_NCSI:-0}" = 1 ]; then
   zbmc_ncsi_health(){ echo "fixture NC-SI"; }
@@ -299,6 +303,17 @@ console_required=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfis
 expect "$console_required" "Health    : READY [1/1 - Console]"
 console_required_v=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
 expect "$console_required_v" "ICMP      : N/A (not configured)"
+console_failed=$(TEST_CONSOLE_DOWN=1 TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+expect "$console_failed" "Console   : FAILED (expected; no serial prompt)"
+expect "$console_failed" "Health    : DEGRADED [0/1 - Console failed]"
+
+loaded_console=$(TEST_ROOT="$TEST_ROOT" bash -c '
+  ZBMC_DIR="$TEST_ROOT"; CONSOLE_LOG="$TEST_ROOT/legacy-console.log"
+  . "'"$fixture"'/tools/zbmc-runlib"
+  _zr_load ""
+  printf "%s" "$CONSOLE_LOG"
+')
+[ "$loaded_console" = "$TEST_ROOT/runs/run-1/console.log" ] || { echo "current run console was not loaded: $loaded_console" >&2; exit 1; }
 
 runlib_probe=$(TEST_ROOT="$TEST_ROOT" bash -c '
   ZBMC_SOURCE_ONLY=1 . "'"$fixture"'/tools/zbmc"

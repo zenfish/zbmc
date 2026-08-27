@@ -280,6 +280,7 @@ _zr_load(){ # run id, or current
   [ -n "$ZBMC_RUN_ID" ] && [ -d "$ZBMC_RUN_ROOT/$ZBMC_RUN_ID" ] || return 1
   ZBMC_RUN_DIR="$ZBMC_RUN_ROOT/$ZBMC_RUN_ID"
   ZBMC_CONSOLE_LOG="$ZBMC_RUN_DIR/console.log"
+  CONSOLE_LOG="$ZBMC_CONSOLE_LOG"
   ZBMC_RUN_START_EPOCH=$(cat "$ZBMC_RUN_DIR/start-epoch")
   local _zr_meta _zr_services _zr_disabled
   _zr_meta=$(python3 - "$ZBMC_RUN_DIR/manifest.json" <<'PY' 2>/dev/null
@@ -310,7 +311,7 @@ PY
   else
     _zr_set_effective_services "${_zr_disabled:-0}"
   fi
-  export ZBMC_RUN_ROOT ZBMC_RUN_ID ZBMC_RUN_DIR ZBMC_RUN_START_EPOCH ZBMC_CONSOLE_LOG
+  export ZBMC_RUN_ROOT ZBMC_RUN_ID ZBMC_RUN_DIR ZBMC_RUN_START_EPOCH ZBMC_CONSOLE_LOG CONSOLE_LOG
 }
 
 _zr_timing(){ # stage seconds

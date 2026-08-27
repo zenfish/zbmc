@@ -10,5 +10,7 @@ grep -q 'grep -qi '\''"RedfishVersion"'\''' "$status"
 grep -q 'https://\$ZBMC_IP:\${WEB_PORT:-443}/redfish/v1/" 2>/dev/null' "$x10"
 grep -q 'grep -q '\''"RedfishVersion"'\''' "$x10"
 ! grep -q '/redfish/v1/Managers' "$status"
+grep -Fq '2??|3??) echo "ok|' "$status"
+grep -Fq '*) echo "fail||HTTP $code from $(hostname -s)"' "$status"
 
 echo "Redfish service-root probes: PASS"
