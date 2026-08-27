@@ -15,7 +15,7 @@ grep -Fq 'timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_t
 grep -Fq 'timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd"' "$repo/tools/zbmc"
 grep -Fxq 'ZBMC_SSH_PROBE_TIMEOUT=18' "$box"
 grep -Fxq 'ZBMC_HTTP_PROBE_TIMEOUT=18' "$box"
-grep -Fxq 'ZBMC_REQUIRED_SERVICES="ssh ipmi webui"' "$box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"' "$box"
 grep -Fxq 'SNAP=svc-snap-full-working.gz' "$box"
 grep -Fq 'if [ -n "${ZBMC_WARM:-}" ]' "$box"
 grep -Fq 'if=mtd,snapshot=on' "$repo/boxes/supermicro-x14/shell-x14.sh"

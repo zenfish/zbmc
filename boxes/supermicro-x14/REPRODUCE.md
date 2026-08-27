@@ -3,8 +3,8 @@
 > **Historical reconstruction notes; not a complete current recipe.** The cited `x14.dts`, `mkgpt.py`,
 > and patched init source are not in this repository. The supported build downloads hash-pinned derived
 > artifacts with `./build.sh supermicro-x14`, then cold-starts with
-> `sudo ./tools/zbmc supermicro-x14 start`. Current acceptance is SSH, IPMI, and Web-UI; Redfish is not
-> configured. Preserve the steps below as investigation provenance, not a fresh-clone promise.
+> `sudo ./tools/zbmc supermicro-x14 start`. Current acceptance is SSH, IPMI, Redfish, and Web-UI.
+> Preserve the steps below as investigation provenance, not a fresh-clone promise.
 
 Clean-room rebuild of the Supermicro X14 virtual BMC (OpenBMC / AST2600) under QEMU, with
 external SSH shell + IPMI + Redfish. Everything except the vendor firmware is in this repo;
