@@ -181,13 +181,14 @@ fi
 _x10_ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
   -o "$_x10_hka" -o "$_x10_pka" -o ConnectTimeout=4)
 zbmc_ssh() {
-  if [ "$*" = "echo up" ]; then
-    local out; out=$(echo 'echo up; exit' | sshpass -p "$SSH_PW" ssh -T "${_x10_ssh_opts[@]}" \
-      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" 2>/dev/null)
-    echo "$out" | grep -q "up" && echo "up"
+  if [ $# -gt 0 ]; then
+    local out; out=$(printf '%s\nexit\n' "$*" | sshpass -p "$SSH_PW" ssh -T "${_x10_ssh_opts[@]}" \
+      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" 2>/dev/null) || return
+    if [ "$*" = "echo up" ]; then echo "$out" | grep -q "up" && echo "up"
+    else printf '%s\n' "$out"; fi
   else
     sshpass -p "$SSH_PW" ssh "${_x10_ssh_opts[@]}" \
-      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+      -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP"
   fi
 }
 
