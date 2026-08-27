@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Run the currently verified iLO 5 bootloader -> kernel -> scheduler experiment.
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$HERE/../.." && pwd)
+MODULES="${1:-$ROOT/work/ilo5-241/modules}"
+OUT="$ROOT/work/ilo5/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+RENODE="${RENODE:-}"
+if [ -z "$RENODE" ] && [ -x "$ROOT/renode/runtime/renode" ]; then
+  RENODE="$ROOT/renode/runtime/renode"
+fi
+if [ -z "$RENODE" ] && [ -x "$HOME/Applications/Renode.app/Contents/MacOS/renode" ]; then
+  RENODE="$HOME/Applications/Renode.app/Contents/MacOS/renode"
+fi
+if [ -z "$RENODE" ]; then RENODE=$(command -v renode || true); fi
+TIMEOUT=$(command -v timeout || command -v gtimeout || true)
+BL1="$MODULES/bootloader1_main.raw"
+KERNEL="$MODULES/kernel_main.bin"
+
+sha256() {
+  if command -v shasum >/dev/null; then shasum -a 256 "$1" | awk '{print $1}'
+  else sha256sum "$1" | awk '{print $1}'; fi
+}
+require_hash() {
+  local file="$1" expected="$2" actual
+  [ -f "$file" ] || { echo "missing: $file" >&2; exit 1; }
+  actual=$(sha256 "$file")
+  [ "$actual" = "$expected" ] || {
+    printf 'wrong artifact: %s\nexpected: %s\nactual:   %s\n' "$file" "$expected" "$actual" >&2
+    exit 1
+  }
+}
+
+if [ -z "$RENODE" ] || [ ! -x "$RENODE" ]; then
+  echo "Renode is not installed; run tools/install-renode-runtime --write" >&2
+  exit 1
+fi
+[ -n "$TIMEOUT" ] || { echo "timeout is not installed" >&2; exit 1; }
+version_output=$($RENODE --version | head -3)
+version=$(printf '%s\n' "$version_output" | sed -n '1p')
+build=$(printf '%s\n' "$version_output" | sed -n '2p')
+case "$version" in "Renode v1.16.1."*) ;; *)
+  echo "wrong Renode version: $version (need Renode 1.16.1)" >&2
+  exit 1
+esac
+case "$build" in *d66b0c2a*) ;; *)
+  echo "wrong Renode build: $build (need release commit d66b0c2a)" >&2
+  exit 1
+esac
+require_hash "$BL1" d57c412ffc3efa1d3508f01b2ae566db7b2e4da07156d5b727e625766dbb5bad
+require_hash "$KERNEL" f68761823cf0fd21669a0bcf71a8e497dac8b2e3a363a0f063f252030c74668a
+mkdir -p "$OUT"
+
+echo "checking: generating modeled bootblock service page"
+python3 "$HERE/renode/mksvcpage.py" "$OUT/svcpage.bin" >/dev/null
+python3 - "$BL1" "$OUT/bootloader1.patched.raw" <<'PY'
+from pathlib import Path
+import struct, sys
+data = bytearray(Path(sys.argv[1]).read_bytes())
+for offset, expected in ((0x1ce8, 0xeb000c4f), (0x1d1c, 0xeb000325)):
+    actual = struct.unpack_from("<I", data, offset)[0]
+    if actual != expected:
+        raise SystemExit(f"unexpected instruction at {offset:#x}: {actual:#010x}")
+    struct.pack_into("<I", data, offset, 0xe3a03000)
+Path(sys.argv[2]).write_bytes(data)
+PY
+
+echo "checking: applying guarded kernel gate ledger"
+python3 "$HERE/renode/patch_kernel.py" "$KERNEL" "$OUT/kernel_main.patched.bin" \
+  > "$OUT/patch-kernel.log"
+require_hash "$OUT/kernel_main.patched.bin" f11bda7c4f5f9f1cb92de946e97fd5a21d8f451fed3106542f032fbf7885364c
+sed "s|@PERIPHERALS@|$HERE/renode|g" "$HERE/renode/platform.repl" > "$OUT/platform.repl"
+
+cat > "$OUT/run.resc" <<EOF
+using sysbus
+mach create "gxp-ilo5"
+machine LoadPlatformDescription @$OUT/platform.repl
+sysbus LoadBinary @$OUT/svcpage.bin 0xFFFF0000
+sysbus LoadBinary @$OUT/bootloader1.patched.raw 0x10000000
+sysbus LoadBinary @$OUT/kernel_main.patched.bin 0x41000000
+cpu PC 0x10000000
+cpu CreateExecutionTracing "tracer" @$OUT/trace.log PC
+emulation RunFor "0.15"
+tracer Dispose
+quit
+EOF
+
+printf 'checking: Renode boot (%s)\nevidence: %s\n' "$version" "$OUT"
+"$TIMEOUT" 180 "$RENODE" --disable-xwt --plain "$OUT/run.resc" > "$OUT/renode.log" 2>&1
+grep -aE 'UART\|' "$OUT/renode.log" | sed -E 's/^.*UART\| ?//' > "$OUT/uart.log" || true
+for pc in 0x10000584 0x41000000 0x4100EE28; do
+  grep -aqi "^$pc$" "$OUT/trace.log" || { echo "FAILED: trace did not reach $pc" >&2; exit 1; }
+done
+{
+  echo "PASS: bootloader -> kernel -> INTEGRITY scheduler"
+  echo "Renode: $version;${build}"
+  echo "modules: $MODULES"
+  echo "bootloader handoff 0x10000584: $(grep -aic '^0x10000584$' "$OUT/trace.log")"
+  echo "kernel entry 0x41000000: $(grep -aic '^0x41000000$' "$OUT/trace.log")"
+  echo "scheduler idle 0x4100ee28: $(grep -aic '^0x4100EE28$' "$OUT/trace.log")"
+} | tee "$OUT/SUMMARY.txt"

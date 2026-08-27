@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto source-sha256=28cdcd89f05f7c7ebeb59119faf3c0ea32886de77a332723313566528930ae7d body-sha256=94cea6757cde4a7d28a31d9e10fa350b09859ea6d47a275b0c72f1b67edc452e -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HPE iLO 5: Renode experiment</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">HPE iLO 5: Renode experiment</h1>
+  </div>
+</div>
+
+<p>This is the next zoo target, but it is <strong>not yet a
+<code>zbmc</code> fleet box</strong>. The preserved HPE bootloader and
+kernel run under Renode 1.16.1 and reach the Green Hills INTEGRITY
+scheduler. The 31 MB <code>elf_secure</code> application image is
+decrypted but not loaded, so SSH, IPMI, Redfish, and the Web-UI do not
+run.</p>
+<h2 id="reproduce">Reproduce</h2>
+<p>The newest local firmware package that the published Airbus keys
+fully decrypt is iLO 5 v2.41. Its <code>bootloader1_main.raw</code> and
+<code>kernel_main.bin</code> are byte-identical to v2.33, the version
+used to develop the Renode model.</p>
+<pre class="bash"><code>./tools/install-renode-runtime --write
+./tools/unpack-ilo5 /full/path/ilo5_241_linux.rpm
+./tools/unpack-ilo5 --write /full/path/ilo5_241_linux.rpm work/ilo5-241
+./experiments/ilo5/run-renode work/ilo5-241/modules</code></pre>
+<p><code>run-renode</code> requires Renode 1.16.1 from release commit
+<code>d66b0c2a</code>; packaging build numbers may differ by platform.
+Set <code>RENODE=/full/path/to/renode</code> when it is not on
+<code>PATH</code>. Every run records the generated images, UART, Renode
+log, execution trace, and summary under
+<code>work/ilo5/runs/</code>.</p>
+<h2 id="version-boundary">Version boundary</h2>
+<table>
+<thead>
+<tr>
+<th>Firmware</th>
+<th>Local result</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.33</td>
+<td>Fully decrypted; historical Renode development base</td>
+<td>Historical baseline</td>
+</tr>
+<tr>
+<td>2.41</td>
+<td>Fully decrypted; bootloader and kernel match 2.33 byte-for-byte</td>
+<td>Current package and runtime core</td>
+</tr>
+<tr>
+<td>2.71</td>
+<td>Outer package decrypted; <code>elf_secure</code> key
+unavailable</td>
+<td>Static inventory only</td>
+</tr>
+<tr>
+<td>3.19</td>
+<td>Newest local package; old outer key fails AES-GCM
+authentication</td>
+<td>Provenance only</td>
+</tr>
+</tbody>
+</table>
+<p>The 2,082-byte <code>ilo5_319.clear.bin</code> is not decrypted
+firmware. It is the signed header written after authentication failed.
+<code>tools/unpack-ilo5</code> rejects that partial output.</p>
+<h2 id="what-is-modeled-or-changed">What is modeled or changed</h2>
+<ul>
+<li>The HPE bootloader and kernel remain vendor code.</li>
+<li>A bootblock service page is reconstructed so the bootloader can
+print and query boot mode.</li>
+<li>GXP system, UART, DDR-status, DDR-PHY, and device-mailbox behavior
+is modeled in Renode.</li>
+<li>Physical DDR training and memory tests are skipped because Renode
+RAM has no data eye to train.</li>
+<li>Ten guarded kernel instructions bypass unsupported CPU debug state,
+an early scheduler dead end, a dangling bootloader string pointer, and
+absent NVRAM validation.</li>
+</ul>
+<p>Success proves the preserved bootloader-to-kernel handoff and
+scheduler path. It does not prove application startup or any management
+protocol.</p>
+<h2 id="next-wall">Next wall</h2>
+<p>The kernel reaches <code>wfi</code> without a modeled periodic timer.
+After timer scheduling works, the experiment must place
+<code>elf_secure</code> where the HPE stager expects it and reconstruct
+only the missing platform environment needed to start the preserved
+vendor services. It should become a <code>zbmc</code> box only when at
+least one real management service is functionally reachable.</p>
+</div>
+</body>
+</html>

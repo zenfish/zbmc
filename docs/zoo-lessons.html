@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=d35daffb24bdde3c76ae6d5f76c0581f54242e5578052f4a9a0c92c13f263110 body-sha256=af90a7fa613ec2b8b2cf14bfc16216a0f3529a9d3c59c3b34756f5b20e66c3e9 -->
+<!-- zmd2html:auto source-sha256=597055ac247043eefa2e71145a768ed7d46b82a4cd981ab167405f365b55fb40 body-sha256=57c80274ebdde9d587996c63de4769181720c662fafa5523a1614c056ea46b40 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</title>
@@ -239,20 +239,20 @@ ipmid dlopens all 4 vendor OEM <code>.so</code> at once</td>
 </tr>
 <tr>
 <td><strong>ilo5</strong></td>
-<td>HPE iLO5 (<strong>Green Hills INTEGRITY</strong> RTOS, not
+<td>HPE iLO5 v2.41 (<strong>Green Hills INTEGRITY</strong> RTOS, not
 Linux)</td>
 <td>HPE <strong>GXP</strong> ASIC (Cortex-A9); <strong>Renode</strong>
 (not QEMU)</td>
 <td>INTEGRITY 11.2.4 @0x41000000</td>
-<td>Renode <code>.repl</code> model; bl1→kernel; <strong>gate-ledger
-binary patches</strong></td>
+<td>Renode <code>.repl</code> model; bl1→kernel; <strong>guarded
+gate-ledger binary patches</strong></td>
 <td>n/a — no net yet</td>
 <td>UART via modeled <code>gxp_sysctl@0xC0000000</code></td>
 <td>n/a (pre-app-load)</td>
-<td>boots to healthy INTEGRITY idle</td>
-<td>it's an <strong>RTOS not Linux</strong>: gates are
-scheduler/DDR-PHY/boot-handoff faults; <strong>live-hook registers,
-don't over-theorize</strong></td>
+<td>bootloader→kernel→INTEGRITY scheduler verified; application not
+loaded</td>
+<td>v2.41's bootloader/kernel are byte-identical to v2.33;
+<code>elf_secure</code> is decrypted but not started</td>
 </tr>
 </tbody>
 </table>
@@ -497,6 +497,12 @@ carve each region by node magic <code>85 19</code> (0x1985 LE) then run
 jefferson per-region; (4) macOS <code>dd</code> lacks
 <code>iflag=skip_bytes</code> — carve with
 <code>tail -c +N | head -c LEN</code>.</li>
+<li><strong>HPE iLO 5</strong> (<code>tools/unpack-ilo5</code>): pins
+Airbus's GPLv2 toolbox commit and authenticates both AES-GCM envelopes.
+v2.41 fully decrypts; v2.71 lacks the published <code>elf_secure</code>
+key; v3.19 also changed the outer key. A 2,082-byte output is only the
+signed header after failed authentication, not clear firmware, and the
+wrapper rejects it.</li>
 <li>HPM: cray firmware is a <strong>PICMGFWU/HPM.1 wrapper</strong>
 around AMI FMH modules, not linear flash — fixed-offset carve fails; use
 its extract.sh.</li>

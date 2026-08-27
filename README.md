@@ -1,8 +1,10 @@
 # zbmc — a zoo of virtual BMCs under QEMU
 
-Boot real vendor **BMC** (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher
+Boot real vendor **BMC**s (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher
 (`zbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI /
 RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
+
+Invaluable for testing [zipmi](https://github.com/zenfish/zipmi) on a variety of BMCs.
 
 This is my own working "zoo" plus the tools, per-box boot recipes, a full field write-up, and an agent
 skill so others can reproduce it on their own images. C&C very welcome, as are new recipes/methods/improvements
@@ -69,7 +71,8 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 # Debian 13 on x86_64
 sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
   device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
-  netcat-openbsd iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
+  netcat-openbsd iproute2 iputils-ping tcpdump libarchive-tools \
+  python3-pexpect python3-pycryptodome python3-venv pipx
 pipx install jefferson
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
 ./build.sh                     # install exact QEMU/zipmi + build every ready box
@@ -156,8 +159,9 @@ Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
 
 ```
 build.sh      build every ready box's boot artifacts into work/<box>/  (./build.sh --list to preview)
-tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)
 boxes/<name>/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
+experiments/  pre-service targets kept outside the fleet contract (currently HPE iLO 5 / Renode)
 docs/         engineering rationale, per-box deep dives, and cross-box lessons
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
@@ -200,6 +204,8 @@ The two `*.standalone.html` packaging copies remain HTML-only.
   direct-kernel vs FIT vs raw-flash boot, flash sizing traps, cold-boot-flaky → warm-snapshot (QMP
   migrate), the network last-mile per SoC (usb-net on NPCM vs the AST2600 NC-SI wall), and the OpenBMC /
   MegaRAC / iDRAC userland fixes.
+- **[experiments/ilo5/README.md](experiments/ilo5/README.md)** — the reproducible iLO 5 v2.41
+  unpack and Renode bootloader-to-INTEGRITY-scheduler experiment, with explicit service limits.
 
 ## License / use
 

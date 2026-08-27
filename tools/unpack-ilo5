@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Reproducibly unpack an HPE iLO 5 .fwpkg, Linux RPM, or raw ilo5_*.bin.
+set -euo pipefail
+
+TOOLBOX_URL=https://github.com/airbus-seclab/ilo4_toolbox.git
+TOOLBOX_COMMIT=672a5d610fd0b1e5107bc886221ca7b11b549604
+MODE=check
+case "${1:-}" in
+  --check) shift ;;
+  --write) MODE="write"; shift ;;
+  -h|--help)
+    echo "usage: tools/unpack-ilo5 [--check|--write] FIRMWARE [OUTPUT]"
+    echo "       default: --check (no files written)"
+    exit 0
+    ;;
+esac
+
+IN="${1:?usage: tools/unpack-ilo5 [--check|--write] FIRMWARE [OUTPUT]}"
+[ -f "$IN" ] || { echo "input not found: $IN" >&2; exit 1; }
+IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"
+STEM="$(basename "$IN")"; STEM="${STEM%.*}"
+OUT="${2:-$(dirname "$IN")/$STEM.unpacked}"
+
+need() { command -v "$1" >/dev/null || { echo "missing tool: $1" >&2; return 1; }; }
+sha256() {
+  if command -v shasum >/dev/null; then shasum -a 256 "$1" | awk '{print $1}'
+  else sha256sum "$1" | awk '{print $1}'; fi
+}
+
+bad=0
+for tool in git python3; do need "$tool" || bad=1; done
+python3 -c 'from Crypto.Cipher import AES' 2>/dev/null || {
+  echo "missing Python Crypto module (Debian: apt install python3-pycryptodome)" >&2
+  bad=1
+}
+case "$IN" in
+  *.fwpkg) need unzip || bad=1; kind=fwpkg ;;
+  *.rpm) command -v bsdtar >/dev/null || { need rpm2cpio && need cpio; } || bad=1; kind=rpm ;;
+  *.bin) kind=bin ;;
+  *) echo "unsupported input: $IN (need .fwpkg, .rpm, or .bin)" >&2; exit 1 ;;
+esac
+[ "$bad" -eq 0 ] || exit 1
+
+printf 'input:   %s\nsha256:  %s\nformat:  %s\ntoolbox: %s @ %s\n' \
+  "$IN" "$(sha256 "$IN")" "$kind" "$TOOLBOX_URL" "$TOOLBOX_COMMIT"
+[ "$MODE" = write ] || { echo "check: ready; use --write to unpack"; exit 0; }
+[ ! -e "$OUT" ] || { echo "output already exists: $OUT" >&2; exit 1; }
+
+mkdir -p "$OUT/package" "$OUT/modules"
+echo "checking: extracting firmware package"
+case "$kind" in
+  fwpkg) unzip -q "$IN" -d "$OUT/package" ;;
+  rpm)
+    if command -v bsdtar >/dev/null; then bsdtar -xf "$IN" -C "$OUT/package"
+    else (cd "$OUT/package" && rpm2cpio "$IN" | cpio -idm --quiet); fi
+    ;;
+  bin) cp "$IN" "$OUT/package/$(basename "$IN")" ;;
+esac
+FW=$(find "$OUT/package" -type f -name 'ilo5_*.bin' -print -quit)
+[ -n "$FW" ] || { echo "package contains no ilo5_*.bin" >&2; exit 1; }
+
+echo "checking: fetching pinned Airbus iLO toolbox"
+git clone --quiet "$TOOLBOX_URL" "$OUT/ilo4_toolbox"
+git -C "$OUT/ilo4_toolbox" checkout --quiet "$TOOLBOX_COMMIT"
+TOOLS="$OUT/ilo4_toolbox/scripts/iLO5"
+
+echo "checking: authenticating and decrypting outer envelope"
+(cd "$TOOLS" && python3 ilo5_fw_decrypt.py --infile "$FW" --outfile "$OUT/ilo5.clear.bin") \
+  > "$OUT/outer-decrypt.log" 2>&1
+[ "$(wc -c < "$OUT/ilo5.clear.bin" 2>/dev/null || echo 0)" -gt 1000000 ] || {
+  echo "outer AES-GCM authentication failed; see $OUT/outer-decrypt.log" >&2
+  exit 1
+}
+
+echo "checking: extracting boot and application modules"
+(cd "$TOOLS" && python3 ilo5_extract.py "$OUT/ilo5.clear.bin" "$OUT/modules") \
+  > "$OUT/module-extract.log" 2>&1
+for file in bootloader1_main.raw kernel_main.bin elf_secure.raw elf_secure.hdr; do
+  [ -s "$OUT/modules/$file" ] || { echo "missing extracted module: $file" >&2; exit 1; }
+done
+
+version=$(python3 - "$OUT/modules/elf_secure.hdr" <<'PY'
+import sys
+print(open(sys.argv[1], "rb").read(4).decode("ascii", "replace"))
+PY
+)
+case "$version" in
+  2.3?|2.41)
+    echo "checking: authenticating and decrypting elf_secure $version"
+    (cd "$TOOLS" && python3 ilo5_image_decrypt.py \
+      --rawfile "$OUT/modules/elf_secure.raw" \
+      --hdrfile "$OUT/modules/elf_secure.hdr" \
+      --outfile "$OUT/modules/elf_secure.clear.bin" \
+      --outdir "$OUT/modules/elf_secure_unwrapped") > "$OUT/app-decrypt.log" 2>&1
+    [ "$(wc -c < "$OUT/modules/elf_secure_unwrapped/elf_secure.clear.bin" 2>/dev/null || echo 0)" -gt 1000000 ] || {
+      echo "elf_secure AES-GCM authentication failed; see $OUT/app-decrypt.log" >&2
+      exit 1
+    }
+    app=decrypted
+    ;;
+  *) app="encrypted (no published toolbox key for $version)" ;;
+esac
+
+{
+  echo "iLO 5 firmware $version"
+  echo "source: $IN"
+  echo "source_sha256: $(sha256 "$IN")"
+  echo "toolbox_commit: $TOOLBOX_COMMIT"
+  echo "elf_secure: $app"
+  while IFS= read -r file; do printf '%s  %s\n' "$(sha256 "$file")" "$file"; done \
+    < <(find "$OUT/modules" -maxdepth 2 -type f | sort)
+} > "$OUT/MANIFEST.txt"
+
+echo "checking: output contract"
+grep -q '^elf_secure: decrypted$' "$OUT/MANIFEST.txt" || {
+  echo "partial unpack: $app" >&2
+  exit 2
+}
+printf 'PASS: iLO 5 %s fully unpacked\noutput: %s\nmanifest: %s\n' "$version" "$OUT" "$OUT/MANIFEST.txt"

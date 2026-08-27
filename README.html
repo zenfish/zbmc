@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=8e4b801959d954b7cba7ffafe6aad2e583a5f3e998c6d2f3dec56b2aba969c1b body-sha256=524832893560faebfe921d52f5de5aa9856a1f53a64b8931566a45f594cd9202 -->
+<!-- zmd2html:auto source-sha256=726a5eeb69c2bf1fbcc2f5bbdc66d1ba0af1468d93dc436594838c94c620b317 body-sha256=53ad2fe432b5b69ef73ac3a0ab4cd86f619ae231104b42038c92a8f9fe18acb3 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -45,11 +45,14 @@
   </div>
 </div>
 
-<p>Boot real vendor <strong>BMC</strong> (Baseboard Management
+<p>Boot real vendor <strong>BMC</strong>s (Baseboard Management
 Controller) firmware under QEMU, driven by one dispatcher
 (<code>zbmc</code>), for reverse-engineering and security research on
 the out-of-band management stack (IPMI / RMCP+, Redfish, the web UI, the
 RAKP auth path) <strong>without owning the physical server</strong>.</p>
+<p>Invaluable for testing <a
+href="https://github.com/zenfish/zipmi">zipmi</a> on a variety of
+BMCs.</p>
 <p>This is my own working "zoo" plus the tools, per-box boot recipes, a
 full field write-up, and an agent skill so others can reproduce it on
 their own images. C&amp;C very welcome, as are new
@@ -177,7 +180,8 @@ version:</p>
 <pre class="bash"><code># Debian 13 on x86_64
 sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
   device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
-  netcat-openbsd iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
+  netcat-openbsd iproute2 iputils-ping tcpdump libarchive-tools \
+  python3-pexpect python3-pycryptodome python3-venv pipx
 pipx install jefferson
 export PATH=&quot;$HOME/.local/bin:$PWD/tools:$PATH&quot;
 ./build.sh                     # install exact QEMU/zipmi + build every ready box
@@ -286,8 +290,9 @@ and examples: <strong><a
 href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
 <h2 id="layout">Layout</h2>
 <pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
-tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)
 boxes/&lt;name&gt;/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
+experiments/  pre-service targets kept outside the fleet contract (currently HPE iLO 5 / Renode)
 docs/         engineering rationale, per-box deep dives, and cross-box lessons
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)</code></pre>
@@ -339,6 +344,11 @@ cross-box patterns: QEMU machine per SoC, direct-kernel vs FIT vs
 raw-flash boot, flash sizing traps, cold-boot-flaky → warm-snapshot (QMP
 migrate), the network last-mile per SoC (usb-net on NPCM vs the AST2600
 NC-SI wall), and the OpenBMC / MegaRAC / iDRAC userland fixes.</li>
+<li><strong><a
+href="experiments/ilo5/README.html">experiments/ilo5/README.md</a></strong>
+— the reproducible iLO 5 v2.41 unpack and Renode
+bootloader-to-INTEGRITY-scheduler experiment, with explicit service
+limits.</li>
 </ul>
 <h2 id="license--use">License / use</h2>
 <p>Scripts + docs: MIT (<code>LICENSE</code>). Firmware images are the

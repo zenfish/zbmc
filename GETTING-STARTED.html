@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=b048fa88a4c425daf9fcadbc90d674cfcca38ec8dfbd48c9e349820faae8fc3e body-sha256=12ef1a87d92ce0d7ab7fcfcb6b49822e0632adbbfdf2abd1b761f876179aafe3 -->
+<!-- zmd2html:auto source-sha256=838cd19249ad202b3ae8a9562197cc0c60da883cc304a7c341e64c584aa75700 body-sha256=8d7f2343a22e9ea3698f33f31007d64cc942e93e679761d55dd3dc0a18c85c7e -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -64,7 +64,8 @@ limits. Cold boot is CPU- and load-sensitive.</p>
 sudo apt install docker.io curl git ca-certificates \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
-  iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
+  iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \
+  python3-pycryptodome python3-venv pipx
 pipx install jefferson</code></pre>
 <p>Start Docker if the package did not do so:</p>
 <pre class="bash"><code>sudo systemctl enable --now docker

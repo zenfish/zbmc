@@ -1,4 +1,5 @@
 work/
+renode/runtime/
 *.sqfs
 mtdflash*.bin
 kernel.Image

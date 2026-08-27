@@ -1,0 +1,42 @@
+// bl1.repl - bootloader1-road platform (reconstructed; the inline resc was lost on the 06-24 crash).
+// bootloader1_main.raw runs at 0x10000000 (ldram). Services come from the 0xFFFF0000 svcpage
+// (mksvcpage.py) whose dispatcher is at 0xFFFF0024. gxp_sysctl @0xC0000000 is the live-modeled
+// system/UART/DDR-PHY controller; the rest are RAM the session mapped so bootloader1's DDR
+// memory-test / data-eye read-backs (write pattern -> read -> verify) stick instead of vanishing.
+cpu: CPU.ARMv7A @ sysbus
+    cpuType: "cortex-a9"
+    genericInterruptController: gic
+    cpuId: 0
+gic: IRQControllers.ARM_GenericInterruptController @ {
+        sysbus new Bus.BusMultiRegistration { address: 0xF8F01000; size: 0x1000; region: "distributor" };
+        sysbus new Bus.BusMultiRegistration { address: 0xF8F00100; size: 0x100; region: "cpuInterface" } }
+    supportsTwoSecurityStates: false
+    architectureVersion: .GICv1
+scu: Miscellaneous.ArmSnoopControlUnit @ sysbus 0xF8F00000
+
+sram: Memory.MappedMemory @ sysbus 0xA0000000
+    size: 0x80000
+ldram: Memory.MappedMemory @ sysbus 0x10000000          // bootloader1 code + low RAM
+    size: 0x8000000
+lowram: Memory.MappedMemory @ sysbus 0x00000000          // null page + low scratch the init touches
+    size: 0x100000
+dram: Memory.MappedMemory @ sysbus 0x41000000            // DRAM / kernel-load region (memtest target)
+    size: 0x8000000
+phyram: Memory.MappedMemory @ sysbus 0x80000000          // 0x80F00000/0x84F00000 PHY data-lane test region
+    size: 0x5000000
+cfgram: Memory.MappedMemory @ sysbus 0xCEFF0000          // config region bootblock writes+verifies
+    size: 0x100000
+
+gxp_sysctl: Python.PythonPeripheral @ sysbus 0xC0000000
+    size: 0x10000
+    initable: true
+    filename: "@PERIPHERALS@/gxp_sysctl.py"
+gxp_dev: Python.PythonPeripheral @ sysbus 0xD1000000
+    size: 0x100000
+    initable: true
+    filename: "@PERIPHERALS@/gxp_dev.py"
+
+flash: Memory.MappedMemory @ sysbus 0xFC000000
+    size: 0x100000
+manifest: Memory.MappedMemory @ sysbus 0xFFFF0000        // svcpage: manifest + dispatcher @0xFFFF0024
+    size: 0x10000

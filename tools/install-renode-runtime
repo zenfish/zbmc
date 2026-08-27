@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+DEST="$ROOT/renode/runtime"
+URL=https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable-dotnet.tar.gz
+SHA256=00e113cdbd0f5354cf2f64bbe3f5a070d8958409542fca66e45ac97d982938c0
+MODE=check
+case "${1:-}" in
+  --check|'') ;;
+  --write) MODE="write" ;;
+  -h|--help) echo "usage: tools/install-renode-runtime [--check|--write]"; exit 0 ;;
+  *) echo "usage: tools/install-renode-runtime [--check|--write]" >&2; exit 1 ;;
+esac
+
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  echo "Renode package requires x86_64 Linux" >&2
+  exit 1
+fi
+check() {
+  [ -x "$DEST/renode" ] || { echo "Renode runtime is not installed: $DEST" >&2; return 1; }
+  output=$("$DEST/renode" --version | head -3)
+  printf '%s\n' "$output" | grep -q '^Renode v1\.16\.1\.'
+  printf '%s\n' "$output" | grep -q 'build: d66b0c2a-'
+  echo "Renode runtime ready: $DEST/renode"
+}
+
+if [ "$MODE" = check ]; then
+  check || { echo "run: tools/install-renode-runtime --write" >&2; exit 1; }
+  exit 0
+fi
+check 2>/dev/null && exit 0
+[ ! -e "$DEST" ] || { echo "refusing to replace unknown runtime: $DEST" >&2; exit 1; }
+command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
+command -v sha256sum >/dev/null || { echo "sha256sum is required" >&2; exit 1; }
+
+archive=$(mktemp)
+stage="$ROOT/renode/.runtime-$$"
+trap 'rm -f "$archive"; rm -rf "$stage"' EXIT
+echo "checking: downloading Renode 1.16.1"
+curl -fL --retry 2 -o "$archive" "$URL"
+echo "$SHA256  $archive" | sha256sum -c -
+mkdir -p "$stage"
+tar -xzf "$archive" -C "$stage" --strip-components=1
+mv "$stage" "$DEST"
+check
