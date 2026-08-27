@@ -50,10 +50,11 @@ toolbox_python() {
     python3 "$@"
   else
     python3 -c '
-import runpy, sys, Cryptodome
-sys.modules["Crypto"] = Cryptodome
+from pathlib import Path
+import sys
 script = sys.argv.pop(1)
-runpy.run_path(script, run_name="__main__")
+source = Path(script).read_text().replace("from Crypto", "from Cryptodome")
+exec(compile(source, script, "exec"), {"__file__": script, "__name__": "__main__"})
 ' "$@"
   fi
 }
