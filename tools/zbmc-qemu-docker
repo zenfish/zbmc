@@ -15,7 +15,7 @@ else
   exit 1
 fi
 
-docker_args=(run --rm --network host
+docker_args=(run --rm --network host --workdir "$PWD"
   --volume "$ROOT:$ROOT" --volume /tmp:/tmp --volume /var/tmp:/var/tmp)
 for arg in "$@"; do
   if [[ "$arg" == *ifname=* ]]; then
