@@ -11,9 +11,9 @@
 #         ast2600 ftgmac100 NIC doesn't re-deliver to the guest post-migration, same class
 #         as the idrac9 usb-net issue). So for LIVE external IPMI/Redfish we cold-boot and
 #         bring the daemons up by hand (bringup-ipmi.sh) in the correct order.
-# NET:    10.0.8.14 (lo0 alias). hostfwd 22/443->tcp, 623->udp to guest 10.0.2.15.
-# RUN:    ~/phd/tmp/x14-virtual/shell-x14.sh &     then drive via socat serial.sock
-# AFTER:  once at the sh-5.1# prompt, run bringup-ipmi.sh in the guest, then from the Mac:
+# NET:    10.0.8.14 (Linux loopback alias). hostfwd 22/443->tcp, 623->udp to guest 10.0.2.15.
+# RUN:    WD=/path/to/work/supermicro-x14 ./shell-x14.sh &   then drive via socat serial.sock
+# AFTER:  once at the sh-5.1# prompt, run bringup-ipmi.sh in the guest, then from the host:
 #         ipmitool -I lanplus -H 10.0.8.14 -U ADMIN -P ADMIN mc info
 #
 set -euo pipefail
@@ -21,10 +21,10 @@ cd "${WD:-$(dirname "$0")}"
 IP="${ZBMC_IP:-10.0.8.14}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-console-uart.log}"
 BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"
-case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
+ip addr show dev lo | grep -qw "$IP" || sudo ip addr add "$IP/32" dev lo
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f serial.sock qmp.sock
-QEMU="${QEMU:-$(command -v qemu-system-arm || echo /home/zen/opt/qemu-11/bin/qemu-system-arm)}"
+QEMU="${QEMU:-$(command -v qemu-system-arm)}"
 exec sudo "$QEMU" \
   -m 1024 -M ast2600-evb -display none -no-reboot \
   -chardev "socket,id=serial0,path=serial.sock,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \

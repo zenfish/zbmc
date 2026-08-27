@@ -30,8 +30,7 @@ else CG=; CR=; CP=; CC=; CD=; CZ=; fi
 # --- registry: every boxes/<name>/zbmc.box in this repo (relative to this script) ----------
 # Single source of truth: the repo's own boxes/. phd runs this tool via a symlink (dogfood),
 # so there is exactly ONE tool + ONE set of descriptors — no more manual-copy drift.
-# Resolve symlinks (BSD/macOS has no `readlink -f`) so discovery works when invoked via the
-# phd/bin/zbmc symlink — otherwise _REPO would be phd/ and boxes/* would glob nothing.
+# Resolve symlinks without relying on `readlink -f`, so installed and repository-local links agree.
 _src="${BASH_SOURCE[0]:-$0}"
 while [ -L "$_src" ]; do
   _lnk="$(readlink "$_src")"; case "$_lnk" in /*) _src="$_lnk";; *) _src="$(dirname "$_src")/$_lnk";; esac
@@ -101,13 +100,11 @@ _zbmc_duration(){
 }
 export -f _zbmc_duration
 
-# _zbmc_lo_alias IP — add an IP to the loopback interface (idempotent, cross-platform).
+# _zbmc_lo_alias IP — add an IP to the Linux loopback interface idempotently.
 _zbmc_lo_alias(){
   local ip="$1" SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  case "$(uname -s)" in
-    Darwin) $SUDO ifconfig lo0 alias "$ip" up 2>/dev/null ;;
-    *)      ip addr show dev lo 2>/dev/null | grep -q "$ip" || $SUDO ip addr add "$ip/32" dev lo 2>/dev/null ;;
-  esac
+  [ "$(uname -s)" = Linux ] || { echo "zbmc: v1 supports only Linux" >&2; return 1; }
+  ip addr show dev lo 2>/dev/null | grep -qw "$ip" || $SUDO ip addr add "$ip/32" dev lo 2>/dev/null
 }
 export -f _zbmc_lo_alias
 
@@ -163,6 +160,20 @@ usage(){
 # --- status probe helpers -------------------------------------------------------------
 # Each _probe_* echoes "STATE|DISPLAY|NOTE"; STATE = ok|authfail|fail|na.
 # _ipmi_invocation is PURE (no network) so the shown command == the probed command.
+_probe_lock_file(){
+  local service="$1" dir="${ZBMC_PROBE_LOCK_DIR:-/run/lock/zbmc}" file
+  file="$dir/$ZBMC_NAME.$service"
+  if [ "$(id -u)" = 0 ]; then
+    install -d -m 755 "$dir" 2>/dev/null || return 1
+    touch "$file" 2>/dev/null && chmod 666 "$file" 2>/dev/null || return 1
+  elif [ -n "${ZBMC_PROBE_LOCK_DIR:-}" ]; then
+    mkdir -p "$dir" 2>/dev/null || return 1
+    [ -e "$file" ] || { umask 000; : >"$file"; }
+  fi
+  [ -w "$file" ] || return 1
+  printf '%s\n' "$file"
+}
+
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
   if [ "$1" = pw ]; then
     echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P '<password>'${IPMI_OPTS:+ $IPMI_OPTS}"
@@ -185,9 +196,8 @@ _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
 
 _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY|NOTE
   if command -v flock >/dev/null 2>&1; then
-    local lock_dir="${TMPDIR:-/tmp}/zbmc-probe-locks-$UID"
-    mkdir -p -m 700 "$lock_dir" 2>/dev/null || { echo "fail||probe lock unavailable"; return; }
-    exec 9>"$lock_dir/$ZBMC_NAME.ipmi" || { echo "fail||probe lock unavailable"; return; }
+    local lock_file; lock_file=$(_probe_lock_file ipmi) || { echo "fail||probe lock unavailable"; return; }
+    exec 9<>"$lock_file" || { echo "fail||probe lock unavailable"; return; }
     flock -w "$(( ${IPMI_T:-3} + 8 ))" 9 || { echo "fail||probe busy"; return; }
   fi
   if declare -F zbmc_ipmi_health >/dev/null; then
@@ -221,9 +231,8 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
 _probe_ssh(){
   local cmd='.'" '$BF'"'; zbmc_ssh '\''echo up'\'''
   if command -v flock >/dev/null 2>&1; then
-    local lock_dir="${TMPDIR:-/tmp}/zbmc-probe-locks-$UID"
-    mkdir -p -m 700 "$lock_dir" 2>/dev/null || { echo "fail||probe lock unavailable"; return; }
-    exec 8>"$lock_dir/$ZBMC_NAME.ssh" || { echo "fail||probe lock unavailable"; return; }
+    local lock_file; lock_file=$(_probe_lock_file ssh) || { echo "fail||probe lock unavailable"; return; }
+    exec 8<>"$lock_file" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
   if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" 2>/dev/null | grep -q up; then
@@ -317,8 +326,8 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
   _all_args=("${_all_filtered[@]}")
   td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
   # root check for the whole fleet — fail once up front, not N times in subprocesses
-  _all_run_as_me=0; _all_no_fix_ip=0
-  for _a in "${_all_args[@]}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; [ "$_a" = "--no-fix-ip" ] && _all_no_fix_ip=1; done
+  _all_run_as_me=0
+  for _a in "${_all_args[@]}"; do [ "$_a" = "--run-as-me" ] && _all_run_as_me=1; done
   if [ "$_all_run_as_me" = 0 ] && _need_root "$verb" && [ "$(id -u)" != 0 ]; then
     echo "zbmc: '$verb' needs root to bind privileged ports and manage qemu." >&2
     echo "  sudo zbmc all $verb" >&2
@@ -408,10 +417,9 @@ _zbmc_spawn_watcher(){ # run-id qemu-pid deadline detail
 }
 
 # --run-as-me: per-invocation flag
-ZBMC_RUN_AS_ME=0; ZBMC_NO_FIX_IP=
+ZBMC_RUN_AS_ME=0
 for _a in "$@"; do
   [ "$_a" = "--run-as-me" ] && ZBMC_RUN_AS_ME=1
-  [ "$_a" = "--no-fix-ip" ] && ZBMC_NO_FIX_IP=1
 done
 if [ "$ZBMC_RUN_AS_ME" = 0 ] && _need_root "$VERB" && [ "$(id -u)" != 0 ]; then
   echo "zbmc: '$VERB' needs root to bind privileged ports and manage qemu." >&2
@@ -542,6 +550,16 @@ _zbmc_select_qemu(){
   export ZBMC_QEMU QEMU
 }
 
+_zbmc_run_build(){
+  local builder; builder="$(dirname "$BF")/build.sh"
+  if [ -x "$builder" ]; then
+    bash "$builder" "$ZBMC_DIR"
+  else
+    echo "zbmc: '$ZBMC_NAME' has no build recipe" >&2
+    return 2
+  fi
+}
+
 case "$VERB" in
   _watch)
     [ $# -ge 3 ] || exit 2
@@ -550,7 +568,7 @@ case "$VERB" in
     _zr_wait_ready "$2" "$3" ;;
   up|start)
     do_web=1; [ "${ZBMC_DEFAULT_NO_WEB:-0}" = 1 ] && do_web=0
-    _wait=1; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
+    _wait=1; _do_build=0; ZBMC_DETAIL=0; _deadline="${ZBMC_READY_DEADLINE:-900}"
     _original_args="$*"
     _start_args=()
     while [ $# -gt 0 ]; do
@@ -564,23 +582,25 @@ case "$VERB" in
     done
     set -- "${_start_args[@]}"
     _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; no launch attempted" >&2; exit 1; }
-    for a in "$@"; do case "$a" in
-      --build)  zbmc_build || exit 1;;
-      --no-web) do_web=0;;
-      --no-wait) _wait=0;;
-      --warm) ZBMC_WARM=1;;
-      -v|--verbose) ZBMC_DETAIL=1;;
-      -d|--debug) ZBMC_DETAIL=2;;
-      --deadline=*) _deadline="${a#*=}";;
-    esac; done
-    set -- "$@"
     while [ $# -gt 0 ]; do
-      if [ "$1" = --deadline ]; then
-        [ $# -ge 2 ] || { echo "zbmc: --deadline needs seconds" >&2; exit 2; }
-        _deadline="$2"; shift 2
-      else shift; fi
+      case "$1" in
+        --build) _do_build=1;;
+        --no-web) do_web=0;;
+        --no-wait) _wait=0;;
+        --warm) ZBMC_WARM=1;;
+        -v|--verbose) ZBMC_DETAIL=1;;
+        -d|--debug) ZBMC_DETAIL=2;;
+        --deadline)
+          [ $# -ge 2 ] || { echo "zbmc: --deadline needs seconds" >&2; exit 2; }
+          _deadline="$2"; shift 2; continue;;
+        --deadline=*) _deadline="${1#*=}";;
+        --run-as-me) ;;
+        *) echo "zbmc: unknown start option: $1" >&2; exit 2;;
+      esac
+      shift
     done
     [[ "$_deadline" =~ ^[0-9]+$ ]] || { echo "zbmc: bad deadline '$_deadline'" >&2; exit 2; }
+    [ "$_do_build" = 0 ] || _zbmc_run_build || exit 1
     _zr_set_effective_services "$([ "$do_web" = 0 ] && echo 1 || echo 0)"
     ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"
     export ZBMC_DETAIL ZBMC_ORIGINAL_COMMAND ZBMC_WARM
@@ -600,7 +620,7 @@ case "$VERB" in
         fi
         _zr_event BUILD ready "$_rmsg"
       fi
-    # zbmc_boot self-elevates (sudo), sets the lo0 alias + /etc/hosts, and binds $ZBMC_IP:{22,443,623}
+    # zbmc_boot self-elevates (sudo), sets the loopback alias + /etc/hosts, and binds service ports
     # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
     qp=$(zbmc_boot) || {
       _zr_archive_logs; _zr_snapshot failure; _zr_event LAUNCH failed 'box launcher returned failure'; _zr_result failed LAUNCH 'box launcher returned failure'
@@ -628,12 +648,15 @@ case "$VERB" in
     # Bring up a configured HTTP service once SSH is reachable. --no-web disables only Web-UI;
     # Redfish remains independent and may use the same box hook.
     if [[ " $ZBMC_REQUIRED_SERVICES " == *' redfish '* ]] || { [ "$do_web" = 1 ] && [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; }; then
-      nohup bash -c '. "'"$BF"'"; qp="'"$qp"'"
+      nohup bash -c '. "$1"
+        ZBMC_IP="$2"; SSH_PORT="$3"; IPMI_PORT="$4"; WEB_PORT="$5"; qp="$6"
+        ZBMC_DIR="$7"; ZBMC_HOST="$8"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
           if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; zbmc_web; exit; fi
           sleep 8
-        done' </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
+        done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" \
+        </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
       echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
     if [ "$_wait" = 1 ]; then
@@ -1086,10 +1109,7 @@ PY
     if declare -F zbmc_console >/dev/null; then zbmc_console "$@"
     elif _zr_load "" 2>/dev/null && [ -f "$ZBMC_RUN_DIR/console.log" ]; then tail -f "$ZBMC_RUN_DIR/console.log"
     else echo "$ZBMC_NAME is up, but its current run has no console evidence — try 'ssh' or restart"; fi ;;
-  build)
-    _box_builder="$(dirname "$BF")/build.sh"
-    if [ -x "$_box_builder" ]; then bash "$_box_builder" "$ZBMC_DIR"
-    else zbmc_build; fi ;;
+  build) _zbmc_run_build ;;
   shell)    declare -F zbmc_shell    >/dev/null && zbmc_shell    "$@" || { echo "zbmc: '$ZBMC_NAME' has no shell verb"; exit 2; } ;;
   snapshot|restore)
     _qemu_args=()

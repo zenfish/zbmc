@@ -21,7 +21,7 @@
 #      the loopback alias without changing the physical uplink. Direct-LAN TAP
 #      mode remains available with X10_NET_MODE=direct on a compatible lab LAN.
 #
-# Sourced by ~/phd/bin/zbmc. Reproducible from ipmi.old/fw/BMC_X10AST2400-32M_20210528_03.93_STD.bin.
+# Sourced by the repository's `tools/zbmc` dispatcher.
 ZBMC_NAME=supermicro-x10
 ZBMC_DESC="Supermicro X10 BMC (ASPEED AST2400, FW 3.93) — weak-cipher ORACLE: offers IPMI 2.0 suites 0-14 (RC4/MD5); ADMIN:ADMIN"
 
@@ -34,7 +34,7 @@ ZBMC_DIR="$_XREPO/work/supermicro-x10"
 X10_MASTER="$_XREPO/firmware/x10-master.flash"
 
 # Zoo subnet target: qemu user-net forwards udp 10.0.8.10:623 -> guest 623, bound
-# on a lo0 alias (qemu under sudo, like x14). zbmc_boot aliases lo0 + primes sudo,
+# on a Linux loopback alias (QEMU under sudo, like x14). zbmc_boot adds the alias,
 # then the pexpect driver spawns `sudo -n qemu`. running() greps $PIDF / the 623
 # hostfwd, both now on 10.0.8.10.
 ZBMC_IP=$(_zbmc_resolve_ip supermicro-x10 20 10.0.8.10)

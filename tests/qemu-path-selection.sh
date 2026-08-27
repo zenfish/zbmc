@@ -55,6 +55,11 @@ zbmc_boot(){ printf '%s\n' "\${ZBMC_QEMU:-}" >"\$TEST_ROOT/booted"; sleep 30 >/d
 zbmc_snapshot(){ printf '%s\n' "\${ZBMC_QEMU:-}" >"\$TEST_ROOT/snapshotted"; }
 zbmc_restore(){ printf '%s\n' "\${ZBMC_QEMU:-}" >"\$TEST_ROOT/restored"; }
 EOF
+cat > "$fixture/boxes/fake/build.sh" <<'EOF'
+#!/usr/bin/env bash
+: > "$TEST_ROOT/built"
+EOF
+chmod +x "$fixture/boxes/fake/build.sh"
 
 run(){ ZHOSTS_FILE="$fixture/zhosts.txt" TEST_ROOT="$TEST_ROOT" "$fixture/tools/zbmc" fake "$@"; }
 wait_for_boot(){
@@ -92,8 +97,12 @@ else good_sha=$(shasum -a 256 "$good" | awk '{print $1}'); fi
 grep -Fx "ZBMC_QEMU_SHA256=$good_sha" "$fixture/boxes/fake/zbmc.box" >/dev/null
 grep -Fx "$good" "$TEST_ROOT/booted" >/dev/null
 stop_fake; rm -f "$TEST_ROOT/booted"
-run start --run-as-me --no-wait >/dev/null
+if run start --run-as-me --no-wait --bogus >/dev/null 2>&1; then exit 1; fi
+[ ! -e "$TEST_ROOT/booted" ]
+[ ! -e "$TEST_ROOT/built" ]
+run start --run-as-me --no-wait --deadline 12 --build >/dev/null
 wait_for_boot
+[ -f "$TEST_ROOT/built" ]
 grep -Fx "$good" "$TEST_ROOT/booted" >/dev/null
 stop_fake
 run snapshot --run-as-me

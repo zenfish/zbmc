@@ -1,7 +1,7 @@
 # zbmc.conf — optional network configuration for the virtual BMC zoo.
 # Copy to zbmc.conf (gitignored) and uncomment what you need.
 #
-# By default, zbmc uses 10.0.{6,7,8,9}.x addresses (lo0 aliases).
+# By default, zbmc uses 10.0.{6,7,8,9}.x addresses on the Linux loopback interface.
 # If your network already uses the default 10.0.{6,7,8,9}.x range,
 # set ZBMC_POOL to relocate every box into any /24 you control —
 # a quiet corner of the same 10/8 block works fine.

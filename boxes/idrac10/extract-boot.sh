@@ -11,13 +11,13 @@
 set -euo pipefail; cd "$(dirname "$0")"
 
 # ── firmware location ──────────────────────────────────────────────────────────
-# Run unpack-idrac on the YP95X DUP first if not already done:
-#   ~/phd/bin/unpack-idrac ~/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.BIN
-UNPACK="${IDRAC10_UNPACK:-/Volumes/yyy/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.unpacked}"
+# Run tools/unpack-idrac on the YP95X DUP first, then point this reference recipe at its output.
+UNPACK="${IDRAC10_UNPACK:-}"
+[ -n "$UNPACK" ] || { echo "FATAL: set IDRAC10_UNPACK to the unpacked YP95X directory" >&2; exit 1; }
 BLOBS="$UNPACK/fw-fit-blobs"
 MDITB="$BLOBS/md.itb"
 
-[ -d "$BLOBS" ] || { echo "FATAL: fw-fit-blobs not found at $BLOBS"; echo "Run: ~/phd/bin/unpack-idrac ~/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.BIN"; exit 1; }
+[ -d "$BLOBS" ] || { echo "FATAL: fw-fit-blobs not found at $BLOBS"; exit 1; }
 [ -f "$MDITB" ] || { echo "FATAL: md.itb not found at $MDITB"; exit 1; }
 
 mkdir -p boot

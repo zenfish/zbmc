@@ -14,7 +14,7 @@
 # STATUS: boots to `localhost login:` with all daemons. KNOWN GAP: guest eth0 gets
 #         no IPv4 under qemu user-net (phosphor-network-manager vs ephemeral overlay),
 #         so host->guest hostfwd to bmcweb/ipmid not yet reachable. See NEXT STEPS.
-# RUN:    ~/phd/tmp/x14-virtual/start-x14.sh   (Ctrl-A X to quit the console)
+# RUN:    QEMU=/path/to/qemu-system-arm ./start-x14.sh   (reference launcher; Ctrl-A X to quit)
 # DEPS:   qemu-system-arm (aspeed), the prepared artifacts below (built by PREP).
 #
 # ---- ARTIFACTS (in this dir; PREP shows how they were derived from the firmware) ----
@@ -38,10 +38,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 IP="${ZBMC_IP:-10.0.8.14}"
-QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
+QEMU="${QEMU:-$(command -v qemu-system-arm || true)}"
+[ "$(uname -s)" = Linux ] || { echo "start-x14.sh supports Linux only" >&2; exit 1; }
+[ -x "$QEMU" ] || { echo "set QEMU to an executable qemu-system-arm" >&2; exit 1; }
 
 # ensure the loopback alias exists (idempotent)
-case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
+ip addr show dev lo | grep -qw "$IP" || sudo ip addr add "$IP/32" dev lo
 # free the port if a stale instance is around
 sudo pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 1
 

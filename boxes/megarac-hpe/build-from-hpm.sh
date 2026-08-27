@@ -10,7 +10,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-FW="$ROOT/firmware/XD670_BMC_v1.27_signed.bin.hpm"
+FW="${SRC:-$ROOT/firmware/XD670_BMC_v1.27_signed.bin.hpm}"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
 
 [ -f "$FW" ] || bash "$ROOT/firmware/download-fw.sh" megarac-hpe    # fetch from mirror if missing

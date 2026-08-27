@@ -14,7 +14,8 @@ chmod +x img/initrd4/init
 # them if missing. The real factory values live in flash we don't have — these come from the
 # CfgAttributeMetadata defaults (scripts/build-cfgdb-defaults.py).
 CVDB=img/cfgdb-defaults.db
-META=/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs/usr/share/cfgdb/CfgAttributeMetadata.db
+META="${META:-}"
+[ -f "$META" ] || { echo "FATAL: set META to the extracted iDRAC9 CfgAttributeMetadata.db" >&2; exit 1; }
 # curated subset (network/IPMI/Users/Info groups) — full 10638-attr load stalls cfgmgr
 CVGROUPS="CurrentIPv4,CurrentIPv6,IPv4,IPv4Static,IPv6,IPv6Static,NIC,NICStatic,CurrentNIC,NICVLAN,IPMILANConfig,IPMILan,IPMIIPConfig,IPMISOL,IPMISerial,SNMPTrapIPv4,Users,Info,IPBlocking,SecureDefaultPassword,IPMIUserInfo"
 python3 scripts/build-cfgdb-defaults.py "$META" "$CVDB" evb "$CVGROUPS" >/dev/null

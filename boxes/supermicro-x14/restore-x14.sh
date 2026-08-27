@@ -9,17 +9,19 @@
 # PREREQ: ckpt/state.gz exists (created by checkpoint.py against a good cold boot).
 #         Raw disks (x14-ce0-64m.img, emmc.img) reused as-is — safe because the running
 #         rootfs is a tmpfs overlay and the flash is read-only (no disk drift to capture).
-# RUN:    ~/phd/tmp/x14-virtual/restore-x14.sh
+# RUN:    QEMU=/path/to/qemu-system-arm ./restore-x14.sh   (reference launcher)
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 IP="${ZBMC_IP:-10.0.8.14}"
 STATE=ckpt/state.gz
 [ -f "$STATE" ] || { echo "no checkpoint at $STATE — run a cold boot + checkpoint.py first"; exit 1; }
-case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
+[ "$(uname -s)" = Linux ] || { echo "restore-x14.sh supports Linux only" >&2; exit 1; }
+ip addr show dev lo | grep -qw "$IP" || sudo ip addr add "$IP/32" dev lo
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 1
 
-QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
+QEMU="${QEMU:-$(command -v qemu-system-arm || true)}"
+[ -x "$QEMU" ] || { echo "set QEMU to an executable qemu-system-arm" >&2; exit 1; }
 exec sudo "$QEMU" \
   -m 1024 -M ast2600-evb -nographic -no-reboot \
   -incoming "exec:gunzip -c < $STATE" \

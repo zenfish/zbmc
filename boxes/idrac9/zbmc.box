@@ -1,4 +1,4 @@
-# zbmc.box — virtual-BMC descriptor for "idrac9". Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc).
+# zbmc.box — virtual-BMC descriptor for "idrac9", sourced by the repository's `tools/zbmc` dispatcher.
 # To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
 ZBMC_NAME=idrac9
 ZBMC_DESC="Dell iDRAC9 (NPCM750) - cold boot; SSH/IPMI accepted; Web-UI observed; Redfish not configured"

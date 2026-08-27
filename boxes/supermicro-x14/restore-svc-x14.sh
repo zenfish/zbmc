@@ -13,10 +13,10 @@ cd "${WD:-$(dirname "$0")}"
 SNAP="${1:-svc-snap.gz}"; IP="${ZBMC_IP:-10.0.8.14}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-console-uart.log}"
 [ -f "$SNAP" ] || { echo "no snapshot at $SNAP — run snapshot-x14.sh first"; exit 1; }
-case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
+ip addr show dev lo | grep -qw "$IP" || sudo ip addr add "$IP/32" dev lo
 sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
 sudo -n rm -f serial.sock qmp.sock
-QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"
+QEMU="${QEMU:-$(command -v qemu-system-arm)}"
 sudo -n "$QEMU" \
   -m 1024 -M ast2600-evb -display none -no-reboot \
   -chardev "socket,id=serial0,path=serial.sock,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \

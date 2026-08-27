@@ -18,4 +18,7 @@ resolve(){
 rm "$tmp/zhosts.txt"
 [ "$(resolve)" = 192.0.2.10 ]
 
+grep -Fq 'ZBMC_IP="$2"; SSH_PORT="$3"; IPMI_PORT="$4"; WEB_PORT="$5"; qp="$6"' "$repo/tools/zbmc"
+grep -Fq 'ZBMC_DIR="$7"; ZBMC_HOST="$8"' "$repo/tools/zbmc"
+
 echo "address configuration: PASS"

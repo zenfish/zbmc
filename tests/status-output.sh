@@ -6,6 +6,7 @@ fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 export TEST_ROOT="$fixture/work/fake"
 export TEST_ACTIVITY_ROOT="$fixture/ipmi-active"
+export ZBMC_PROBE_LOCK_DIR="$fixture/probe-locks"
 
 mkdir -p "$fixture/tools" "$fixture/boxes/fake" "$TEST_ROOT/runs/run-1"
 cp "$repo/tools/zbmc" "$repo/tools/zbmc-runlib" "$fixture/tools/"
@@ -17,6 +18,11 @@ TEST_ZBMC="$fixture/tools/zbmc" bash -c '
   _stop_background
   ! kill -0 "$parent" 2>/dev/null && ! kill -0 "$child" 2>/dev/null
 ' || { echo "status background cleanup failed" >&2; exit 1; }
+TEST_ZBMC="$fixture/tools/zbmc" bash -c '
+  ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
+  ZBMC_NAME=fake
+  [ "$(_probe_lock_file ipmi)" = "$ZBMC_PROBE_LOCK_DIR/fake.ipmi" ]
+' || { echo "status probe lock failed" >&2; exit 1; }
 printf 'fake 127.0.0.1\n' > "$fixture/zhosts.txt"
 cat > "$fixture/boxes/fake/zbmc.box" <<'EOF'
 ZBMC_NAME=fake
@@ -165,6 +171,7 @@ ready=$("$fixture/tools/zbmc" fake status)
 [[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - ICMP, SSH, IPMI, Web-UI]"
+[ -f "$ZBMC_PROBE_LOCK_DIR/fake.ipmi" ]
 expect "$("$fixture/tools/zbmc" fake web --ui-only)" "web args: --ui-only"
 
 cat > "$TEST_ROOT/runs/run-1/result.json" <<'EOF'

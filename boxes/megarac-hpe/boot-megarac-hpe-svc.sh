@@ -17,7 +17,8 @@
 #        BG=1 ./boot-megarac-hpe-svc.sh         (background via a fifo; console -> $WD/svc.log, drive via $WD/cin)
 # RELATED: extract.sh, boot-megarac-hpe.sh, zbmc.box.
 set -u
-WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WD="${WD:-$(cd "$HERE/../.." && pwd)/work/megarac-hpe}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${IP:-127.0.0.1}"

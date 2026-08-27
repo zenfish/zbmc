@@ -58,8 +58,9 @@ GATEWAY = os.environ.get("X10_GATEWAY", "10.0.0.1" if NET_MODE == "direct" else 
 IFACE = os.environ.get("X10_IFACE", "eth1" if NET_MODE == "direct" else "eth0")
 SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.0.24" if NET_MODE == "direct" else "10.0.2.2")
 import shutil as _sh
-QEMU     = os.environ.get("X10_QEMU",
-           _sh.which("qemu-system-arm") or "/opt/homebrew/bin/qemu-system-arm")
+QEMU = os.environ.get("X10_QEMU") or os.environ.get("ZBMC_QEMU") or _sh.which("qemu-system-arm")
+if not QEMU:
+    raise SystemExit("qemu-system-arm not found; run the tracked zbmc build first")
 QEMU_PLUGIN = os.environ.get("X10_QEMU_PLUGIN", "")
 FTGMAC_GUARD = os.environ.get("X10_FTGMAC_GUARD", "")
 QEMU_DEBUG = os.environ.get("X10_QEMU_DEBUG", "guest_errors,unimp,cpu_reset")

@@ -7,7 +7,7 @@
 #      Cold-boot is needed only if no snapshot exists or the flash needs to be reset.
 #
 # HEALTHY  = authenticated IPMI works without an IPMIMain SIGSEGV.
-# RUN: IP=10.0.6.66 WD=/Users/zen/phd/tmp/cray-xd670 ./start-megarac-hpe-green.sh   (prints qemu pid on green)
+# RUN: IP=10.0.6.66 WD=/path/to/work/megarac-hpe ./start-megarac-hpe-green.sh   (prints qemu pid on green)
 # ENV: WD (workdir/artifacts), IP (bind IP), HTTPS_PORT/IPMI_PORT (default 443/623), TRIES (default 4).
 set -u
 WD="${WD:-$(cd "$(dirname "$0")/../.." && pwd)/work/megarac-hpe}"

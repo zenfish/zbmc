@@ -13,8 +13,9 @@ set -euo pipefail; cd "$(dirname "$0")"
 
 # ── source busybox aarch64 static ─────────────────────────────────────────────
 # Grab from iDRAC10 rootfs squashfs if not overridden
-ROOTFS="${IDRAC10_ROOTFS:-/Volumes/yyy/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.unpacked/fw-filesystems/rootfs}"
-BUSYBOX="${BUSYBOX:-$ROOTFS/bin/busybox}"
+UNPACK="${IDRAC10_UNPACK:-}"
+ROOTFS="${IDRAC10_ROOTFS:-${UNPACK:+$UNPACK/fw-filesystems/rootfs}}"
+BUSYBOX="${BUSYBOX:-${ROOTFS:+$ROOTFS/bin/busybox}}"
 [ -f "$BUSYBOX" ] || { echo "FATAL: busybox not at $BUSYBOX — set BUSYBOX= or run unpack-idrac first"; exit 1; }
 echo "==> using busybox: $BUSYBOX ($(file -b "$BUSYBOX" | cut -d, -f1))"
 
@@ -57,7 +58,7 @@ _here="$PWD"
 echo "==> done: $(du -sh boot/initramfs.p1.cpio.gz)"
 
 # ── SD card image: squashfs raw ────────────────────────────────────────────────
-SQUASHFS="${IDRAC10_ROOTFS_SQ:-/Volumes/yyy/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.unpacked/fw-fit-blobs/rootfs.squashfs}"
+SQUASHFS="${IDRAC10_ROOTFS_SQ:-${UNPACK:+$UNPACK/fw-fit-blobs/rootfs.squashfs}}"
 IMG=img/sd.img
 if [ ! -f "$IMG" ] && [ -f "$SQUASHFS" ]; then
   echo "==> creating SD image from $SQUASHFS"

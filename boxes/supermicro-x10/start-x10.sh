@@ -2,8 +2,8 @@
 # Detached launcher for the X10 oracle. nohup the pexpect driver (holds qemu as
 # its child + fixes guest networking), wait for NET_CONFIGURED (IPMI reachable on
 # 10.0.8.10:623/udp), then print the qemu pid. Zoo-standard model like x14: qemu
-# runs under sudo, binds the lo0-alias IP 10.0.8.10 on privileged port 623.
-# The lo0 alias + sudo timestamp are primed by the box's zbmc_boot before this runs.
+# runs under sudo and binds the selected Linux loopback address on privileged port 623.
+# The loopback alias and sudo context are prepared by the box's zbmc_boot before this runs.
 # Idempotent: no-op if this box's qemu is already up.
 set -u
 SELF="$(cd "$(dirname "$0")" && pwd)"   # scripts live here (repo box dir)

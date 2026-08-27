@@ -14,7 +14,7 @@
 #   IPMI    : zipmi -H evb -U root -P 0penBmc <cmd>   (mc info -> Mfr 0 = vanilla)
 #   Redfish : curl -sk -u root:0penBmc https://evb/redfish/v1/
 #
-# Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). qemu runs as root and binds the box's real IP
+# Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP
 # (10.0.7.10, OpenBMC class 10.0.7.*) + standard ports 22/443/623 directly. See BUILD-INFO.md +
 # memory reference_evb_ast2600_vanilla_openbmc.
 ZBMC_NAME=openbmc

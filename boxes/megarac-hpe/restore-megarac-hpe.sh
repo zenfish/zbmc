@@ -5,10 +5,11 @@
 #       flash (cray-snap-flash.bin, copied to a fresh run file each time so restore is repeatable).
 #       Comes up with IPMIMain already stable + admin/superuser provisioned — sidesteps the cold-boot
 #       crash race entirely. Machine/kernel/dtb/net MUST match the snapshot exactly.
-# USAGE: IP=10.0.6.66 WD=/Users/zen/phd/tmp/cray-xd670 ./restore-megarac-hpe.sh   (prints qemu pid)
+# USAGE: IP=10.0.6.66 WD=/path/to/work/megarac-hpe ./restore-megarac-hpe.sh   (prints qemu pid)
 #        Loopback dev: IP=127.0.0.1 HTTPS_PORT=8443 IPMI_PORT=8623 SSH_PORT=8022 ./restore-megarac-hpe.sh
 set -u
-WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WD="${WD:-$(cd "$HERE/../.." && pwd)/work/megarac-hpe}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"

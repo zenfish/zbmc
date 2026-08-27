@@ -13,7 +13,7 @@
 #        echo 'cmds' | ./boot-megarac-hpe.sh   (feed the shell over stdin; leading delay helps)
 # RELATED: extract.sh (makes the artifacts), boot-megarac-hpe-svc.sh (real init + net), README.html.
 set -u
-WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+WD="${WD:-$(cd "$(dirname "$0")/../.." && pwd)/work/megarac-hpe}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 exec "$QEMU_BIN" -M ast2600-evb -m 1024 -nographic \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \

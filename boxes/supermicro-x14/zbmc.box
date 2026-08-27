@@ -77,7 +77,7 @@ zbmc_boot() {
   echo "$qp"
 }
 
-zbmc_build() { echo "x14 boot is snapshot-driven — see SNAPSHOTS.md; kernel.bin/initramfs-patched.bin + the .gz snapshots are prebuilt. Cold service boot: ZBMC_COLD=1 zbmc x14 start"; }
+zbmc_build() { echo "x14 boot artifacts are packaged; see REPRODUCE.md. Cold boot: zbmc supermicro-x14 start; snapshot opt-in: start --warm"; }
 zbmc_ready() {
   local d="$ZBMC_DIR"
   if [ -f "$d/kernel.bin" ] && [ -f "$d/initramfs-patched.bin" ]; then
@@ -121,7 +121,7 @@ zbmc_web() {
   if curl -sk -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP/redfish/v1/" 2>/dev/null | grep -q ServiceRoot; then
     echo "x14 Redfish: UP  (curl -sk -u $IPMI_USER:$IPMI_PW https://$ZBMC_HOST/redfish/v1/)"
   else
-    echo "x14 Redfish: down — restore not up? (zbmc x14 start)"
+    echo "x14 Redfish: down — box not ready? (zbmc supermicro-x14 start)"
   fi
 }
 

@@ -7,11 +7,12 @@
 # WHAT: QMP `migrate` -> exec:gzip captures RAM + device state to cray-snap.gz (VM is PAUSED after).
 #       The mtd flash holds the provisioned /conf (admin user), so we also copy it to cray-snap-flash.bin
 #       — restore must re-attach the matching flash. Take the snapshot only AFTER verifying green.
-# USAGE: WD=/Users/zen/phd/tmp/cray-xd670 ./snapshot-megarac-hpe.sh   (qemu must be running with -qmp)
+# USAGE: WD=/path/to/work/megarac-hpe ./snapshot-megarac-hpe.sh   (qemu must be running with -qmp)
 # PAIR:  restore-megarac-hpe.sh loads it. Snapshot files stay in WD (large; not git — regen via a green boot).
 set -euo pipefail
 umask 077
-WD="${WD:-/Users/zen/phd/tmp/cray-xd670}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WD="${WD:-$(cd "$HERE/../.." && pwd)/work/megarac-hpe}"
 OUT="${1:-$WD/cray-snap.gz}"
 QMP="$WD/cray-qmp.sock"
 [ -S "$QMP" ] || { echo "no QMP socket at $QMP — is a -qmp boot running?" >&2; exit 1; }
