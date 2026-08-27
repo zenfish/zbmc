@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>zbmc — a zoo of virtual BMCs under QEMU</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">zbmc — a zoo of virtual BMCs under QEMU</h1>
+  </div>
+</div>
+
+<p>Boot real vendor <strong>BMC</strong> (Baseboard Management
+Controller) firmware under QEMU, driven by one dispatcher
+(<code>zbmc</code>), for reverse-engineering and security research on
+the out-of-band management stack (IPMI / RMCP+, Redfish, the web UI, the
+RAKP auth path) <strong>without owning the physical server</strong>.</p>
+<p>This is my own working "zoo" plus the tools, per-box boot recipes, a
+full field write-up, and an agent skill so others can reproduce it on
+their own images. C&amp;C very welcome, as are new
+recipes/methods/improvements on what I have here. This turned out to be
+a bit more black magic than I'd anticipated beating these into
+submission (at least... mostly beaten... still a bit to do.)</p>
+<blockquote>
+<p><strong>New here? → <a
+href="GETTING-STARTED.html">GETTING-STARTED.md</a></strong> — clone →
+<code>./build.sh</code> →
+<code>sudo ./tools/zbmc openbmc start</code>.</p>
+</blockquote>
+<blockquote>
+<p><strong>Supported host:</strong> zbmc 0.1.1 runs only on
+<strong>x86_64 Linux</strong> (Intel or AMD). The pinned QEMU
+executables, paths, and SHA-256 values were produced for x86_64 Linux.
+ARM64 hosts such as Raspberry Pi and Apple Silicon, macOS, and other
+operating systems are not currently supported. <code>build.sh</code>
+downloads and SHA-256-verifies the pinned QEMU Docker runtime, then
+installs a pinned <code>zipmi</code> environment. Docker keeps the exact
+QEMU binaries identical across Linux releases.</p>
+</blockquote>
+<p>Resource sizing is guidance, not an enforced check. Individual BMCs
+request 128 MiB to 1 GiB of guest RAM; allow roughly 2 GiB host RAM and
+5 GiB free disk for one-at-a-time use. Fleet timings in this README came
+from a four-core host and will be slower on smaller systems.</p>
+<blockquote>
+<p>It aggregates vendor and research firmware and documents fleet-shared
+<em>default</em> credentials (calvin, factory IPMIKeys, CredVault keys,
+etc.). Those aren't repo secrets — they are already present in the
+source firmware or published research bundles; the value here is
+<em>documenting the danger</em>. The tracked tree contains no
+live/customer secrets or private keys. Some fetched lab bundles include
+deliberately shared research identities; see <a
+href="SECURITY.html">SECURITY.md</a>.</p>
+</blockquote>
+<h2 id="the-animals">The animals</h2>
+<p><code>zbmc list</code> shows these; run any with
+<code>sudo ./tools/zbmc &lt;name&gt; start</code>. Firmware isn't
+present in the current tree. <code>build.sh</code> fetches
+SHA-256-pinned vendor images and derived boot artifacts from the source
+listed in each build recipe; some are vendor downloads and some are
+project-mirror-only. The table records exact-build acceptance measured
+on the four-core Debby host; it is a reproducibility baseline, not a
+promise that every vendor service is complete.</p>
+<table>
+<thead>
+<tr>
+<th><code>zbmc</code> name</th>
+<th>Accepted function</th>
+<th>Exact-build result / measured cold start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>openbmc</strong></td>
+<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>pass - 4m32s</td>
+</tr>
+<tr>
+<td><strong>nvidia-obmc</strong></td>
+<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>pass - 5m21s</td>
+</tr>
+<tr>
+<td><strong>advantech-asmb787</strong></td>
+<td>retained serial login; external network is blocked by the unmodeled
+NC-SI path</td>
+<td>pass - 9m38s</td>
+</tr>
+<tr>
+<td><strong>idrac10</strong></td>
+<td>ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td>
+<td>pass - 7m37s</td>
+</tr>
+<tr>
+<td><strong>megarac-hpe</strong></td>
+<td>ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH
+absent</td>
+<td>pass - 8m07s after three automatic cold-boot rerolls; timing is
+nondeterministic</td>
+</tr>
+<tr>
+<td><strong>supermicro-x14</strong></td>
+<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>pass - 3m31s</td>
+</tr>
+<tr>
+<td><strong>supermicro-x10</strong></td>
+<td>user-net (default): forwarded SSH, IPMI, Redfish, Web-UI;
+direct-LAN: the same plus guest ICMP; 60s stable hold</td>
+<td>pass - 2m38s user-net / 3m11s direct-LAN</td>
+</tr>
+<tr>
+<td><strong>idrac9</strong></td>
+<td>ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4
+boot</td>
+<td>pass - 10m31s</td>
+</tr>
+</tbody>
+</table>
+<p>These times were measured with one BMC at a time on a Lenovo m715q (a
+small four-core Intel system). <code>zbmc</code> learns timing profiles
+from completed runs, but cold firmware startup remains load-sensitive.
+Warm snapshots are explicit for MegaRAC-HPE and X14 with
+<code>start --warm</code> because QEMU machine-version drift can
+invalidate a checkpoint. iDRAC9 and the supported iDRAC10 package path
+are cold-only.</p>
+<p>Supermicro X10 defaults to QEMU user networking so it works on cloud
+and other hosts that cannot bridge an additional guest MAC onto the
+physical LAN. Its forwarded SSH and HTTPS ports are shown by
+<code>zbmc supermicro-x10 status -v</code>. Set
+<code>X10_NET_MODE=direct</code> in <code>zbmc.conf</code> only when the
+selected X10 address is routable on the host LAN; direct mode adds ICMP
+and TAP packet capture.</p>
+<p>Full per-box boot method, network trick, and gotchas: <a
+href="docs/zoo-lessons.html">docs/zoo-lessons.md</a>. The project-wide
+retrospective is <a href="docs/why-bmc-virtualization-is-hard.html">Why
+Virtualizing BMC Firmware Was Hard</a>.</p>
+<h2 id="quickstart">Quickstart</h2>
+<p>Full walkthrough (with a glossary): <strong><a
+href="GETTING-STARTED.html">GETTING-STARTED.md</a></strong>. The short
+version:</p>
+<pre class="bash"><code># Debian 13 on x86_64
+sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
+  device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
+  netcat-openbsd iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
+pipx install jefferson
+export PATH=&quot;$HOME/.local/bin:$PWD/tools:$PATH&quot;
+./build.sh                     # install exact QEMU/zipmi + build every ready box
+sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 4m30s on the reference host)
+./tools/zbmc openbmc ssh &#39;uname -a&#39;
+./tools/zbmc openbmc ipmi mc info
+./tools/zbmc openbmc web</code></pre>
+<p>No firmware is present in the current checkout; <code>build.sh</code>
+fetches what a box needs via the applicable box recipe or
+<code>firmware/download-fw.sh</code>:</p>
+<pre class="bash"><code>./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh openbmc</code></pre>
+<p>Every fetched artifact is SHA-256 verified.
+<code>firmware/download-fw.sh</code> reports whether the source is a
+vendor URL or the project mirror; several derived boot bundles are
+mirror-only because they contain the documented emulation adaptations.
+See <a href="SECURITY.html">SECURITY.md</a> for the trust and provenance
+boundary.</p>
+<h2 id="exact-qemu-builds-and-docker-package">Exact QEMU builds and
+Docker package</h2>
+<p>Every box descriptor pins a QEMU executable, version, machine, and
+SHA-256. <code>zbmc</code> validates all four before launch and refuses
+a changed or incompatible binary. These pins are
+host-architecture-specific: the current 0.1.1 build/package path
+supports <strong>x86_64 Linux only</strong> and ships two patched QEMU
+11 artifacts plus Debian's exact QEMU 10.0.11 package in one pinned
+Docker image. Normal users receive and verify this package automatically
+through <code>build.sh</code>; these commands reproduce it:</p>
+<p>The engineering rationale, observed failures, evidence strength, and
+criteria for removing a variant are documented in <a
+href="docs/why-multiple-qemu-builds.html">Why zbmc Ships Multiple QEMU
+Builds</a>.</p>
+<pre class="bash"><code>tools/build-qemu --plan qemu-11-arm
+tools/build-qemu qemu-11-arm
+tools/build-qemu qemu-11-idrac10
+
+tools/package-qemu-docker /absolute/path/zbmc-qemu.docker.tar \
+  /absolute/path/debian-13-qemu-10.0.11.json \
+  /absolute/path/qemu-11-arm-manifest.json \
+  /absolute/path/qemu-11-idrac10-manifest.json
+
+docker load -i /absolute/path/zbmc-qemu.docker.tar
+tools/validate-qemu-build --deadline 1200 /absolute/path/qemu-manifest.json box-name</code></pre>
+<p>The Docker base image and package version are pinned, and the
+packager verifies executable/data hashes and QMP startup for every
+declared machine before export. Debian apt dependencies still resolve
+from the live repository, so this is exact-artifact packaging rather
+than a byte-for-byte offline source rebuild. The runtime uses host
+networking and writable work mounts for QEMU; Docker is packaging, not a
+security boundary. It does not use privileged mode or the host PID
+namespace.</p>
+<h2 id="network-configuration">Network configuration</h2>
+<p>By default, each box binds to a Linux loopback alias in the
+<strong>10.0.{6,7,8,9}.x</strong> range, broken out by vendor
+family:</p>
+<table>
+<thead>
+<tr>
+<th>Subnet</th>
+<th>Vendor</th>
+<th>Boxes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10.0.6.x</td>
+<td>AMI MegaRAC</td>
+<td>megarac-hpe (.66)</td>
+</tr>
+<tr>
+<td>10.0.7.x</td>
+<td>OpenBMC</td>
+<td>openbmc (.10), nvidia-obmc (.20)</td>
+</tr>
+<tr>
+<td>10.0.8.x</td>
+<td>Supermicro</td>
+<td>supermicro-x10 (.10), supermicro-x14 (.14)</td>
+</tr>
+<tr>
+<td>10.0.9.x</td>
+<td>Dell iDRAC</td>
+<td>idrac9 (.9), idrac10 (.10)</td>
+</tr>
+<tr>
+<td>configured pool <code>.50</code></td>
+<td>Advantech</td>
+<td>advantech-asmb787</td>
+</tr>
+</tbody>
+</table>
+<p>If your network already uses the default 10.0.{6,7,8,9}.x range, copy
+<code>zbmc.conf.example</code> to <code>zbmc.conf</code> (gitignored)
+and set <strong>one</strong> of:</p>
+<pre class="bash"><code># Pool mode — relocate every box into any /24 you control (first 3 octets):
+ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
+# ZBMC_POOL=192.168.9    # or a completely different block
+# → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
+#   idrac9=.30, idrac10=.31, megarac-hpe=.40, asmb787=.50
+
+# Per-box override — when you only have a few free IPs:
+ZBMC_IP_idrac9=172.16.0.99
+ZBMC_IP_openbmc=192.168.1.100</code></pre>
+<p>Priority: per-box <code>ZBMC_IP_&lt;name&gt;</code> &gt; pool &gt;
+<code>ZHOSTS_FILE</code> &gt; descriptor default. Full allocation table
+and examples: <strong><a
+href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
+<h2 id="layout">Layout</h2>
+<pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
+boxes/&lt;name&gt;/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
+docs/         engineering rationale, per-box deep dives, and cross-box lessons
+skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
+firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)</code></pre>
+<p>Every documentation source has both a GitHub-friendly Markdown form
+and a styled HTML form. Existing Markdown remains authoritative where it
+existed first; existing hand-authored HTML remains authoritative for the
+reverse-engineering reports. Markdown-to-HTML uses the vendored
+<code>zmd2html</code>; HTML-to-Markdown uses Pandoc 3.7.0.2 with its GFM
+writer. Regenerate or verify the pairs with:</p>
+<pre class="bash"><code>tools/install-pandoc-docs
+export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
+tools/sync-docs --write       # or: --check</code></pre>
+<p>The two <code>*.standalone.html</code> packaging copies remain
+HTML-only.</p>
+<p><code>./tools/zbmc -V</code> (or <code>--version</code>) prints the
+dispatcher version.</p>
+<h2 id="the-docs-the-sweat-the-tears">The docs, the sweat, the
+tears</h2>
+<ul>
+<li><strong><a
+href="docs/why-bmc-virtualization-is-hard.html">docs/why-bmc-virtualization-is-hard.html</a></strong>
+— why was it so difficult, which problems were inherent versus
+self-inflicted, what failed, what worked, the current limits, and the
+rules that hopefully will guide future endeavors.</li>
+<li><strong><a
+href="docs/release-readiness-retrospective.html">docs/release-readiness-retrospective.html</a></strong>
+— the repository-wide 2026-08-27 audit, corrected contracts,
+verification, and remaining release risks.</li>
+<li><strong><a
+href="docs/why-multiple-qemu-builds.html">docs/why-multiple-qemu-builds.html</a></strong>
+— why multiple QEMU executables were stuffed in here, which differences
+require separate builds, and how to test whether Advantech still needs
+the separately packaged Debian QEMU 10 build.</li>
+<li><strong><a
+href="docs/from-firmware-to-bare-metal.html">docs/from-firmware-to-bare-metal.md</a></strong>
+— one box end to end: the "encrypted" misnomer, AMI FMH / SquashFS /
+JFFS2 / FIT unpacking (and the binwalk &amp; jefferson traps), the exact
+QEMU flags and why, the IPMIMain SIGSEGV fixes, and the NC-SI networking
+wall in full.</li>
+<li><strong><a
+href="docs/zoo-lessons.html">docs/zoo-lessons.md</a></strong> — the
+cross-box patterns: QEMU machine per SoC, direct-kernel vs FIT vs
+raw-flash boot, flash sizing traps, cold-boot-flaky → warm-snapshot (QMP
+migrate), the network last-mile per SoC (usb-net on NPCM vs the AST2600
+NC-SI wall), and the OpenBMC / MegaRAC / iDRAC userland fixes.</li>
+</ul>
+<h2 id="license--use">License / use</h2>
+<p>Scripts + docs: MIT (<code>LICENSE</code>). Firmware images are the
+respective vendors' and are not covered by it. Use only on
+hardware/firmware you're authorized to test.</p>
+</div>
+</body>
+</html>

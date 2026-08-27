@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>X14 virtual BMC — snapshot manifest</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">X14 virtual BMC — snapshot manifest</h1>
+  </div>
+</div>
+
+<p>QMP warm-restore checkpoints (made by <code>snapshot-x14.sh</code>,
+restored by <code>restore-svc-x14.sh</code>). Each is a full RAM+device
+state of a running SVC-mode boot. <strong>Restore ~10s, network survives
+(-incoming keeps UDP 623 + TCP 443/22 live).</strong> Must restore with
+matching machine+dtb (ast2600-evb + x14-noncsi.dtb) — the restore script
+handles it.</p>
+<p>Restore any of them: <code>./restore-svc-x14.sh &lt;file&gt;</code>
+then drive: <code>socat - /tmp/x14.sock</code>,
+<code>ipmitool -H 10.0.8.14 ...</code>,
+<code>curl -k https://10.0.8.14/...</code>,
+<code>ssh ADMIN@10.0.8.14</code>.</p>
+<table>
+<thead>
+<tr>
+<th>snapshot</th>
+<th>~size</th>
+<th>what works</th>
+<th>notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>svc-snap-shell.gz</td>
+<td>93 MB</td>
+<td>IPMI + Redfish + interactive SSH shell</td>
+<td>historical local checkpoint; not packaged</td>
+</tr>
+<tr>
+<td><strong>svc-snap-full-working.gz</strong></td>
+<td>92 MB</td>
+<td>IPMI + Redfish</td>
+<td><strong>packaged snapshot used by
+<code>start --warm</code></strong></td>
+</tr>
+<tr>
+<td>svc-snap-redfish-working.gz</td>
+<td>92 MB</td>
+<td>Redfish (curl) only</td>
+<td>after bmcweb <code>/var/log</code> fix; IPMI still blocked</td>
+</tr>
+<tr>
+<td>svc-snap2.gz</td>
+<td>92 MB</td>
+<td>core daemons only (dbus/mapperx/ipmid/eth0), no Redfish/IPMI</td>
+<td>pre-fixes; used as iteration base</td>
+</tr>
+<tr>
+<td>svc-snap.gz</td>
+<td>91 MB</td>
+<td>core daemons only</td>
+<td>earliest; poisoned/churned</td>
+</tr>
+</tbody>
+</table>
+<h2 id="access-on-a-restored-instance">Access on a restored
+instance</h2>
+<ul>
+<li><strong>Serial console (always):</strong>
+<code>sudo socat - UNIX-CONNECT:/tmp/x14.sock</code> → root
+<code>/bin/sh</code> (PID1, no auth).</li>
+<li><strong>SSH shell</strong> (shell snapshot):
+<code>ssh ADMIN@10.0.8.14</code> pw <code>ADMIN</code> → real Linux
+<code>/bin/sh</code>; <code>sudo -i</code> (pw ADMIN) → root. Or
+<code>ssh root@10.0.8.14</code> pw <code>x14pass</code> (root unlocked
+in the shell snapshot).
+<ul>
+<li>The <code>SMASH_ENABLE=0</code> in <code>/etc/smash.conf</code> is
+what makes SSH give a real shell instead of the SMASH-CLP shell (vendor
+toggle).</li>
+</ul></li>
+<li><strong>IPMI:</strong>
+<code>ipmitool -I lanplus -H 10.0.8.14 -U ADMIN -P ADMIN user list 1 | channel info 1 | ...</code></li>
+<li><strong>Redfish:</strong>
+<code>curl -sk -u ADMIN:ADMIN https://10.0.8.14/redfish/v1/Systems</code></li>
+</ul>
+<h2 id="making-a-new-snapshot">Making a new snapshot</h2>
+<p><code>./snapshot-x14.sh &lt;name&gt;.gz</code> (pauses the VM —
+restore to resume). Then add a row here.</p>
+<h2
+id="fixes-baked-into-the-svc-bringup-initramfs-xinit-that-made-each-work">Fixes
+baked into the SVC bringup (initramfs-x/init) that made each work</h2>
+<ul>
+<li>bmcweb exit(255): <code>mkdir -p /var/volatile/log/redfish</code>
+before bmcweb (missing inotify-watch dir).</li>
+<li>IPMI RAKP:
+<code>mapperx --service-namespaces="$MAPPER_SERVICES"</code> (empty
+whitelist ⇒ mapper indexes nothing ⇒ ipmid wipes users).</li>
+<li>SSH real shell: <code>/etc/smash.conf</code> SMASH_ENABLE=0 +
+<code>mkdir -p /dev/pts</code> before devpts mount (ptys) + sshd -D on
+:22.</li>
+</ul>
+</div>
+</body>
+</html>

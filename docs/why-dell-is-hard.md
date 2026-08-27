@@ -13,7 +13,8 @@ they taught us; it is not the current operator guide.
 ## The turnkey boxes cheat
 
 An OpenBMC image is **one flash blob** — u-boot + kernel + rootfs concatenated — and it boots on a stock
-QEMU machine with `-drive if=mtd,snapshot=on`. Nothing to assemble, deterministic, done in ~2 minutes.
+QEMU machine with `-drive if=mtd,snapshot=on`. Nothing to assemble, deterministic; the current reference
+runs reached full acceptance in 4m32s (OpenBMC) and 5m21s (NVIDIA).
 That's the whole trick behind `openbmc` and `nvidia-obmc`.
 
 The iDRACs break **every** assumption in that sentence.

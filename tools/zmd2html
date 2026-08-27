@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+# =============================================================================
+# zmd2html -- convert Markdown to house-styled HTML (Tailwind look).
+# =============================================================================
+# Vendored from /Users/zen/phd/bin/zmd2html on 2026-08-27; zbmc-specific notes follow.
+# WHAT  Reads FILE.md and renders it to house Tailwind HTML (dark gradient hero
+#       + white card, same look as our hand-authored docs), rewriting local
+#       *.md links to *.html so the corpus stays clickable. Body rendered by
+#       pandoc (GFM). A conversation utility: by default it writes the HTML to
+#       STDOUT and touches nothing on disk. Named z* to dodge the md4c
+#       `md2html` on PATH (brew).
+# WHY   The HTML-first doctrine (feedback_html_first_docs): .md blows except in
+#       md. The Jun-2026 bulk .md->.html migration was done by hand with no
+#       reusable tool; this is that tool.
+# NON-DESTRUCTIVE  The source .md is ONLY ever read -- never moved, renamed, or
+#       deleted. Output goes to stdout unless you name a destination (-o / --tree).
+# USAGE
+#   zmd2html [-i] FILE.md                 # -> HTML on stdout (default)
+#   zmd2html [-i] -o OUT.html FILE.md     # -> write OUT.html
+#   zmd2html [-i] [--force] --tree DIR    # -> FILE.html beside each *.md in DIR
+#   opts: -i, --include-all  self-contained output: inline the Tailwind runtime
+#                            + hero SVG so the file needs NO network (assets
+#                            cached in ~/.cache/zmd2html; one online fetch to seed)
+#         -o PATH            write to PATH instead of stdout
+#         --force            overwrite an existing output file (else refuse/skip)
+#         --no-crumbs        skip the crumbs breadcrumb pass (file outputs only)
+#         --selftest         run the link-rewrite self-check and exit
+# CRUMBS  `crumbs` runs only on a written file that lives under ~/phd (stdout
+#       output has no path, so it gets no breadcrumb). Status goes to stderr so
+#       stdout stays clean HTML for piping.
+# SKIP  Under --tree, Claude-ops/repo-doc basenames (CLAUDE/AGENTS/GEMINI/
+#       README/CONTRIBUTING/...) are left alone. Name such a file explicitly to
+#       convert it -- safe now, since nothing is ever moved or deleted.
+# STYLE  Tailwind CDN + Font Awesome + a `@layer components` block that styles
+#       raw tags (h2/p/table/pre/code/a) -- the SAME house look as our
+#       hand-authored docs (bmc/bmc-supply-chain/tendril-map.html,
+#       bmc/SMI/uefi-smi-research-log.html): slate-100 page, centered white card,
+#       dark gradient hero with an icon + gradient-text H1. pandoc emits plain
+#       semantic HTML; the component layer styles it, so NO `prose` plugin needed.
+# HINTS  In the .md, optional HTML comments tune the hero:
+#          <!-- icon: fa-microchip -->     Font Awesome icon (default fa-file-lines)
+#          <!-- subtitle: any text -->     hero subtitle line (default: none)
+# RELATED  tools/sync-docs owns zbmc's paired-document workflow.
+# =============================================================================
+import sys, os, re, subprocess, shutil, html
+
+PHD = os.path.realpath(os.path.expanduser("~/phd"))
+BIN = os.path.dirname(os.path.realpath(__file__))
+MARK = "<!-- zmd2html:auto -->"
+
+# Same vendor/dump prune list the sibling tools use (keep --tree from chewing
+# firmware source trees + Claude-op files).
+EXCLUDE = ("/phd-data/", "/nas-copy/", "/node_modules/", "/.git/", "/vendor/",
+           "/3rd/", "/src/github-repos/", "/dox/", ".extracted", "/extracted/",
+           "/extractions/", "-dump/", "_unpacked", "/rootfs", "/www/", "/mods/",
+           "/dissect_", "leaked", "/gasser/", "/zgrab", "/zmap-src/",
+           "/squashfs-root", "/initramfs", "/.md/")
+
+# Basenames that stay .md no matter what (Claude ops + repo-doc conventions).
+KEEP_MD = {"claude.md", "agents.md", "gemini.md", "readme.md", "contributing.md",
+           "changelog.md", "license.md", "code_of_conduct.md"}
+
+
+# House @layer component styles: applied to the raw tags pandoc emits, lifted
+# from the canonical hand-authored docs so converted pages match them.
+TW_COMPONENTS = """  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }"""
+
+
+def hints(md_text):
+    """Pull optional hero tuning from HTML comments in the .md."""
+    icon = re.search(r'<!--\s*icon:\s*([\w-]+)\s*-->', md_text)
+    sub = re.search(r'<!--\s*subtitle:\s*(.+?)\s*-->', md_text)
+    return (icon.group(1) if icon else "fa-file-lines",
+            sub.group(1) if sub else "")
+
+
+def rewrite_md_links(body):
+    """href/src="foo.md" or "foo.md#anchor" -> ".html", but leave web URLs,
+    mailto:, and protocol-relative links alone. Local anchors (#x) untouched."""
+    def sub(m):
+        attr, url, anchor = m.group(1), m.group(2), m.group(3) or ""
+        if re.match(r"[a-z]+://|mailto:|//", url):
+            return m.group(0)
+        return f'{attr}="{url[:-3]}.html{anchor}"'
+    # attr="....md"  or  attr="....md#anchor"
+    return re.sub(r'(href|src)="([^"]+?\.md)(#[^"]*)?"', sub, body)
+
+
+def title_of(md_text, fallback):
+    m = re.search(r'^\#\s+(.+?)\s*$', md_text, re.M)
+    return m.group(1).strip() if m else fallback
+
+
+def strip_lead_h1(body):
+    """The hero owns the title (gradient text); drop pandoc's leading <h1> so it
+    isn't rendered twice."""
+    return re.sub(r'\s*<h1[^>]*>.*?</h1>\s*', '\n', body, count=1, flags=re.S)
+
+
+def render_body(md_path):
+    """pandoc GFM -> html5 fragment. --no-highlight: doc.css owns code styling
+    (dark pre block, no per-token spans), so plain <pre><code> is what we want."""
+    out = subprocess.run(
+        ["pandoc", "--from=gfm", "--to=html5", "--no-highlight", md_path],
+        capture_output=True, text=True)
+    if out.returncode != 0:
+        raise RuntimeError(f"pandoc failed on {md_path}: {out.stderr.strip()}")
+    return out.stdout
+
+
+FA_CDN = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+CACHE = os.path.expanduser("~/.cache/zmd2html")
+TW_URL = "https://cdn.tailwindcss.com"
+FA_SVG_URL = ("https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1"
+              "/svgs/solid/{}.svg")
+
+
+def _cached(name, url):
+    """Text of a cached asset, fetching+caching from url on first use. None on
+    failure (offline & not yet cached)."""
+    os.makedirs(CACHE, exist_ok=True)
+    p = os.path.join(CACHE, name)
+    if not os.path.exists(p):
+        r = subprocess.run(["curl", "-fsSL", url], capture_output=True, text=True)
+        if r.returncode != 0 or not r.stdout.strip():
+            return None
+        open(p, "w", encoding="utf-8").write(r.stdout)
+    return open(p, encoding="utf-8").read()
+
+
+def icon_html(fa_name, selfcontained):
+    """Hero icon. CDN mode: a Font Awesome <i>. Self-contained: the icon's SVG
+    inlined (fill via currentColor). Empty string if a self-contained SVG can't
+    be had."""
+    if not selfcontained:
+        return (f'<i class="fa-solid {fa_name} text-2xl md:text-3xl text-cyan-300 '
+                'drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>')
+    slug = re.sub(r'^fa-', '', fa_name)
+    svg = _cached(f"icon-{slug}.svg", FA_SVG_URL.format(slug))
+    if not svg:
+        return ""
+    svg = re.sub(r'<svg\b', '<svg fill="currentColor" width="100%" height="100%"',
+                 svg, count=1)
+    return ('<span class="inline-block h-7 w-7 md:h-8 md:w-8 text-cyan-300 '
+            f'drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]">{svg}</span>')
+
+
+def head_assets(selfcontained):
+    """Tailwind + house component styles for the <head>. CDN by default; with
+    --include-all the Tailwind Play runtime is inlined so the file needs no
+    network (it JITs the classes + @apply block in-browser)."""
+    if selfcontained:
+        tw = _cached("tailwind.js", TW_URL)
+        if not tw:
+            raise RuntimeError("--include-all needs the Tailwind CDN JS; fetch "
+                               "failed and it isn't cached (need network once)")
+        return (f"<script>\n{tw}\n</script>\n"
+                f'<style type="text/tailwindcss">\n{TW_COMPONENTS}\n</style>')
+    return (f'<script src="{TW_URL}"></script>\n'
+            f'<link rel="stylesheet" href="{FA_CDN}" />\n'
+            f'<style type="text/tailwindcss">\n{TW_COMPONENTS}\n</style>')
+
+
+HERO = (
+    '<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">\n'
+    '<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 '
+    'bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg '
+    'flex items-center gap-3">\n'
+    '  {icon}\n'
+    '  <div>\n'
+    '    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r '
+    'from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">{title}</h1>\n'
+    '{subtitle}'
+    '  </div>\n'
+    '</div>\n')
+
+
+def page(title, body, icon="fa-file-lines", subtitle="", selfcontained=False):
+    sub = (f'    <p class="text-slate-400 text-sm mt-1">{html.escape(subtitle)}</p>\n'
+           if subtitle else "")
+    hero = HERO.format(icon=icon_html(icon, selfcontained),
+                       title=html.escape(title), subtitle=sub)
+    return (
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+        f"{MARK}\n"
+        '<meta charset="utf-8" />\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />\n'
+        f"<title>{html.escape(title)}</title>\n"
+        f"{head_assets(selfcontained)}\n"
+        '</head>\n<body class="bg-slate-100 text-slate-800">\n'
+        f"{hero}"
+        f"{body.rstrip()}\n"
+        "</div>\n"
+        "</body>\n</html>\n")
+
+
+def render(md_path, selfcontained=False):
+    """Pure: read FILE.md, return the house-styled HTML string. No writes, no
+    moves -- the input file is only read."""
+    md_text = open(md_path, encoding="utf-8", errors="replace").read()
+    icon, subtitle = hints(md_text)
+    stem = os.path.basename(md_path)[:-3] if md_path.lower().endswith(".md") \
+        else os.path.basename(md_path)
+    body = strip_lead_h1(rewrite_md_links(render_body(md_path)))
+    return page(title_of(md_text, stem), body, icon=icon, subtitle=subtitle,
+                selfcontained=selfcontained)
+
+
+def _under_phd(p):
+    return os.path.realpath(p).startswith(PHD + os.sep)
+
+
+def write_out(md_path, out_path, selfcontained, do_crumbs):
+    """Write rendered HTML to out_path, then breadcrumb it if it lives under
+    ~/phd. Never touches the source .md."""
+    html = render(md_path, selfcontained)
+    open(out_path, "w", encoding="utf-8").write(html)
+    print(f"wrote: {out_path}", file=sys.stderr)
+    if do_crumbs and _under_phd(out_path):
+        subprocess.run([os.path.join(BIN, "crumbs"), out_path])
+
+
+def is_excluded(p):
+    ap = os.path.realpath(p)
+    if any(x in ap + "/" for x in EXCLUDE):
+        return True
+    return os.path.basename(ap).lower() in KEEP_MD
+
+
+def gather_tree(root):
+    for dp, dns, fns in os.walk(root):
+        dns[:] = [x for x in dns if not is_excluded(os.path.join(dp, x))]
+        for f in fns:
+            p = os.path.join(dp, f)
+            if f.lower().endswith(".md") and not is_excluded(p):
+                yield p
+
+
+def selftest():
+    r = rewrite_md_links
+    assert r('<a href="notes.md">x</a>') == '<a href="notes.html">x</a>'
+    assert r('<a href="a/b.md#sec">x</a>') == '<a href="a/b.html#sec">x</a>'
+    assert r('<a href="https://x.com/y.md">x</a>') == '<a href="https://x.com/y.md">x</a>'
+    assert r('<a href="mailto:a@b.md">x</a>') == '<a href="mailto:a@b.md">x</a>'
+    assert r('<a href="#top">x</a>') == '<a href="#top">x</a>'
+    assert r('<img src="d.md" />') == '<img src="d.html" />'
+    print("zmd2html selftest: ok")
+
+
+USAGE = ("usage: zmd2html [-i] FILE.md               # -> HTML on stdout\n"
+         "       zmd2html [-i] -o OUT.html FILE.md   # -> write OUT.html\n"
+         "       zmd2html [-i] [--force] --tree DIR  # -> FILE.html beside each .md\n"
+         "  opts: -i/--include-all self-contained (inline Tailwind+SVG, no network)\n"
+         "        -o PATH  output file   --force overwrite existing output\n"
+         "        --no-crumbs  skip breadcrumb   --selftest  run self-check\n"
+         "  NON-DESTRUCTIVE: the source .md is only ever READ, never moved/deleted.")
+
+
+def main(argv):
+    if "--selftest" in argv:
+        selftest(); return 0
+    force = "--force" in argv
+    do_crumbs = "--no-crumbs" not in argv
+    tree = "--tree" in argv
+    selfcontained = "--include-all" in argv or "-i" in argv
+
+    # parse -o PATH (and -oPATH), collect positionals
+    out_path, args, i = None, [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "-o":
+            i += 1
+            if i >= len(argv):
+                sys.exit("zmd2html: -o needs a path")
+            out_path = argv[i]
+        elif a.startswith("-o") and len(a) > 2:
+            out_path = a[2:]
+        elif not a.startswith("-"):
+            args.append(a)
+        i += 1
+
+    if not args:
+        sys.exit(USAGE)
+    if not shutil.which("pandoc"):
+        sys.exit("zmd2html: pandoc not found (brew install pandoc)")
+    for t in args:
+        if not os.path.exists(t):
+            sys.exit(f"zmd2html: no such file: {t}")
+
+    try:
+        if tree:                                     # batch: FILE.html beside each .md
+            targets = sorted(p for root in args for p in gather_tree(root))
+            n = 0
+            for t in targets:
+                dst = t[:-3] + ".html"
+                if os.path.exists(dst) and not force:
+                    print(f"skip (exists): {os.path.relpath(dst, PHD)}", file=sys.stderr)
+                    continue
+                write_out(t, dst, selfcontained, do_crumbs)
+                n += 1
+            print(f"converted {n} file(s)", file=sys.stderr)
+        elif out_path:                               # single file -> chosen path
+            if len(args) != 1:
+                sys.exit("zmd2html: -o takes exactly one FILE.md")
+            if os.path.exists(out_path) and not force:
+                sys.exit(f"zmd2html: {out_path} exists (use --force)")
+            write_out(args[0], out_path, selfcontained, do_crumbs)
+        else:                                        # default: stdout (HTML only)
+            if len(args) != 1:
+                sys.exit("zmd2html: stdout mode takes one FILE.md; use -o or --tree for batch")
+            sys.stdout.write(render(args[0], selfcontained))
+    except RuntimeError as e:
+        sys.exit(f"zmd2html: {e}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

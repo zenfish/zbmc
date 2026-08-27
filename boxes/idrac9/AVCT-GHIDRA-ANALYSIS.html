@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avocent (&quot;avct&quot;) Binary RE — iDRAC9 + iDRAC6</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Avocent (&quot;avct&quot;) Binary RE — iDRAC9 + iDRAC6</h1>
+  </div>
+</div>
+
+<p>Ghidra 12.0_DEV headless (ARM EABI5). Targets, addresses, and string
+offsets below are all grounded in disassembly / <code>.rodata</code>
+dumps. Two binaries are stripped (<code>avct_util</code>,
+<code>avct_login</code>, <code>avcttm</code>); the iDRAC6
+<code>libavctAuth.so</code> ships with debug_info (not stripped).</p>
+<p>Sources:</p>
+<ul>
+<li>iDRAC9 rootfs:
+<code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs</code></li>
+<li>iDRAC6 appweb:
+<code>/Volumes/yyy/phd/bmc/dell/idrac6-appweb</code></li>
+</ul>
+<p>Decompiled artifacts saved under the session scratchpad
+<code>.../out/</code> (libnss_avct.so.2.0.0.c, avct_login.c,
+login_exec.c). Disassembly via
+<code>arm-linux-gnueabi-objdump</code>.</p>
+<hr />
+<h2 id="tldr--the-two-crown-findings">TL;DR — the two crown
+findings</h2>
+<ol type="1">
+<li><p><strong><code>libnss_avct.so.2.0.0</code> is the SSH
+restricted-shell mechanism, and the shell is FULLY HARDCODED.</strong>
+<code>_nss_avct_getpwnam_r</code> fabricates a passwd entry for
+<em>any</em> username with <code>pw_shell = "/usr/bin/rcdmShell"</code>.
+It reads <strong>no</strong> config and <strong>no</strong> AIM
+variable. <code>racuser</code> is NOT a special-cased account — it is
+the literal stamped into the <code>pw_gecos</code> field of every
+synthesized entry. The only gate is the <strong>calling program
+name</strong>: the entry is only synthesized when
+<code>__progname</code> is <code>sshd</code> or <code>avct_login</code>.
+The username <code>chassis_serial_port_user</code> is explicitly
+excluded (returns NOTFOUND).</p></li>
+<li><p><strong>The iDRAC6 <code>libavctAuth.so</code> is NOT the SSH
+CLP-vs-console selector.</strong> It is the <strong>appweb (HTTPS)
+authentication handler module</strong>
+(<code>AVCTAuthHandlerHandler</code>,
+<code>DataHandler::doLogin/doSCLogin/doSSOLogin/doTempLogin</code>, PAM
++ <code>AIMClient</code> + web sessions). There is <strong>no
+<code>sshuser</code>/<code>racuser</code> string and no shell-exec
+selector</strong> in it or anywhere else in the appweb dir. The
+<code>getVar("sshuser")→exec</code> backdoor mechanism the task expected
+is not in this file. Its only <code>system()</code> calls are in
+TLS-cert upload handlers (separate command-injection surface, noted
+below).</p></li>
+</ol>
+<hr />
+<h2 id="1-usrbinavct_util-idrac9-arm-stripped">1.
+<code>/usr/bin/avct_util</code> (iDRAC9, ARM,
+<strong>stripped</strong>)</h2>
+<p><code>/usr/local/bin/avct_util</code> is a symlink to
+<code>../../../usr/bin/avct_util</code> — same binary.</p>
+<p><strong>Purpose (plain English):</strong> a low-level hardware
+register / memory poke-and-peek debug CLI for the Nuvoton/Avocent "AESS"
+SoC. It opens the kernel memory driver <code>/dev/aess_memdrv</code> and
+reads/writes physical addresses, named register groups, GPIO, I2C, PWM
+and ADC blocks. <strong>It has nothing to do with users, passwords, or
+<code>avctpasswd</code></strong> — the prior assumption that
+<code>avct_util</code> provisions users or computes hashes is wrong.</p>
+<p><strong>Grounding (strings; binary is stripped so no symbol
+addresses):</strong></p>
+<ul>
+<li>Device: <code>/dev/aess_memdrv</code>; error paths
+<code>fail to {open,request,read,write,release} memory driver</code>.</li>
+<li>Subcommands: <code>read</code>/<code>write</code>
+(<code>read or write hardwar registers or memories</code>),
+<code>reg</code> (<code>access hardware registers or memories</code>,
+<code>-g group -n name</code>), <code>cal</code>
+(<code>calculate or convert</code>), <code>debug</code>
+(<code>set debug level</code>), <code>time</code>
+(<code>time a simple command or show current time, unit is second</code>),
+<code>help</code>.</li>
+<li>Read/write usage:
+<code>-r[b|w|l] [[-a] address [-c count] | -g group [-n name] [-v]]</code>
+and the matching <code>-w[b|w|l]</code> — byte / word / dword access at
+a physical <code>--address</code>.</li>
+<li>Register-group namespace: <code>i2c0</code>–<code>i2c15</code>,
+<code>i2csegctl</code>, <code>i2csegsel</code>,
+<code>gpio0</code>–<code>gpio7</code>,
+<code>pwm0</code>/<code>pwm1</code>,
+<code>Analog To Digital Converter</code> (ADC).</li>
+<li>No <code>passwd</code>, <code>/etc/</code>, <code>/mnt/</code>,
+<code>cv/</code>, <code>pbkdf</code>, <code>crypt</code>,
+<code>hmac</code>, <code>salt</code>, <code>kuid</code> strings exist in
+the binary (verified by <code>strings | grep -i</code>).</li>
+</ul>
+<p><strong>Limitation:</strong> stripped, so per-subcommand handler
+addresses aren't recoverable without manual function carving; the role
+is nonetheless unambiguous from the string table.</p>
+<hr />
+<h2
+id="2-usrliblibnss_avctso200-idrac9-arm-stripped-except-dynsym--key">2.
+<code>/usr/lib/libnss_avct.so.2.0.0</code> (iDRAC9, ARM, stripped except
+dynsym) — <strong>KEY</strong></h2>
+<p><strong>Purpose:</strong> an <code>nsswitch</code> backend
+(<code>passwd: ... avct</code>) whose sole job is to manufacture a
+synthetic <code>struct passwd</code> so that SSH (and the custom
+<code>avct_login</code>) sees every iDRAC user as a uid-1000 account
+whose login shell is the restricted RACADM shell
+<code>/usr/bin/rcdmShell</code>.</p>
+<p><strong>Key function:</strong>
+<code>_nss_avct_getpwnam_r @ 0x00010668</code> (file offset 0x668). It
+is the only real function; everything else is PLT/init glue.
+<code>FUN_00010598</code> is its bump-allocator string-copy helper
+(copies a C string into the NSS result buffer and stores the field
+ptr).</p>
+<p><strong><code>.rodata</code> string map (file offsets):</strong></p>
+<table>
+<thead>
+<tr>
+<th>addr</th>
+<th>string</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x0880</td>
+<td><code>chassis_serial_port_user</code></td>
+</tr>
+<tr>
+<td>0x089c</td>
+<td><code>sshd</code></td>
+</tr>
+<tr>
+<td>0x08a4</td>
+<td><code>avct_login</code></td>
+</tr>
+<tr>
+<td>0x08b0</td>
+<td><code>racuser</code></td>
+</tr>
+<tr>
+<td>0x08b8</td>
+<td><code>x</code></td>
+</tr>
+<tr>
+<td>0x08bc</td>
+<td><code>/tmp/</code></td>
+</tr>
+<tr>
+<td>0x08c4</td>
+<td><code>/usr/bin/rcdmShell</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reconstructed logic</strong> (from disassembly 0x668–0x83c;
+standard <code>getpwnam_r(name, pwd, buf, buflen, errnop)</code>
+signature):</p>
+<pre class="c"><code>nss_status _nss_avct_getpwnam_r(name, pwd, buf, buflen, errnop) {
+    if (strcmp(name, &quot;chassis_serial_port_user&quot;) == 0)   // 0x6a8
+        return NSS_STATUS_NOTFOUND;                       // serial-port user handled elsewhere
+
+    // __progname gate (0x6c0–0x838): only act for the SSH daemon or avct_login
+    if (strncmp(__progname, &quot;sshd&quot;, 4) != 0 &amp;&amp;            // 0x6dc
+        strcmp(__progname, &quot;avct_login&quot;) != 0) {          // 0x824
+        *errnop = ENOENT;                                 // 0x82c (status=2)
+        return NSS_STATUS_NOTFOUND;
+    }
+
+    if (buflen &lt; 2*strlen(name) + 36) {                   // 0x6f8
+        *errnop = ERANGE; return NSS_STATUS_TRYAGAIN;     // (-2)
+    }
+
+    pwd-&gt;pw_uid    = 1000;                                // 0x714, str [r4,#8]
+    pwd-&gt;pw_gid    = 500;                                 // 0x718, str [r4,#12]
+    pwd-&gt;pw_name   = name;                                // 0x734  -&gt; buf copy
+    pwd-&gt;pw_gecos  = &quot;racuser&quot;;                           // 0x74c  (str @0x8b0)
+    pwd-&gt;pw_passwd = &quot;x&quot;;                                 // 0x764  (str @0x8b8)
+    pwd-&gt;pw_dir    = &quot;/tmp/&quot;;                             // 0x77c  (str @0x8bc)
+    // stat(pw_dir); if it fails, truncate pw_dir[5]=0 (no-op for &quot;/tmp/&quot;)   0x7b4–0x7d0
+    pwd-&gt;pw_shell  = &quot;/usr/bin/rcdmShell&quot;;                // 0x7e0  (str @0x8c4)  &lt;&lt;&lt;&lt;
+    *errnop = 0;
+    return NSS_STATUS_SUCCESS;                            // 0x7e4 (r0=1)
+}</code></pre>
+<p><strong>Security-relevant takeaways:</strong></p>
+<ul>
+<li>The login shell is a <strong>compile-time constant</strong> —
+<code>/usr/bin/rcdmShell</code> — not read from any AIM/config var.
+There is no code path that yields any other shell. This is exactly why
+an SSH login lands in the restricted RACADM shell; bypass requires
+<code>authorized_keys command=</code> or an FSD root-shell (consistent
+with <code>reference_idrac9_ssh_shell_chain.md</code>).</li>
+<li><strong><code>racuser</code> is a red herring as an
+"account"</strong>: it is only ever written into <code>pw_gecos</code>
+(the comment field) of the synthesized record; no branch compares the
+<em>username</em> against <code>racuser</code>. Every username that
+arrives via <code>sshd</code>/<code>avct_login</code> gets uid 1000, gid
+500, home <code>/tmp/</code>, shell <code>rcdmShell</code>.</li>
+<li>uid 1000 / gid 500 are hardcoded constants (0x714/0x718).</li>
+</ul>
+<hr />
+<h2 id="3-usrbinavct_login-idrac9-arm-stripped">3.
+<code>/usr/bin/avct_login</code> (iDRAC9, ARM, stripped)</h2>
+<p><strong>Purpose:</strong> a drop-in <code>login(1)</code> replacement
+(<code>Usage: login [OPTION] [ username ]</code>, flags <code>-f</code>
+auto-login, <code>-s</code> service, <code>-u</code> user). It runs PAM
+(<code>pam_start</code>/<code>pam_authenticate</code>/
+<code>pam_acct_mgmt</code>/<code>pam_setcred</code>/<code>pam_open_session</code>),
+looks the user up with <code>getpwnam</code> (which routes through
+<code>libnss_avct</code> above), sets up the environment, then
+<code>execvp</code>s the user's <code>pw_shell</code>. It is the
+serial/console counterpart to <code>sshd</code> — and it is the second
+<code>__progname</code> that <code>libnss_avct</code> trusts.</p>
+<p><strong>Env-setup function (decompiled, avct_login.c
+~L1255–1290):</strong> treats <code>param_4</code> as the
+<code>struct passwd</code> (word array):
+<code>param_4[0]=pw_name</code>, <code>[2]=pw_uid</code>,
+<code>[5]=pw_dir</code>, <code>[6]=pw_shell</code>. It calls:</p>
+<ul>
+<li><code>setenv("USER", pw_name, 1)</code> / <code>LOGNAME</code> (USER
+@0x13318)</li>
+<li><code>setenv("HOME", pw_dir, 0)</code> (HOME @0x13324)</li>
+<li><code>if (pw_uid==0) PATH=/usr/local/sbin:...:/usr/sbin:/usr/bin else PATH=/usr/local/bin:/bin/:/usr/bin</code></li>
+<li><code>setenv("SHELL", pw_shell, 1)</code> ← <strong>SHELL =
+pw_shell</strong> (SHELL @0x1339c)</li>
+</ul>
+<p><strong>Exec function (disassembly around
+<code>execvp@plt</code>):</strong></p>
+<ul>
+<li><code>execvp</code> PLT @ <code>0x10f5c</code>; the single call site
+is <code>@0x115f4</code>.</li>
+<li>It branches on <code>strchr(pw_shell, ' ')</code>
+(<code>@0x1158c</code>):
+<ul>
+<li><strong>No-space (normal) path @0x118b0:</strong> find last
+<code>/</code> in <code>pw_shell</code>, build a login-style argv0 by
+prefixing <code>'-'</code> to the basename, then
+<code>execvp(pw_shell, { pw_shell, "-&lt;basename&gt;", NULL })</code>.
+For the synthesized record this is
+<code>execvp("/usr/bin/rcdmShell", {"/usr/bin/rcdmShell", "-rcdmShell", NULL})</code>.</li>
+<li><strong>Space path @0x115a0:</strong> wraps the command in a shell —
+<code>execvp("/bin/sh", {"/bin/sh", "-sh", "-c", "&lt;pw_shell string&gt;", NULL})</code>
+(<code>/bin/sh</code>@0x1360c, <code>-sh</code>@0x13614,
+<code>-c</code>@0x13618).</li>
+</ul></li>
+<li>On exec failure it logs <code>Fatal: Fail to invoke SHELL %s</code>
+(@0x1361e).</li>
+</ul>
+<p><strong>Takeaway:</strong> <code>avct_login</code> faithfully execs
+whatever <code>pw_shell</code> the NSS layer returns — it adds no shell
+of its own. The restriction is entirely upstream in
+<code>libnss_avct</code>. <code>/bin/sh</code> appears only in the
+space-wrapper branch (never reached for the plain
+<code>/usr/bin/rcdmShell</code>).</p>
+<hr />
+<h2 id="4-supporting-avocent-binaries-brief">4. Supporting Avocent
+binaries (brief)</h2>
+<h3 id="usrbinavcttm-arm-stripped"><code>/usr/bin/avcttm</code> (ARM,
+stripped)</h3>
+<p>Avocent <strong>Time-Management</strong> daemon/test tool. Imports
+<code>libtm.so.1</code> and the <code>aim_config_*</code> /
+<code>aim_event_occurred</code> / <code>aim_function_execute_DDS</code>
+API. Handles NTP config + sync (<code>event_tm_ntp_config</code>,
+<code>tm_ntp_sync_req</code>,
+<code>tm_ntp_{suspend,resume,immediate_sync}</code>,
+<code>tm_ntp_set/get_maxdist</code>, servers 1–3) and timezone
+(<code>tm_tz_set/get</code>, <code>tm_tz_support_cities_get</code>).
+Built-in <code>Usage:</code> exposes an
+<code>event</code>/<code>api</code> test harness. No auth/passwd
+role.</p>
+<h3
+id="usrliblibavctutillmso123"><code>/usr/lib/libavctUtilLM.so.1.2.3</code></h3>
+<p>Avocent <strong>License Manager</strong> library. Exports
+<code>LicenseItem</code> (<code>importLicense</code>,
+<code>exportLicense</code>, <code>replaceLicense</code>,
+<code>deleteLicense</code>,
+<code>getStatus/getType/getExpiration/ getEntitlementID/getFEB</code>,
+<code>isLicenseStatusActive</code>) and <code>LDSRItemList</code>.
+Manages iDRAC feature licenses ("LM" = License Manager). No
+auth/passwd/shell role.</p>
+<h3
+id="usrliblibavctv6so123"><code>/usr/lib/libavctv6.so.1.2.3</code></h3>
+<p>Avocent <strong>IPv6 + IPsec/IKE</strong> networking library. Exports
+<code>ParseIPV6Addr</code>, <code>INET6_addr_translate</code>,
+<code>add_v6_link_local</code>, and a large <code>avct_ike_*</code>
+get/set surface (authentication, encryption, dh_group, hash, pfs_mode,
+sa_lifetime, policy number/enable, remote prefix, key-exchange method).
+Reads/writes <code>/etc/sysconfig/network_config/ifcfgv6-eth0</code>,
+<code>ipsec_policy/</code>, <code>ipsec/psk.txt</code>,
+<code>racoon_*</code>, <code>/proc/net/if_inet6</code>,
+<code>/var/lib/dhcpv6/</code>. No auth/passwd role.</p>
+<hr />
+<h2 id="5-idrac6-libavctauthso-arm-not-stripped--has-debug_info">5.
+iDRAC6 <code>libavctAuth.so</code> (ARM, <strong>not stripped</strong> —
+has debug_info)</h2>
+<p><strong>Purpose:</strong> the <strong>appweb HTTP(S) authentication
+handler module</strong>, not an SSH shell selector. It is an MPR/appweb
+<code>MaModule</code>/<code>MaHandler</code>
+(<code>AVCTAuthHandlerModule</code>,
+<code>AVCTAuthHandlerHandler::{run,matchRequest,negotiate,doSSOLogin,writeAuthToSession}</code>)
+that authenticates <strong>web-UI / Redfish-era login requests</strong>
+and writes web sessions.</p>
+<p><strong>Key functions (symbol addrs):</strong></p>
+<ul>
+<li><code>DataHandler::doLogin(MaRequest*,char*) @0x20400</code></li>
+<li><code>DataHandler::doSCLogin(MaRequest*,char*) @0x21494</code>
+(smart-card login)</li>
+<li><code>DataHandler::doSSOLogin(MaRequest*,char*) @0x22660</code> /
+<code>AVCTAuthHandlerHandler::doSSOLogin @0x1a384</code></li>
+<li><code>DataHandler::doTempLogin(MaRequest*,char*) @0x23554</code></li>
+<li><code>DataHandler::writeAuthToSession(...PAMHelper&amp;) @0x24764</code></li>
+<li><code>AVCTAuthHandlerHandler::run(MaRequest*) @0x19010</code>,
+<code>matchRequest @0x18f64</code>, <code>negotiate @0x1b278</code></li>
+<li><code>AIMClient::{initialize@0x3d7fc, getProperty@0x3db9c/0x3dd18, setProperty, callFunction@0x3e0b8, notifyEvent@0x3e2d8}</code></li>
+<li><code>PAMHelper::{converse, getAIMSessionId@0x46998, instanceForAIMId@0x46e64}</code></li>
+<li>Globals <code>GUISESSIONTYPE @0x5afb4</code>,
+<code>VMCLISESSIONTYPE @0x5afb8</code> — it distinguishes <strong>web
+GUI</strong> vs <strong>VM-CLI</strong> <em>web</em> session types (this
+is the "console vs CLI" distinction, but at the appweb session layer —
+not a shell exec).</li>
+</ul>
+<p><strong>Auth flow (grounded by imports/strings):</strong> request
+vars via <code>MaRequest::getVar/setVar/ compareVar</code> → credentials
+checked through <code>PAMHelper::converse</code>
+(<code>pam_message</code>/<code>pam_response</code>/
+<code>pam_close_session</code>/<code>pam_end</code>) and
+<code>AIMClient::getProperty/callFunction</code> against the AIM object
+model → result written to the web session
+(<code>writeAuthToSession</code> / <code>writeAuthResponseXML</code>).
+No <code>getpwnam</code>, no <code>pw_shell</code>, no
+<code>execvp</code>.</p>
+<p><strong>No SSH backdoor here:</strong>
+<code>strings</code>/<code>nm</code> over <code>libavctAuth.so</code>
+<strong>and every other lib in the appweb dir</strong>
+(<code>libDataHandler.so</code>, <code>libWSManModule.so</code>,
+<code>appweb</code>, …) return <strong>zero</strong> matches for
+<code>sshuser</code>, <code>racuser</code>, <code>smclp</code>,
+<code>clpload</code>, or a <code>/bin/sh</code> shell-selector. Whatever
+does the iDRAC6 SSH CLP-vs-console decision lives in a different
+component (the SSH/SMASH-CLP launcher binary), not in this appweb
+extract.</p>
+<p><strong>Tangential finding — cert-upload <code>system()</code>
+shell-outs (command-injection surface):</strong>
+<code>system@plt @0x16460</code> is called only from TLS/credential
+upload handlers: <code>uploadUserCert @0x2d304</code>,
+<code>uploadKrbKeytab @0x2da98</code> (×2),
+<code>uploadADCert @0x2e60c</code>, <code>uploadKMSCert @0x2eb54</code>,
+<code>uploadKMCPKCSCert @0x2f2fc</code> (×2),
+<code>removeidrac_fw @0x2f934</code>,
+<code>FirmwareStartHandler::run @0x3993c</code>. These build shell
+command lines (cert post-processing) and are an injection-audit target —
+separate concern from the shell-selector task.</p>
+<hr />
+<h2
+id="6-where-avctpasswd-actually-lives-neither-avct_util-nor-libnss_avct-touch-it">6.
+Where <code>avctpasswd</code> actually lives (neither avct_util nor
+libnss_avct touch it)</h2>
+<p>Confirmed by scanning the rootfs: <strong>no binary under
+<code>usr/{bin,lib,sbin}</code> computes or verifies
+<code>avctpasswd</code></strong> — only config does:</p>
+<ul>
+<li><code>usr/lib/tmpfiles.d/avctpass.conf</code>:
+<code>C /flash/data0/cv/avctpasswd - - - - /etc/avctpasswd</code> →
+<code>/etc/avctpasswd</code> is a copy of the credential-vault file
+<code>/flash/data0/cv/avctpasswd</code>.</li>
+<li><code>etc/init.d/credential-vault.sh:128–129</code>: moves
+<code>…/etc/avctpasswd</code> into the dm-crypt CV mountpoint,
+<code>chmod 640</code>.</li>
+</ul>
+<p>So the PBKDF2-SHA384/1000 (field 2) + universal Kuid/IPMIKey (field
+14) parsing is done by the CIAM / <code>pam_iiam_manager</code> stack
+against the CV-mounted file, exactly as documented in
+<code>reference_bmc_auth_architecture.md</code> /
+<code>reference_idrac9_factory_ipmikey.md</code> — <strong>not</strong>
+by any <code>avct_*</code> utility analyzed here.</p>
+<hr />
+<h2 id="tooling-notes--limitations">Tooling notes / limitations</h2>
+<ul>
+<li><code>avct_util</code>, <code>avct_login</code>, <code>avcttm</code>
+are stripped; function addresses for those are derived by carving
+(objdump) rather than symbol names. <code>libavctAuth.so</code> retains
+symbols.</li>
+<li>All string offsets for the stripped iDRAC9 ELFs are
+<strong>file</strong> offsets (Ghidra rebases the shared objects to
+0x10000; subtract 0x10000 to match the objdump column).</li>
+</ul>
+</div>
+</body>
+</html>

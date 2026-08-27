@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC10 — STATE &amp; RESUME NOTES</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtual iDRAC10 — STATE &amp; RESUME NOTES</h1>
+  </div>
+</div>
+
+<blockquote>
+<p><strong>Historical investigation record (2026-06-29).</strong> Phase
+status below is not current. The supported package now cold-boots to
+accepted ICMP, SSH, retained IPMI, and a static Redfish ServiceRoot in
+7m37s on the reference host; it has no vendor Web-UI. Use the README and
+<code>./tools/zbmc idrac10 status -v</code>.</p>
+</blockquote>
+<p><strong>Updated:</strong> 2026-06-29. Read this first.</p>
+<h2 id="what-this-is">What this is</h2>
+<p>Dell iDRAC10 (NPCM845 / AArch64) running under QEMU on this Mac,
+booting Dell's real firmware
+(<code>~/phd/bmc/dell/idrac10-yp95x-dup/</code>, YP95X 1.30.10.50).
+Companion to the completed iDRAC9 virtual project
+(<code>../idrac9-virtual/</code>).</p>
+<h2 id="current-status">CURRENT STATUS</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Goal</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 1</td>
+<td>Boot to console shell</td>
+<td><strong>DONE</strong> (commit 9b40aa92b)</td>
+</tr>
+<tr>
+<td>Phase 2</td>
+<td>Apache HTTPS + Redfish surface</td>
+<td><strong>DONE</strong> (2026-06-29)</td>
+</tr>
+<tr>
+<td>Phase 3</td>
+<td>Redfish /redfish/v1/ HTTP 200 JSON</td>
+<td><strong>DONE</strong> (2026-06-29)</td>
+</tr>
+<tr>
+<td>Phase 4</td>
+<td>iDRAC10 service mesh / attack surface</td>
+<td>not started</td>
+</tr>
+<tr>
+<td>Phase 5</td>
+<td>IPMI/RAKP auth</td>
+<td>not started</td>
+</tr>
+</tbody>
+</table>
+<h2 id="how-to-run-phase-3--redfish-http-200">HOW TO RUN (Phase 3 —
+Redfish HTTP 200)</h2>
+<pre class="bash"><code>cd ~/phd/bmc/dell/idrac10-virtual
+./run-p3-redfish.sh      # ~5-6min; boots + Apache + static Redfish JSON</code></pre>
+<p>Waits for:</p>
+<ol type="1">
+<li>stmmac ndo_open() ~60-180s kernel time (varies each run)</li>
+<li>crng init done (head -c 1 /dev/random blocks)</li>
+<li>Apache port 443 up</li>
+</ol>
+<p>Endpoints once up:</p>
+<ul>
+<li><code>https://localhost:8443/</code> → 403 Forbidden</li>
+<li><code>https://localhost:8443/redfish/v1/</code> → <strong>200 OK +
+ServiceRoot JSON</strong></li>
+<li><code>https://localhost:8443/redfish/</code> → <strong>200 OK +
+<code>{"v1":"/redfish/v1/"}</code></strong></li>
+</ul>
+<h2 id="phase-1-run-interactively">Phase 1 (run interactively)</h2>
+<pre class="bash"><code>./run-p1-shell.sh          # starts QEMU unix socket + shell
+./connect-p1.sh            # socat to /tmp/idrac10.sock</code></pre>
+<h2
+id="guest-side-scripts-served-from-tmpidrac10-serve-via-http">GUEST-SIDE
+SCRIPTS (served from /tmp/idrac10-serve/ via HTTP)</h2>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>setup-apache.sh</code></td>
+<td>Copies Apache config, patches httpd.conf, writes TLS cert/key</td>
+</tr>
+<tr>
+<td><code>boot-apache-guest.sh</code></td>
+<td>Full bring-up: setup → crng wait → Apache start → port poll</td>
+</tr>
+<tr>
+<td><code>diag-apache.sh</code></td>
+<td>Diagnostic run: SELinux/entropy/cert/ErrorLog checks</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-technical-facts">KEY TECHNICAL FACTS</h2>
+<ul>
+<li><strong>stmmac delay</strong>: <code>ip link set eth0 up</code>
+blocks 60–180s (ndo_open() MDIO scan in QEMU)</li>
+<li><strong>crng timing</strong>: <code>crng init done</code> fires at
+~150–320s kernel time (interrupt jitter-based)</li>
+<li><strong>entropy fix</strong>:
+<code>head -c 1 /dev/random &gt; /dev/null</code> blocks until CSPRNG
+ready (Linux 5.6+)</li>
+<li><strong>python3 absent</strong>: iDRAC10 busybox rootfs has no
+python3 binary</li>
+<li><strong>ErrorLog path</strong>:
+<code>/var/log/apache2/error_log</code> → writable via squashfs
+<code>/var/log → /var/volatile/log</code></li>
+<li><strong>cgid_module sed</strong>: must be anchored
+<code>/^LoadModule cgid_module /d</code>; unanchored also deletes
+<code>&lt;IfModule&gt;</code> block</li>
+<li><strong>AVCT_VCONSOLE_PORT</strong>: <code>Define</code> must be at
+httpd.conf LINE 1 (prepend, not append)</li>
+<li><strong>TLS cert</strong>: self-signed RSA-2048, SAN=IP:127.0.0.1,
+CN=idrac10-virtual; AH01906/AH01909 warnings harmless</li>
+<li><strong>Port 443 binding</strong>: tcp6 socket
+<code>::0:01BB</code>; grep BOTH /proc/net/tcp and /proc/net/tcp6</li>
+<li><strong>Redfish static mock</strong>:
+<code>minimal-redfish.conf</code> uses <code>AliasMatch</code> to serve
+<code>/tmp/rf_root.json</code> → skips telemetryservice/fcgirds
+entirely</li>
+<li><strong>telemetryservice</strong>:
+<code>com.dell.iDRAC.metric-engine</code> flatpak (22MB AArch64, 9+
+Dell-specific <code>.so</code> deps including
+<code>libdelldbusclients</code>); can't start without D-Bus and Dell
+services</li>
+<li><strong>expect exit</strong>: MUST add <code>exit 0</code> inside
+APACHE_READY match block or expect hangs waiting for socat EOF</li>
+</ul>
+<h2 id="key-differences-from-idrac9">KEY DIFFERENCES FROM iDRAC9</h2>
+<ul>
+<li><strong>Machine</strong>:
+<code>qemu-system-aarch64 -M npcm845-evb</code> (64-bit AArch64 NPCM845)
+vs iDRAC9's <code>qemu-system-arm -M npcm750-evb</code> (32-bit ARMv7
+NPCM750)</li>
+<li><strong>Kernel</strong>: Linux 6.12.40 (from md.itb Image 1, gzip
+AArch64, 9.3MB compressed)</li>
+<li><strong>Fleet secrets identical</strong>: calvin / 915F32F4…IPMIKey
+/ 00d078…CredVault AES</li>
+</ul>
+<h2 id="firmware-files">FIRMWARE FILES</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw DUP</td>
+<td><code>~/phd/bmc/dell/idrac10-yp95x-dup/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.BIN</code></td>
+</tr>
+<tr>
+<td>Extraction</td>
+<td><code>...YP95X...A00.unpacked/</code></td>
+</tr>
+<tr>
+<td>md.itb (kernel+DTB)</td>
+<td><code>fw-fit-blobs/md.itb</code></td>
+</tr>
+<tr>
+<td>rootfs.squashfs</td>
+<td><code>fw-filesystems/rootfs.squashfs</code> (LZO, 253MB)</td>
+</tr>
+<tr>
+<td>Extracted rootfs</td>
+<td><code>rootfs-extracted/</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="oem-ipmi-command-re--separate-track-updated-2026-07-05">OEM IPMI
+COMMAND RE — separate track (updated 2026-07-05)</h1>
+<p>Static + per-command reverse-engineering of Dell OEM IPMI handlers.
+Distinct from the boot/virtualization phases above; uses the extracted
+rootfs <code>.so</code> libs, no live box needed.</p>
+<h2
+id="where-things-are-was-missing--the-reason-a-cold-restart-got-lost">WHERE
+THINGS ARE (was missing — the reason a cold restart got lost)</h2>
+<ul>
+<li><strong>ALL tmp/scratch:</strong>
+<code>/Volumes/yyy/phd/tmp/idrac10-virtual/</code> (NOT
+<code>/tmp</code>, NOT in-repo)</li>
+<li><strong>OEM per-command output:</strong>
+<code>/Volumes/yyy/phd/tmp/idrac10-virtual/oem-re/</code>
+<ul>
+<li><code>docs/*.json</code> — 30 per-lib batch files, schema
+<code>list[{name,netfn,cmd,subcmd,priv,purpose,request,response,...}]</code></li>
+<li><code>decomp/&lt;lib&gt;/</code> — EMPTY (decompiled .c never
+persisted; re-run Ghidra if needed)</li>
+</ul></li>
+<li><strong>Committed (in repo):</strong>
+<code>idrac10-dispatch-tables.md</code>,
+<code>idrac9-vs-idrac10-ipmi-diff.html</code>,
+<code>dump_dispatch_tables_idrac10.py</code>,
+<code>tasks/todo-idrac10-cmds.md</code></li>
+<li><strong>Workflow script (resumable):</strong>
+<code>~/.claude/projects/-Volumes-yyy-phd-bmc-dell-idrac10-virtual/d815fdeb-.../workflows/scripts/idrac10-oem-cmd-re-wf_d2eb2cf5-5e6.js</code></li>
+</ul>
+<h2 id="status">STATUS</h2>
+<p>Committed (5fd37640b, 528bd6f8b): static map <strong>429
+tuples</strong> (&gt;iDRAC9's 293); zipmi
+<code>load_vendor("idrac10")</code> 383 entries; iDRAC9↔︎10 diff HTML.
+Live dynamic sweep DONE 2026-07-08 (commit 1a062b802) — earlier "BLOCKED
+on D-Bus" verdict was WRONG (asserted, not measured). Fix: probe each
+cmd with EMPTY data — the handler rejects at request-length validation
+(CC 0xc7) BEFORE it ever calls the D-Bus backend, so dispatch is
+confirmed without the hang. <code>re-tools/live_oem_sweep.py</code>
+probes all determined netfn/cmd (skips destructive names), classifies
+CC, appends resumable JSONL; <code>merge_live.py</code> folds a SEPARATE
+<code>live</code> axis into the catalog (never overwrites static
+<code>confidence</code>). RESULT idrac10: <strong>342/383 (89%)
+confirmed real</strong> (238 dispatched + 64 Dell-CC + 40 data), 17
+gated, 24 absent, ZERO timeouts. idrac9 (10.0.9.9): <strong>214/223
+(95%)</strong> (commit 1132a5555). Raw evidence:
+idrac{9,10}-live-sweep-results.jsonl. Live badges in
+idrac{9,10}-oem-reference.html (gen_reference.py). DESTRUCTIVE PASS also
+DONE (commit f038a7f9e): all 60 idrac10 + 53 idrac9 destructive-named
+cmds probed with empty data + per-cmd liveness check (DESTRUCTIVE=1 env)
+— box NEVER died, 0 executed-fatal, every one rejects empty data at
+request-validation. FULL COVERAGE: idrac10 402/443 real (91%), idrac9
+267/276 (97%). Nothing left live-unverified except 3 undetermined-netfn
+stubs.</p>
+<p>Deep per-command workflow wf_d2eb2cf5-5e6 produced 30
+<code>docs/*.json</code> batches (<strong>358 entries, 9 libs</strong>:
+liboemcmds 106, libmisccmd 89, libmaser 66, libdcmi 60, libmodular 22,
+libosa 11, + backplane/kcspassthru/serialcmds) but DIED before
+Synthesize. → Being closed 2026-07-05: merge →
+<code>idrac10-commands.json</code> +
+<code>idrac10-ipmi-commands.html</code>, move to repo, commit.</p>
+<h2
+id="4-phase-program-in-flight-2026-07-05-user-directed-workflow-driven">4-PHASE
+PROGRAM IN FLIGHT (2026-07-05, user-directed, workflow-driven)</h2>
+<ol type="1">
+<li><strong>Close idrac10 OEM gap</strong> — workflow
+<code>wv61kf1ph</code> DONE (decompile all 4 libs ok). Gap docs at
+<code>docs/&lt;lib&gt;.so.9.9.9-gap.json</code>: libmisccmd 9,
+libmodular 30, liboemcmds 19 (all verified); <strong>libmaser
+65</strong> (5 dispatcher trees expanded —
+DellFactory/vFlash/BackupRestore/SupportAssist/ RemoteEnablement)
+documented, verify was cut by session-limit → RE-VERIFY running as
+standalone agent <code>a9780c925a3fa54eb</code>. NOTE: gap files are
+<code>{lib,commands:[...]}</code> wrappers (not bare lists);
+<code>synthesize.py</code> patched to normalize both + sanitize polluted
+subcmd. Verify caught many inBandOnly mislabels + fabricated byte
+layouts (adversarial pass earned its keep). ON libmaser-verify DONE:
+re-run <code>synthesize.py</code> → regen idrac10-commands.json (~481
+cmds) + HTML → commit. Phase-3 idrac9 workflow already authored:
+<code>tmp/idrac9-firmware/oem-re/idrac9-oem-re-wf.js</code>. → PHASE 1
+COMMITTED 2026-07-05 (commit 46aedd90e): idrac10-commands.json =
+<strong>447 cmds</strong>, HTML regenerated.</li>
+<li><strong>zipmi oem idrac10 + dox</strong> — RUNNING: background agent
+<code>a4648c87ceb61bb4c</code>. Generates
+<code>zipmi/scapy_ipmi/oem/idrac10_commands_generated.py</code> (447-cmd
+catalog) + parser <code>parsers/idrac10_commands_json.py</code> + CLI
+<code>oem idrac10</code> doc-lookup + test; commits in zipmi repo
+(/Volumes/xxx/src/me/git/zipmi). Mirrors idrac9_generated.py
+pattern.</li>
+<li><strong>idrac9 fine-tooth deep RE</strong> — workflow
+<code>wipe69gxv</code> DONE (2 casualties: decompile:liboemcmds
+API-policy false-positive, document:liboemcmds-1 timeout — neither lost
+output). Synthesized: <strong>idrac9-commands.json = 249 cmds</strong>
+(liboemcmds 243, libmaser 1, libipmicmdtableapi 5), 0 dups, 162
+inBandOnly. liboemcmds-1 batch (49:
+vFlash/SupportAssist/ToolSet/POSTMASER) skipped verify → RE-VERIFY
+running as agent <code>a9589b0d1f94ada0c</code>. ON verify DONE: re-run
+idrac9 synthesize.py → commit idrac9-commands.json +
+idrac9-ipmi-commands.html. (2a/4a: wire into zipmi = task #5.) → idrac9
+COMMITTED honest 2026-07-05 (a8c2880ca): 249 cmds, but 48 (batch
+liboemcmds-1) were FABRICATED by the timed-out agent (bodies live in
+libvfl/libvflash/libsupportassist, never imported) → verify reset them
+to undetermined. FIX RUNNING: workflow <code>w15lm97jr</code> / run
+<code>wf_5fed5dd7-0bc</code>, script
+<code>tmp/idrac9-firmware/oem-re/fix-batch1-wf.js</code> — imports the
+delegate libs, re-decompiles 9 dispatchers, re-documents to
+<code>docs-fix/{A,B}.json</code>, verifies. ON FIX DONE: merge
+docs-fix/A+B (+ keep body-verified CmdOEMSetMASERAccessState) into
+docs/liboemcmds.so.9.9.9-1.json → re-run idrac9 synthesize.py → commit
+upgrade → then Phase 4.</li>
+<li><strong>9↔︎10 diff</strong> — generator authored+syntax-clean:
+<code>tmp/idrac9-firmware/oem-re/gen_diff.py</code> (matches by handler
+name; buckets changed/added/removed; OEM-namespace filter on added). Run
+AFTER the fix so the 48 carry real inBandOnly/req/resp. Output
+idrac9-vs-idrac10-oem-diff.html. PREP facts: 211 entries in
+<code>idrac9-firmware/idrac9_runtime_dispatch.json</code>
+(netfn,cmd→symbol/priv/lib); 58 top-level Dell/OEM (liboemcmds 53) +
+dispatcher expansion; libs
+<code>idrac9-firmware/extracted/rootfs/usr/lib/ipmi/</code> (.so.9.9.9,
+SAME names as idrac10 → idrac10 docs are the template);
+<code>arm-linux-gnueabi-objdump</code> present (32-bit). Clone
+gap-close-wf.js pattern, 32-bit ARM, output idrac9-commands.json +
+HTML.</li>
+<li><strong>9↔︎10 per-command diff</strong> — after (1)+(3). Supersedes
+dispatch-tuple-only diff.</li>
+</ol>
+<h2
+id="-anti-fabrication-2026-07-05--the-llm-re-pipeline-fabricated-3-all-caught">★
+ANTI-FABRICATION (2026-07-05) — the LLM RE pipeline fabricated 3×, all
+caught</h2>
+<p>The multi-agent document+verify pipeline invented byte layouts when
+decompile failed/timed out (48-entry liboemcmds-1 batch;
+DellCmdRIPSControl — LLM verifier MISSED that one). Guard now permanent:
+<code>bmc/dell/re-tools/provenance_check.py</code> grounds every cited
+symbol against the decomp .c corpus AND every .so's dynsym; a symbol in
+neither = fabrication. Wired as a HARD GATE at the end of both
+synthesize scripts (exit 1 blocks build). <code>--selftest</code> proves
+teeth. All 4 gens' catalogs pass; <code>undetermined</code> beats
+invented. Committed 1f26007a4, 69fe30c94. NEXT (task #6): per-entry
+<code>source</code> field (exact .c file+line) → exact provenance,
+click-to-verify. Needs re-running document agents (cost) —
+user-scheduled.</p>
+<h2 id="still-todo-beyond-the-4-phases">STILL TODO (beyond the 4
+phases)</h2>
+<ul>
+<li>Task #6: per-entry source-provenance field (bulletproof the gate;
+heavy re-RE)</li>
+<li>Unified 6↔︎9↔︎10 cross-gen doc; link from bmc/dell index</li>
+</ul>
+<h2 id="security-notable-oem-commands">SECURITY-NOTABLE OEM
+commands</h2>
+<ul>
+<li><code>DellCmdGetBootstrapCredentials</code> /
+<code>DellCmdGetMgrCertFingerprint</code> (netfn 0x2c) — bootstrap creds
++ cert fp over KCS</li>
+<li><code>DellCPLDAccessStatus</code> (0x30/0xbc) — arb CPLD reg read;
+op=3 leaks uninitialized buffer</li>
+<li><code>DellRollbackFW</code> (0x30/0xbe) — no-validation FW
+downgrade</li>
+<li><code>libkcspassthru</code> — KCS→racadm shell bridge
+(RACADM_ACCESS=kcspt)</li>
+</ul>
+</div>
+</body>
+</html>

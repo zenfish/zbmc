@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reproduce the virtual X14 BMC — firmware → working box</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Reproduce the virtual X14 BMC — firmware → working box</h1>
+  </div>
+</div>
+
+<blockquote>
+<p><strong>Historical reconstruction notes; not a complete current
+recipe.</strong> The cited <code>x14.dts</code>, <code>mkgpt.py</code>,
+and patched init source are not in this repository. The supported build
+downloads hash-pinned derived artifacts with
+<code>./build.sh supermicro-x14</code>, then cold-starts with
+<code>sudo ./tools/zbmc supermicro-x14 start</code>. Current acceptance
+is ICMP, SSH, IPMI, Redfish, and Web-UI. Preserve the steps below as
+investigation provenance, not a fresh-clone promise.</p>
+</blockquote>
+<p>Historical clean-room reconstruction of the Supermicro X14 virtual
+BMC (OpenBMC / AST2600) under QEMU, with external SSH shell + IPMI +
+Redfish. Several reconstruction inputs named below are absent; use the
+hash-pinned derived bundle for the supported path.</p>
+<h2 id="0-prereqs">0. Prereqs</h2>
+<ul>
+<li>x86_64 Linux. Use the exact patched <code>qemu-system-arm</code>
+pinned in <code>zbmc.box</code>.</li>
+<li><code>dumpimage</code> (u-boot-tools), <code>unsquashfs</code>
+(squashfs-tools), <code>mke2fs</code>, <code>xz</code>,
+<code>cpio</code>, <code>python3</code>.</li>
+<li><code>ipmitool</code>, <code>sshpass</code>, <code>socat</code>,
+<code>curl</code> to drive it.</li>
+</ul>
+<h2 id="1-get-the-firmware-you-supply-this">1. Get the firmware (you
+supply this)</h2>
+<p>Supermicro X14 BMC image, exact version this was built against:</p>
+<pre><code>BMC_X14AST2600-ROT-E601MS_20260306_01.01.06.07_STDsp.bin   (128 MB raw AST2600 flash)</code></pre>
+<p>From Supermicro's site (MBD-X14SBSC BMC firmware) or your own dump.
+Sanity:</p>
+<pre><code>xxd -l16 fw.bin | grep &#39;1f00 00ea&#39;       # ARM boot vector = raw AST2600 flash
+strings -n8 fw.bin | grep arm-openbmc    # Phosphor OpenBMC marker</code></pre>
+<h2 id="2-carve-kernel--dtb--initramfs-fit--flash-0x330000">2. Carve
+kernel + dtb + initramfs (FIT @ flash 0x330000)</h2>
+<pre><code>F=fw.bin
+dd if=$F of=x14-ce0-64m.img bs=1m count=64                    # active CE0 image (u-boot+kernel+rofs)
+dd if=$F bs=4096 skip=$((0x330000/4096)) count=2560 of=k.bin  # the FIT
+dumpimage -T flat_dt -p 0 -o kernel.bin  k.bin               # kernel zImage
+dumpimage -T flat_dt -p 1 -o x14.dtb     k.bin               # x14-ast2600-rot dtb
+dumpimage -T flat_dt -p 2 -o initramfs.bin k.bin             # obmc-phosphor-initramfs</code></pre>
+<p>NC-SI wedge fix — build <code>x14-noncsi.dtb</code> from the
+committed decompiled source <code>x14.dts</code>: disable the sideband
+NC-SI NICs so nothing hangs probing them, then recompile.</p>
+<pre><code># in x14.dts, set status=&quot;disabled&quot; on the eth1/eth2 nodes (1e690000 / 1e670000), then:
+dtc -I dts -O dtb -o x14-noncsi.dtb x14.dts</code></pre>
+<p>(<code>x14.dts</code> is <code>dtc -I dtb -O dts</code> of the carved
+<code>x14.dtb</code>; it's in this repo, so the dtb is rebuildable.)</p>
+<h2 id="3-extract-the-rootfs-squashfs--flash-0x00d40000">3. Extract the
+rootfs (squashfs @ flash 0x00D40000)</h2>
+<pre><code>dd if=$F of=rootfs.sqsh bs=4096 skip=$((0x00D40000/4096)) count=$((55*1024*1024/4096))
+unsquashfs -d rootfs rootfs.sqsh</code></pre>
+<p>(Full teardown + the SAA 252-command analysis:
+<code>bmc/supermicro/x14sbsc/teardown/extract.sh</code> +
+<code>X14-*-TEARDOWN.html</code>.)</p>
+<h2 id="4-build-the-emmc-image-rootfs-lives-here-not-the-nor-flash">4.
+Build the eMMC image (rootfs lives here, not the NOR flash)</h2>
+<p>Init mounts rootfs from <code>mmcblk0p9</code>. Build a 256 MB GPT:
+p9 = rofs squashfs, p17 = rwfs ext4, p8 = env.</p>
+<pre><code>python3 mkgpt.py emmc.img            # writes the GPT (both headers share one DISK_GUID)
+dd if=rootfs.sqsh of=emmc.img seek=&lt;p9-start&gt; conv=notrunc
+mke2fs -F -t ext4 ... emmc.img       # (p17 rwfs) — see mkgpt.py for the exact partition map</code></pre>
+<h2 id="5-patch-the-initramfs-init--the-svc-bringup--all-fixes">5. Patch
+the initramfs init → the SVC bringup + all fixes</h2>
+<p>The patched init (<code>initramfs-x/init</code>) adds three cmdline
+tokens and a scripted daemon bringup (no systemd). Take the extracted
+initramfs, replace its <code>init</code> with this repo's
+<code>initramfs-x/init</code>, repack:</p>
+<pre><code>cd initramfs-x &amp;&amp; find . | sort | cpio -o -H newc -R 0:0 | xz --check=crc32 -c &gt; ../initramfs-patched.bin</code></pre>
+<p><code>--check=crc32</code> is mandatory (kernel xz decompressor).
+Tokens the init honors:</p>
+<ul>
+<li><code>qemu-x14-ramroot</code> — tmpfs RAM-overlay switch_root
+(always).</li>
+<li><code>qemu-x14-svc</code> — run <code>svc-bringup.sh</code> (the
+daemon stack) then drop to a root shell. <strong>← use
+this.</strong></li>
+<li><code>qemu-x14-shell</code> — exec /bin/sh as PID1 (manual bringup /
+debugging).</li>
+</ul>
+<h3
+id="the-bringup-fixes-baked-into-init-each-was-red--see-snapshotsmd--memory">The
+bringup fixes baked into init (each was RE'd — see SNAPSHOTS.md /
+memory)</h3>
+<ol type="1">
+<li><strong>Redfish (bmcweb):</strong>
+<code>mkdir -p /var/volatile/log/redfish</code> <strong>before
+bmcweb</strong> — bmcweb <code>main()</code> inotify-watches
+<code>/var/log</code>; missing dir ⇒ <code>exit(255)</code>.</li>
+<li><strong>IPMI RAKP:</strong>
+<code>mapperx --service-namespaces="$MAPPER_SERVICES"</code> (source
+<code>/etc/default/obmc/mapper</code>). Empty whitelist ⇒ mapper
+introspects nothing ⇒ ipmid wipes <code>ipmi_user.json</code> ⇒ RAKP
+"unauthorized name".</li>
+<li><strong>SSH real shell:</strong> <code>/etc/smash.conf</code>
+<code>SMASH_ENABLE=0</code> (vendor toggle: SMASH-CLP shell →
+<code>/bin/sh</code>)
+<ul>
+<li><code>mkdir -p /dev/pts</code> <strong>before</strong>
+<code>mount -t devpts</code> (else no ptys → interactive ssh "PTY alloc
+failed")</li>
+<li><code>sshd -D -p 22</code>.</li>
+</ul></li>
+</ol>
+<h2 id="6-cold-boot">6. Cold boot</h2>
+<pre><code>qemu-system-arm -m 1024 -M ast2600-evb -display none -no-reboot \
+  -serial unix:/tmp/x14.sock,server,nowait -qmp unix:/tmp/x14-qmp.sock,server,nowait \
+  -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
+  -drive file=x14-ce0-64m.img,format=raw,if=mtd -drive file=emmc.img,format=raw,if=sd,index=2 \
+  -net nic -net user,hostfwd=tcp:10.0.8.14:22-:22,hostfwd=tcp:10.0.8.14:443-:443,hostfwd=udp:10.0.8.14:623-:623 \
+  -append &quot;console=ttyS4,115200n8 root=/dev/ram rw maxcpus=1 \
+           initcall_blacklist=ast2600_spitee_init,optee_driver_init qemu-x14-ramroot qemu-x14-svc loglevel=4&quot;</code></pre>
+<p>(<code>maxcpus=1</code> — CPU1 bringup faults;
+<code>initcall_blacklist</code> skips the secure-world init that has no
+TrustZone/OP-TEE/CPLD model under QEMU. <code>10.0.8.14</code> = a
+<code>lo0</code> alias.) <code>shell-x14.sh</code> wraps this. The
+current accepted cold run reached all five checks in 3m31s on the
+four-core reference host. This whole boot skips the vendor SMC secure
+SPL/OP-TEE chain (direct-kernel).</p>
+<h2 id="7-snapshot-once--restore-in-10-s-forever-after">7. Snapshot once
+→ restore in ~10 s forever after</h2>
+<pre><code>./snapshot-x14.sh svc-snap-full-working.gz     # QMP migrate exec:gzip (pauses the VM)
+./restore-svc-x14.sh svc-snap-full-working.gz  # qemu -incoming exec:gunzip — network survives (UDP+TCP)</code></pre>
+<p>Snapshots are gitignored (large binary) — you regenerate them; they
+are NOT needed to reproduce.</p>
+<h2 id="8-verify-from-the-host">8. Verify (from the host)</h2>
+<pre><code>ssh ADMIN@10.0.8.14                         # pw ADMIN -&gt; real /bin/sh ; sudo -i (pw ADMIN) -&gt; root
+   #   serial console always: sudo socat - UNIX-CONNECT:/tmp/x14.sock  -&gt; root PID1
+ipmitool -I lanplus -H 10.0.8.14 -U ADMIN -P ADMIN user list 1   # ADMIN = ADMINISTRATOR
+curl -sk -u ADMIN:ADMIN https://10.0.8.14/redfish/v1/Systems     # 200</code></pre>
+<p>Creds <code>ADMIN:ADMIN</code> + <code>root:0penBmc</code> were
+recovered from <code>/etc/ipmi_pass</code> with the fleet-static key
+<code>OPENBMC=</code> — see
+<code>bmc/supermicro/x14sbsc/teardown/openbmc-ipmi-pass.py</code>.</p>
+<h2 id="once-built-drive-it-from-the-framework">Once built, drive it
+from the framework</h2>
+<p><code>sudo ./tools/zbmc supermicro-x14 start</code>, then use
+<code>status</code>, <code>ssh</code>, <code>ipmi &lt;cmd&gt;</code>,
+<code>web</code>, or <code>snapshot</code>.</p>
+</div>
+</body>
+</html>

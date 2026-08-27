@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</h1>
+  </div>
+</div>
+
+<blockquote>
+<p><strong>Historical investigation record (2026-08).</strong> This
+document preserves the experiments and terminology used during bring-up;
+its per-box table is not the current release contract. Use the fleet
+table in <code>README.md</code>, each
+<code>boxes/&lt;name&gt;/zbmc.box</code>, and live
+<code>status -v</code> output for current behavior. In the 0.1.1
+release, iDRAC9 and iDRAC10 are cold-only, X14 accepts Redfish, and
+MegaRAC-HPE accepts retained IPMI only. Older results in the table below
+remain historical evidence.</p>
+</blockquote>
+<p>Cross-box patterns distilled from virtualizing nine BMCs across four
+vendors and three RTOS/Linux stacks (Dell iDRAC9/10, Supermicro X14, HPE
+Cray XD670, Advantech ASMB-787, NVIDIA GB200NVL, vanilla OpenBMC,
+Romulus, HPE iLO5). If you're trying to boot a vendor BMC image under an
+emulator, read this first — most of these cost hours to learn the hard
+way.</p>
+<p>Companion deep-dive on a single box end-to-end: <a
+href="from-firmware-to-bare-metal.html">from-firmware-to-bare-metal.md</a>.</p>
+<h2 id="1-per-box-table">1. Per-box table</h2>
+<table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Vendor / Stack</th>
+<th>SoC + QEMU machine</th>
+<th>Kernel</th>
+<th>Boot method</th>
+<th>Network last-mile</th>
+<th>Console</th>
+<th>Default creds</th>
+<th>Working ifaces</th>
+<th>#1 gotcha / lesson</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>idrac9</strong></td>
+<td>Dell iDRAC9 (custom Yocto + Dell mesh)</td>
+<td>Nuvoton <strong>NPCM750</strong> (Poleg, ARMv7 dual A9);
+<code>qemu-system-arm -M npcm750-evb</code></td>
+<td><code>5.4.80.idrac</code> (uImage)</td>
+<td>direct-kernel
+<code>-kernel uImage.patched -dtb p4.dtb -initrd initramfs.p4.xz</code>;
+rootfs squashfs on <strong>sd-bus</strong>
+(<code>-device sd-card,bus=sd-bus</code>→mmcblk0);
+<strong>cold</strong></td>
+<td><strong>usb-net</strong>
+(<code>-device usb-net,bus=usb-bus.0</code>) @10.0.2.15; on-chip
+GMAC/EMC link-up NULL-crashes kernel; hostfwd on real IP 10.0.9.9</td>
+<td>serial log file; ckpt boots add ttyS1 root shell</td>
+<td>ssh: vmkey only (Dell PAM rejects pw); IPMI: factory IPMIKey
+<code>-K</code>; web: root:calvin</td>
+<td>ssh, RAKP/IPMI, authed Redfish (all cold)</td>
+<td><code>CONFIG_CMDLINE_FORCE</code> — kernel <strong>ignores
+<code>-append</code></strong>; only lever is <code>init=/init</code> in
+the initramfs you own</td>
+</tr>
+<tr>
+<td><strong>idrac10</strong></td>
+<td>Dell iDRAC10 (Yocto + Dell mesh)</td>
+<td>Nuvoton <strong>NPCM845</strong> (aarch64);
+<code>qemu-system-aarch64 -M npcm845-evb</code></td>
+<td><code>6.12.40</code> AArch64 (4 binary patches)</td>
+<td>direct-kernel
+<code>-kernel Image.boot-patched -dtb qemu-gmac.dtb</code>; squashfs on
+sd-bus; <strong>warm-restore snapshot</strong> (~9s, self-healing
+×3)</td>
+<td>on-chip <strong>npcm-gmac</strong> (<code>model=npcm-gmac</code>) +
+slirp; <strong>migrates clean</strong> (unlike idrac9 usb-net); hostfwd
+10.0.9.10</td>
+<td><code>-serial unix:$SOCK</code> (16550 migrates fine)</td>
+<td>ssh root (baked into ckpt); IPMI factory IPMIKey <code>-K</code>;
+web root:calvin</td>
+<td>ssh, RAKP/IPMI, Redfish</td>
+<td>cold boot = <strong>dbus-broker socket-activate lottery</strong>
+(~2/3 hang); fix = don't cold-boot — QMP <code>migrate</code> warm
+snapshot + frozen <strong>qcow2 overlay</strong> (NOT
+<code>snapshot=on</code>)</td>
+</tr>
+<tr>
+<td><strong>x14</strong></td>
+<td>Supermicro X14 (Phosphor <strong>OpenBMC</strong>, AST2600-ROT)</td>
+<td>ASPEED <strong>AST2600</strong> (Cortex-A7);
+<code>qemu-system-arm -M ast2600-evb</code></td>
+<td><code>5.15</code> zImage (FIT @flash 0x330000)</td>
+<td>direct-kernel (FIT-carved); rootfs on <strong>eMMC</strong>
+(<code>-drive if=sd,index=2</code>→mmcblk0, GPT p9=rofs/p17=rwfs);
+<strong>warm-restore</strong></td>
+<td>slirp; <strong>eth1/eth2 NC-SI disabled in dtb</strong>
+(<code>x14-noncsi.dtb</code>); eth0 static 10.0.2.15; real IP
+10.0.8.14</td>
+<td><code>-serial unix:/tmp/x14.sock</code> + socat; QMP sock</td>
+<td>ADMIN:ADMIN (IPMI+Redfish+ssh); root:0penBmc</td>
+<td>Redfish (remote), ssh (real shell via <code>SMASH_ENABLE=0</code>),
+IPMI-LAN partial</td>
+<td>cold init-system <strong>spin-freezes under single TCG
+vCPU</strong>; escape via <strong><code>qemu-x14-svc</code></strong>
+scripted daemon bring-up (no systemd) + snapshot</td>
+</tr>
+<tr>
+<td><strong>cray</strong></td>
+<td>HPE Cray XD670 = <strong>AMI MegaRAC SP-X</strong></td>
+<td>ASPEED <strong>AST2600</strong> (armv7l);
+<code>qemu-system-arm -M ast2600-evb</code></td>
+<td><code>5.4.184-ami</code> (FIT kernel @0x37502CF)</td>
+<td>direct-kernel; <strong>rootfs squashfs as RAM disk</strong>
+(<code>root=/dev/ram0 ramdisk_size=131072</code>);
+<code>/conf</code>+<code>/bkupconf</code> from 64MB NOR
+<code>-drive if=mtd</code>; warm snapshot</td>
+<td>slirp DHCP → 10.0.2.15 (5.4.184 ftgmac negotiates qemu's NC-SI
+responder); <strong>IPMI-623 only reliable on 127.0.0.1</strong> (slirp
+mangles RMCP+ multi-UDP on alias)</td>
+<td>ttyS4 getty; fifo <code>echo cmd &gt; cin</code></td>
+<td>IPMI admin:superuser; console sysadmin:superuser</td>
+<td>IPMI 2.0 RMCP+, authed Redfish</td>
+<td><strong>IPMIMain SIGSEGV</strong> = per-interface thread faults on
+hw-less ifcs; fix = seed <code>/conf/BMC→BMC1/ast2600evb_ami</code>
+symlink + disable serial/sol/bt/smm/smbus/ipmb +
+<code>NM_IPMB_BUS=0xFF</code></td>
+</tr>
+<tr>
+<td><strong>asmb787</strong></td>
+<td>Advantech ASMB-787 = <strong>AMI MegaRAC SP-X 4.0</strong></td>
+<td>ASPEED <strong>AST2600</strong> (armv7l);
+<code>qemu-system-arm -M ast2600-evb</code></td>
+<td><code>5.4.11-ami</code></td>
+<td>direct-kernel <code>-initrd rootfs.sqfs -drive if=mtd</code>;
+mtdparts match <code>/etc/dupfstab</code> mtdblock numbers;
+maxcpus=1</td>
+<td><strong>BLOCKED — NC-SI wall.</strong> 5.4.11-ami ftgmac forces
+NC-SI + rejects qemu's responder
+(<code>packet type 0x82 returned -19</code>); usb-net hangs (AST2600
+EHCI high-speed only)</td>
+<td>ttyS4 via <code>zbmc asmb787 console '&lt;cmd&gt;'</code> fifo</td>
+<td>sysadmin:superuser (console)</td>
+<td><strong>console only</strong> (all IP rides dead eth0)</td>
+<td>NC-SI is <strong>kernel-version-dependent</strong>: cray's 5.4.184
+works, asmb787's 5.4.11 doesn't — qemu handles NC-SI internally, no
+external "fake NIC" can help</td>
+</tr>
+<tr>
+<td><strong>gb200</strong></td>
+<td>NVIDIA GB200NVL (<strong>OpenBMC</strong>, NVIDIA OEM)</td>
+<td>ASPEED <strong>AST2600</strong>;
+<code>qemu-system-arm -M gb200nvl-bmc</code> (custom machine)</td>
+<td>bitbake <code>MACHINE=gb200nvl-obmc</code></td>
+<td><strong>flash-mtd</strong> full image
+(<code>-drive if=mtd,snapshot=on</code>); cold</td>
+<td><code>-net nic -net user</code> slirp; real IP 10.0.7.20; net-ipmid
+comes up late</td>
+<td><code>-serial unix:$SOCK</code> (+<code>-serial null</code> for
+2nd)</td>
+<td>root:0penBmc</td>
+<td>ssh, IPMI-LAN (<strong>cipher-17 ONLY</strong>), Redfish, OEM 0x3C
+via busctl</td>
+<td>IPMI-LAN is <strong>cipher-17 only</strong>
+(<code>zipmi -C 17</code>); net-ipmid starts late so early probes look
+dead</td>
+</tr>
+<tr>
+<td><strong>evb-openbmc</strong></td>
+<td><strong>Vanilla upstream OpenBMC</strong> (Phosphor)</td>
+<td>ASPEED <strong>AST2600</strong>;
+<code>qemu-system-arm -M ast2600-evb</code></td>
+<td>Yocto <code>obmc-phosphor-image</code></td>
+<td><strong>flash-mtd</strong> full <code>.static.mtd</code>
+(<code>-drive if=mtd,snapshot=on</code>); cold ~60-90s</td>
+<td><code>-net nic -net user</code> slirp; real IP 10.0.7.10</td>
+<td>serial0 = ttyS4 (<code>-serial unix:$SOCK</code>; <strong>do NOT
+prepend <code>-serial null</code></strong>)</td>
+<td>root:0penBmc</td>
+<td>ssh, IPMI-LAN, Redfish (all green)</td>
+<td><strong>Manufacturer ID 0 = the vanilla signature</strong>;
+<code>-serial null</code> first sends console to /dev/null</td>
+</tr>
+<tr>
+<td><strong>romulus</strong></td>
+<td>Custom <strong>multi-OEM OpenBMC</strong>
+(OpenPOWER+Intel+Ampere+Facebook)</td>
+<td>ASPEED AST2500; <code>qemu-system-arm -M romulus-bmc</code></td>
+<td>Phosphor <code>.static.mtd</code></td>
+<td><strong>flash-mtd</strong>; loopback 2222/2443/2623
+(<code>do-q</code>)</td>
+<td>slirp, loopback high-ports</td>
+<td>serial</td>
+<td>(base OpenBMC)</td>
+<td>ssh, Redfish, IPMI</td>
+<td>base Get-Device-ID all-zero → looks vanilla; <strong>check
+<code>/usr/lib/ipmid-providers/</code> not the device-id</strong> —
+ipmid dlopens all 4 vendor OEM <code>.so</code> at once</td>
+</tr>
+<tr>
+<td><strong>ilo5</strong></td>
+<td>HPE iLO5 (<strong>Green Hills INTEGRITY</strong> RTOS, not
+Linux)</td>
+<td>HPE <strong>GXP</strong> ASIC (Cortex-A9); <strong>Renode</strong>
+(not QEMU)</td>
+<td>INTEGRITY 11.2.4 @0x41000000</td>
+<td>Renode <code>.repl</code> model; bl1→kernel; <strong>gate-ledger
+binary patches</strong></td>
+<td>n/a — no net yet</td>
+<td>UART via modeled <code>gxp_sysctl@0xC0000000</code></td>
+<td>n/a (pre-app-load)</td>
+<td>boots to healthy INTEGRITY idle</td>
+<td>it's an <strong>RTOS not Linux</strong>: gates are
+scheduler/DDR-PHY/boot-handoff faults; <strong>live-hook registers,
+don't over-theorize</strong></td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-cross-cutting-lessons">2. Cross-cutting lessons</h2>
+<h3 id="qemu-machine-selection-per-soc">QEMU machine selection per
+SoC</h3>
+<ul>
+<li><strong>Nuvoton NPCM750</strong> (iDRAC9, ARMv7 dual-A9) →
+<code>-M npcm750-evb</code> (<code>qemu-system-arm</code>).
+<strong>NPCM845</strong> (iDRAC10, aarch64) →
+<code>-M npcm845-evb</code> (<code>qemu-system-aarch64</code>). NPCM
+msgbox/KCS/LPC/PCI-mbox/OTP <strong>are modeled</strong>; genuinely
+absent: TPM, eMMC-RPMB secure store, PECI/I2C/ADC/PWM sensor data
+plane.</li>
+<li><strong>ASPEED AST2600</strong> (x14, cray, asmb787, gb200, evb) →
+<code>-M ast2600-evb</code> (or a custom machine like
+<code>gb200nvl-bmc</code>). Cortex-A7. <strong>AST2500</strong>
+(romulus) → <code>-M romulus-bmc</code>.</li>
+<li><strong>HPE GXP</strong> (iLO5, A9) has no QEMU machine — modeled
+from scratch in <strong>Renode</strong> (cribbed from zynq-7000:
+A9+GICv1+SCU+timers).</li>
+</ul>
+<h3 id="direct-kernel-vs-fit-dumpimage-vs-raw-flash-boot">Direct-kernel
+vs FIT (dumpimage) vs raw-flash boot</h3>
+<ul>
+<li><strong>Full-flash (<code>-drive if=mtd,snapshot=on</code>)</strong>
+is simplest, used by the <em>upstream/vendor OpenBMC</em> images that
+ship a bootable u-boot+kernel+rootfs in one blob: <strong>evb, gb200,
+romulus</strong>. <code>snapshot=on</code> keeps the built image
+pristine.</li>
+<li><strong>Direct-kernel</strong> is required whenever the vendor
+SPL→u-boot→(OP-TEE/ROT) chain can't complete under emulation. Carve
+kernel/dtb/initrd from a <strong>FIT</strong> with
+<code>dumpimage -T flat_dt -p N</code>. <code>-kernel</code>
+<strong>cannot unpack a FIT</strong> — <code>dumpimage -p0</code> to a
+raw Image first. AST2600 ROT boxes wall at OP-TEE (no TrustZone/CPLD
+model) → skip to Linux with
+<code>initcall_blacklist=ast2600_spitee_init,optee_driver_init</code>.</li>
+<li><strong>iLO5</strong> is neither: INTEGRITY loaded at a fixed link
+base (0x41000000) with a hand-written bl1 handoff and a gate-ledger of
+binary patches.</li>
+</ul>
+<h3 id="flash--mtd--rootfs-sizing-traps">Flash / MTD / rootfs sizing
+traps</h3>
+<ul>
+<li>iDRAC9 rootfs must be a <strong>block dev on the SDHCI
+sd-bus</strong> (<code>if=none</code> +
+<code>-device sd-card,bus=sd-bus</code>→mmcblk0); generic
+<code>if=sd</code>/<code>-sd</code> is rejected. <strong>SD size must be
+power-of-2</strong>: pad 177MiB squashfs to 256MiB.</li>
+<li>iDRAC10: <code>nuvoton,npcm845-sdhci</code> @0xf0842000 must be in
+the minimal dtb or kernel panics "Cannot open root device".</li>
+<li>x14 rootfs is on <strong>eMMC not NOR</strong>: attach as
+<code>-drive if=sd,index=2</code> (index 0/1 = disabled sdhci slots);
+GPT partition <strong>number must equal the entry index</strong>.</li>
+<li>MegaRAC (cray/asmb787): NOR image must be <strong>exactly
+64MB</strong> (FMC w25q512jv); <code>mtdparts=</code> names/offsets must
+match <code>mountall.sh</code>/<code>dupfstab</code> and each
+<code>@offset</code> must land on the real jffs2/squashfs magic. Rootfs
+squashfs runs as a <strong>RAM disk</strong>
+(<code>root=/dev/ram0 ramdisk_size=131072</code> — default ram0 too
+small).</li>
+</ul>
+<h3 id="console-uart-per-soc">Console UART per SoC</h3>
+<ul>
+<li><strong>NPCM750/845</strong>: Dell console = <code>ttyS0</code> =
+<code>serial@1000</code> = first <code>-serial</code>. <strong>Don't use
+<code>-nographic</code></strong> (steals serial-0 to stdio) — use
+<code>-display none -serial ...</code>.</li>
+<li><strong>AST2600</strong>: console = <strong>ttyS4</strong>. On
+flash-mtd OpenBMC boxes <code>-serial unix:$SOCK</code> is serial0/ttyS4
+— <strong>do not prepend <code>-serial null</code></strong> (evb lesson:
+silent boot).</li>
+<li><strong><code>CONFIG_CMDLINE_FORCE</code></strong> on both iDRAC
+kernels makes the compiled-in DTB bootargs override <code>-append</code>
+entirely. iDRAC10 needs 4 binary kernel patches (blank
+<code>quiet</code>, <code>loglevel=0</code>→<code>8</code>, inject
+<code>root=/dev/mmcblk0 ... init=/usr/bin/sh</code>). Shell is
+<code>/usr/bin/sh</code> NOT <code>/bin/sh</code> on iDRAC10.</li>
+</ul>
+<h3 id="maxcpus--cpu-bringup">maxcpus / CPU bringup</h3>
+<ul>
+<li><strong>AST2600-evb needs 2 CPUs but CPU1 bringup faults under
+TCG</strong> → cap kernel-side with
+<strong><code>maxcpus=1</code></strong> (can't <code>-smp 1</code> — the
+machine wants 2). <code>-accel tcg,thread=multi</code> → guest won't
+boot (CPU1 faults).</li>
+</ul>
+<h3
+id="cold-boot-flaky--warm-snapshot-qmp-migrate--the-biggest-reliability-lever">Cold-boot-flaky
+→ warm-snapshot (QMP migrate) — the biggest reliability lever</h3>
+<p>Used on <strong>idrac10, x14, cray</strong>. Cold boot is
+nondeterministic under single-vCPU TCG (dbus-broker socket-activate
+lottery ~2/3 hang; init spin-freeze; IPMIMain race). Pattern:</p>
+<ul>
+<li>Cold-boot <strong>retrying until a good box</strong> (services up +
+IPMI answers), then QMP <code>stop</code> +
+<code>migrate exec:gzip</code> → <code>state.gz</code>.</li>
+<li><strong>Disk must stay consistent with migrated RAM</strong>: use a
+<strong>persistent qcow2 overlay</strong>, NOT <code>snapshot=on</code>
+(iDRAC10: boot writes to /flash+/etc diverge on restore otherwise).</li>
+<li>Restore = <code>-incoming</code> + frozen overlay. iDRAC10
+self-heals: <strong>verify IPMI post-resume, re-restore up to
+3×</strong> (a migrated UDP socket sometimes resumes silent → port bound
+but guest never answers = timeout; fully-down = ECONNREFUSED).</li>
+<li><strong>What survives <code>-incoming</code> depends on the
+NIC</strong>: NPCM845 gmac + x14-svc AST2600 restore with <strong>live
+network</strong>. iDRAC9 <strong>usb-net does NOT re-enumerate</strong>
+post-<code>-incoming</code> (EHCI async URBs don't resume) → warm
+restore network-dead, must cold-boot.</li>
+<li>x14 must <strong>snapshot in <code>qemu-x14-svc</code> mode</strong>
+— a normal-boot snapshot was network-dead.</li>
+</ul>
+<h3 id="the-network-last-mile-per-soc">The network last-mile per
+SoC</h3>
+<ul>
+<li><strong>NPCM</strong>: on-chip GMAC (idrac10, clean) works; iDRAC9
+GMAC/EMC link-up <strong>NULL-crashes</strong> so it falls back to
+<strong>usb-net</strong> (works but unmigratable). iDRAC9's usable NIC
+is the <strong>EMC (eth2)</strong> on old phylib, not GMAC.</li>
+<li><strong>AST2600 NC-SI wall</strong> is kernel-version-dependent:
+qemu's ftgmac model <strong>handles NC-SI internally</strong> and never
+forwards 0x88F8 frames to the netdev. cray's
+<strong>5.4.184-ami</strong> negotiates with qemu's responder (link up,
+slirp DHCP). asmb787's <strong>5.4.11-ami</strong> driver forces NC-SI
+regardless of dtb and <strong>rejects qemu's response</strong>
+(<code>NCSI: Handler for packet type 0x82 returned -19</code>) → dead
+eth0. An external "fake NIC" responder is <strong>impossible</strong>
+(qemu intercepts NC-SI before any netdev). usb-net is not a fallback on
+AST2600 (EHCI is high-speed only → full-speed usb-net hangs).</li>
+<li><strong>OpenBMC noncsi dtb</strong>: x14 disables the NC-SI sideband
+NICs eth1/eth2 in <code>x14-noncsi.dtb</code>
+(<code>status="disabled"</code>) + masks
+<code>bmc-shared-lan-discovery.service</code> (the oneshot that hangs
+probing absent NC-SI hw).</li>
+<li><strong>static-IP vs slirp DHCP</strong>: emulated boxes usually get
+a static eth0 (10.0.2.15/24 gw 10.0.2.2) from the initramfs; flash-mtd
+OpenBMC images DHCP off slirp fine.</li>
+<li><strong>slirp mangles RMCP+ multi-packet UDP on a lo0 alias</strong>
+(cray) → IPMI-623 only reliable on 127.0.0.1, even though Redfish TCP is
+fine on the alias.</li>
+<li><strong>IPMI_T timeout under emulation</strong>: aarch64/armv7 RMCP+
+RAKP is slow — iDRAC10 needs <code>IPMI_T=25</code>, cray
+<code>IPMI_T=20</code>. Short timeouts make a live box look dead.</li>
+</ul>
+<h3 id="ipmimain-sigsegv-fixes-megarac">IPMIMain SIGSEGV fixes
+(MegaRAC)</h3>
+<ul>
+<li>The PC in the crash (<code>0x2c004</code>) is the <strong>SIGSEGV
+handler</strong> — red herring. Real fault = <code>MsgHndlr</code>
+@0x14864 in <code>libipmimsghndlr.so</code> dereferencing an
+uninitialised <code>g_BMCInfo[]</code> slot. <code>devmap.xml</code> is
+orthogonal.</li>
+<li>Two real causes: (1) IPMIMain opens the <strong>literal
+path</strong> <code>/conf/BMC/IPMI.conf</code> — nothing creates the
+<code>/conf/BMC → BMC1/ast2600evb_ami</code> symlink under qemu →
+interface table never built; (2) <code>MsgHndlr</code> spawns one thread
+per enabled interface and faults on hw-less ones (serial/SOL on
+ttyS2/ttyS3 the kernel never brings up, IPMB/SMBUS/SMM).</li>
+<li>Fix (no binary patch, in <code>qemu-patch-rootfs.sh</code>): seed
+<code>/conf</code> from <code>/etc/defconfig</code>, create the
+<code>/conf/BMC</code> symlink before first launch, set
+<code>SUPPORT_{SERIAL,SOL,SMM,SMBUS}_IFC=0</code> + all
+<code>*_IPMB_SUPPORT=0</code> (keep LAN/UDS/KCS), and
+<strong><code>NM_IPMB_BUS=0xFF</code></strong> (the Node-Manager
+self-stop guard fires only for bus ∈ {0,1,2}). Ported clean from cray to
+asmb787.</li>
+</ul>
+<h3 id="openbmc-bmcweb--mapper-fixes">OpenBMC bmcweb / mapper fixes</h3>
+<ul>
+<li><strong>bmcweb exits 255 on fresh boots</strong> with no stderr:
+<code>main()</code> <code>inotify_add_watch(fd,"/var/log",...)</code>
+returns -1 → <code>exit_group(-1)</code>.
+<code>/var/log</code>→<code>/var/volatile/log</code> is a boot tmpfs
+made by systemd-tmpfiles; scripted (non-systemd) bring-up skips it.
+<strong>Fix: <code>mkdir -p /var/volatile/log/redfish</code> before
+bmcweb.</strong></li>
+<li>bmcweb is <strong>socket-activated</strong>
+(<code>bmcweb.socket</code> ListenStream=443) — run via
+<code>systemd-socket-activate -l 0.0.0.0:443 /usr/bin/bmcweb</code>;
+bare exits 255.</li>
+<li><strong>Redfish is remote-usable, not loopback-usable</strong> under
+emulation: <code>curl https://127.0.0.1/redfish</code>
+<strong>hangs</strong>, remote <code>curl https://IP/redfish</code> =
+200. Endpoints touching <code>org.freedesktop.systemd1</code> crash
+without PID1 systemd; collections + ServiceRoot are stable.</li>
+<li><strong>mapperx empty-whitelist bug</strong>:
+<code>needToIntrospect = inWhitelist &amp;&amp; !inBlacklist</code> — an
+empty whitelist introspects <strong>nothing</strong> → empty object tree
+→ ipmid wipes <code>ipmi_user.json</code> → RAKP "unauthorized name".
+<strong>Fix:
+<code>mapperx --service-namespaces="$MAPPER_SERVICES"</code></strong>
+(from <code>/etc/default/obmc/mapper</code>).</li>
+<li>Meta-lesson (x14): daemons "dying mysteriously" across repeated runs
+= <strong>suspect your own accumulated state first</strong> — a stale
+<code>/var/run/dbus/pid</code> silently failed every dbus-daemon
+restart. Clear pidfiles/sockets before bring-up.</li>
+</ul>
+<h3 id="rakp--ipmi-cipher-quirks-under-emulation">RAKP / IPMI cipher
+quirks under emulation</h3>
+<ul>
+<li><strong>gb200 is cipher-17 ONLY</strong>
+(<code>zipmi -C 17 -I lanplus</code>); iDRAC9 also <code>-C 17</code>.
+OpenBMC in general is cipher-17-only.</li>
+<li>IPMI auth key is the <strong>factory IPMIKey</strong> via
+<code>-K</code> (first <strong>20 bytes</strong> / 40 hex — BMC RAKP key
+len hardcoded 20), NOT a password. iDRAC9/10 share it (unrotated).</li>
+<li>iDRAC10 RAKP gate findings: RAKP2 status <code>0x0d</code> = 16-byte
+username <strong>MemCmp</strong> miss (seed
+<code>UserName AttributeMemSize</code> = <strong>16 not 4</strong>, else
+"root"→"roo\0"); <code>0x0a</code> = priv nibble from raw entry byte
+<code>+0x25+channel</code>; HMAC key at entry<code>+0x11</code> (20B).
+RAKP1 username must be <strong>NUL-padded to 16B</strong>
+client-side.</li>
+<li>RAKP/RMCP reliability under single-vCPU TCG is a
+<strong>QEMU/injection artifact, not a real-iDRAC property</strong> —
+the warm-snapshot pattern is what makes it dependable.</li>
+<li>MegaRAC RAKP: <code>UserPassword</code> uses an
+<code>$ENCRYPTED$</code> sentinel → per-box AES-256-CBC blob
+(<code>UserEncPswd.ini</code>, key from
+<code>/conf/AESKey</code>+<code>AESIV</code>); plaintext-bypass if the
+field isn't the sentinel.</li>
+</ul>
+<h3 id="unpacking-fmh--squashfs--jffs2--fit">Unpacking (FMH / SquashFS /
+JFFS2 / FIT)</h3>
+<ul>
+<li><strong>Dell</strong> (<code>tools/unpack-idrac</code>):
+auto-detects gen by firmimg extension (<code>.d9</code>=FIT via
+dumpimage, <code>.d10</code>=tar). DUP is a shell self-extractor
+(<code>7z x</code>→tar) or appended zip.
+<strong><code>unsquashfs -ignore-errors</code> is critical</strong> for
+LZO rootfs on macOS — without it ~12k files silently become
+zero-length.</li>
+<li><strong>AMI MegaRAC</strong> (<code>tools/unpack-ami</code>): FMH
+<code>$MODULE$</code> table, payload = header_offset + 0x10000. Traps:
+(1) <strong>"encrypted_*.ima_enc" is a misnomer</strong> — plain
+XZ-SquashFS (<code>hsqs</code> magic, size at superblock+0x28); (2)
+degraded <strong>binwalk lacks the squashfs signature</strong> and
+silently skips the rootfs — scan magics yourself; (3) <strong>jefferson
+misdetects JFFS2 endianness</strong> on the whole image (→0 nodes) —
+carve each region by node magic <code>85 19</code> (0x1985 LE) then run
+jefferson per-region; (4) macOS <code>dd</code> lacks
+<code>iflag=skip_bytes</code> — carve with
+<code>tail -c +N | head -c LEN</code>.</li>
+<li>HPM: cray firmware is a <strong>PICMGFWU/HPM.1 wrapper</strong>
+around AMI FMH modules, not linear flash — fixed-offset carve fails; use
+its extract.sh.</li>
+</ul>
+<h3 id="the-zbmc-dispatcher-pattern">The zbmc dispatcher pattern</h3>
+<p>Each box ships a <code>zbmc.box</code> descriptor (sourced by
+<code>tools/zbmc</code>) exposing uniform verbs: <code>zbmc_boot</code>
+(cold by default; supported X14 and MegaRAC snapshots require
+<code>start --warm</code>), <code>zbmc_build</code>,
+<code>zbmc_snapshot</code>, <code>zbmc_restore</code>,
+<code>zbmc_ssh</code>, <code>zbmc_ipmi</code>,
+<code>zbmc_ipmi_health</code>, <code>zbmc_web</code>,
+<code>zbmc_console</code>, plus <code>ZBMC_READY_GREP</code> for a
+console readiness marker.</p>
+<ul>
+<li><strong>Root-direct model</strong>: qemu runs as root and binds the
+box's selected <strong>Linux loopback alias</strong> + standard ports
+22/443/623 directly — kills the socat/high-port indirection.</li>
+<li><strong>IP scheme</strong>: 10.0.7.x = OpenBMC (evb/gb200), 10.0.8.x
+= Supermicro/MegaRAC (x14/cray/asmb787), 10.0.9.x = Dell (idrac9/10).
+Each zbmc binds a <strong>specific</strong> IP:22 so it coexists with
+the host's own sshd.</li>
+<li>qemu's real pid is found by the <strong>hostfwd signature</strong>
+(<code>pgrep -f "hostfwd=udp:$IP:623-:623"</code>), not <code>$!</code>
+(it's a root child of sudo).</li>
+<li>Access differs per stack and the descriptor encodes it: Dell/gb200 =
+IPMI <code>-K</code> factory key; x14/cray/evb = password. Health probes
+route around per-box quirks (x14 uses <code>channel info 1</code>
+because <code>mc info</code>=0xff; cray greps for the vendor
+MfgID).</li>
+</ul>
+<hr />
+<p><em>Distilled 2026-08 from a running research zoo. No extracted
+secret values are reproduced here — keys are referred to by name
+(factory IPMIKey, CredVault AES key) and are, in any case, extractable
+from the vendors' own publicly-downloadable firmware.</em></p>
+</div>
+</body>
+</html>

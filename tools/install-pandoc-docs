@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION=3.7.0.2
+SHA256=8f8f67fdd540b6519326b0ac49d5c55c5d5d15e43920e80a086e02c8aff83268
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+DEPS="$REPO/work/deps"
+DEST="$DEPS/pandoc-$VERSION"
+ARCHIVE="$DEPS/pandoc-$VERSION-linux-amd64.tar.gz"
+URL="https://github.com/jgm/pandoc/releases/download/$VERSION/pandoc-$VERSION-linux-amd64.tar.gz"
+
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  echo "install-pandoc-docs: requires Linux x86_64" >&2
+  exit 1
+fi
+if [ ! -f "$ARCHIVE" ]; then
+  mkdir -p "$DEPS"
+  curl -fL --retry 3 -o "$ARCHIVE.tmp" "$URL"
+  echo "$SHA256  $ARCHIVE.tmp" | sha256sum -c -
+  mv "$ARCHIVE.tmp" "$ARCHIVE"
+fi
+echo "$SHA256  $ARCHIVE" | sha256sum -c -
+tar -xzf "$ARCHIVE" -C "$DEPS"
+"$DEST/bin/pandoc" --version | head -1
+echo "$DEST/bin"

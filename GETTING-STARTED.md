@@ -6,7 +6,7 @@ Redfish, and Web-UI paths.
 
 ## Host boundary
 
-zbmc v1 supports **x86_64 Linux only**. The packaged QEMU executables and their SHA-256 contracts do
+zbmc 0.1.1 supports **x86_64 Linux only**. The packaged QEMU executables and their SHA-256 contracts do
 not run on ARM64, Raspberry Pi, Apple Silicon, macOS, or other operating systems. `build.sh` rejects an
 unsupported host before downloading anything.
 
@@ -71,7 +71,7 @@ sudo ./tools/zbmc openbmc start
 
 `start` validates the descriptor's QEMU path, SHA-256, exact version, machine, and QMP startup before
 launching firmware. It then reports each startup stage and waits for the box's declared functional
-services. OpenBMC took about five minutes on the four-core reference host.
+services. OpenBMC took 4m32s on the four-core reference host.
 
 To return immediately while the readiness watcher continues:
 
@@ -138,9 +138,10 @@ sudo ./tools/zbmc supermicro-x14 start
 
 The current measured acceptance boundary is in the README fleet table. Important exceptions:
 
-- `advantech-asmb787` is console-only and took about 11m50s on the reference host.
-- `idrac10` and `megarac-hpe` are bounded partials. READY means their narrower declared acceptance
-  contract passed; it does not promote substituted or unstable services to retained vendor behavior.
+- `advantech-asmb787` is console-only and took 9m38s on the reference host.
+- `idrac10` reaches SSH, retained IPMI, and its static Redfish ServiceRoot, but has no vendor Web-UI.
+- `megarac-hpe` accepts retained IPMI only. Cold boot is nondeterministic and automatically rerolls an
+  attempt when the vendor `IPMIMain` process hits its known startup race.
 - `idrac9` must cold-boot. Its USB network does not survive warm migration.
 - `idrac10` is cold-only. Its former packaged checkpoint carried stale shared state and is no longer a
   supported release path.

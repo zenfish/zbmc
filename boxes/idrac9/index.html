@@ -7,7 +7,11 @@
 <link rel="stylesheet" href="../../../css/doc.css" />
 </head>
 <body>
-<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">dell</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">idrac9-virtual</span></nav>
+<aside style="max-width:64rem;margin:1rem auto;padding:1rem;border-left:4px solid #b45309;background:#fffbeb;font-family:ui-sans-serif,system-ui,sans-serif">
+<strong>Historical investigation record.</strong> The phase roadmap below predates zbmc 0.1.1. Current
+iDRAC9 cold-boots to accepted ICMP, SSH, IPMI, and vendor Web-UI in 10m31s on the reference host;
+Redfish remains unavailable. Use the repository README and <code>./tools/zbmc idrac9 status -v</code>.
+</aside>
 
 <h1>Virtual iDRAC9 — Dell's BMC firmware under QEMU</h1>
 <p><em>Goal: a working, explorable iDRAC9 in software — boot Dell's own kernel + rootfs on
@@ -217,10 +221,8 @@ hardware (<code>usbmap</code> restart-looped 1753×) and never reach the target;
 </ul>
 
 <hr />
-<p style="font-size:.8rem;color:#64748b"><em>Sibling work: the credential math this box exercises is
-proven on the real binary in <a href="../idrac10/ipmikey-re/">idrac10/ipmikey-re</a> (Unicorn
-emulation of <code>generateHashes</code>); cold-start brief in
-<a href="../idrac-binary-emulation-HANDOFF.html">idrac-binary-emulation-HANDOFF.html</a>.
-Written 2026-06-22.</em></p>
+<p style="font-size:.8rem;color:#64748b"><em>Historical sibling work used Unicorn emulation of
+<code>generateHashes</code> and a separate cold-start handoff; those source-tree records are not included
+in this repository. Written 2026-06-22.</em></p>
 </body>
 </html>

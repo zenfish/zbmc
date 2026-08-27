@@ -1,0 +1,4412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC10 IPMI Command Dispatch Tables — Static Extraction</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC10 IPMI Command Dispatch Tables — Static Extraction</h1>
+  </div>
+</div>
+
+<p>Firmware: iDRAC10 1.30.10.50 (aarch64). Source: rootfs
+<code>/usr/lib/ipmi/*.so.9.9.9</code>. Walked by
+<code>dump_dispatch_tables_idrac10.py</code>.</p>
+<p>Each entry is 16 bytes:
+<code>[cmd:u8][netfn:u8][priv:u8][flags:u8][pad:u32][handler:u64]</code>.
+The libraries are PIE, so the 8-byte handler pointer is not stored in
+the file — it is a dynamic relocation
+(<code>R_AARCH64_ABS64</code>/<code>GLOB_DAT</code> against an imported
+<code>Cmd*</code> symbol, or <code>R_AARCH64_RELATIVE</code> with a
+<code>.text</code> addend). Handler names are resolved from
+<code>.dynsym</code>.</p>
+<p>Priv: 0=None/pre-session, 1=Callback, 2=User, 3=Operator, 4=Admin,
+5=OEM.</p>
+<h2 id="liboemcmdsso999--238-entries"><code>liboemcmds.so.9.9.9</code> —
+238 entries</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>NetFn</th>
+<th style="text-align: right;">Cmd</th>
+<th>Priv</th>
+<th style="text-align: right;">Flags</th>
+<th style="text-align: right;">Handler addr</th>
+<th>Symbol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e060</td>
+<td><code>CmdOEMGetChassisCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e070</td>
+<td><code>CmdOEMSetChassisCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e080</td>
+<td><code>DellCmdGetChassisStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x04</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e090</td>
+<td><code>CmdOEMChassisIdentify</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x06</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e0a0</td>
+<td><code>CmdSetPowerRestorePolicy</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e0b0</td>
+<td><code>OEMCmdSetSystemBootOptions</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x0a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e0c0</td>
+<td><code>DellCmdSetFrntPanelState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x23</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e0d0</td>
+<td><code>NotSupportRequestHandle</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x0a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e0e0</td>
+<td><code>CmdOEMGetCommandSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e0f0</td>
+<td><code>CmdOEMGetChannelInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x32</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e100</td>
+<td><code>CmdOEMEnableMsgChannelRecv</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">11</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e110</td>
+<td><code>OEMCmdSetUserAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x52</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e120</td>
+<td><code>CmdI2CWriteRead_OEM</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">13</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e130</td>
+<td><code>CmdOEMManufacturingTestOn</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">14</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x04</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e140</td>
+<td><code>CmdOEMGetSelfTestResults</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">15</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x38</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4e150</td>
+<td><code>CmdCMCGetChannelAuthCap</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">16</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x39</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x11</td>
+<td style="text-align: right;">0x4e160</td>
+<td><code>CmdCMCGetSessionChallenge</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">17</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x16</td>
+<td style="text-align: right;">0x4e170</td>
+<td><code>CmdCMCActivateSession</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">18</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3b</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e180</td>
+<td><code>CmdCMCSetSessionPrivLevel</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">19</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x45</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x11</td>
+<td style="text-align: right;">0x4e190</td>
+<td><code>OEMCmdSetUserName</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">20</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x47</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e1a0</td>
+<td><code>CmdOEMSetUserPassword</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x56</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e1b0</td>
+<td><code>OEMCmdSetChannelSecurityKeys</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e1c0</td>
+<td><code>DellOEMCmdSetPEF</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">23</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x13</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e1d0</td>
+<td><code>DellOEMCmdGetPEF</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">24</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x2f</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e1e0</td>
+<td><code>CmdGetSensorType</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">25</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e1f0</td>
+<td><code>CmdOEMReadFRUData</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">26</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x25</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e200</td>
+<td><code>NotSupportRequestHandle</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">27</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x27</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e210</td>
+<td><code>NotSupportRequestHandle</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">28</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x4e220</td>
+<td><code>CmdOEMGetSELEntry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">29</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x49</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e230</td>
+<td><code>CmdOEMSetSELTime</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">30</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e240</td>
+<td><code>DellCmdSetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">31</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e250</td>
+<td><code>DellCmdGetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">32</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e260</td>
+<td><code>DellCmdSetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">33</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e270</td>
+<td><code>DellCmdGetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">34</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x21</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e280</td>
+<td><code>DellCmdSetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">35</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e290</td>
+<td><code>DellCmdGetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">36</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x21</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e2a0</td>
+<td><code>CmdResetToDefault</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">37</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4e2b0</td>
+<td><code>CmdResvExtendedConfigure</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">38</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e2c0</td>
+<td><code>CmdGetExtendedConfigure</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">39</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x03</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e2d0</td>
+<td><code>CmdSetExtendedConfigure</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">40</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x04</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4e2e0</td>
+<td><code>CmdPOSTEvent</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">41</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xe0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e2f0</td>
+<td><code>DellCmdNodeMgrDebugInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">42</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xe1</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e300</td>
+<td><code>DellCmdNodeMgrSendRaw</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">43</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xcb</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4e310</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">44</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xce</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e320</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">45</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e330</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">46</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc1</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x91</td>
+<td style="text-align: right;">0x4e340</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">47</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc2</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e350</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">48</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e360</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">49</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc8</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e370</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">50</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xca</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e380</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">51</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xb7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e390</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">52</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xba</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8f</td>
+<td style="text-align: right;">0x4e3a0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">53</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e3b0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">54</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x41</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e3c0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">55</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4e3d0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">56</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e3e0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">57</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x44</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e3f0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">58</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x45</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8a</td>
+<td style="text-align: right;">0x4e400</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">59</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x46</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4e410</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">60</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x4b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8c</td>
+<td style="text-align: right;">0x4e420</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">61</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x60</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e430</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">62</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x61</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e440</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">63</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x64</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e450</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">64</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x65</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e460</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">65</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x66</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8c</td>
+<td style="text-align: right;">0x4e470</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">66</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x67</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e480</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">67</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x68</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8c</td>
+<td style="text-align: right;">0x4e490</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">68</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x69</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e4a0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">69</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x80</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e4b0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">70</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x81</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e4c0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">71</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x82</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e4d0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">72</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xa8</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e4e0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">73</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc3</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e4f0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">74</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc4</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e500</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">75</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc5</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e510</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">76</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc6</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e520</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">77</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xc9</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e530</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">78</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xcf</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e540</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">79</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e550</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">80</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd1</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e560</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">81</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd2</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e570</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">82</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd3</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e580</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">83</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd4</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e590</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">84</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8c</td>
+<td style="text-align: right;">0x4e5a0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">85</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd8</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e5b0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">86</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xd9</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4e5c0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">87</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xdc</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e5d0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">88</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xdf</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e5e0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">89</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xea</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e5f0</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">90</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e600</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">91</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf1</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e610</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">92</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf2</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e620</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">93</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf3</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e630</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">94</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf4</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e640</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">95</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf5</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e650</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">96</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xf6</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e660</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">97</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x98</td>
+<td style="text-align: right;">0x4e670</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">98</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e680</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">99</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x13</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e690</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">100</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x14</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e6a0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">101</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x15</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0xa1</td>
+<td style="text-align: right;">0x4e6b0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">102</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x16</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e6c0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">103</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x17</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e6d0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">104</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x19</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e6e0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">105</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1a</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e6f0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">106</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e700</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">107</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1d</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e710</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">108</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1e</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e720</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">109</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1f</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e730</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">110</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x20</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e740</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">111</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4e750</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">112</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x23</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e760</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">113</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x25</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e770</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">114</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x26</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e780</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">115</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2a</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e790</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">116</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e7a0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">117</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e7b0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">118</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2d</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e7c0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">119</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2e</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e7d0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">120</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x2f</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e7e0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">121</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x44</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e7f0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">122</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x48</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e800</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">123</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x49</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e810</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">124</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x4a</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e820</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">125</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x4b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e830</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">126</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x4c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e840</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">127</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x4d</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e850</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">128</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xdf</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e860</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">129</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc6</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e870</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">130</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4e880</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">131</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e890</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">132</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x06</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e8a0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">133</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e8b0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">134</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x20</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e8c0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">135</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x4e8d0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">136</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd8</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x89</td>
+<td style="text-align: right;">0x4e8e0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">137</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xda</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x9b</td>
+<td style="text-align: right;">0x4e8f0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">138</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4e900</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">139</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x09</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8e</td>
+<td style="text-align: right;">0x4e910</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">140</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e920</td>
+<td><code>CmdGetDeviceID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">141</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xdb</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4e930</td>
+<td><code>FileObjCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">142</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x1c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e940</td>
+<td><code>DellCmdReadWriteFrontPanel</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">143</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x21</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e950</td>
+<td><code>CmdResetToDefault</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">144</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x26</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8a</td>
+<td style="text-align: right;">0x4e960</td>
+<td><code>DellNMCommand</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">145</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x27</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e970</td>
+<td><code>DellGetInternalVariable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">146</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x24</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4e980</td>
+<td><code>DellSetTeamingMode</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">147</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x28</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e990</td>
+<td><code>CmdSetNICSelectionFailover</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">148</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x29</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4e9a0</td>
+<td><code>CmdGetNICSelectionFailover</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">149</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x30</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4e9b0</td>
+<td><code>DellSetFanControlParameters</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">150</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x31</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4e9c0</td>
+<td><code>DellGetFanControlParameters</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">151</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x32</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e9d0</td>
+<td><code>DellQueryChassisIdentifyStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">152</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x33</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4e9e0</td>
+<td><code>DellQueryGetCPLDRevision</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">153</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x35</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x0a</td>
+<td style="text-align: right;">0x4e9f0</td>
+<td><code>DellCmdFreshAir</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">154</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x36</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ea00</td>
+<td><code>DellPcieSSDFRU</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">155</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x51</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea10</td>
+<td><code>DellCmdGetHostEventStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">156</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x87</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ea20</td>
+<td><code>DellCmdServerPwrOnResponse</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">157</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x8c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea30</td>
+<td><code>DellCmdRequestedAirflow</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">158</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x8d</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea40</td>
+<td><code>DellCmdVKVMStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">159</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x8e</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea50</td>
+<td><code>DellCmdVMediaStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">160</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x8f</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea60</td>
+<td><code>DellCmdServerPwrConsumption</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">161</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x90</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ea70</td>
+<td><code>DellCmdGetIMCStatusRegister</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">162</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x91</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x25</td>
+<td style="text-align: right;">0x4ea80</td>
+<td><code>DellCmdIMCFirmwareUpdate</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">163</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x92</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ea90</td>
+<td><code>DellCmdEDIDInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">164</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x93</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4eaa0</td>
+<td><code>DellCmdLCDReadFromStaging</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">165</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x94</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eab0</td>
+<td><code>DellCmdLCDReadFromQueue</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">166</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x95</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4eac0</td>
+<td><code>DellCmdChassisFanStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">167</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x96</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x24</td>
+<td style="text-align: right;">0x4ead0</td>
+<td><code>DellCmdLoginAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">168</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x97</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x09</td>
+<td style="text-align: right;">0x4eae0</td>
+<td><code>DellCmdSetIMCStatusRegister</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">169</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x98</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eaf0</td>
+<td><code>DellCmdLEDStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">170</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x99</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4eb00</td>
+<td><code>DellCmdGetLastPostCode</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">171</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9a</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4eb10</td>
+<td><code>DellCmdMemThrottlingCtrl</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">172</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4eb20</td>
+<td><code>DellCmdGetPowerCycleInterval</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">173</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9c</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eb30</td>
+<td><code>DellPwrGetPwrConsumptionData</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">174</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9d</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4eb40</td>
+<td><code>DellPwrResetPwrConsumptionData</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">175</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9e</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eb50</td>
+<td><code>DellCmdBladeACPowerCycle</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">176</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eb60</td>
+<td><code>DellPwrPSUInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">177</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb3</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eb70</td>
+<td><code>DellPwrRealTimePwrConsumption</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">178</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb5</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eb80</td>
+<td><code>DellCmdGetFrontPanelInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">179</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb6</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4eb90</td>
+<td><code>DellPwrPSUFirmwareUpdate</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">180</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb7</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4eba0</td>
+<td><code>DellPwrPSUFirmwareUpdateStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">181</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb8</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x0e</td>
+<td style="text-align: right;">0x4ebb0</td>
+<td><code>QueueSpdDimmInfoCmd</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">182</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xb9</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8e</td>
+<td style="text-align: right;">0x4ebc0</td>
+<td><code>QueueSpdDimmInfoCmd</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">183</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xba</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4ebd0</td>
+<td><code>DellPwrCapEnable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">184</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xbb</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ebe0</td>
+<td><code>DellPwrHeadroom</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">185</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xbc</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x8a</td>
+<td style="text-align: right;">0x4ebf0</td>
+<td><code>DellCPLDAccessStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">186</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xbd</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ec00</td>
+<td><code>DellCmdIMCFeatureSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">187</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xbe</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ec10</td>
+<td><code>DellRollbackFW</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">188</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xbf</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ec20</td>
+<td><code>DellGetFWVersion</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">189</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x9f</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ec30</td>
+<td><code>DellCmdSpecialACCycle</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">190</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc0</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x90</td>
+<td style="text-align: right;">0x4ec40</td>
+<td><code>DellPwrEfficiency</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">191</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc1</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x4ec50</td>
+<td><code>DellGetActiveLOM</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">192</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd2</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ec60</td>
+<td><code>RacMw_TransferData</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">193</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xfa</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ec70</td>
+<td><code>DellCmdSmaMbxFlag</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">194</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc3</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4ec80</td>
+<td><code>DellCmdCMCFeatureSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">195</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc5</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ec90</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">196</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc8</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4eca0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">197</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xc9</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ecb0</td>
+<td><code>DellCmdBladeVirtualMAC</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">198</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xcb</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ecc0</td>
+<td><code>DellCmdBladeChassisInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">199</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xcc</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4ecd0</td>
+<td><code>DellPwrAverageInterval</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">200</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xcd</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4ece0</td>
+<td><code>DellPwrAverageRange</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">201</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xce</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ecf0</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">202</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xcf</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed00</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">203</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd0</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed10</td>
+<td><code>CmdOEMMiscCmd</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">204</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa0</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x4ed20</td>
+<td><code>CmdGetSoftLockStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">205</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd1</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed30</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">206</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd3</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed40</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">207</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd4</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x4ed50</td>
+<td><code>DellCmdiDracPOSTCode</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">208</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd5</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed60</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">209</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xd6</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed70</td>
+<td><code>SubCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">210</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xdd</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed80</td>
+<td><code>ConfigValDDCmdHndlr</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">211</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xde</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x86</td>
+<td style="text-align: right;">0x4ed90</td>
+<td><code>DellBpAckDriveRemoval</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">212</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0x18</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4eda0</td>
+<td><code>DellCmdGetBladeSlotId</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">213</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xdc</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x4edb0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">214</td>
+<td>0x32 (Dell OEM)</td>
+<td style="text-align: right;">0x73</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4edc0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">215</td>
+<td>0x32 (Dell OEM)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x4edd0</td>
+<td><code>CmdDcmiGetPowerReading</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">216</td>
+<td>0x32 (Dell OEM)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ede0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">217</td>
+<td>0x36 (Dell OEM)</td>
+<td style="text-align: right;">0xf5</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4edf0</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">218</td>
+<td>0x32 (Dell OEM)</td>
+<td style="text-align: right;">0x03</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x4ee00</td>
+<td><code>DellDCSSCBMCWrapper</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">219</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa2</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee10</td>
+<td><code>CmdOEMMASERPartitionAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">220</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa1</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee20</td>
+<td><code>CmdOEMPOSTMASERAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">221</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa9</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee30</td>
+<td><code>CmdOEMMASER_PM</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">222</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xaa</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee40</td>
+<td><code>CmdOEMMASERLCLAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">223</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xae</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee50</td>
+<td><code>CmdOEMGetMASERAccessState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">224</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xaf</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4ee60</td>
+<td><code>CmdOEMSetMASERAccessState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">225</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xad</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x4ee70</td>
+<td><code>CmdOEMGetMASERType</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">226</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xab</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x4ee80</td>
+<td><code>CmdOEMGetMASERInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">227</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xac</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ee90</td>
+<td><code>CmdOEMRecreateMASER</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">228</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa3</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4eea0</td>
+<td><code>CmdOEMRemoteEnablement</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">229</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa4</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4eeb0</td>
+<td><code>CmdOEMvFlash</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">230</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa5</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4eec0</td>
+<td><code>CmdOEMDellFactory</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">231</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa6</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4eed0</td>
+<td><code>CmdOEMBackupRestore</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">232</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa7</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4eee0</td>
+<td><code>CmdOEMToolSet</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">233</td>
+<td>0x30 (Dell OEM)</td>
+<td style="text-align: right;">0xa8</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x4eef0</td>
+<td><code>CmdOEMSupportAssist</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">234</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x58</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ef00</td>
+<td><code>DellCmdSetSysInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">235</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x59</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ef10</td>
+<td><code>DellCmdGetSysInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">236</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x33</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x4ef20</td>
+<td><code>DellCmdNodeMgrDebugInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">237</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x26</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x4ef30</td>
+<td><code>CmdSetSensorThresholdsOverride</code></td>
+</tr>
+</tbody>
+</table>
+<h2
+id="libipmicmdtableapiso999--138-entries"><code>libipmicmdtableapi.so.9.9.9</code>
+— 138 entries</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>NetFn</th>
+<th style="text-align: right;">Cmd</th>
+<th>Priv</th>
+<th style="text-align: right;">Flags</th>
+<th style="text-align: right;">Handler addr</th>
+<th>Symbol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x162a0</td>
+<td><code>CmdTerminalSYS</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xcc</td>
+<td>0x01 (Callback)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x162b0</td>
+<td><code>CmdOSAOEMCmdHandler</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x162c0</td>
+<td><code>DellCmdGetMgrCertFingerprint</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x162d0</td>
+<td><code>DellCmdGetBootstrapCredentials</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x162e0</td>
+<td><code>CmdDcmiGetDcmiCapabilityInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x162f0</td>
+<td><code>CmdDcmiGetPowerReading</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x03</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16300</td>
+<td><code>CmdDcmiGetPowerLimit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x04</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x0f</td>
+<td style="text-align: right;">0x16310</td>
+<td><code>CmdDcmiSetPowerLimit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16320</td>
+<td><code>CmdDcmiActDeactPowerLimit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x06</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16330</td>
+<td><code>CmdDcmiGetAssetTag</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x05</td>
+<td style="text-align: right;">0x16340</td>
+<td><code>CmdDcmiGetDcmiSensorInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">11</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16350</td>
+<td><code>CmdDcmiSetAssetTag</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x09</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16360</td>
+<td><code>CmdDcmiGetManagementControllerIdStr</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">13</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x0a</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16370</td>
+<td><code>CmdDcmiSetManagementControllerIdStr</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">14</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x0b</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x07</td>
+<td style="text-align: right;">0x16380</td>
+<td><code>CmdDcmiSetThermalLimit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">15</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x0c</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16390</td>
+<td><code>CmdDcmiGetThermalLimit</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">16</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x05</td>
+<td style="text-align: right;">0x163a0</td>
+<td><code>CmdDcmiGetTemperatureReadings</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">17</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x163b0</td>
+<td><code>CmdDcmiSetDMCIConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">18</td>
+<td>0x2c (DCMI)</td>
+<td style="text-align: right;">0x13</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x163c0</td>
+<td><code>CmdDcmiGetDMCIConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">19</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x163d0</td>
+<td><code>CmdGetChassisCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">20</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x163e0</td>
+<td><code>CmdGetChassisStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x163f0</td>
+<td><code>CmdChassisControl</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x16400</td>
+<td><code>CmdSetChassisCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">23</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16410</td>
+<td><code>CmdGetSystemRestartCause</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">24</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x16420</td>
+<td><code>CmdSetSystemBootOptions</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">25</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x09</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16430</td>
+<td><code>CmdGetSystemBootOptions</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">26</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x0b</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16440</td>
+<td><code>CmdSetPowerCycleInterval</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">27</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16450</td>
+<td><code>CmdSetEventReceiver</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">28</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16460</td>
+<td><code>CmdGetEventReceiver</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">29</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x87</td>
+<td style="text-align: right;">0x16470</td>
+<td><code>CmdPlatformEvent</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">30</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16480</td>
+<td><code>CmdPEFCGetCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">31</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16490</td>
+<td><code>CmdPEFCArmPostponeTimer</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">32</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x164a0</td>
+<td><code>CmdPEFCSetConfigurationParameters</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">33</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x13</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x164b0</td>
+<td><code>CmdPEFCGetConfigurationParameters</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">34</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x14</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x164c0</td>
+<td><code>CmdPEFCSetLastProcessedEventID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">35</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x15</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x164d0</td>
+<td><code>CmdPEFCGetLastProcessedEventID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">36</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x16</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x164e0</td>
+<td><code>CmdPEFCAlertImmediate</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">37</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x17</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x0c</td>
+<td style="text-align: right;">0x164f0</td>
+<td><code>CmdPETCAcknowledge</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">38</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x23</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16500</td>
+<td><code>CmdGetSensorReadingFactors</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">39</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x24</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16510</td>
+<td><code>CmdSetSensorHysteresis</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">40</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x25</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16520</td>
+<td><code>CmdGetSensorHysteresis</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">41</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x26</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x08</td>
+<td style="text-align: right;">0x16530</td>
+<td><code>CmdSetSensorThresholds</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">42</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x27</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16540</td>
+<td><code>CmdGetSensorThresholds</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">43</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x28</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x16550</td>
+<td><code>CmdSetSensorEventEnable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">44</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x29</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16560</td>
+<td><code>CmdGetSensorEventEnable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">45</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x2a</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x16570</td>
+<td><code>CmdRearmSensorEvents</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">46</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x2b</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16580</td>
+<td><code>CmdGetSensorEventStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">47</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x2d</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16590</td>
+<td><code>CmdGetSensorReading</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">48</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x30</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x165a0</td>
+<td><code>CmdSetSensorReading</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">49</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x165b0</td>
+<td><code>CmdGetDeviceID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">50</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x165c0</td>
+<td><code>CmdColdReset</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">51</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x04</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x165d0</td>
+<td><code>CmdGetSelfTestResults</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">52</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x05</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x165e0</td>
+<td><code>CmdManufacturingTestOn</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">53</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x06</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x165f0</td>
+<td><code>CmdSetACPIPowerState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">54</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16600</td>
+<td><code>CmdGetACPIPowerState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">55</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16610</td>
+<td><code>CmdGetDeviceGUID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">56</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x09</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16620</td>
+<td><code>CmdGetNetFnSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">57</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x0a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x16630</td>
+<td><code>CmdGetCommandSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">58</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x0b</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16640</td>
+<td><code>CmdGetCommandSubFnSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">59</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x0c</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x16650</td>
+<td><code>CmdGetConfigurableCommands</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">60</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x0d</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16660</td>
+<td><code>CmdGetConfigurableCommandSubFn</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">61</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16670</td>
+<td><code>CmdResetWatchdogTimer</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">62</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x24</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x16680</td>
+<td><code>CmdSetWatchdogTimer</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">63</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x25</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16690</td>
+<td><code>CmdGetWatchdogTimer</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">64</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x2e</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x166a0</td>
+<td><code>CmdSetBMCGlobalEnable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">65</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x2f</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x166b0</td>
+<td><code>CmdGetBMCGlobalEnable</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">66</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x30</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x166c0</td>
+<td><code>CmdClearMsgFlags</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">67</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x31</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x166d0</td>
+<td><code>CmdGetMsgFlags</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">68</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x32</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x166e0</td>
+<td><code>CmdEnableMsgChannelRecv</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">69</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x33</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x166f0</td>
+<td><code>CmdGetMsg</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">70</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x35</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16700</td>
+<td><code>CmdReadEventMsgBuf</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">71</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x37</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16710</td>
+<td><code>CmdGetSystemGUID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">72</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16720</td>
+<td><code>CmdCloseSession</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">73</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3d</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x16730</td>
+<td><code>CmdGetSessionInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">74</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3f</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x13</td>
+<td style="text-align: right;">0x16740</td>
+<td><code>CmdGetAuthCode</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">75</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16750</td>
+<td><code>CmdSetChannelAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">76</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x41</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16760</td>
+<td><code>CmdGetChannelAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">77</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16770</td>
+<td><code>CmdGetChannelInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">78</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x16780</td>
+<td><code>CmdSetUserAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">79</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x44</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16790</td>
+<td><code>CmdGetUserAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">80</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x45</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x11</td>
+<td style="text-align: right;">0x167a0</td>
+<td><code>CmdSetUserName</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">81</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x46</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x167b0</td>
+<td><code>CmdGetUserName</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">82</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x47</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x167c0</td>
+<td><code>CmdSetUserPassword</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">83</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x48</td>
+<td>0x01 (Callback)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x167d0</td>
+<td><code>CmdActivatePayload</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">84</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x49</td>
+<td>0x01 (Callback)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x167e0</td>
+<td><code>CmdDeactivatePayload</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">85</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x167f0</td>
+<td><code>CmdGetPayloadActivationStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">86</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4b</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16800</td>
+<td><code>CmdGetPayloadInstanceInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">87</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x16810</td>
+<td><code>CmdSetUserPayloadAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">88</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4d</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16820</td>
+<td><code>CmdGetUserPayloadAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">89</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4e</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16830</td>
+<td><code>CmdGetChannelPayloadSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">90</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4f</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16840</td>
+<td><code>CmdGetChannelPayloadVersion</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">91</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x50</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x07</td>
+<td style="text-align: right;">0x16850</td>
+<td><code>CmdGetChannelOEMPayloadInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">92</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x54</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16860</td>
+<td><code>CmdGetChannelCipherSuites</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">93</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x55</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16870</td>
+<td><code>CmdSuspendResumePayloadEncryption</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">94</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x56</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x16880</td>
+<td><code>CmdSetChannelSecurityKeys</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">95</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x57</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16890</td>
+<td><code>CmdGetSystemInterfaceCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">96</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x60</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x168a0</td>
+<td><code>CmdSetCommandEnables</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">97</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x61</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x168b0</td>
+<td><code>CmdGetCommandEnables</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">98</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x62</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x88</td>
+<td style="text-align: right;">0x168c0</td>
+<td><code>CmdSetCommandSubFnEnables</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">99</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x63</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x168d0</td>
+<td><code>CmdGetCommandSubFnEnables</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">100</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x64</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x168e0</td>
+<td><code>CmdGetOEMNetFnIANASupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">101</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x08</td>
+<td style="text-align: right;">0x168f0</td>
+<td><code>CmdFirmwareUpdate</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">102</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16900</td>
+<td><code>CmdFirmwareUpdatePhase1</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">103</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16910</td>
+<td><code>CmdFirmwareUpdatePhase2</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">104</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16920</td>
+<td><code>CmdGetFirmwareUpdateStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">105</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x13</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16930</td>
+<td><code>CmdGetFirmwareVersion</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">106</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x14</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16940</td>
+<td><code>CmdRollbackFirmwareVersion</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">107</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x15</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16950</td>
+<td><code>CmdCancelFirmwareUpdate</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">108</td>
+<td>0x08 (Firmware)</td>
+<td style="text-align: right;">0x16</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16960</td>
+<td><code>CmdSetFWImageStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">109</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16970</td>
+<td><code>CmdGetFRUInvAreaInfoDBUS</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">110</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16980</td>
+<td><code>CmdReadFRUDataDBUS</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">111</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x16990</td>
+<td><code>CmdWriteFRUDataDBUS</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">112</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x20</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x169a0</td>
+<td><code>CmdGetSDRRepoInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">113</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x169b0</td>
+<td><code>CmdResvSDRRepo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">114</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x23</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x169c0</td>
+<td><code>CmdGetSDR</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">115</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x25</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x169d0</td>
+<td><code>CmdPartAddSDR</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">116</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x27</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x169e0</td>
+<td><code>CmdClrSDR</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">117</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x28</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x169f0</td>
+<td><code>CmdGetSDRRepoTime</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">118</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x29</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16a00</td>
+<td><code>CmdSetSDRRepoTime</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">119</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x2c</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x16a10</td>
+<td><code>CmdRunInitAgent</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">120</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16a20</td>
+<td><code>CmdGetSELInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">121</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16a30</td>
+<td><code>CmdReserveSEL</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">122</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x16a40</td>
+<td><code>CmdGetSELEntry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">123</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x44</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x10</td>
+<td style="text-align: right;">0x16a50</td>
+<td><code>CmdAddSELEntry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">124</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x47</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x16a60</td>
+<td><code>CmdClearSEL</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">125</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x48</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x16a70</td>
+<td><code>CmdGetSELTime</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">126</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x49</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16a80</td>
+<td><code>CmdSetSELTime</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">127</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x16a90</td>
+<td><code>CmdSetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">128</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16aa0</td>
+<td><code>CmdGetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">129</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x16ab0</td>
+<td><code>CmdSetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">130</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16ac0</td>
+<td><code>CmdGetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">131</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x16ad0</td>
+<td><code>CmdSetSerModemMux</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">132</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x1c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x16ae0</td>
+<td><code>CmdSetSerRoutingMux</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">133</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x21</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x16af0</td>
+<td><code>CmdSetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">134</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x16b00</td>
+<td><code>CmdGetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">135</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16b10</td>
+<td><code>CmdTerminalSYS</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">136</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0x08</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x16b20</td>
+<td><code>CmdTerminalSYSDRAC</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">137</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xcc</td>
+<td>0x01 (Callback)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x16b30</td>
+<td><code>CmdOSAOEMCmdHandler</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="libdcmiso999--44-entries"><code>libdcmi.so.9.9.9</code> — 44
+entries</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>NetFn</th>
+<th style="text-align: right;">Cmd</th>
+<th>Priv</th>
+<th style="text-align: right;">Flags</th>
+<th style="text-align: right;">Handler addr</th>
+<th>Symbol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x191d0</td>
+<td><code>CmdGetChassisCapabilities</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x191e0</td>
+<td><code>CmdGetChassisStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>0x00 (Chassis)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x191f0</td>
+<td><code>CmdChassisControl</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x27</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x19200</td>
+<td><code>CmdGetSensorThresholds</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x2d</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x19210</td>
+<td><code>CmdGetSensorReading</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x19220</td>
+<td><code>CmdGetDeviceID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x07</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x19230</td>
+<td><code>CmdGetACPIPowerState</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x33</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x19240</td>
+<td><code>CmdGetMsg</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x37</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x19250</td>
+<td><code>CmdGetSystemGUID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x38</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x19260</td>
+<td><code>CmdGetChannelAuthCapability</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x84</td>
+<td style="text-align: right;">0x19270</td>
+<td><code>CmdCloseSession</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">11</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x3d</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x19280</td>
+<td><code>CmdGetSessionInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x19290</td>
+<td><code>CmdSetChannelAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">13</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x41</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x192a0</td>
+<td><code>CmdGetChannelAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">14</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x192b0</td>
+<td><code>CmdGetChannelInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">15</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x192c0</td>
+<td><code>CmdSetUserAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">16</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x44</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x192d0</td>
+<td><code>CmdGetUserAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">17</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x45</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x11</td>
+<td style="text-align: right;">0x192e0</td>
+<td><code>CmdSetUserName</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">18</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x46</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x192f0</td>
+<td><code>CmdGetUserName</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">19</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x47</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x19300</td>
+<td><code>CmdSetUserPassword</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">20</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x48</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x80</td>
+<td style="text-align: right;">0x19310</td>
+<td><code>CmdActivatePayload</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x49</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x19320</td>
+<td><code>CmdDeactivatePayload</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4a</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x19330</td>
+<td><code>CmdGetPayloadActivationStatus</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">23</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4b</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x19340</td>
+<td><code>CmdGetPayloadInstanceInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">24</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x19350</td>
+<td><code>CmdSetUserPayloadAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">25</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4d</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x19360</td>
+<td><code>CmdGetUserPayloadAccess</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">26</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x4e</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x19370</td>
+<td><code>CmdGetChannelPayloadSupport</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">27</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x54</td>
+<td>0x00 (None)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x19380</td>
+<td><code>CmdGetChannelCipherSuites</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">28</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x20</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x19390</td>
+<td><code>CmdGetSDRRepoInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">29</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x193a0</td>
+<td><code>CmdResvSDRRepo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">30</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x23</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x193b0</td>
+<td><code>CmdGetSDR</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">31</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x193c0</td>
+<td><code>CmdGetSELInfo</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">32</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x193d0</td>
+<td><code>CmdReserveSEL</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">33</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x43</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x193e0</td>
+<td><code>CmdGetSELEntry</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">34</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x47</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x06</td>
+<td style="text-align: right;">0x193f0</td>
+<td><code>CmdClearSEL</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">35</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x19400</td>
+<td><code>CmdSetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">36</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x02</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x19410</td>
+<td><code>CmdGetLANConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">37</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x10</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x82</td>
+<td style="text-align: right;">0x19420</td>
+<td><code>CmdSetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">38</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x11</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x19430</td>
+<td><code>CmdGetSerModemConfigParam</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">39</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x12</td>
+<td>0x03 (Operator)</td>
+<td style="text-align: right;">0x02</td>
+<td style="text-align: right;">0x19440</td>
+<td><code>CmdSetSerModemMux</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">40</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x1c</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x03</td>
+<td style="text-align: right;">0x19450</td>
+<td><code>CmdSetSerRoutingMux</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">41</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x21</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x83</td>
+<td style="text-align: right;">0x19460</td>
+<td><code>CmdSetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">42</td>
+<td>0x0c (Transport)</td>
+<td style="text-align: right;">0x22</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x19470</td>
+<td><code>CmdGetSOLConfiguration</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">43</td>
+<td>0x2e (Group/IANA)</td>
+<td style="text-align: right;">0xcc</td>
+<td>0x01 (Callback)</td>
+<td style="text-align: right;">0x85</td>
+<td style="text-align: right;">0x19480</td>
+<td><code>CmdOSAOEMCmdHandler</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="libosaso999--9-entries"><code>libosa.so.9.9.9</code> — 9
+entries</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>NetFn</th>
+<th style="text-align: right;">Cmd</th>
+<th>Priv</th>
+<th style="text-align: right;">Flags</th>
+<th style="text-align: right;">Handler addr</th>
+<th>Symbol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x1a010</td>
+<td><code>CmdGetFWVersion</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x02 (User)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x1a020</td>
+<td><code>CmdGetFWID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x10</td>
+<td style="text-align: right;">0x1a030</td>
+<td><code>CmdSetSysGUID</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x41</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x01</td>
+<td style="text-align: right;">0x1a040</td>
+<td><code>CmdSetBMCSA</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>0x06 (App)</td>
+<td style="text-align: right;">0x42</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x1a050</td>
+<td><code>CmdGetBMCSA</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>0x04 (Sensor/Event)</td>
+<td style="text-align: right;">0x40</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x81</td>
+<td style="text-align: right;">0x1a060</td>
+<td><code>CmdSensorTest</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>0x0a (Storage)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x04</td>
+<td style="text-align: right;">0x1a070</td>
+<td><code>CmdResetToDefaultOSA</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>0x10 (OSA-OEM)</td>
+<td style="text-align: right;">0x00</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x08</td>
+<td style="text-align: right;">0x1a080</td>
+<td><code>CmdMemoryChk</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td>0x10 (OSA-OEM)</td>
+<td style="text-align: right;">0x01</td>
+<td>0x04 (Admin)</td>
+<td style="text-align: right;">0x00</td>
+<td style="text-align: right;">0x1a090</td>
+<td><code>CmdGetDynaAllocMemorySize</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="summary">Summary</h2>
+<ul>
+<li><code>liboemcmds.so.9.9.9</code>: 238 entries</li>
+<li><code>libipmicmdtableapi.so.9.9.9</code>: 138 entries</li>
+<li><code>libdcmi.so.9.9.9</code>: 44 entries</li>
+<li><code>libosa.so.9.9.9</code>: 9 entries</li>
+<li><strong>Total recovered: 429 (NetFn, cmd, priv, handler)
+tuples</strong></li>
+</ul>
+<h3 id="non-command-structures-rejected">Non-command structures
+rejected</h3>
+<p>Detected 16-byte pointer runs that are NOT IPMI command dispatch
+tables (uniformly priv=0; handlers are config-param callbacks,
+channel-driver interfaces, or C++ vtables). Listed for transparency,
+excluded from the count:</p>
+<ul>
+<li><code>libchnl.so.9.9.9</code>: 37 slots (e.g.
+<code>LAN_Channel_Access_Handler</code>)</li>
+<li><code>libsess.so.9.9.9</code>: 10 slots (e.g.
+<code>User_Password_Handler</code>)</li>
+<li><code>libemgr.so.9.9.9</code>: 9 slots (e.g.
+<code>PEF_Entry_Handler</code>)</li>
+<li><code>libsol.so.9.9.9</code>: 8 slots (e.g.
+<code>hwchUARTSOLMsgGet</code>)</li>
+<li><code>libtcpi.so.9.9.9</code>: 5 slots (e.g.
+<code>PSMgrIPAddressConversion</code>)</li>
+<li><code>libipmidipmb.so.9.9.9</code>: 2 slots (e.g.
+<code>IPMBGetInfo</code>)</li>
+<li><code>libkcs.so.9.9.9</code>: 2 slots (e.g.
+<code>KCSGetInfo</code>)</li>
+<li><code>libssif.so.9.9.9</code>: 2 slots (e.g.
+<code>SSIFGetInfo</code>)</li>
+</ul>
+<h2 id="for-diff">For diff</h2>
+<p>Flat sorted <code>(netfn, cmd, handler)</code> list — 383 unique
+across all tables (duplicates across libs collapsed):</p>
+<pre><code>0x00 0x00 CmdGetChassisCapabilities
+0x00 0x00 CmdOEMGetChassisCapabilities
+0x00 0x01 CmdGetChassisStatus
+0x00 0x01 DellCmdGetChassisStatus
+0x00 0x02 CmdChassisControl
+0x00 0x04 CmdOEMChassisIdentify
+0x00 0x05 CmdOEMSetChassisCapabilities
+0x00 0x05 CmdSetChassisCapabilities
+0x00 0x06 CmdSetPowerRestorePolicy
+0x00 0x07 CmdGetSystemRestartCause
+0x00 0x08 CmdSetSystemBootOptions
+0x00 0x08 OEMCmdSetSystemBootOptions
+0x00 0x09 CmdGetSystemBootOptions
+0x00 0x0a DellCmdSetFrntPanelState
+0x00 0x0b CmdSetPowerCycleInterval
+0x04 0x00 CmdSetEventReceiver
+0x04 0x01 CmdGetEventReceiver
+0x04 0x02 CmdPlatformEvent
+0x04 0x10 CmdPEFCGetCapabilities
+0x04 0x11 CmdPEFCArmPostponeTimer
+0x04 0x12 CmdPEFCSetConfigurationParameters
+0x04 0x12 DellOEMCmdSetPEF
+0x04 0x13 CmdPEFCGetConfigurationParameters
+0x04 0x13 DellOEMCmdGetPEF
+0x04 0x14 CmdPEFCSetLastProcessedEventID
+0x04 0x15 CmdPEFCGetLastProcessedEventID
+0x04 0x16 CmdPEFCAlertImmediate
+0x04 0x17 CmdPETCAcknowledge
+0x04 0x23 CmdGetSensorReadingFactors
+0x04 0x23 NotSupportRequestHandle
+0x04 0x24 CmdSetSensorHysteresis
+0x04 0x25 CmdGetSensorHysteresis
+0x04 0x26 CmdSetSensorThresholds
+0x04 0x26 CmdSetSensorThresholdsOverride
+0x04 0x27 CmdGetSensorThresholds
+0x04 0x28 CmdSetSensorEventEnable
+0x04 0x29 CmdGetSensorEventEnable
+0x04 0x2a CmdRearmSensorEvents
+0x04 0x2b CmdGetSensorEventStatus
+0x04 0x2d CmdGetSensorReading
+0x04 0x2f CmdGetSensorType
+0x04 0x30 CmdSetSensorReading
+0x04 0x40 CmdSensorTest
+0x06 0x00 CmdGetFWVersion
+0x06 0x01 CmdGetDeviceID
+0x06 0x01 CmdGetFWID
+0x06 0x02 CmdColdReset
+0x06 0x04 CmdGetSelfTestResults
+0x06 0x04 CmdOEMGetSelfTestResults
+0x06 0x05 CmdManufacturingTestOn
+0x06 0x05 CmdOEMManufacturingTestOn
+0x06 0x06 CmdSetACPIPowerState
+0x06 0x07 CmdGetACPIPowerState
+0x06 0x08 CmdGetDeviceGUID
+0x06 0x09 CmdGetNetFnSupport
+0x06 0x0a CmdGetCommandSupport
+0x06 0x0a CmdOEMGetCommandSupport
+0x06 0x0b CmdGetCommandSubFnSupport
+0x06 0x0c CmdGetConfigurableCommands
+0x06 0x0d CmdGetConfigurableCommandSubFn
+0x06 0x22 CmdResetWatchdogTimer
+0x06 0x24 CmdSetWatchdogTimer
+0x06 0x25 CmdGetWatchdogTimer
+0x06 0x2e CmdSetBMCGlobalEnable
+0x06 0x2f CmdGetBMCGlobalEnable
+0x06 0x30 CmdClearMsgFlags
+0x06 0x31 CmdGetMsgFlags
+0x06 0x32 CmdEnableMsgChannelRecv
+0x06 0x32 CmdOEMEnableMsgChannelRecv
+0x06 0x33 CmdGetMsg
+0x06 0x33 DellCmdNodeMgrDebugInfo
+0x06 0x35 CmdReadEventMsgBuf
+0x06 0x37 CmdGetSystemGUID
+0x06 0x38 CmdCMCGetChannelAuthCap
+0x06 0x38 CmdGetChannelAuthCapability
+0x06 0x39 CmdCMCGetSessionChallenge
+0x06 0x3a CmdCMCActivateSession
+0x06 0x3b CmdCMCSetSessionPrivLevel
+0x06 0x3c CmdCloseSession
+0x06 0x3d CmdGetSessionInfo
+0x06 0x3f CmdGetAuthCode
+0x06 0x40 CmdSetChannelAccess
+0x06 0x40 CmdSetSysGUID
+0x06 0x41 CmdGetChannelAccess
+0x06 0x41 CmdSetBMCSA
+0x06 0x42 CmdGetBMCSA
+0x06 0x42 CmdGetChannelInfo
+0x06 0x42 CmdOEMGetChannelInfo
+0x06 0x43 CmdSetUserAccess
+0x06 0x43 OEMCmdSetUserAccess
+0x06 0x44 CmdGetUserAccess
+0x06 0x45 CmdSetUserName
+0x06 0x45 OEMCmdSetUserName
+0x06 0x46 CmdGetUserName
+0x06 0x47 CmdOEMSetUserPassword
+0x06 0x47 CmdSetUserPassword
+0x06 0x48 CmdActivatePayload
+0x06 0x49 CmdDeactivatePayload
+0x06 0x4a CmdGetPayloadActivationStatus
+0x06 0x4b CmdGetPayloadInstanceInfo
+0x06 0x4c CmdSetUserPayloadAccess
+0x06 0x4d CmdGetUserPayloadAccess
+0x06 0x4e CmdGetChannelPayloadSupport
+0x06 0x4f CmdGetChannelPayloadVersion
+0x06 0x50 CmdGetChannelOEMPayloadInfo
+0x06 0x52 CmdI2CWriteRead_OEM
+0x06 0x54 CmdGetChannelCipherSuites
+0x06 0x55 CmdSuspendResumePayloadEncryption
+0x06 0x56 CmdSetChannelSecurityKeys
+0x06 0x56 OEMCmdSetChannelSecurityKeys
+0x06 0x57 CmdGetSystemInterfaceCapabilities
+0x06 0x58 DellCmdSetSysInfo
+0x06 0x59 DellCmdGetSysInfo
+0x06 0x60 CmdSetCommandEnables
+0x06 0x61 CmdGetCommandEnables
+0x06 0x62 CmdSetCommandSubFnEnables
+0x06 0x63 CmdGetCommandSubFnEnables
+0x06 0x64 CmdGetOEMNetFnIANASupport
+0x08 0x02 CmdFirmwareUpdate
+0x08 0x05 DellDCSSCBMCWrapper
+0x08 0x06 DellDCSSCBMCWrapper
+0x08 0x07 DellDCSSCBMCWrapper
+0x08 0x08 DellDCSSCBMCWrapper
+0x08 0x09 DellDCSSCBMCWrapper
+0x08 0x10 CmdFirmwareUpdatePhase1
+0x08 0x11 CmdFirmwareUpdatePhase2
+0x08 0x12 CmdGetFirmwareUpdateStatus
+0x08 0x13 CmdGetFirmwareVersion
+0x08 0x14 CmdRollbackFirmwareVersion
+0x08 0x15 CmdCancelFirmwareUpdate
+0x08 0x16 CmdSetFWImageStatus
+0x08 0x20 DellDCSSCBMCWrapper
+0x0a 0x01 CmdResetToDefaultOSA
+0x0a 0x10 CmdGetFRUInvAreaInfoDBUS
+0x0a 0x11 CmdOEMReadFRUData
+0x0a 0x11 CmdReadFRUDataDBUS
+0x0a 0x12 CmdWriteFRUDataDBUS
+0x0a 0x20 CmdGetSDRRepoInfo
+0x0a 0x22 CmdResvSDRRepo
+0x0a 0x23 CmdGetSDR
+0x0a 0x25 CmdPartAddSDR
+0x0a 0x25 NotSupportRequestHandle
+0x0a 0x27 CmdClrSDR
+0x0a 0x27 NotSupportRequestHandle
+0x0a 0x28 CmdGetSDRRepoTime
+0x0a 0x29 CmdSetSDRRepoTime
+0x0a 0x2c CmdRunInitAgent
+0x0a 0x40 CmdGetSELInfo
+0x0a 0x42 CmdReserveSEL
+0x0a 0x43 CmdGetSELEntry
+0x0a 0x43 CmdOEMGetSELEntry
+0x0a 0x44 CmdAddSELEntry
+0x0a 0x47 CmdClearSEL
+0x0a 0x48 CmdGetSELTime
+0x0a 0x49 CmdOEMSetSELTime
+0x0a 0x49 CmdSetSELTime
+0x0c 0x01 CmdSetLANConfigParam
+0x0c 0x01 DellCmdSetLANConfigParam
+0x0c 0x02 CmdGetLANConfigParam
+0x0c 0x02 DellCmdGetLANConfigParam
+0x0c 0x10 CmdSetSerModemConfigParam
+0x0c 0x10 DellCmdSetSerModemConfigParam
+0x0c 0x11 CmdGetSerModemConfigParam
+0x0c 0x11 DellCmdGetSerModemConfigParam
+0x0c 0x12 CmdSetSerModemMux
+0x0c 0x1c CmdSetSerRoutingMux
+0x0c 0x21 CmdSetSOLConfiguration
+0x0c 0x21 DellCmdSetSOLConfiguration
+0x0c 0x22 CmdGetSOLConfiguration
+0x0c 0x22 DellCmdGetSOLConfiguration
+0x10 0x00 CmdMemoryChk
+0x10 0x01 CmdGetDynaAllocMemorySize
+0x2c 0x01 CmdDcmiGetDcmiCapabilityInfo
+0x2c 0x01 DellCmdGetMgrCertFingerprint
+0x2c 0x02 CmdDcmiGetPowerReading
+0x2c 0x02 DellCmdGetBootstrapCredentials
+0x2c 0x03 CmdDcmiGetPowerLimit
+0x2c 0x04 CmdDcmiSetPowerLimit
+0x2c 0x05 CmdDcmiActDeactPowerLimit
+0x2c 0x06 CmdDcmiGetAssetTag
+0x2c 0x07 CmdDcmiGetDcmiSensorInfo
+0x2c 0x08 CmdDcmiSetAssetTag
+0x2c 0x09 CmdDcmiGetManagementControllerIdStr
+0x2c 0x0a CmdDcmiSetManagementControllerIdStr
+0x2c 0x0b CmdDcmiSetThermalLimit
+0x2c 0x0c CmdDcmiGetThermalLimit
+0x2c 0x10 CmdDcmiGetTemperatureReadings
+0x2c 0x12 CmdDcmiSetDMCIConfigParam
+0x2c 0x13 CmdDcmiGetDMCIConfigParam
+0x2e 0x01 CmdResvExtendedConfigure
+0x2e 0x02 CmdGetExtendedConfigure
+0x2e 0x03 CmdSetExtendedConfigure
+0x2e 0x04 CmdPOSTEvent
+0x2e 0x07 CmdTerminalSYS
+0x2e 0x08 CmdTerminalSYSDRAC
+0x2e 0x21 CmdResetToDefault
+0x2e 0x40 DellNMCommand
+0x2e 0x41 DellNMCommand
+0x2e 0x42 DellNMCommand
+0x2e 0x43 DellNMCommand
+0x2e 0x44 DellNMCommand
+0x2e 0x45 DellNMCommand
+0x2e 0x46 DellNMCommand
+0x2e 0x4b DellNMCommand
+0x2e 0x60 DellNMCommand
+0x2e 0x61 DellNMCommand
+0x2e 0x64 DellNMCommand
+0x2e 0x65 DellNMCommand
+0x2e 0x66 DellNMCommand
+0x2e 0x67 DellNMCommand
+0x2e 0x68 DellNMCommand
+0x2e 0x69 DellNMCommand
+0x2e 0x80 DellNMCommand
+0x2e 0x81 DellNMCommand
+0x2e 0x82 DellNMCommand
+0x2e 0xa8 DellNMCommand
+0x2e 0xb7 DellNMCommand
+0x2e 0xba DellNMCommand
+0x2e 0xc0 DellNMCommand
+0x2e 0xc1 DellNMCommand
+0x2e 0xc2 DellNMCommand
+0x2e 0xc3 DellNMCommand
+0x2e 0xc4 DellNMCommand
+0x2e 0xc5 DellNMCommand
+0x2e 0xc6 DellNMCommand
+0x2e 0xc7 DellNMCommand
+0x2e 0xc8 DellNMCommand
+0x2e 0xc9 DellNMCommand
+0x2e 0xca DellNMCommand
+0x2e 0xcb DellNMCommand
+0x2e 0xcc CmdOSAOEMCmdHandler
+0x2e 0xce DellNMCommand
+0x2e 0xcf DellNMCommand
+0x2e 0xd0 DellNMCommand
+0x2e 0xd1 DellNMCommand
+0x2e 0xd2 DellNMCommand
+0x2e 0xd3 DellNMCommand
+0x2e 0xd4 DellNMCommand
+0x2e 0xd7 DellNMCommand
+0x2e 0xd8 DellNMCommand
+0x2e 0xd9 DellNMCommand
+0x2e 0xdc DellNMCommand
+0x2e 0xdf DellNMCommand
+0x2e 0xe0 DellCmdNodeMgrDebugInfo
+0x2e 0xe1 DellCmdNodeMgrSendRaw
+0x2e 0xea DellNMCommand
+0x2e 0xf0 DellNMCommand
+0x2e 0xf1 DellNMCommand
+0x2e 0xf2 DellNMCommand
+0x2e 0xf3 DellNMCommand
+0x2e 0xf4 DellNMCommand
+0x2e 0xf5 DellNMCommand
+0x2e 0xf6 DellNMCommand
+0x30 0x11 DellDCSSCBMCWrapper
+0x30 0x12 DellDCSSCBMCWrapper
+0x30 0x13 DellDCSSCBMCWrapper
+0x30 0x14 DellDCSSCBMCWrapper
+0x30 0x15 DellDCSSCBMCWrapper
+0x30 0x16 DellDCSSCBMCWrapper
+0x30 0x17 DellDCSSCBMCWrapper
+0x30 0x18 DellCmdGetBladeSlotId
+0x30 0x19 DellDCSSCBMCWrapper
+0x30 0x1a DellDCSSCBMCWrapper
+0x30 0x1b DellDCSSCBMCWrapper
+0x30 0x1c DellCmdReadWriteFrontPanel
+0x30 0x1d DellDCSSCBMCWrapper
+0x30 0x1e DellDCSSCBMCWrapper
+0x30 0x1f DellDCSSCBMCWrapper
+0x30 0x20 DellDCSSCBMCWrapper
+0x30 0x21 CmdResetToDefault
+0x30 0x22 DellDCSSCBMCWrapper
+0x30 0x23 DellDCSSCBMCWrapper
+0x30 0x24 DellSetTeamingMode
+0x30 0x25 DellDCSSCBMCWrapper
+0x30 0x26 DellDCSSCBMCWrapper
+0x30 0x26 DellNMCommand
+0x30 0x27 DellGetInternalVariable
+0x30 0x28 CmdSetNICSelectionFailover
+0x30 0x29 CmdGetNICSelectionFailover
+0x30 0x2a DellDCSSCBMCWrapper
+0x30 0x2b DellDCSSCBMCWrapper
+0x30 0x2c DellDCSSCBMCWrapper
+0x30 0x2d DellDCSSCBMCWrapper
+0x30 0x2e DellDCSSCBMCWrapper
+0x30 0x2f DellDCSSCBMCWrapper
+0x30 0x30 DellSetFanControlParameters
+0x30 0x31 DellGetFanControlParameters
+0x30 0x32 DellQueryChassisIdentifyStatus
+0x30 0x33 DellQueryGetCPLDRevision
+0x30 0x35 DellCmdFreshAir
+0x30 0x36 DellPcieSSDFRU
+0x30 0x44 DellDCSSCBMCWrapper
+0x30 0x48 DellDCSSCBMCWrapper
+0x30 0x49 DellDCSSCBMCWrapper
+0x30 0x4a DellDCSSCBMCWrapper
+0x30 0x4b DellDCSSCBMCWrapper
+0x30 0x4c DellDCSSCBMCWrapper
+0x30 0x4d DellDCSSCBMCWrapper
+0x30 0x51 DellCmdGetHostEventStatus
+0x30 0x87 DellCmdServerPwrOnResponse
+0x30 0x8c DellCmdRequestedAirflow
+0x30 0x8d DellCmdVKVMStatus
+0x30 0x8e DellCmdVMediaStatus
+0x30 0x8f DellCmdServerPwrConsumption
+0x30 0x90 DellCmdGetIMCStatusRegister
+0x30 0x91 DellCmdIMCFirmwareUpdate
+0x30 0x92 DellCmdEDIDInfo
+0x30 0x93 DellCmdLCDReadFromStaging
+0x30 0x94 DellCmdLCDReadFromQueue
+0x30 0x95 DellCmdChassisFanStatus
+0x30 0x96 DellCmdLoginAccess
+0x30 0x97 DellCmdSetIMCStatusRegister
+0x30 0x98 DellCmdLEDStatus
+0x30 0x99 DellCmdGetLastPostCode
+0x30 0x9a DellCmdMemThrottlingCtrl
+0x30 0x9b DellCmdGetPowerCycleInterval
+0x30 0x9c DellPwrGetPwrConsumptionData
+0x30 0x9d DellPwrResetPwrConsumptionData
+0x30 0x9e DellCmdBladeACPowerCycle
+0x30 0x9f DellCmdSpecialACCycle
+0x30 0xa0 CmdGetSoftLockStatus
+0x30 0xa1 CmdOEMPOSTMASERAccess
+0x30 0xa2 CmdOEMMASERPartitionAccess
+0x30 0xa3 CmdOEMRemoteEnablement
+0x30 0xa4 CmdOEMvFlash
+0x30 0xa5 CmdOEMDellFactory
+0x30 0xa6 CmdOEMBackupRestore
+0x30 0xa7 CmdOEMToolSet
+0x30 0xa8 CmdOEMSupportAssist
+0x30 0xa9 CmdOEMMASER_PM
+0x30 0xaa CmdOEMMASERLCLAccess
+0x30 0xab CmdOEMGetMASERInfo
+0x30 0xac CmdOEMRecreateMASER
+0x30 0xad CmdOEMGetMASERType
+0x30 0xae CmdOEMGetMASERAccessState
+0x30 0xaf CmdOEMSetMASERAccessState
+0x30 0xb0 DellPwrPSUInfo
+0x30 0xb3 DellPwrRealTimePwrConsumption
+0x30 0xb5 DellCmdGetFrontPanelInfo
+0x30 0xb6 DellPwrPSUFirmwareUpdate
+0x30 0xb7 DellPwrPSUFirmwareUpdateStatus
+0x30 0xb8 QueueSpdDimmInfoCmd
+0x30 0xb9 QueueSpdDimmInfoCmd
+0x30 0xba DellPwrCapEnable
+0x30 0xbb DellPwrHeadroom
+0x30 0xbc DellCPLDAccessStatus
+0x30 0xbd DellCmdIMCFeatureSupport
+0x30 0xbe DellRollbackFW
+0x30 0xbf DellGetFWVersion
+0x30 0xc0 DellPwrEfficiency
+0x30 0xc1 DellGetActiveLOM
+0x30 0xc3 DellCmdCMCFeatureSupport
+0x30 0xc5 DellDCSSCBMCWrapper
+0x30 0xc6 DellDCSSCBMCWrapper
+0x30 0xc7 DellDCSSCBMCWrapper
+0x30 0xc8 DellDCSSCBMCWrapper
+0x30 0xc9 DellCmdBladeVirtualMAC
+0x30 0xcb DellCmdBladeChassisInfo
+0x30 0xcc DellPwrAverageInterval
+0x30 0xcd DellPwrAverageRange
+0x30 0xce SubCmdHandler
+0x30 0xcf SubCmdHandler
+0x30 0xd0 CmdOEMMiscCmd
+0x30 0xd1 SubCmdHandler
+0x30 0xd2 RacMw_TransferData
+0x30 0xd3 SubCmdHandler
+0x30 0xd4 DellCmdiDracPOSTCode
+0x30 0xd5 SubCmdHandler
+0x30 0xd6 SubCmdHandler
+0x30 0xd7 DellDCSSCBMCWrapper
+0x30 0xd8 DellDCSSCBMCWrapper
+0x30 0xda DellDCSSCBMCWrapper
+0x30 0xdb FileObjCmdHandler
+0x30 0xdc DellDCSSCBMCWrapper
+0x30 0xdd ConfigValDDCmdHndlr
+0x30 0xde DellBpAckDriveRemoval
+0x30 0xdf DellDCSSCBMCWrapper
+0x30 0xfa DellCmdSmaMbxFlag
+0x32 0x01 CmdDcmiGetPowerReading
+0x32 0x02 DellDCSSCBMCWrapper
+0x32 0x03 DellDCSSCBMCWrapper
+0x32 0x73 DellDCSSCBMCWrapper
+0x36 0xf5 DellDCSSCBMCWrapper</code></pre>
+</div>
+</body>
+</html>

@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Build or verify paired Markdown and HTML documentation."""
+
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+HTML_MARKER = "<!-- zmd2html:auto -->"
+MD_MARKER_PREFIX = "<!-- html2md:auto source="
+PANDOC_VERSION = "3.7.0.2"
+
+
+def run(command: list[str], root: Path) -> bytes:
+    result = subprocess.run(command, cwd=root, capture_output=True)
+    if result.returncode:
+        sys.stderr.buffer.write(result.stderr)
+        raise SystemExit(f"sync-docs: command failed: {' '.join(command)}")
+    return result.stdout
+
+
+def documents(root: Path) -> dict[Path, dict[str, Path]]:
+    output = run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.md", "*.html"],
+        root,
+    )
+    pairs: dict[Path, dict[str, Path]] = {}
+    for name in output.decode().splitlines():
+        path = root / name
+        if name.endswith(".standalone.html"):
+            continue
+        pairs.setdefault(path.with_suffix(""), {})[path.suffix] = path
+    return pairs
+
+
+def generated(path: Path, marker: str) -> bool:
+    return path.exists() and marker in path.read_text(encoding="utf-8", errors="replace")[:512]
+
+
+def expected(root: Path, source: Path) -> bytes:
+    if source.suffix == ".md":
+        return run([str(root / "tools/zmd2html"), str(source)], root)
+    body = run(
+        [
+            "pandoc",
+            "--from=html",
+            "--to=gfm",
+            "--wrap=none",
+            f"--lua-filter={root / 'tools/html-to-gfm.lua'}",
+            str(source),
+        ],
+        root,
+    )
+    marker = f"<!-- html2md:auto source={source.relative_to(root).as_posix()} -->\n\n".encode()
+    return marker + body
+
+
+def authority(files: dict[str, Path]) -> tuple[Path, Path]:
+    md = files.get(".md")
+    html = files.get(".html")
+    if md and not html:
+        return md, md.with_suffix(".html")
+    if html and not md:
+        return html, html.with_suffix(".md")
+    assert md and html
+    md_generated = generated(md, MD_MARKER_PREFIX)
+    html_generated = generated(html, HTML_MARKER)
+    if html_generated and not md_generated:
+        return md, html
+    if md_generated and not html_generated:
+        return html, md
+    raise SystemExit(f"sync-docs: ambiguous pair without one generated side: {md} / {html}")
+
+
+def replace(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+        stream.write(content)
+        temporary = stream.name
+    os.replace(temporary, path)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--write", action="store_true", help="create or refresh generated siblings")
+    mode.add_argument("--check", action="store_true", help="fail if a generated sibling is missing or stale")
+    args = parser.parse_args()
+
+    root = Path(__file__).resolve().parent.parent
+    if not (root / ".git").exists():
+        raise SystemExit("sync-docs: run from a Git checkout")
+    pandoc = shutil.which("pandoc")
+    if not pandoc:
+        raise SystemExit("sync-docs: pandoc not found; run tools/install-pandoc-docs and add its path")
+    version = subprocess.check_output([pandoc, "--version"], text=True).splitlines()[0]
+    if version != f"pandoc {PANDOC_VERSION}":
+        raise SystemExit(
+            f"sync-docs: requires pandoc {PANDOC_VERSION}, found {version}; "
+            "run tools/install-pandoc-docs and add its path"
+        )
+
+    stale: list[Path] = []
+    for files in documents(root).values():
+        source, destination = authority(files)
+        content = expected(root, source)
+        if destination.exists() and destination.read_bytes() == content:
+            continue
+        stale.append(destination)
+        if args.write:
+            replace(destination, content)
+            print(f"wrote {destination.relative_to(root)}")
+
+    if stale and args.check:
+        print("sync-docs: missing or stale generated files:", file=sys.stderr)
+        for path in stale:
+            print(f"  {path.relative_to(root)}", file=sys.stderr)
+        return 1
+    print(f"documentation pairs: {'updated' if stale else 'current'} ({len(stale)} changed)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

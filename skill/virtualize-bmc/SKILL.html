@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtualize BMC firmware with zbmc</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtualize BMC firmware with zbmc</h1>
+  </div>
+</div>
+
+<p>Use the repository contract, not a hand-written QEMU command, for
+registered boxes. Current runtime authority is <code>README.md</code>,
+<code>tools/zbmc</code>, the selected
+<code>boxes/&lt;name&gt;/zbmc.box</code>, and tests. The 0.1.1 package
+supports x86_64 Linux only.</p>
+<pre class="bash"><code>./build.sh &lt;box&gt;
+sudo ./tools/zbmc &lt;box&gt; start
+./tools/zbmc &lt;box&gt; status -v
+./tools/zbmc &lt;box&gt; console</code></pre>
+<p>Each descriptor pins a QEMU executable, SHA-256, exact version,
+machine, and QMP smoke test. Never substitute a PATH-selected QEMU.
+<code>-q /absolute/path/qemu-system-*</code> deliberately validates and
+persists a replacement; use it only after proving the candidate boots
+that box and passes its functional probes.</p>
+<h2 id="define-the-claim-before-changing-firmware">Define the claim
+before changing firmware</h2>
+<p>Record these separately:</p>
+<ol type="1">
+<li>What booted: bootloader, kernel, init, vendor services.</li>
+<li>Which vendor components remain in each request path.</li>
+<li>Which missing board/environment state was reconstructed.</li>
+<li>Which behavior was interposed or replaced.</li>
+<li>Which functional probes establish acceptance.</li>
+</ol>
+<p>Supplying a missing environment to a retained vendor component
+supports bounded claims about that component. Replacing the endpoint
+proves only integration around the substitute. A listening port,
+process, login prompt, ICMP reply, or synthetic response is not proof of
+IPMI, Redfish, SSH, or Web-UI functionality. Preserve console output and
+run evidence; use <code>status -v</code> and <code>evidence</code> to
+locate both.</p>
+<h2 id="route-by-soc-and-image">Route by SoC and image</h2>
+<p>Read the DTB/FIT and firmware metadata before choosing a machine.</p>
+<table>
+<thead>
+<tr>
+<th>SoC / current box</th>
+<th>Packaged QEMU machine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NPCM750 / iDRAC9</td>
+<td>QEMU 11 ARM, <code>npcm750-evb</code></td>
+</tr>
+<tr>
+<td>NPCM845 / iDRAC10</td>
+<td>patched QEMU 11 AArch64, <code>npcm845-evb</code></td>
+</tr>
+<tr>
+<td>AST2400 / Supermicro X10</td>
+<td>patched QEMU 11 ARM, <code>supermicrox11-bmc</code></td>
+</tr>
+<tr>
+<td>AST2600 / OpenBMC, X14, MegaRAC</td>
+<td>QEMU 11 ARM, <code>ast2600-evb</code></td>
+</tr>
+<tr>
+<td>AST2600 / NVIDIA GB200</td>
+<td>QEMU 11 ARM, <code>gb200nvl-bmc</code></td>
+</tr>
+<tr>
+<td>AST2600 / Advantech</td>
+<td>preserved Debian QEMU 10.0.11, <code>ast2600-evb</code></td>
+</tr>
+</tbody>
+</table>
+<p>No current package covers HPE GXP/iLO5. Do not infer that a nearby
+ARM machine is compatible.</p>
+<p>Choose the least invasive boot path that works:</p>
+<ul>
+<li>Full flash for complete OpenBMC images whose boot chain is
+modeled.</li>
+<li>Direct kernel/DTB/initramfs when SPL, ROT, OP-TEE, CPLD, or storage
+initialization blocks first-stage boot.</li>
+<li>Extract a FIT with <code>dumpimage</code>; QEMU <code>-kernel</code>
+does not unpack a FIT.</li>
+<li>MegaRAC uses a RAM-disk root. iDRAC9/10 use SD-backed filesystems.
+Current X14 service boot uses the vendor initramfs as
+<code>root=/dev/ram</code> while retaining eMMC at
+<code>if=sd,index=2</code>.</li>
+<li>Never attach a canonical writable flash image. Copy it to a per-run
+image or use the descriptor.</li>
+</ul>
+<h2 id="scope-workarounds-narrowly">Scope workarounds narrowly</h2>
+<ul>
+<li>NPCM console is <code>ttyS0</code>; AST2600 console is normally
+<code>ttyS4</code>. Do not prepend a serial device that consumes the
+expected console.</li>
+<li>Dell kernels may force compiled boot arguments. Confirm
+<code>CONFIG_CMDLINE_FORCE</code> before relying on
+<code>-append</code>.</li>
+<li>X14 direct-kernel boot only uses <code>maxcpus=1</code>, the
+non-NC-SI DTB, service masks, and manual bmcweb preparation. Do not
+apply those changes to full-flash OpenBMC or NVIDIA boots.</li>
+<li>QEMU's current AST2600 FTGMAC consumes NC-SI internally. An external
+responder cannot repair the Advantech path; its older guest remains
+console-only pending a kernel or emulator compatibility fix.</li>
+<li>Never infer credentials, cipher, or timeout from vendor family. Read
+<code>IPMI_USER</code>, <code>IPMI_PW</code>, <code>IPMI_KEY</code>,
+<code>IPMI_OPTS</code>, and <code>IPMI_T</code> from the descriptor.
+Dell uses factory keys; NVIDIA uses its declared password plus cipher
+17.</li>
+</ul>
+<p>Warm migration is box-specific. Use only the descriptor's
+snapshot/restore behavior with its pinned QEMU and matched storage.
+iDRAC9 and iDRAC10 are cold-only; X14 and MegaRAC-HPE opt into their
+matched snapshots with <code>start --warm</code>. Re-run every declared
+functional probe after restore.</p>
+<h2 id="add-or-change-a-box">Add or change a box</h2>
+<ol type="1">
+<li>Preserve the source artifact and hashes; identify the exact
+container, partitions, SoC, DTB, UART, storage layout, and boot
+arguments.</li>
+<li>Start from the closest existing descriptor and packaged QEMU. Add a
+QEMU variant only after a controlled comparison proves an architecture,
+machine, patch, or migration requirement.</li>
+<li>Keep build artifacts under <code>work/&lt;box&gt;</code> and runtime
+writes in per-run copies.</li>
+<li>Declare only intended service acceptance in
+<code>ZBMC_REQUIRED_SERVICES</code>; keep Redfish and Web-UI separate.
+Add a functional probe for every declared service.</li>
+<li>Start with <code>--no-wait</code>, follow with
+<code>status --follow</code>, and inspect the recorded console log.</li>
+<li>Add one focused regression test for the compatibility or lifecycle
+rule introduced.</li>
+</ol>
+<p>Read <a href="../../docs/why-bmc-virtualization-is-hard.html">Why
+Virtualizing BMC Firmware Was Hard</a> for the evidence model and <a
+href="../../docs/why-multiple-qemu-builds.html">Why zbmc Ships Multiple
+QEMU Builds</a> for runtime provenance. <code>docs/zoo-lessons.md</code>
+preserves useful engineering history; verify every operational claim
+against the current descriptor and tests before reuse.</p>
+</div>
+</body>
+</html>

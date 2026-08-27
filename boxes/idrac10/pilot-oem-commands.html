@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC10 Dell OEM IPMI Command Handlers — Pilot (12 commands)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC10 Dell OEM IPMI Command Handlers — Pilot (12 commands)</h1>
+  </div>
+</div>
+
+<p>Firmware: iDRAC10 1.30.10.50 (aarch64). Source libs:
+<code>rootfs-extracted/usr/lib/ipmi/*.so.9.9.9</code>. Method: Ghidra
+12.0 headless decompilation of the <em>defining</em> function body
+(resolved via <code>.dynsym</code> name, not the dispatch-table thunk
+address). Dispatch metadata (netfn/cmd/priv/flags) from
+<code>idrac10-dispatch-tables.md</code>.</p>
+<p>This is a <strong>calibration pilot</strong>: the goal is to nail the
+per-command schema below so it can be fanned out to all ~190 Dell OEM
+commands. See the closing "Scaling" section.</p>
+<hr />
+<h2 id="schema--method">Schema + method</h2>
+<p>Each command block has these fields. How each was derived:</p>
+<ul>
+<li><strong>Name / NetFn / Cmd / Privilege / Flags</strong> — verbatim
+from <code>idrac10-dispatch-tables.md</code> (the dispatch entry). Priv:
+0=None,1=Callback,2=User,3=Operator,4=Admin,5=OEM.</li>
+<li><strong>Defined in</strong> — which <code>.so</code> actually
+contains the function body + its file-vaddr (from
+<code>objdump -T</code>, filtering out <code>*UND*</code> imports). The
+dispatch table in
+<code>liboemcmds</code>/<code>libipmicmdtableapi</code> often only holds
+a GLOB_DAT pointer to a symbol defined in another lib (e.g.
+<code>libmaser</code>, <code>libmisccmd</code>,
+<code>libosa</code>).</li>
+<li><strong>Purpose</strong> — plain English, read off the decompiled
+control flow + log/<code>dlog_printf</code> format strings (many
+handlers log their own function name and a human description of each
+branch — a gift).</li>
+<li><strong>Request</strong> — byte layout. <strong>Calling
+convention</strong> (constant across every handler, high confidence):
+the handler is
+<code>cc_t handler(REQ *req, u8 *resp_len, u8 *resp_data)</code>.
+<ul>
+<li><code>req+7</code> = <code>u8CmdDataLen</code> — number of IPMI data
+bytes that follow (the handlers literally compare against this;
+confirmed by the group-extension commands placing the 3-byte IANA at
+req+8..+10).</li>
+<li><code>req+8</code> = <strong>IPMI data byte 0</strong>
+(<code>data[0]</code>), <code>req+9</code> = <code>data[1]</code>, … So
+<em>IPMI data-byte index N lives at req+8+N</em>. I give both the struct
+offset and the <code>data[N]</code> index.</li>
+<li><code>req+0</code> = a message-source/medium byte. Several handlers
+test <code>*req &gt;&gt; 4 == 7</code> to branch (e.g. pick a per-source
+scratch buffer). Interpreted as an internal channel/medium tag —
+<strong>med confidence</strong>; not attacker-supplied payload, so it
+doesn't affect the request wire format.</li>
+<li><code>req+1..+6</code> = session/lun/seq header, not parsed by these
+handlers.</li>
+</ul></li>
+<li><strong>Response</strong> — bytes the handler writes.
+<code>*resp_len</code> (at the <code>resp_len</code> pointer) = number
+of data bytes; <code>resp_data[0..]</code> = payload; <strong>completion
+code is the function return value</strong> (separate from the data
+buffer). Standard CCs seen: <code>0x00</code> ok, <code>0xC7</code>(199)
+req-length-invalid, <code>0xCC</code> invalid data field / unknown
+subcommand, <code>0xD4</code> insufficient-priv/security-restriction
+(used here for the out-of-band rejection), <code>0x80</code> OEM
+"feature disabled", <code>0xC0</code> node busy, <code>0xC9</code> param
+out of range, <code>0xCB</code> requested data not present,
+<code>0xFF</code> unspecified.</li>
+<li><strong>Backend deps</strong> — cfgdb keys
+(<code>CfgGetAttribute*</code>/<code>CfgSetAttribute*</code>), files
+(<code>fopen64</code>/<code>stat64</code> paths), dbus
+(<code>sd_bus_*</code>/<code>dbusMethodCall</code>), IPC clients
+(<code>*_IPCClient</code>), hardware/RAC APIs. Taken directly from the
+calls in the decompilation. These predict what is exercisable on the
+emulator.</li>
+<li><strong>Security notes</strong> — reachability gate (in-band-only vs
+LAN), what it writes/exposes, cred/cert/FW relevance.</li>
+<li><strong>Confidence</strong> — high/med/low + what's uncertain.</li>
+</ul>
+<p><strong>Reachability gates (recurring, high confidence):</strong></p>
+<ul>
+<li><code>IsInBandCommand()</code> /
+<code>IsMsgFromSystemInterface()</code> (both imported) == "request came
+from the host-side KCS/system interface." Many OEM 0x30 and both 0x2c
+commands <strong>reject out-of-band (LAN/RMCP+) callers</strong>
+outright (<code>0xD4</code> or <code>0x01</code>). This is the single
+biggest testability fact: on the emulated box these are only reachable
+via the host KCS path, not remote IPMI.</li>
+</ul>
+<p><strong>Per-command cost:</strong> ~5–8 min each wall-clock, but that
+is dominated by one-time Ghidra import+auto-analysis per lib (4 libs,
+run in parallel). Actual marginal decompile+read is ~2 min/command. All
+12 were Ghidra decompilation (no objdump fallback needed); decompiler
+output quality was high (named cfgdb keys, named sub-handlers,
+self-logging format strings).</p>
+<hr />
+<h2 id="1-cmdgetextendedconfigure">1. CmdGetExtendedConfigure</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x2E (Group/IANA) /
+0x02 / User(2) / 0x89</li>
+<li><strong>Defined in:</strong> <code>liboemcmds.so.9.9.9</code> @
+0x197c0 (size 0x3f4)</li>
+<li><strong>Purpose:</strong> Read a chunk of the RAC "extended
+configuration" blob addressed by a <em>token</em> (config class) and
+<em>index</em>, with a reserve-ID handshake and offset-based chunked
+read (≤0x80 bytes per call). This is the IPMI transport for Dell's
+RACADM/token config store.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must ==
+9</strong>. | struct off | data[] | field | meaning | |---|---|---|---|
+| +8..+10 | data[0..2] | IANA (LE, 3B) | must == 0x0002A2 (Dell, 674)
+else <code>0xCC</code> | | +11 | data[3] | reserve id | reservation
+handle | | +12 | data[4] | token (<code>bVar2</code>) | config class;
+token 0x0B = special "version/build" fast-path | | +13 | data[5] | index
+(<code>bVar3</code>) | instance index | | +14..+15 | data[6..7] | offset
+(u16 LE) | read offset into blob; 0 = start (reloads blob) | | +16 |
+data[8] | read len | bytes to return (clamped to 0x80) |</li>
+<li><strong>Response:</strong> <code>data[0..1]</code>=IANA low echo,
+<code>data[2]</code>=IANA high, <code>data[3]</code>=token,
+<code>data[4]</code>=index, <code>data[5]</code>=byte count returned,
+<code>data[6..]</code>=config bytes. <code>*resp_len = count + 6</code>.
+CC <code>0x00</code>. Token-mismatch across a chunked read →
+<code>0xC9</code>. Token validity checked by
+<code>FUN_00116eb0(token,…)</code>.</li>
+<li><strong>Backend deps:</strong> <code>GetRACExtendedConfig()</code>
+(RAC token store). Two static 0x6000-byte (24KB) scratch buffers keyed
+by request source (<code>*req&gt;&gt;4==7</code> picks
+<code>DAT_001597c8</code> vs <code>DAT_0015f7d8</code>). Token 0x0B
+returns fixed bytes <code>DAT_00137d10..20</code> (build/version).</li>
+<li><strong>Security notes:</strong> User priv, but a
+<strong>read</strong> primitive over the whole RAC config token space;
+content sensitivity depends on token. No auth beyond IPMI session priv.
+Chunked-read state is global/shared (per-source buffer) → possible
+cross-session read interleaving if two Users race the same source
+tag.</li>
+<li><strong>Confidence:</strong> high on request layout &amp;
+token/offset semantics; med on the <code>*req&gt;&gt;4==7</code>
+source-tag buffer selection (interpretation of req+0).</li>
+</ul>
+<h2 id="2-cmdsetextendedconfigure">2. CmdSetExtendedConfigure</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x2E (Group/IANA) /
+0x03 / Admin(4) / 0x89</li>
+<li><strong>Defined in:</strong> <code>liboemcmds.so.9.9.9</code> @
+0x19bb4 (size 0x3cc)</li>
+<li><strong>Purpose:</strong> Write side of the token config store.
+Accumulates payload chunks into a 24KB buffer and commits via
+<code>SetRACExtendedConfig()</code> when the "commit" byte is set.
+Requires a matching reserve ID.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must be
+≥ 9</strong>. | struct off | data[] | field | meaning |
+|---|---|---|---| | +8..+10 | data[0..2] | IANA (LE) | must == 0x0002A2
+else <code>0xCC</code> | | +11 | data[3] | reserve id | must ==
+<code>G_u8RacResvID</code> (from CmdResvExtendedConfigure) else
+<code>0xC5</code> | | +12 | data[4] | token | config class | | +13 |
+data[5] | index | instance | | +14..+15 | data[6..7] | offset (u16 LE) |
+write offset; must match accumulated length else <code>0xC9</code> | |
++16 | data[8] | commit flag | ==1 → call
+<code>SetRACExtendedConfig</code> and reset buffer | | +17.. | data[9..]
+| payload | <code>datalen-9</code> bytes, memcpy into
+<code>DAT_001537bc</code> (cap 0x6000) |</li>
+<li><strong>Response:</strong> <code>data[0..1]</code>=IANA low echo,
+<code>data[2]</code>=IANA high,
+<code>data[3]</code>=bytes-written-this-chunk.
+<code>*resp_len = 4</code>. CC <code>0x00</code>; commit failure →
+<code>0xCC</code>.</li>
+<li><strong>Backend deps:</strong> <code>SetRACExtendedConfig()</code>;
+global 0x6000 accumulation buffer + length/token/index state
+(<code>DAT_001537b8</code>, <code>DAT_001597bc</code>,
+<code>DAT_001597c0</code>).</li>
+<li><strong>Security notes:</strong> <strong>Admin write primitive into
+the RAC config token store</strong> — the mutating counterpart to #1.
+Reserve-ID handshake is the only integrity gate; no per-token ACL
+visible at this layer. High-value: whatever RACADM/iDRAC config is
+token-addressable can be set here. <code>memcpy</code> is length-clamped
+to 0x6000 (no obvious overflow), offset must equal running length (no
+arbitrary seek).</li>
+<li><strong>Confidence:</strong> high.</li>
+</ul>
+<h2 id="3-cmdresettodefault">3. CmdResetToDefault</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x2E/0x21
+<strong>and</strong> 0x30/0x21 (two dispatch entries, same handler) /
+Admin(4) / 0x01</li>
+<li><strong>Defined in:</strong> <code>libosa.so.9.9.9</code> @ 0x6864
+(size 0x26c)</li>
+<li><strong>Purpose:</strong> Reset iDRAC configuration to defaults
+(RTD). data[0] selects a query vs a reset-variant; the actual reset runs
+on a detached worker thread.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must ==
+1</strong>. | struct off | data[] | field | meaning | |---|---|---|---|
+| +8 | data[0] | RTD mode | <code>0x00</code> = <strong>query status
+only</strong> (returns whether an RTD lock is present); other values =
+perform reset |
+<ul>
+<li>For reset: <code>data[0]</code> must be <code>0xAA</code>,
+<code>0xCC</code>, or fall in a bitmap of allowed variant codes
+(<code>(bVar5+0x23)</code> in {…}; the <code>0x400020001</code> mask).
+Else <code>0xCC</code>. Special: <code>data[0]==0xAA</code> and
+<code>*req&gt;&gt;4==7</code> (host source) is rewritten to variant
+<code>0xDD</code>.</li>
+</ul></li>
+<li><strong>Response:</strong> Query mode: <code>*resp_len=1</code>,
+<code>resp_data[0]</code> =
+<code>stat64("/var/lock/rtd/r2default.lock")!=0</code> (1 = no lock /
+idle). Reset mode: <code>*resp_len=1</code>,
+<code>resp_data[0]=0</code>, CC <code>0x00</code> after spawning
+worker.</li>
+<li><strong>Backend deps:</strong>
+<code>stat64("/var/lock/rtd/r2default.lock")</code>;
+<code>preChecks()</code>; <code>IsFirmwareUpdateInProgress()</code>
+(blocks RTD during FW update → <code>0xC0</code>); worker
+<code>threadResetToDefault</code> (→
+<code>CfgResetConfigToDefaults</code>,
+<code>CfgDAResetToDefaults</code>, <code>PEFLANCfgResetToDefault</code>,
+<code>ResetLANIPCfgToDefault</code>,
+<code>run_mount_maser_as_root</code> per libosa imports).</li>
+<li><strong>Security notes:</strong> <strong>Destructive.</strong>
+Admin-gated factory/config reset of the iDRAC. Refuses while a FW update
+is in progress. The <code>0xAA→0xDD</code> host-only rewrite implies a
+broader "full reset" variant only reachable from the system interface.
+Async (returns before completion) — status pollable via query mode.</li>
+<li><strong>Confidence:</strong> high on flow &amp; lock file; med on
+the exact meaning of each allowed variant code (bitmap decoded but
+per-code semantics not individually labeled in this function).</li>
+</ul>
+<h2 id="4-cmdoemvflash">4. CmdOEMvFlash</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA4
+/ User(2) / 0x81</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x21510 (size 0x464)</li>
+<li><strong>Purpose:</strong> vFlash (SD-card virtual flash) management
+dispatcher. <code>data[0]</code> = subcommand selecting a vFlash
+operation; routes to a dedicated sub-handler.</li>
+<li><strong>Request:</strong> <code>req+8</code> = <code>data[0]</code>
+= subcommand. Sub-handler parses the rest. | data[0] | sub-handler |
+|---|---| | 0x00 | <code>CmdOEMVflashGetCardInfo</code> | | 0x01 |
+<code>CmdOEMVflashCardControl</code> (enable/disable vFlash) | | 0x10 |
+<code>CmdOEMVflashGetPartitionIndexInfo</code> | | 0x11 |
+<code>CmdOEMLVflashGetPartitionInfo</code> | | 0x12 / 0x13 |
+<code>CmdOEMVflashAttachPartitions</code> / <code>…Detach…</code> | |
+0x14 / 0x15 | <code>…SetBootPartition</code> /
+<code>…GetBootPartition</code> | | 0x20 / 0x21 |
+<code>…CreateEmptyPartition</code> / <code>…FormatPartition</code> | |
+0x22 / 0x23 | <code>…ChangePartitionAccessType</code> /
+<code>…DeletePartition</code> | | 0x24 / 0x25 |
+<code>…GetJobStatus</code> / <code>…GetPartitionStatus</code> | | other
+| <code>0xCC</code> |</li>
+<li><strong>Response:</strong> produced by the sub-handler
+(<code>*resp_len</code>,<code>resp_data</code>), CC returned
+through.</li>
+<li><strong>Backend deps:</strong> <code>IsMsgFromSystemInterface</code>
+gate; VFL_* API (<code>VFL_Boot_VFlash_Label</code>,
+<code>VFL_Boot_VFlash_Partition</code>, <code>VFL_Disable_vFlash</code>,
+<code>VFL_List_SD_Card_Info</code>), SD-card device.</li>
+<li><strong>Security notes:</strong> <strong>In-band-only</strong>
+(<code>IsMsgFromSystemInterface==0 → CC 0x01</code>). User priv but not
+LAN-reachable. Attach/format/delete-partition + set-boot-partition =
+full control over the vFlash virtual media the host can boot from
+(attack surface: host boot-image substitution) — but only from the host
+side. This handler is the parent of the historical
+VFLASH-LABEL-TRAVERSAL / IMAGE-URL issues.</li>
+<li><strong>Confidence:</strong> high for the dispatch map; sub-handler
+byte layouts not expanded (each is its own command in the full
+fan-out).</li>
+</ul>
+<h2 id="5-cmdoembackuprestore">5. CmdOEMBackupRestore</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA6
+/ User(2) / 0x81</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x21a40 (size 0x354)</li>
+<li><strong>Purpose:</strong> iDRAC/system config <strong>Backup &amp;
+Restore</strong> (SCP-style) dispatcher over the MASER (Managed Storage
+/ partition) subsystem. <code>data[0]</code> = subcommand.</li>
+<li><strong>Request:</strong> <code>req+8</code> = <code>data[0]</code>
+= subcommand: | data[0] | sub-handler | |---|---| | 0 |
+<code>CmdOEMBnRPopulateBackupCmd</code> | | 1 |
+<code>CmdOEMBnRSendBackupCmd</code> | | 2 |
+<code>CmdOEMBnRPopulateRestoreCmd</code> | | 3 |
+<code>CmdOEMBnRSendRestoreCmd</code> | | 4 |
+<code>CmdOEMBnRQueryJobStatus</code> | | 5 |
+<code>CmdOEMBnRQueryJobID</code> | | 6 | <code>CmdOEMBnRCancelCmd</code>
+| | 7 | <code>CmdOEMBnRSetJobStatusCmd</code> | | 8,9 | reserved → CC
+0x01 | | 10 | <code>CmdOEMBnRGetAutoFeatureStatus</code> | | 0x0B |
+<code>CmdOEMBnRGetAutoRestoreVflCap</code> | | other | <code>0xCC</code>
+|</li>
+<li><strong>Response:</strong> from sub-handler.</li>
+<li><strong>Backend deps:</strong> <code>IsMsgFromSystemInterface</code>
+gate; MASER partition storage, job queue, vFlash (auto-restore
+capability).</li>
+<li><strong>Security notes:</strong> <strong>In-band-only.</strong>
+Backup/restore moves the <em>entire</em> iDRAC config profile (creds,
+certs, licenses) to/from a MASER partition. Restore = config-injection
+primitive; "SetJobStatus" (sub 7) mutating job state is worth a
+dedicated look. Not LAN-reachable at this layer.</li>
+<li><strong>Confidence:</strong> high for dispatch; sub-handlers
+deferred.</li>
+</ul>
+<h2 id="6-cmdoemsupportassist">6. CmdOEMSupportAssist</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA8
+/ User(2) / 0x81</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x30644 (size 0x628)</li>
+<li><strong>Purpose:</strong> SupportAssist (SA) / iSM collection
+control: expose/hide the iSM installer, start/stop native-OS log
+collection, initiate/cancel an SA data collection, query status.
+<code>data[0]</code>=subcommand.</li>
+<li><strong>Request:</strong> <code>req+8</code> = <code>data[0]</code>
+subcommand: | data[0] | action / sub-handler | |---|---| | 0 |
+<code>CmdOEMSANativeOSCollection</code> (is supported) | | 1 / 2 |
+<code>…NativeOSCollectionStarted</code> / <code>…Ended</code> | | 3 / 4
+| <code>CmdOEMSAExposeiSMInstaller</code> /
+<code>…HideiSMInstaller</code> | | 5 | <code>CmdOEMSAGetStatus</code>
+(last command status) | | 6 | <code>CmdOEMSACollectData</code> (initiate
+collection) | | 7 | <code>CmdOEMSAGetCollectDataStatus</code> | | 8 |
+<code>CmdOEMSAHideCollectDataResult</code> | | 9 |
+<code>CmdOEMSACollectDataCancel</code> | | 0x10 |
+<code>CmdOEMSAJobInProgressPendingSignal</code> | | other |
+<code>0xCC</code> |</li>
+<li><strong>Response:</strong> <code>resp_data[0]</code> set by
+sub-handler; CC = sub-handler return.</li>
+<li><strong>Backend deps:</strong> <code>IsMsgFromSystemInterface</code>
+gate; MASER partition (collection output), iSM installer image exposure
+(mounts a virtual device visible to host OS).</li>
+<li><strong>Security notes:</strong> <strong>In-band-only.</strong>
+"Expose iSM installer" surfaces an installer image to the host — a
+BMC→host software-delivery channel worth scrutiny. Data collection can
+gather host logs. Host-side only.</li>
+<li><strong>Confidence:</strong> high for dispatch (self-logging strings
+label each branch); sub-handlers deferred.</li>
+</ul>
+<h2 id="7-cmdoemdellfactory">7. CmdOEMDellFactory</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA5
+/ User(2) / 0x81</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x45de0 (size 0x31c)</li>
+<li><strong>Purpose:</strong> Factory/manufacturing operations: query
+factory status, trigger platform-cache cleanup, create factory HW
+inventory XML (worker thread), and set the <strong>secure default
+password</strong>.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen normally
+<strong>== 6</strong> (except the secure-default-password path which is
+length 4 / branch when <code>data[0]==4</code>). <code>req+8</code> =
+<code>data[0]</code> = command type: | data[0] | action | |---|---| | 0
+| create factory HW inventory (spawns
+<code>threadCreateFactoryHWInventory</code>) | | 1 | recreate MASER
+images (deprecated → <code>0xCC</code>) | | 2 | <strong>factory
+status</strong> query; returns state byte from
+<code>DAT_0018c480[data[1]]</code>, <code>data[1]</code>(req+9) ≤4 | | 3
+| write "features/platform cache cleanup request" to
+<code>/flash/data0/features/system-id</code> | | 4 |
+<strong>CMD_MASER_FACTORY_SECURE_DEFAULT_PASSWORD</strong> →
+<code>CmdOEMSecureDefaultPassword</code> | | ≥5 | out of range →
+<code>0xCC</code> |</li>
+<li><strong>Response:</strong> status path <code>*resp_len=4</code>,
+<code>resp_data[0]=data[1]</code>, <code>resp_data[1]=state</code>, else
+per-branch.</li>
+<li><strong>Backend deps:</strong>
+<strong><code>IsMsgFromSystemInterface</code> gate</strong>;
+<code>IsInManufacturingTestMode(2)</code> (must be in mfg mode else
+<code>0x09</code>);
+<code>IsMASERInit</code>/<code>IsMASERDisabled</code> (else
+<code>0x05</code>); file <code>/flash/data0/features/system-id</code>;
+worker <code>threadCreateFactoryHWInventory</code>;
+<code>CmdOEMSecureDefaultPassword</code>.</li>
+<li><strong>Security notes:</strong> <strong>In-band-only AND
+manufacturing-mode-gated</strong> — strongest gating in the pilot. The
+secure-default-password subcommand (data[0]=4) is the most sensitive
+(sets the factory default credential); it delegates to
+<code>CmdOEMSecureDefaultPassword</code> — a priority follow-up target.
+Not attacker-reachable on a production, non-mfg-mode, remote box.</li>
+<li><strong>Confidence:</strong> high on flow/gates; the
+<code>DAT_0018c480</code> factory-status byte table contents are runtime
+state (undetermined statically — marked so).</li>
+</ul>
+<h2 id="8-cmdoemgetmaserinfo">8. CmdOEMGetMASERInfo</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xAB
+/ User(2) / 0x03</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x1d6c0 (size 0x3e4)</li>
+<li><strong>Purpose:</strong> Report MASER (managed-storage / SD) info
+for a given MASER type: presence, in-use flags, media type (SD/MMC),
+size.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must ==
+3</strong>. <code>req+8</code> = <code>data[0]</code> = <strong>MASER
+type</strong>: | data[0] | meaning | |---|---| | 0x00 | reads
+<code>/var/tmp/maser0.info</code> | | 0x01 | SD-card MASER:
+<code>aim_config_get_bool("ameastatus_bool_amea_sd_present")</code>,
+<code>VFL_List_SD_Card_Info</code>, reads
+<code>/var/tmp/maser1.info</code> | | other | invalid →
+<code>0xCB</code> |</li>
+<li><strong>Response:</strong> <code>*resp_len=10</code>.
+<code>resp_data[0]</code>=type, <code>resp_data[1]</code>=media class
+(0x4453="SD" → 0/1, else "MMC"→2), <code>resp_data[2..3]</code>=size
+(<code>local_a8</code>), <code>resp_data[6]</code>=flags (bit0
+SD-in-use, bit1 label present, bit2 vFlash-in-use). Missing info file →
+<code>0xCB</code>.</li>
+<li><strong>Backend deps:</strong> files
+<code>/var/tmp/maser{0,1}.info</code> (parsed by
+<code>FUN_0010e1d0</code>); <code>aim_config_get_bool</code> (AIM config
+store); <code>VFL_List_SD_Card_Info</code>;
+<code>VFlash_in_use</code>.</li>
+<li><strong>Security notes:</strong> Read-only info leak (SD
+presence/size/label state). <strong>No</strong>
+<code>IsMsgFromSystemInterface</code> gate in this handler → potentially
+LAN-reachable at User priv (unlike its sibling MASER commands). Low
+direct impact but a fingerprinting/recon primitive.</li>
+<li><strong>Confidence:</strong> high on request length &amp; type; med
+on exact response field widths beyond the labeled flags (some come from
+the .info file parse <code>FUN_0010e1d0</code>, not expanded).</li>
+</ul>
+<h2 id="9-cmdoemtoolset">9. CmdOEMToolSet</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA7
+/ User(2) / 0x81</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x2f8f0 (size 0x200)</li>
+<li><strong>Purpose:</strong> "ToolSet" dispatcher — expose/hide
+executables to the host, collect data, marker begin/update/end, and
+<strong>system erase</strong>. <code>data[0]</code>=subcommand.</li>
+<li><strong>Request:</strong> <code>req+8</code> = <code>data[0]</code>
+subcommand: | data[0] | sub-handler | |---|---| | 0 / 1 |
+<code>CmdOEMTSExposeExecs</code> / <code>CmdOEMTSHideExecs</code> | | 2
+| <code>CmdOEMTSGetStatus</code> | | 3 |
+<code>CmdOEMTSCollectData</code> | | 4 |
+<code>CmdOEMTSGetDataInfo</code> | | 5 / 6 / 7 |
+<code>CmdOEMTSBeginMarker</code> / <code>…EndMarker</code> /
+<code>…UpdateMarker</code> | | 8 |
+<strong><code>CmdOEMTSSystemErase</code></strong> | | other |
+<code>0xCC</code> |</li>
+<li><strong>Response:</strong> from sub-handler
+(<code>resp_data[0]</code>), CC returned.</li>
+<li><strong>Backend deps:</strong> <code>IsMsgFromSystemInterface</code>
+gate; MASER partition; host-exposed executables channel.</li>
+<li><strong>Security notes:</strong> <strong>In-band-only.</strong>
+<code>CmdOEMTSSystemErase</code> (data[0]=8) is
+<strong>destructive</strong> (system erase / secure-wipe) — a priority
+follow-up. "ExposeExecs" is another BMC→host code-delivery surface.</li>
+<li><strong>Confidence:</strong> high for dispatch; sub-handlers
+deferred.</li>
+</ul>
+<h2 id="10-cmdoemremoteenablement">10. CmdOEMRemoteEnablement</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x30 (Dell OEM) / 0xA3
+/ User(2) / 0x80</li>
+<li><strong>Defined in:</strong> <code>libmaser.so.9.9.9</code> @
+0x21260 (size 0x2a8)</li>
+<li><strong>Purpose:</strong> Remote Enablement / auto-discovery
+(zero-touch provisioning) dispatcher. Lazily builds a
+<code>{subcommand → handler}</code> table on first call, then dispatches
+<code>data[0]</code> through it.</li>
+<li><strong>Request:</strong> <code>req+8</code> = <code>data[0]</code>
+= subcommand. Table (built once into <code>DAT_0018bc38/40</code>): |
+data[0] | handler | |---|---| | 0 / 1 |
+<code>CmdOEMGetAutoDiscovery</code> /
+<code>CmdOEMSetAutoDiscovery</code> | | 2 |
+<code>CmdOEMSignCertificate</code> | | 3 |
+<code>CmdOEMGetCertificateStatus</code> | | 4 / 5 |
+<code>CmdOEMGetRECapabilitiesBitmap</code> / <code>…Set…</code> | | 6 /
+7 | <code>CmdOEMGetProvisioningServerInfo</code> / <code>…Set…</code> |
+| 8 / 9 | <code>CmdOEMGetDiscoveryRestartOptions</code> /
+<code>…Set…</code> | | 0x0A..0x11 | CCR
+feature/update-mode/config/auto-sync get/set pairs | | 0x12 |
+<code>CmdOEMGetDHStatus</code> | | 0x13 |
+<code>CmdOEMRemoveCertificate</code> | | 0x14 |
+<code>CmdOEMSkipISOBoot</code> | | 0x15 |
+<code>CmdOEMDisconnectNetworkISO</code> | | 0x16 |
+<code>CmdOEMChangeRFSToAttachMode</code> | | 0x17 |
+<code>CmdOEMReCapabilityForDup</code> | | 0xFFFFFFF0 |
+<code>CmdOEMUEFILOGService</code> | | no match | <code>0xCC</code>
+(returns 0xFFFFFFCC) |</li>
+<li><strong>Response:</strong> from the selected sub-handler.</li>
+<li><strong>Backend deps:</strong> provisioning/auto-discovery config,
+certificate store (sign/remove/status), network ISO / remote-file-share
+attach. <strong>No</strong> <code>IsMsgFromSystemInterface</code> gate
+at this dispatcher level (unlike the other 0x30 MASER commands) —
+sub-handlers may gate individually.</li>
+<li><strong>Security notes:</strong> High interest.
+<code>CmdOEMSignCertificate</code> /
+<code>CmdOEMSetProvisioningServerInfo</code> /
+<code>CmdOEMSetAutoDiscovery</code> touch the zero-touch-provisioning
+trust chain (cf. iDRAC9 discovery-cert fleet-key work). User priv + no
+in-band gate here means these may be <strong>LAN-reachable</strong> —
+verify each sub-handler's own gating.
+<code>CmdOEMDisconnectNetworkISO</code> / <code>SkipISOBoot</code>
+affect host boot media.</li>
+<li><strong>Confidence:</strong> high for dispatch table;
+per-sub-handler gating undetermined here (deferred).</li>
+</ul>
+<h2 id="11-dellcmdgetbootstrapcredentials">11.
+DellCmdGetBootstrapCredentials</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x2C (DCMI namespace) /
+0x02 / Admin(4) / 0x02</li>
+<li><strong>Defined in:</strong> <code>libmisccmd.so.9.9.9</code> @
+0x2cc40 (size 0x254)</li>
+<li><strong>Purpose:</strong> Redfish/host-interface <strong>credential
+bootstrapping</strong> — generate and return a one-time IPMI/Redfish
+bootstrap username+password to the host (DMTF Redfish Host Interface
+bootstrap flow). One of the two <em>new</em> iDRAC10 0x2C commands.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must ==
+2</strong>. | struct off | data[] | field | meaning | |---|---|---|---|
+| +8 | data[0] | magic | must == <code>'R'</code> (0x52) else
+<code>0xCC</code> | | +9 | data[1] | disable-after flag |
+<code>0xA5</code> = keep provisioning enabled; <strong>any other value
+disables</strong> <code>IPMIBootstrapCredentialProvisioning</code> after
+this read |</li>
+<li><strong>Response:</strong> <code>resp_data[0]=0x52</code>('R'),
+<code>resp_data[1..32]</code> = 32 bytes credential material
+(username+password), <code>*resp_len = 0x21</code> (33). CC
+<code>0x00</code>. Failure CCs: <code>0xD4</code> not in-band,
+<code>0xC7</code> bad len, <code>0xCC</code> bad magic,
+<code>0x80</code> provisioning-disabled/read-fail, <code>0xFF</code>
+generation/format failure.</li>
+<li><strong>Backend deps:</strong>
+<strong><code>IsInBandCommand()</code> gate</strong> (out-of-band →
+<code>0xD4</code>); cfgdb key
+<code>iDRAC.Embedded.1#Security.1#IPMIBootstrapCredentialProvisioning</code>
+(int; must be non-zero);
+<code>GenerateBootstrapCredentials_IPCClient()</code> (IPC to the
+credential service); <code>CfgSetAttributeInt(...=0)</code> to
+auto-disable.</li>
+<li><strong>Security notes:</strong> <strong>Highest-value in the
+pilot.</strong> Hands out working management credentials. Gated by (a)
+in-band only, (b) the <code>IPMIBootstrapCredentialProvisioning</code>
+cfg flag being enabled, (c) magic 'R'. This is the Redfish "credential
+bootstrapping" feature — if the provisioning flag can be left enabled
+and a host-side agent (or host-RAM/KCS pivot) reaches it, it yields
+fleet-relevant creds. Cross-refs iDRAC9/10 factory-cred research.
+Confirm the cfg-flag default state and whether
+<code>Generate…IPCClient</code> derives from a fleet-static secret.</li>
+<li><strong>Confidence:</strong> high on request/response wire format
+and gating; med on the <em>content/derivation</em> of the 32 returned
+bytes (produced in the IPC service, not this function).</li>
+</ul>
+<h2 id="12-dellcmdgetmgrcertfingerprint">12.
+DellCmdGetMgrCertFingerprint</h2>
+<ul>
+<li><strong>NetFn / Cmd / Priv / Flags:</strong> 0x2C (DCMI namespace) /
+0x01 / Admin(4) / 0x02</li>
+<li><strong>Defined in:</strong> <code>libmisccmd.so.9.9.9</code> @
+0x2ca10 (size 0x230)</li>
+<li><strong>Purpose:</strong> Return the iDRAC manager <strong>TLS
+certificate SHA-256 fingerprint</strong> to the host, so a host agent
+can pin/verify the Redfish endpoint before using bootstrap creds (#11).
+Second new 0x2C command.</li>
+<li><strong>Request:</strong> <code>req+7</code> datalen <strong>must ==
+2</strong>. | struct off | data[] | field | meaning | |---|---|---|---|
+| +8 | data[0] | magic | must == <code>'R'</code> (0x52) else
+<code>0xCC</code> | | +9 | data[1] | subcommand | must ==
+<code>0x01</code> else <code>0xCB</code> |</li>
+<li><strong>Response:</strong> <code>resp_data[0]=0x52</code>('R'),
+<code>resp_data[1]=0x01</code>, <code>resp_data[2..33]</code> = 32-byte
+SHA-256 fingerprint (hex string from cfgdb, <code>StringToHex</code>'d
+to raw 32B). <code>*resp_len = 0x22</code> (34). CC <code>0x00</code>.
+Failure: <code>0xD4</code> not in-band, <code>0xC7</code> bad len,
+<code>0x80</code> provisioning disabled, <code>0xFF</code> read/convert
+failure (incl. stored fingerprint string length != 0x41).</li>
+<li><strong>Backend deps:</strong>
+<strong><code>IsInBandCommand()</code> gate</strong>; cfgdb keys
+<code>iDRAC.Embedded.1#Security.1#IPMIBootstrapCredentialProvisioning</code>
+(must be enabled) and
+<code>iDRAC.Embedded.1#Security.1#TLSCertificateFingerPrint</code>
+(65-char hex string); <code>StringToHex</code>.</li>
+<li><strong>Security notes:</strong> In-band, provisioning-flag-gated.
+Info-only (public cert fingerprint) but it is the trust anchor for the
+bootstrap-cred flow — pairs with #11. Note the fingerprint lives in
+cfgdb, so it's also readable to anything that can read that key
+directly.</li>
+<li><strong>Confidence:</strong> high.</li>
+</ul>
+<hr />
+<h2 id="scaling-to-190-dell-oem-commands">Scaling to ~190 Dell OEM
+commands</h2>
+<p><strong>What worked (keep):</strong></p>
+<ul>
+<li>Resolve each handler's <em>defining</em> lib+addr by name via
+<code>objdump -T | grep -v '*UND*'</code> before touching Ghidra. The
+dispatch-table address is just a GLOB_DAT thunk; ~2/3 of
+<code>liboemcmds</code> OEM 0x30 entries are
+<code>DellDCSSCBMCWrapper</code>/<code>DellNMCommand</code>/<code>SubCmdHandler</code>
+shells whose real bodies live in
+<code>libmaser</code>/<code>libmisccmd</code>/<code>libosa</code>/<code>libifru</code>/etc.</li>
+<li>One Ghidra headless import+analysis <strong>per lib</strong> (not
+per command), then a single <code>-process -noanalysis</code> pass
+running <code>DecompByName</code> with <em>all</em> target names for
+that lib. Look up functions by <code>.dynsym</code>
+<strong>name</strong>, not rebased address (Ghidra rebased
+<code>.so</code> to imageBase 0x100000 — the raw file-vaddr
+misses).</li>
+<li>Self-logging <code>dlog_printf("%s: …", "CmdX")</code> format
+strings label almost every branch — dispatch maps and subcommand
+meanings fall out for free.</li>
+</ul>
+<p><strong>Batching plan:</strong></p>
+<ol type="1">
+<li>Build one CSV:
+<code>symbol, netfn, cmd, priv, flags, defining_lib, addr</code> by
+joining the dispatch md with the <code>objdump -T</code> defined-symbol
+map across all <code>*.so.9.9.9</code>. Group by
+<code>defining_lib</code>.</li>
+<li>Distinct libs are few (~6: <code>liboemcmds</code>,
+<code>libmaser</code>, <code>libmisccmd</code>, <code>libosa</code>,
+<code>libifru</code>, <code>libdcmi</code>, plus a handful). Import each
+<strong>once</strong> (parallel; libmaser ~508KB is the long pole at a
+few min).</li>
+<li>Per lib, one <code>DecompByName</code> batch over every target
+symbol → one <code>.c</code> file per lib. This is the parallelizable
+unit. ~190 commands = ~6 Ghidra runs, not 190.</li>
+<li><strong>Deduplicate dispatchers:</strong> many 0x30 subcommands
+funnel through a handful of parent dispatchers
+(<code>CmdOEMvFlash</code>, <code>CmdOEMBackupRestore</code>,
+<code>CmdOEMToolSet</code>, <code>CmdOEMSupportAssist</code>,
+<code>CmdOEMRemoteEnablement</code>, <code>DellNMCommand</code>,
+<code>SubCmdHandler</code>, <code>DellDCSSCBMCWrapper</code>). Document
+the parent once, then treat each sub-handler
+(<code>CmdOEMVflash*</code>, <code>CmdOEMBnR*</code>,
+<code>CmdOEMTS*</code>, <code>CmdOEMSA*</code>, <code>CmdOEM*</code> RE)
+as its own leaf command — that is where the real per-subcommand request
+bytes live. The true command count is larger than 190 once subcommands
+are counted; the dispatch entry is only the first hop.</li>
+<li>Fan-out authoring: feed each lib's <code>.c</code> batch to a
+documentation pass (subagent per lib) emitting the schema block above.
+The calling convention (<code>req+7</code>=len,
+<code>req+8+N</code>=data[N], return=CC, <code>*resp_len</code>,
+<code>resp_data</code>) and the gate vocabulary
+(<code>IsInBandCommand</code>/<code>IsMsgFromSystemInterface</code>,
+standard CCs) are now fixed constants — no re-derivation needed.</li>
+</ol>
+<p><strong>Schema fields that were hard / partly undetermined (flag
+these up front in the fan-out):</strong></p>
+<ul>
+<li><strong>req+0 source/medium byte</strong>
+(<code>*req&gt;&gt;4==7</code>): interpreted as internal channel tag,
+not proven. Doesn't change wire format but affects a few branch
+decisions.</li>
+<li><strong>Response field widths beyond the labeled bytes</strong>:
+when a response is filled from a helper (<code>FUN_0010e1d0</code>
+parsing <code>.info</code> files, or
+<code>GenerateBootstrapCredentials_IPCClient</code>), the
+<em>structure</em> is clear but individual sub-fields require
+decompiling the helper — defer to a second tier if needed.</li>
+<li><strong>Runtime-state tables</strong> (e.g.
+<code>DAT_0018c480</code> factory-status bytes): contents are set at
+runtime; statically "undetermined" — mark, don't guess.</li>
+<li><strong>Backend value semantics</strong>: cfgdb key <em>names</em>
+are recovered verbatim (high value), but the <em>meaning</em> of
+returned cred/status bytes lives in the IPC service on the other side of
+<code>*_IPCClient</code> — a separate RE target (those services, not
+these handlers).</li>
+<li><strong>Per-subcommand gating</strong> for dispatchers with no
+top-level <code>IsMsgFromSystemInterface</code> check (RemoteEnablement,
+GetMASERInfo): must be read from each leaf handler; do not assume the
+parent's gate.</li>
+</ul>
+<p><strong>Wall-clock:</strong> pilot = ~35 min total for 12 (dominated
+by 4 parallel Ghidra imports + reading). At scale, marginal cost is ~2–3
+min per <em>leaf</em> command once the lib is imported; the 6 imports
+amortize across all ~190+. All Ghidra (decompiler), no objdump fallback
+required.</p>
+</div>
+</body>
+</html>

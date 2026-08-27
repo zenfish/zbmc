@@ -10,8 +10,8 @@ Restore any of them:  `./restore-svc-x14.sh <file>`   then drive: `socat - /tmp/
 
 | snapshot | ~size | what works | notes |
 |---|---|---|---|
-| **svc-snap-shell.gz** | 93 MB | **IPMI + Redfish + interactive SSH shell** — the full set | ← CANONICAL / newest. smash.conf=0, devpts fixed |
-| svc-snap-full-working.gz | 92 MB | IPMI (ipmitool) + Redfish (curl) | after mapperx `--service-namespaces` fix |
+| svc-snap-shell.gz | 93 MB | IPMI + Redfish + interactive SSH shell | historical local checkpoint; not packaged |
+| **svc-snap-full-working.gz** | 92 MB | IPMI + Redfish | **packaged snapshot used by `start --warm`** |
 | svc-snap-redfish-working.gz | 92 MB | Redfish (curl) only | after bmcweb `/var/log` fix; IPMI still blocked |
 | svc-snap2.gz | 92 MB | core daemons only (dbus/mapperx/ipmid/eth0), no Redfish/IPMI | pre-fixes; used as iteration base |
 | svc-snap.gz | 91 MB | core daemons only | earliest; poisoned/churned |

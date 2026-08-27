@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — RAKP user-provisioning investigation (resume notes)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtual iDRAC9 — RAKP user-provisioning investigation (resume notes)</h1>
+  </div>
+</div>
+
+<p><strong>Date:</strong> 2026-06-24. Branch <code>vilo-ilo5</code>.
+HEAD <code>b61ba62</code> (the RAKP wip). <strong>Goal:</strong> clear
+RAKP completion code <code>0x0d</code> ("unauthorized name") so virtual
+iDRAC9 (QEMU npcm750-evb) authenticates IPMI 2.0 as <code>root</code>.
+RAKP socket already LIVE (RAKP1→RAKP2 on udp/623).</p>
+<p>This file = full context dump so work can resume cold. Pairs with
+commit <code>b61ba62</code> message.</p>
+<hr />
+<h2 id="root-cause--found-binary-re-confirmed">ROOT CAUSE — FOUND
+(binary-RE confirmed)</h2>
+<p><strong>RAKP does NOT read <code>/etc/avctpasswd</code>.</strong> The
+string <code>"avctpasswd"</code> appears in ZERO binaries in the rootfs
+— fullfw physically cannot open it by name. avctpasswd is the
+<strong>OS-login/PAM/NSS</strong> store only (via
+<code>/flash/data0/cv/avctpasswd</code> → <code>/etc/avctpasswd</code>,
+tmpfiles.d/avctpass.conf). So the factory root entry in avctpasswd
+(index 2, IPMIKey <code>915F32…8964</code>) is IRRELEVANT to RAKP.</p>
+<p><strong>RAKP validates the username against cfgdb.</strong> Evidence
+(libsess.so.9.9.9, ARMv7):</p>
+<ul>
+<li>RAKP1 username handler: <code>RSSPOnSMWaitRAKP1StateRecvRAKP1</code>
+@ <code>0x447b6054</code></li>
+<li>0x0d emitted @ <code>libsess</code> <code>0x447b6664</code>
+(<code>mov r1,#13</code> → <code>RSSPReplyErrorRespData</code>), reached
+after:
+<ol type="1">
+<li><code>UserInfoSearchByNameAndPriv</code> @ <code>0x447ade90</code> —
+walks in-memory table <code>G_aPSUserInfoTable</code> (semaphore-locked
+MemCmp on names)</li>
+<li><code>snprintf</code> builds key
+<code>idrac.embedded.1#users.N#&lt;field&gt;</code> (fmt
+<code>"%s%d#%s%c"</code>)</li>
+<li><code>CfgGetAttribute(...)</code> @ <code>0x447b6568</code> — live
+query to cfgdb; non-zero → "Error invalid user"
+(<code>0x447bba98</code>) → <code>mov r1,#13</code> → 0x0d</li>
+</ol></li>
+<li>in-memory table populated at boot by
+<code>UserInfoLoadUserConfig</code> @ <code>0x447af720</code> →
+<code>PSMgrReadAttr</code> @ <code>0x447af7ac</code> → cfgdb stack.</li>
+<li>backing DB =
+<strong><code>/var/run/cfgdb/CfgCurrentValues.db</code></strong> (SQLite
+via <code>libcfgdbwrapper.so.1</code>); metadata =
+<code>/var/run/cfgdb/CfgAttributeMetadata.db</code>.</li>
+<li><code>CfgGetAttribute</code> exported by
+<code>libdellcfg.so.9.9.9</code>. Password/IPMIKey material for the
+RAKP2 HMAC is fetched separately via <code>osi_getUserSHA256</code> →
+plugin <code>osi_function_getuser_sha256pwd</code> (in
+<code>libdccfg.so</code>/<code>libfnprv.so.9.9.9</code>), NOT by file
+path. (Second gate, after the 0x0d.)</li>
+<li>cfgdb is MASTER, CV/avctpasswd is DERIVATIVE:
+<code>libcfgdbwrapper</code> exports
+<code>CfgDBCopyPasswordFromSPIToCV</code> / <code>…FromEMMCToCV</code>
+(cfgdb→CV, never reverse). So hand-editing avctpasswd cannot help RAKP
+and can be overwritten from cfgdb.</li>
+</ul>
+<p><strong>Decompiled asm saved (scratchpad):</strong>
+<code>/private/tmp/claude-501/-Volumes-yyy-phd-bmc-dell-idrac9-virtual/617826b1-9fcb-4ac9-b1cc-6e63518e742a/scratchpad/</code></p>
+<ul>
+<li><code>RSSPOnSMWaitRAKP1StateRecvRAKP1.asm</code> (the key one),
+<code>RSSPValidateRAKP1Msg.asm</code>,
+<code>RSSPReplyRAKP2Msg.asm</code>,
+<code>RSSPOnSMRecvRAKPMsg1.asm</code>,
+<code>UserInfoSearchByName.asm</code>,
+<code>libsess_full.asm</code></li>
+<li>RE subagent id <code>a551af0e05d7361d4</code> (SendMessage to
+continue).</li>
+</ul>
+<p>Relevant binaries (rootfs =
+<code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs</code>):</p>
+<ul>
+<li><code>usr/lib/ipmi/libsess.so.9.9.9</code> (RAKP engine)</li>
+<li><code>usr/lib/libcfgdbwrapper.so.1.*</code> (SQLite cfgdb
+backend)</li>
+<li><code>usr/lib/libdellcfg.so.9.9.9</code>
+(<code>CfgGetAttribute</code>)</li>
+</ul>
+<hr />
+<h2
+id="why-the-current-inject-fails-leading-hypothesis--not-yet-verified">WHY
+THE CURRENT INJECT FAILS (leading hypothesis — NOT yet verified)</h2>
+<p><code>init.p4.custom</code> copies our synthesized
+<code>cfgdb-defaults.db</code> into BOTH
+<code>/var/lib/cfgdb/EMMC/CfgCurrentValues.db</code> and
+<code>/var/lib/cfgdb/SPI/CfgCurrentValues.db</code>. That DB DOES
+contain
+<code>Users.2 = root / Enable=1 / IpmiLanPrivilege=4 / Privilege=511 / SolEnable=1 / IPMIKey=915F32…</code>
+(set by <code>build-p4.sh</code> via UPDATEs on
+<code>CfgValueTable</code>).</p>
+<p>But at runtime: <code>racadm get iDRAC.Users.2.UserName</code> →
+EMPTY, RAKP still 0x0d. Meanwhile CurrentIPv4 (the IP) DOES load.</p>
+<p><strong>The decisive difference:</strong></p>
+<ul>
+<li>CurrentIPv4 was written as a <strong>metadata DefaultValue</strong>
+in <code>AttributeMetaTable</code> (build-p4 sets
+<code>DefaultValue</code> for CurrentIPv4#Address/Netmask/Gateway/Enable
+AND <code>IsReadonly=0</code>).</li>
+<li>Users.2 was injected <strong>only</strong> into the SPI/EMMC
+<code>CfgValueTable</code> (the cfgdb-defaults.db), NOT into metadata
+defaults.</li>
+</ul>
+<p><strong>Hypothesis:</strong> cfgmgr/cfgdbinit builds the runtime
+<code>/var/run/cfgdb/CfgCurrentValues.db</code> from <strong>metadata
+DEFAULTS</strong>, largely ignoring our hand-seeded SPI/EMMC
+<code>CfgCurrentValues.db</code> (real SPI store has
+format/validation/signing we don't replicate, or cfgdbinit regenerates
+fresh). The IP only worked because we ALSO put it in metadata defaults.
+Users were never put in metadata defaults → never materialized into
+runtime → <code>G_aPSUserInfoTable</code> has no <code>root</code> →
+0x0d.</p>
+<p><strong>If hypothesis holds, the fix is symmetric with what
+worked:</strong> set the Users.2 values as <strong>metadata
+DefaultValues</strong> in the patched <code>cfgmeta.db</code>
+(<code>AttributeMetaTable</code>), exactly like CurrentIPv4, and keep
+Users <code>IsReadonly=0</code> (build-p4 already does the readonly flip
+for Users).</p>
+<h3 id="open-question-blocking-the-fix-was-mid-check-when-stopped">OPEN
+QUESTION blocking the fix (was mid-check when stopped)</h3>
+<p>Is <code>AttributeMetaTable</code> for the <code>Users</code> group
+<strong>per-instance</strong> (a row per GroupIndex 1..16) or
+<strong>per-group template</strong> (ONE row for
+<code>Users.UserName</code> applying to all instances)?</p>
+<ul>
+<li>Schema (confirmed): <code>AttributeMetaTable</code> PK =
+<code>(FQDD, GroupName, AttributeName)</code> — <strong>no GroupIndex
+column</strong>. So metadata is a <strong>per-group template</strong>,
+indexed by FQDD, not per-instance.</li>
+<li>Implication: setting <code>DefaultValue='root'</code> on
+<code>Users.UserName</code> would default the username of EVERY user
+instance to <code>root</code> — may be acceptable (we only need instance
+2 to auth) or may break enumeration / collide. NEEDS a decision +
+test.</li>
+<li>The FQDD column likely distinguishes instances (e.g.
+<code>iDRAC.Embedded.1</code> vs per-user FQDD). Check
+<code>SELECT DISTINCT FQDD FROM AttributeMetaTable WHERE GroupName='Users';</code>
+— if FQDD encodes the user index, per-instance defaults ARE possible via
+FQDD. <strong>DO THIS FIRST on resume.</strong></li>
+</ul>
+<p>Metadata DB:
+<code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs/usr/share/cfgdb/CfgAttributeMetadata.db</code>
+Users metadata attributes include: UserName, Enable, IPMIKey,
+IpmiLanPrivilege, Privilege, SolEnable, Password, SHA256Password,
+SHA256PasswordSalt, … (full list dumped, 36 attrs).</p>
+<hr />
+<h2
+id="verify-before-fix-plan-systematic-debugging-phase-13">VERIFY-BEFORE-FIX
+PLAN (systematic-debugging Phase 1→3)</h2>
+<ol type="1">
+<li><strong>Static (no boot):</strong>
+<code>SELECT DISTINCT FQDD FROM AttributeMetaTable WHERE GroupName='Users';</code>
+— determine if per-instance defaults are addressable. Inspect
+<code>build-cfgdb-defaults.py</code> to see how it maps
+metadata→CfgValueTable rows (does it even emit Users.2 rows for the
+UPDATE to hit?).</li>
+<li><strong>Live boot</strong> <code>./run-p4.sh</code> (QEMU; Ctrl-A X
+to quit; <code>--serial-log</code> to tee). Then inspect the LIVE
+runtime DB the daemon actually serves:
+<ul>
+<li><code>sqlite3 /var/run/cfgdb/CfgCurrentValues.db "SELECT * ... Users ..."</code>
+— confirm users.2 absent</li>
+<li>compare against <code>/var/lib/cfgdb/SPI/CfgCurrentValues.db</code>
+(our seed) — proves SPI ignored</li>
+<li>check <code>/tmp/cfgdbinject.log</code>,
+<code>/tmp/cfgdbsetup.log</code>, <code>/tmp/cfgmgr*</code> logs</li>
+<li>This is the Phase-1.4 component-boundary evidence: seed DB (in) vs
+runtime DB (out).</li>
+</ul></li>
+<li><strong>Test fix (minimal):</strong> put Users.2 =
+root/Enable/IPMIKey/priv as metadata DefaultValues in cfgmeta.db
+(per-FQDD if possible, else accept all-instances=root for the test).
+Rebuild (<code>build-p4.sh</code>), reboot,
+<code>racadm get iDRAC.Users.2.UserName</code> → expect
+<code>root</code>, then RAKP with <code>zipmi -K 915F32…</code> (or
+<code>-P calvin</code>) → expect != 0x0d.</li>
+<li><strong>Second gate:</strong> if 0x0d clears but RAKP2 HMAC fails,
+chase <code>osi_getUserSHA256</code> /
+<code>osi_function_getuser_sha256pwd</code> (libdccfg/libfnprv) for
+where it pulls the IPMIKey/SHA256.</li>
+</ol>
+<hr />
+<h2
+id="update-2026-06-25--static-checks-done-seed-data-perfect-bug-is-runtime-load">UPDATE
+2026-06-25 — static checks done; seed data PERFECT, bug is runtime
+load</h2>
+<p>FQDD for Users (and CurrentIPv4) = single
+<code>iDRAC.Embedded.1</code>. <code>AttributeMetaTable</code> PK has no
+GroupIndex → metadata is a <strong>per-group template, not per-instance
+addressable</strong>. So the "set Users.2 as metadata DefaultValue" idea
+is DEAD (a default would name ALL 16 slots root).</p>
+<p>Instance mechanism FOUND:
+<code>GroupMetaTable(FQDD,GroupName,GroupType,GroupDisplayName, GroupDescription,NoOfGroupInstances)</code>.
+For Users: <code>NoOfGroupInstances=16</code> (GroupType 16388). So slot
+2 materializes — count is NOT the blocker. Per-platform default tables
+exist (<code>evb</code>, <code>Logan</code>, … one table per platform,
+same per-group-template shape); <code>evb</code> has 0 Users rows
+(normal).</p>
+<p>Per-instance user values can ONLY live in the value store
+<code>CfgValueTable(FQDD,GroupName, GroupIndex,AttributeName,AttributeValue,AttributeMemSize)</code>
+(PK includes GroupIndex).</p>
+<p>Our built <code>img/cfgdb-defaults.db</code> VERIFIED CORRECT: all 16
+Users GroupIndex rows present; <code>Users.2</code> = UserName=root /
+Enable=1 / IPMIKey=915F32… / IpmiLanPrivilege=4 / Privilege=511 /
+SolEnable=1. Schema matches. <strong>Seed data + schema + instance count
+are all right.</strong></p>
+<p>=&gt; The bug is NOT the seed. It is that <strong>cfgmgr/cfgdbinit
+does not load the seeded SPI/EMMC <code>CfgCurrentValues.db</code> into
+the runtime <code>/var/run/cfgdb/CfgCurrentValues.db</code></strong>
+that fullfw/libsess reads. CurrentIPv4 worked only because it was ALSO a
+metadata default (survives a fresh-from-metadata build). The SPI-store
+load path — the only way to get exactly one user=root — is the
+unverified/broken link.</p>
+<h3 id="prime-candidate-fix-lazy-1-line--test-this-first">PRIME
+CANDIDATE FIX (lazy, ~1 line) — TEST THIS FIRST</h3>
+<p><code>init.p4.custom</code> prep.sh copies defaults into
+<code>/var/lib/cfgdb/EMMC/CfgCurrentValues.db</code> and
+<code>/var/lib/cfgdb/SPI/CfgCurrentValues.db</code> — but NOT
+<code>/var/run/cfgdb/CfgCurrentValues.db</code>. And
+<code>cfgdb-setup.sh</code>→<code>cfgdbinit</code> already created an
+EMPTY <code>/var/run/cfgdb/CfgCurrentValues.db</code> from metadata. If
+cfgmgr never re-merges SPI→runtime, that empty runtime DB is what fullfw
+reads. <strong>Fix to try:</strong> add
+<code>/var/run/cfgdb/CfgCurrentValues.db</code> to the copy loop (the
+<code>for d in …EMMC… …SPI…</code> loop in prep.sh), so the runtime DB
+carries Users.2 BEFORE cfgmgr/fullfw start (the in-RAM
+<code>G_aPSUserInfoTable</code> loads once at boot — must be seeded
+pre-start, a late overwrite won't refresh it).</p>
+<h3
+id="single-live-check-to-confirm-cheap-do-beforeafter-the-fix">SINGLE
+LIVE CHECK to confirm (cheap; do before/after the fix)</h3>
+<p>Boot <code>./run-p4.sh</code>, on console:</p>
+<pre><code>sqlite3 /var/run/cfgdb/CfgCurrentValues.db \
+  &quot;SELECT GroupIndex,AttributeName,AttributeValue FROM CfgValueTable WHERE GroupName=&#39;Users&#39; AND GroupIndex=2;&quot;
+cat /tmp/cfgdbsetup.log /tmp/cfgdbinject.log
+ls -la --full-time /var/run/cfgdb/CfgCurrentValues.db /var/lib/cfgdb/SPI/CfgCurrentValues.db</code></pre>
+<ul>
+<li>runtime has empty/no Users.2 while SPI has root =&gt; confirms SPI
+not merged =&gt; apply the fix</li>
+<li>if runtime is rebuilt AFTER our copy (newer mtime) =&gt; cfgmgr
+regenerates =&gt; seed must move later (after cfgmgr) OR also patch
+wherever cfgmgr writes runtime. Then:
+<code>racadm get iDRAC.Users.2.UserName</code> → expect
+<code>root</code>; RAKP (<code>zipmi -K 915F32…</code> /
+<code>-P calvin</code>) → expect != 0x0d.</li>
+</ul>
+<h2
+id="update-2026-06-25-live-boots--narrowed-to-one-attr-then-to-the-cv-store">UPDATE
+2026-06-25 (live boots) — narrowed to ONE attr, then to the CV
+store</h2>
+<p>Booted run-p4 three times with measurements. cfgmgr DOES load our
+injected Users.2 from the SPI/EMMC store into the runtime — every attr
+EXCEPT UserName:</p>
+<ul>
+<li><code>racadm get iDRAC.Users.2</code> →
+<code>IpmiLanPrivilege=4</code> (OUR value, loaded ✓), IPMIKey 915F32 in
+runtime ✓. But <code>Users.2.UserName</code> → EMPTY. UserName is the
+lone holdout → still RAKP 0x0d.</li>
+</ul>
+<p>Why only UserName: metadata <code>DBLocation</code> column splits
+attrs across stores. Confirmed:</p>
+<ul>
+<li>IPMIKey/IpmiLanPrivilege/Enable/Privilege = <strong>DBLocation
+2</strong> → EMMC store → tmpfs (loaded ✓)</li>
+<li><strong>UserName + Password = DBLocation 3</strong> → the <strong>CV
+(credential vault) store</strong>, NOT copied to the runtime tmpfs at
+all. libcfgdbwrapper builds the runtime tmpfs
+<code>/var/run/cfgdb/CfgCurrentValues.db</code> with exactly two
+INSERT..SELECT: <code>FROM SPI_Flash WHERE DBLocation=1</code> and
+<code>FROM EMMC_Flash WHERE DBLocation=2</code>. There is NO loc3→tmpfs
+path. loc3 (UserName/Password) is handled by
+<code>CfgDBCopyPasswordFromEMMCToCV</code> / <code>…FromSPIToCV</code>
+(DELETE+INSERT loc3 EMMC/SPI→CV); reads resolve in CV. CV store path =
+<code>/var/lib/cfgdb/CV/CfgCurrentValues.db</code>.</li>
+</ul>
+<p>ROOT-OF-ROOT (boot-log smoking gun):
+<code>cfgdb-setup.sh: /var/lib/cfgdb/CV is not writable</code> +
+<code>chmod: cannot operate on dangling symlink '/var/lib/cfgdb/CV'</code>.
+Source =
+<code>usr/lib/tmpfiles.d/cfgdb.conf:16  L+ /var/lib/cfgdb/CV 0755 cfgdb cfgdb - /mnt/cv/cfgdb</code>.
+<code>systemd-tmpfiles --create</code> (run in prep.sh) force-symlinks
+CV → <code>/mnt/cv/cfgdb</code> (the dm-crypt vault mount) which DOESN'T
+EXIST here → dangling → CopyPasswordToCV fails → UserName never lands.
+(SPI works because its tmpfiles symlink target
+<code>/flash/data1/var/lib/cfgdb/SPI</code> IS created by us.)</p>
+<h3 id="fixes-applied-to-initp4custom-so-far">Fixes applied to
+init.p4.custom so far</h3>
+<ol type="1">
+<li>seed loop now writes EMMC+SPI+CV <code>CfgCurrentValues.db</code>
+(was EMMC+SPI only; /var/run was moot — cfgmgr regenerates it).</li>
+<li>de-symlink CV before seeding:
+<code>rm -f /var/lib/cfgdb/CV; mkdir -p …/CV; chown cfgdb</code>.</li>
+<li><strong>STILL EMPTY after #1+#2</strong> — because prep's
+<code>cfgdb-setup.sh</code>/cfgdbinit runs BEFORE the de-symlink
+(CopyPassword already failed), and cfgmgr's later CfgDBInit apparently
+does NOT re-copy. So the de-symlink must move EARLIER (before
+cfgdb-setup.sh), OR CopyPassword must be re-triggered after CV is
+writable.</li>
+<li>added sshd to prep (p3's exact line) → LIVE shell on host:2222 for
+fast iteration instead of ~6-min reboots. <code>./ssh-in.sh</code>.</li>
+</ol>
+<h3 id="next-live-in-progress">NEXT (live, in progress)</h3>
+<p>Over SSH: confirm CV is a real writable dir at runtime; check
+<code>sqlite3 /var/lib/cfgdb/CV/CfgCurrentValues.db 'select * ... UserName'</code>;
+determine whether CfgGetAttribute(UserName) reads CV or only tmpfs;
+manually run cfgdbinit/CopyPassword after CV is writable and watch
+UserName populate; then move the de-symlink before cfgdb-setup.sh in
+prep and bake the working sequence. Goal:
+<code>racadm get iDRAC.Users.2.UserName -&gt; root</code>, then RAKP via
+<code>zipmi -K 915F32… -p 6623</code> != 0x0d.</p>
+<h2
+id="-2026-06-25--milestone-1-solved-rakp-0x0d-cleared-root-authenticates-by-name-">★★★
+2026-06-25 — MILESTONE 1 SOLVED: RAKP 0x0d CLEARED, root authenticates
+by name ★★★</h2>
+<p>The whole-session blocker is GONE. Live proof (host → virtual iDRAC9
+udp 6623→623):</p>
+<pre><code>zipmi -H 127.0.0.1 -p 6623 -U root -K 915F32… -I lanplus -C 17 mc info
+  → Open Session Request → reply 52B
+  → RAKP Message 1       → reply 88B   (was 24B 0x0d error)
+  IPMI error: RAKP2: auth code mismatch   (NOT 0x0d anymore)</code></pre>
+<p>RAKP2 returns a full 88-byte auth-code reply instead of the 24-byte
+<code>status 0x0d</code>. fullfw now <strong>accepts username
+root</strong>. Only the HMAC key (milestone 2) remains.</p>
+<h3 id="the-two-fixes-that-did-it">The two fixes that did it</h3>
+<ol type="1">
+<li><strong>cfgdb (root cause):</strong> <code>UserName</code> is
+metadata <code>DBLocation=3</code> (credential-vault store), which is
+broken in emulation (CV = dangling symlink to absent
+<code>/mnt/cv/cfgdb</code>; <code>CopyPasswordToCV</code> moves only
+secret-class attrs, never UserName). FIX in <code>build-p4.sh</code>:
+patch the bind-mounted <code>cfgmeta.db</code>
+<code>AttributeMetaTable SET DBLocation=2 WHERE Users.UserName</code> →
+UserName=root now rides the proven EMMC→tmpfs→datacache path (same as
+IPMIKey/IpmiLanPrivilege). Verified:
+<code>racadm get iDRAC.Users.2.UserName → root</code>, datacache shm
+<code>CfgStrAttribute</code> carries root.</li>
+<li><strong>fullfw timing:</strong> fullfw loads
+<code>G_aPSUserInfoTable</code> ONCE at startup; on a clean boot it
+raced ahead of UserName reaching the datacache → cached empty table →
+0x0d despite racadm showing root. Proven by: restarting fullfw → 0x0d
+instantly clears. FIX in <code>init.p4.custom</code> dbg.sh: gate the
+fullfw launch on a live <code>racadm get …UserName == root</code> loop;
+also bind <code>0.0.0.0:623</code> (was <code>-l 623</code> = v6, though
+bindv6only=0 made it work anyway via SLIRP).</li>
+</ol>
+<h3 id="other-facts-nailed">Other facts nailed</h3>
+<ul>
+<li>RAKP cipher suite = <strong>17 (RAKP-HMAC-SHA256)</strong>. Cipher 3
+(sha1) is silently dropped by fullfw — Open Session got no reply. Always
+use <code>-C 17</code>.</li>
+<li>fullfw is socket-activated:
+<code>systemd-socket-activate --datagram -l 0.0.0.0:623 /bin/fullfw</code>
+from <code>/flash/data0/BMC_Data</code>, env
+<code>USER=root</code>.</li>
+<li>Right client = <code>~/phd/src/zipmi-git</code> (HEAD has
+<code>-K/--key</code> raw-Kuid commit ab8ae82). The brew-installed
+<code>zipmi</code> is a different/older checkout — run zipmi-git via
+<code>PYTHONPATH=~/phd/src/zipmi-git python3 -m zipmi.cli.zipmi …</code>.</li>
+</ul>
+<h2 id="-milestone-2-solved--full-rakp-authentication-2026-06-25-">★★★
+MILESTONE 2 SOLVED — FULL RAKP AUTHENTICATION (2026-06-25) ★★★</h2>
+<p>Virtual iDRAC9 now completes RMCP+ RAKP and establishes an
+authenticated session as root. Reproducible proof (3/3 attempts,
+scratchpad <code>RAKP-AUTH-PROOF.txt</code>):</p>
+<pre><code>Open Session → 52B → RAKP1 → RAKP2 88B → RAKP3 → RAKP4 40B → encrypted IPMI reply 68B</code></pre>
+<p>RAKP4 received = BMC validated our HMAC = authenticated. Test it:
+<code>./rakp-test.sh</code>.</p>
+<p><strong>The key (RE-proven, binary chain in scratchpad
+<code>RAKP2-KEY-FINDINGS.md</code>):</strong> fullfw HMACs with a
+<strong>hardcoded 20-byte key</strong> = the FIRST 20 BYTES of the
+hex-decoded per-user IPMIKey. Not the full 32 bytes, not the 64 ASCII
+chars, not empty — all of which I'd tried and which mismatch on length.
+Chain (libsess.so.9.9.9): <code>RSSPReplyRAKP2Msg</code>@0x447b5d64 →
+<code>RSSPGetRAKPAuthCode</code>@0x447b5280 (sets
+<code>mov ip,#20</code> = keylen 20) →
+<code>RSSPGetKeyExchangeCode</code>@0x447b51b4 →
+<code>hmac_SHA256</code> (libipmicrypto @0x449c2908)
+<code>__memcpy_chk(k_ipad,key,20,64)</code>. Key source:
+<code>UserInfoGetUserHashPWD</code>@0x447ae2a0 →
+<code>osi_getUserSHA256</code> → hex-decode → memcpy first 20 bytes. For
+our user (Password empty) that 64-hex value is the IPMIKey. →
+<code>zipmi -K 915f32f49a97456d0d6d66eee5ed84c894b414af -C 17 -I lanplus -U root</code>.</p>
+<p>RAKP2 msg order = standard
+<code>SIDm‖SIDc‖Rm‖Rc‖GUIDc‖ROLEm‖ULENm‖UNAMEm</code>, no Dell
+deviation. Caveat (fleet): this factory IPMIKey only holds at
+factory/default; setting any real password regenerates IPMIKey =
+UPPER(hex(SHA256(pw‖salt))) (matches the iDRAC10 unicorn proof).</p>
+<p>Residual: post-auth IPMI commands (<code>mc info</code>) reply ~16s
+late under emulation (slow/mocked sensor/SMIL backends) — a performance
+nit, NOT an auth issue. Auth = done.</p>
+<h3 id="clean-boot-reproducibility-caveat-measured">Clean-boot
+reproducibility caveat (measured)</h3>
+<p>The auth proof (3/3) was on a VM warmed ~39 min. On a FRESH boot,
+fullfw binds udp/623 (now IPv4, gate confirms
+<code>UserName=root</code>) but its RMCP receive loop does NOT start for
+a long time — fullfw sits polling <code>/dev/shm/datacache_*</code>
+(strace) while the udp/623 rx_queue grows (packets queued, unread). So
+Open Session times out for the first ~tens of minutes after boot. This
+is the project's pre-existing "fullfw slow to open udp/623" warmup
+(mocked sensor/SMIL/CPLD backends), ORTHOGONAL to the RAKP user/key
+fixes. Once fullfw's IPMI loop is up, <code>./rakp-test.sh</code>
+authenticates reliably. The user fix + key are NOT blocked by this;
+they're proven (boot5).</p>
+<p>UPDATE (measured): on a fully clean boot (boot6) fullfw did NOT start
+its RMCP receive loop even after &gt;1h — Open Session timed out the
+whole time; a clean SIGKILL+relaunch of fullfw after config was ready
+also didn't bring the listener up within minutes. So this is not merely
+"slow warmup": fullfw's transition into the RMCP listen loop is
+nondeterministic / depends on some backend readiness the clean
+mini.target boot doesn't reliably reach. boot5 (which DID authenticate)
+had heavy manual poking (cfgmgr restart, fullfw kill/relaunch attempts)
+— one of those side effects is what nudged fullfw into listening, not
+yet isolated. =&gt; RAKP auth (username accept + 20-byte-key HMAC) is
+PROVEN end-to-end on boot5 and reproducible ONCE fullfw is listening.
+The remaining OPEN item is purely "make fullfw's udp/623 RMCP listener
+start reliably on a clean boot" — a fullfw-startup/backend-readiness
+problem, decoupled from the RAKP user/key fixes. Next: strace the
+boot5-vs-boot6 fullfw to find the datacache/IPC condition it waits on
+before calling recvfrom on the LISTEN_FDS socket (candidates:
+IPMILan.Enable / LAN channel ready, sensord SDR shm, a dfserver/datamgr
+IPC handshake).</p>
+<h3 id="----historical-milestone-2-investigation-notes-below----">---
+(historical) MILESTONE 2 investigation notes below ---</h3>
+<h2
+id="milestone-2-remaining--rakp2-auth-code-mismatch--wrong-hmac-key">MILESTONE
+2 (remaining) — RAKP2 auth-code mismatch = wrong HMAC key</h2>
+<p>fullfw computes RAKP2/RAKP4 HMAC with the user's stored key; our
+<code>-K</code> bytes don't match. Tried &amp; FAILED: raw 32-byte
+IPMIKey (<code>915F32…</code>), the 64-char ASCII hex of it, and empty
+password. So fullfw keys with something else. Strong lead from the
+earlier RE: fullfw fetches the key via <code>osi_getUserSHA256</code> →
+plugin <code>osi_function_getuser_sha256pwd</code> (libdccfg/libfnprv) —
+i.e. the <strong>SHA256 password</strong>, not the IPMIKey. Our user has
+empty Password/SHA256Password. NEXT: RE
+<code>osi_function_getuser_sha256pwd</code> to learn the exact Kuid
+fullfw uses for the HMAC (is it SHA256Password? IPMIKey? a derivation?),
+and what byte encoding; OR set a known SHA256Password for Users.2 and
+pass the matching key. Don't brute-force key encodings blind (already 3
+misses). Useful: strace the live fullfw during a RAKP attempt to see
+which cfgdb attr it reads for the key.</p>
+<h2
+id="-phase-5-complete--full-cold-boot-rakp-auth-2026-06-26-boot13-">★★★★★
+PHASE 5 COMPLETE — full COLD-BOOT RAKP auth (2026-06-26, boot13)
+★★★★★</h2>
+<p>Virtual iDRAC9 now authenticates IPMI 2.0 over RAKP on a
+<strong>clean cold boot, zero manual steps</strong>, and runs
+authenticated commands. Proof (<code>RAKP-COLDBOOT-PROOF.txt</code>,
+reproducible):</p>
+<pre><code>zipmi -H 127.0.0.1 -p 6623 -U root -K 915f32...14af -I lanplus -C 17 mc info
+  Open Session→52B → RAKP1→RAKP2 88B → RAKP3→RAKP4 40B → encrypted session
+  -&gt; Manufacturer ID 674 / Dell, IPMI 2.0, FW 3.00   (authenticated mc info)</code></pre>
+<h3 id="the-complete-cold-boot-chain-every-gate-in-order">The complete
+cold-boot chain (every gate, in order)</h3>
+<ol type="1">
+<li><strong>Socket family</strong> — fullfw's
+<code>UDPCreateInstance</code> does an unconditional
+<code>setsockopt(IPV6_RECVPKTINFO)</code> that returns -1 on an AF_INET
+socket → fullfw exits. MUST socket-activate on <code>[::]:623</code>
+(IPv6 dual-stack, like stock
+<code>fullfw.socket BindIPv6Only=both</code>); bindv6only=0 still
+catches the SLIRP v4 hostfwd. (I had regressed this to
+<code>0.0.0.0:623</code>.)</li>
+<li><strong>UserName load</strong> — <code>Users.2#UserName</code> is
+metadata DBLocation=3 (CV store, broken in emu) → patch to DBLocation=2
+so root flows EMMC→tmpfs→datacache.</li>
+<li><strong>RAKP1 inclusion predicate</strong> — THE 0x0d fix.
+<code>UserInfoSearchByNameAndPriv</code> requires root's per-channel
+access byte <code>record[37+ch]</code> to have priv-nibble≥4 AND bit
+<code>0x10</code>. That byte is built by
+<code>User_Access_Handler</code> from
+<strong><code>IPMIUserInfo.2#UserChannelAccess</code></strong> (8-byte
+per-channel blob), which our direct cfgdb seed never populated
+(factory/racadm create-flow writes it) → 0x00 → 0x0d. Seed
+<code>UserChannelAccess = 0x14</code> per channel (nibble 4 | bit 0x10;
+<code>0x14 &amp; 0x70 = 0x10</code> covers the src2 term) +
+<code>StdPayload=0x10</code> insurance. (No password needed; IPMIKey
+stays the HMAC key.)</li>
+<li><strong>HMAC key</strong> — RAKP2/4 keyed with the <strong>first 20
+bytes</strong> of the hex-decoded IPMIKey, cipher 17.</li>
+</ol>
+<h3 id="red-herrings-ruled-out-with-proof--dont-chase-these-again">RED
+HERRINGS ruled out (with proof) — don't chase these again</h3>
+<ul>
+<li><code>defaultusercreated</code> 60s park — bounded delay, NOT the
+blocker (kept the seed; harmless).</li>
+<li>NIC-index bail in <code>UDPCreateInstance</code> (libtcpi 0x376c) —
+NIC index is provably 0, bail never fires (boot9-unpatched ==
+boot10-patched, identical). Reverted.</li>
+<li>libsess <code>UserInfoInit</code> load-path patch — boot12 forced it
+and still 0x0d; the issue was the inclusion predicate
+(UserChannelAccess), not the load path. Reverted.</li>
+<li>empty Password/SHA256Password — irrelevant to RAKP (IPMIKey is the
+credential).</li>
+</ul>
+<h3
+id="residual-minor-first-30s-after-boot-may-return-0x0d-then-it-works-reliably-user-table">Residual
+(minor): first ~30s after boot may return 0x0d, then it works reliably
+(user table</h3>
+<p>settles shortly after fullfw start). Not a blocker — auth is solid
+once warm (seconds, not the old 40 min). All fixes are in
+<code>build-p4.sh</code> + <code>init.p4.custom</code>;
+<code>./rakp-test.sh</code> to verify.</p>
+<h2
+id="credential-vault-cv--the-store-behind-dblocation3-full-note-cv-vault-notesmd">CREDENTIAL
+VAULT (CV) — the store behind DBLocation=3 (full note:
+<code>CV-VAULT-NOTES.md</code>)</h2>
+<p>The CV is why UserName (DBLocation=3) didn't load: it's iDRAC9's
+at-rest secret store, a dm-crypt volume at <code>/mnt/cv</code> (←
+<code>/flash/data0/cv</code>), set up by
+<code>/etc/init.d/credential-vault.sh</code>. cfgdb's secret-class attrs
+live in <code>/mnt/cv/cfgdb/CfgCurrentValues.db</code>.</p>
+<p>Enumerated live (factory state). The vault is a single container, one
+subdir per secret domain, under ONE hardcoded fleet-shared AES-256 key
+<code>00d078…3a6d</code> (world-readable in credential-vault.sh) — so
+the encryption stops nobody who has read iDRAC9 firmware. Contents:</p>
+<ul>
+<li><code>avctpasswd</code> — root + 16 user records (PBKDF2 pw hash,
+IPMIKey 915F32…, salt). [populated]</li>
+<li><code>cfgdb/CfgCurrentValues.db</code> — all 16 users' Password +
+SNMPv3 passphrases; plus a key stored IN the vault:
+<code>SecureDefaultPassword.AESKey=F91BF6F12B09E262DD1A140D6B0446F7</code>
++ IV. [populated]</li>
+<li><code>sekmkeydir</code> — <strong>SEKM KMIP client
+credential</strong> (the iDRAC's TLS cert+key to the external KMS).
+CORRECTION: SEKM keeps the real drive keys on an external KMS; iDRAC
+fetches them transiently at boot, doesn't store them. So CV compromise →
+that unit's KMIP client identity → impersonate it to the KMS to request
+its drive keys (per-unit, needs KMS reachability) — NOT drive keys in
+the vault.</li>
+<li><code>krb_keytab</code> — iDRAC AD machine-account keytab (0B until
+domain-joined → AD foothold).</li>
+<li><code>oauth</code>/<code>mod_auth_openidc</code>,
+<code>snmpd</code>, <code>supportassist</code>, <code>BNR</code>,
+<code>rm</code>, <code>private</code>, <code>power</code> — per-daemon
+secrets, empty at factory.</li>
+</ul>
+<p>Point: the CV is a SEPARATE problem from calvin and from the RAKP
+CVE-2013-4786 oracle. It's one fleet key gating a pile of high-value
+secrets, several NOT BMC-local (drive keys, AD keytab). Open Q: is
+<code>SecureDefaultPassword.AESKey</code> per-unit or fleet-shared?
+(ours is a metadata default — verify on real HW). Details + threat
+model: <code>CV-VAULT-NOTES.md</code>.</p>
+<h2 id="key-files-all-in-volumesyyyphdbmcdellidrac9-virtual">KEY FILES
+(all in <code>/Volumes/yyy/phd/bmc/dell/idrac9-virtual/</code>)</h2>
+<ul>
+<li><code>build-p4.sh</code> — repacks initramfs; injects Users.2 into
+cfgdb-defaults.db; patches cfgmeta.db (CurrentIPv4 writable+default,
+Users IsReadonly=0). IPMIKEY env overridable.</li>
+<li><code>init.p4.custom</code> — boot init; line ~52 copies avctpasswd
+to CV (RAKP-irrelevant, can ignore); prep.sh runs cfgdb-setup.sh +
+cfgdbinit, then copies cfgdb-defaults.db → SPI/EMMC CfgCurrentValues.db;
+bind-mounts patched cfgmeta over squashfs metadata.</li>
+<li><code>run-p4.sh</code> — QEMU launcher (npcm750-evb, uImage.patched,
+p4.dtb, sd256.img snapshot=on, hostfwd tcp 2222→22 + udp 6623→623).</li>
+<li><code>scripts/build-cfgdb-defaults.py</code> — builds
+cfgdb-defaults.db CfgValueTable from metadata defaults for a curated
+group subset (CVGROUPS in build-p4 includes <code>Users</code>).</li>
+</ul>
+<h2
+id="factory-avctpasswd-root-entry-for-reference-rakp-irrelevant-but-documents-the-key">FACTORY
+avctpasswd root entry (for reference; RAKP-irrelevant but documents the
+key)</h2>
+<p><code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs/etc/avctpasswd</code>
+line 2:
+<code>2:root:yhmydQG7…=:2:1:Administrator:/flash/data0/home/root:/bin/sh:0x1FF:1:946684814:1:0:0:915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964:C7D744A00CD4FD3042413C4B44141696:1</code>
+(field2=user, field9=0x1FF priv, field14=IPMIKey, field15=salt). Matches
+memory <code>reference_idrac9_factory_ipmikey.md</code>.</p>
+<h2 id="stale-web-ui-tasks-housekeeping-not-a-bug">STALE WEB-UI TASKS
+(housekeeping, not a bug)</h2>
+<p>The claude.ai web recap showing "55 running tasks" = dead ghosts from
+the lost dell session (QEMU/wait jobs). Mac rebooted (uptime 2h10m),
+<code>ps</code> shows zero qemu/fullfw. Web UI never got the stop
+signal. Cosmetic. Nothing to kill.</p>
+<h2 id="next-action-on-resume-one-line">NEXT ACTION ON RESUME (one
+line)</h2>
+<p>Run step 1 (<code>SELECT DISTINCT FQDD … Users</code>) → decide
+per-instance vs all-instance metadata default → set Users.2 default in
+cfgmeta.db → rebuild+boot+test RAKP.</p>
+</div>
+</body>
+</html>

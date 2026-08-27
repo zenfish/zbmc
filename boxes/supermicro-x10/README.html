@@ -15,7 +15,7 @@
     <p class="mt-2 text-lg text-slate-600">ASPEED <b>AST2400</b> (ARMv5TEJ), FW&nbsp;3.93, emulated with <code>qemu-system-arm -M supermicrox11-bmc</code>.</p>
     <p class="mt-1 text-sm text-slate-500">Firmware: <code>BMC_X10AST2400-32M_20210528_03.93_STD.bin</code> · zoo box <code>zbmc supermicro-x10</code> · 2026-08-23</p>
     <p class="mt-4 border-l-4 border-amber-500 pl-4 text-sm text-amber-900"><strong>Historical bring-up record.</strong>
-      The macOS/Docker attempts below explain discarded approaches. The supported v1 path is x86_64
+      The macOS/Docker attempts below explain discarded approaches. The supported 0.1.1 path is x86_64
       Linux using <code>./build.sh supermicro-x10</code> and <code>sudo ./tools/zbmc supermicro-x10 start</code>.</p>
   </header>
 
@@ -55,7 +55,7 @@
       <li>Waits for <code>udhcpc</code> to give up, then re-asserts the config (race fix)</li>
       <li>Patches SSH (see below), then disconnects pexpect</li>
     </ol>
-    <p class="mt-3 text-sm">Serial is a UNIX socket (<code>x10-serial.sock</code>) so <code>zbmc shell</code>/<code>zbmc console</code> can attach
+    <p class="mt-3 text-sm">Serial is a UNIX socket (<code>x10-serial.sock</code>) so <code>zbmc console</code> can attach
       after bootstrap via <code>socat</code>. Cold boot takes ~60s to NET_CONFIGURED.</p>
   </section>
 
@@ -85,7 +85,7 @@
       <p class="text-sm text-amber-900 mt-1"><b>Fix:</b> Rewrote to use a UNIX socket serial:
         <code>-chardev socket,id=ser0,path=$SOCK,server=on,wait=off -serial chardev:ser0</code>.
         Pexpect connects via <code>socat</code> for bootstrap, then disconnects &mdash; freeing the socket for
-        <code>zbmc shell</code>/<code>zbmc console</code>. Socket is <code>chmod 777</code> after creation (QEMU runs as root).</p>
+        <code>zbmc console</code>. The socket is group-accessible with mode <code>0660</code>.</p>
     </div>
 
     <!-- Issue 3: Port 443 -->

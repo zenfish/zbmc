@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — Operational Feature Matrix</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtual iDRAC9 — Operational Feature Matrix</h1>
+  </div>
+</div>
+<!--
+Operational feature matrix for the virtual iDRAC9 — destined for the public
+writeup (README.md + index.html). Convert to Tailwind HTML at publish time.
+Status legend: full = works end-to-end | live = proven on the wire |
+partial/⚠ = works with caveat | ❌ = not present.
+-->
+<p>One-liner: <em>A software iDRAC9 that boots the real firmware and
+answers racadm, IPMI, and Redfish — a protocol / management-plane
+emulator, not a hardware simulator. No live sensors, no KVM, no secure
+enclave.</em></p>
+<p>Firmware: <code>firmimgFIT.d9</code> <strong>7.20.30.50</strong>
+(binary patch offsets are pinned to this exact build). SoC: Nuvoton
+NPCM750 (Poleg, ARMv7 dual Cortex-A9) under
+<code>qemu-system-arm -M npcm750-evb</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Boot real Dell kernel + 177MiB rootfs (QEMU npcm750-evb)</td>
+<td>✅ full</td>
+</tr>
+<tr>
+<td>SSH root shell (uid=0)</td>
+<td>✅ full</td>
+</tr>
+<tr>
+<td><code>racadm</code> get/set — real FQDD resolution,
+cfgdb-backed</td>
+<td>✅ full</td>
+</tr>
+<tr>
+<td>IPMI 2.0 RMCP+ / RAKP on udp/623</td>
+<td>✅ live</td>
+</tr>
+<tr>
+<td>Redfish HTTPS — ServiceRoot, Managers, Systems, Chassis,
+Session/Account</td>
+<td>✅ 200s</td>
+</tr>
+<tr>
+<td>Pre-auth root SSH exploit chain (OAuth <code>/ssh_cert</code>)</td>
+<td>✅ proven</td>
+</tr>
+<tr>
+<td>Authenticated Redfish — real PAM credential gate (bad/no creds→401,
+valid→passes)</td>
+<td>✅ Tier D auth PROVEN (2026-07-04)</td>
+</tr>
+<tr>
+<td>Redfish odata pipe alive to real JSON
+(httpd→fcgi-auth→fcgiodata)</td>
+<td>✅ PROVEN 2026-07-05 — real Redfish JSON on the wire
+(<code>401 application/json Base.1.8.AccessDenied</code> when user
+unprovisioned)</td>
+</tr>
+<tr>
+<td>Authenticated Redfish returns 200 with real JSON</td>
+<td>✅ PROVEN 2026-07-05 (⚠️ load-fragile). From a clean cold boot:
+<code>GET /redfish/v1/Managers</code> (root:Calvin123#) →
+<strong><code>200</code> + real ManagerCollection JSON</strong>
+(<code>@odata.type #ManagerCollection.ManagerCollection</code>,
+Members→iDRAC.Embedded.1). Prior "HW-data-model floor / 504" claim
+DISPROVEN — datamgr serves SMIL data (strace-confirmed). Fix was 3
+config gaps: (1) seed <code>/var/run/unifieddatabase/HMC.db</code> —
+masking <code>hmc-client</code> skipped its <code>cp</code>
+ExecCondition; now baked into init.p6 authd.sh → fcgiodata reaches
+<code>active</code>. (2) httpd via <code>httpd -d /</code>
+(ServerRoot=<code>/</code>). (3) provision <code>idrac.users.2</code>
+root. CAVEAT: single emulated core → socket-activated fcgiodata@4200 is
+unstable under repeated traffic (serves ~1–2 requests then intermittent
+Apache <code>500</code> on re-activation). The <code>200</code> is real;
+sustained load needs a calmer box / fcgiodata hardening. ServiceRoot
+<code>/redfish/v1/</code> also intermittently 500s under load.</td>
+</tr>
+<tr>
+<td>Redfish session tokens (X-Auth-Token / OAuth Bearer)</td>
+<td>❌ needs oauthd chain (Bearer path only)</td>
+</tr>
+<tr>
+<td>Live-iterate dev harness (iterate.sh — push script to live box, read
+serial log; box-agnostic)</td>
+<td>✅ built, shared to iDRAC10</td>
+</tr>
+<tr>
+<td>QEMU checkpoint/restore (ckpt.py — skip 15min reboots / survive
+death)</td>
+<td>✅ USABLE (2026-07-06): golden
+<code>img/ckpt/golden-200-ready.gz</code> restores a
+<strong>200-ready</strong> box in ~15s (vs ~15min boot) with the
+<strong>patched qemu</strong> (<code>qemu-system-arm-patched</code>,
+migratable usb-net — see qemu-patch/). Box resumes from the exact frozen
+point (uptime continues; httpd+fcgiodata+creds+HMC.db all intact).
+<strong>Drive it via the ttyS1 root shell</strong>
+(<code>./console.sh</code>): PROVEN
+<code>curl localhost/redfish/v1/Managers = 200</code> from inside the
+restored box. CAVEAT: <strong>host-side</strong> network
+(ssh:2222/redfish:6443 from the Mac) does NOT survive restore — usb-net
+live-migration is solved through 3 layers
+(unmigratable→config→altsetting; RX-inject works) but the guest's
+in-flight EHCI async URBs don't resume, so end-to-end host net stalls.
+So: restored box is fully usable <em>from inside</em> (serial shell),
+not <em>from the host over the wire</em>. Bundle backed up to
+puffer.</td>
+</tr>
+<tr>
+<td>Sensor <em>data plane</em> (live PECI/I2C/ADC/PWM reads)</td>
+<td>❌ static SDR from config, no live values</td>
+</tr>
+<tr>
+<td>TPM, eMMC-RPMB secure store</td>
+<td>❌ not modeled by QEMU</td>
+</tr>
+<tr>
+<td>On-chip GMAC/EMC networking</td>
+<td>⚠️ crashes; uses usb-net workaround</td>
+</tr>
+<tr>
+<td>Video / KVM / vMedia</td>
+<td>❌ unmodeled</td>
+</tr>
+<tr>
+<td>Multi-user.target (full 182-service boot)</td>
+<td>❌ dead-end; mini.target only</td>
+</tr>
+<tr>
+<td>Boot time</td>
+<td>⚠️ 7–9 min under emu</td>
+</tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>

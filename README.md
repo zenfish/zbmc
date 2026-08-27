@@ -11,7 +11,7 @@ submission (at least... mostly beaten... still a bit to do.)
 
 > **New here? → [GETTING-STARTED.md](GETTING-STARTED.md)** — clone → `./build.sh` → `sudo ./tools/zbmc openbmc start`.
 
-> **Supported host:** zbmc v1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
+> **Supported host:** zbmc 0.1.1 runs only on **x86_64 Linux** (Intel or AMD). The pinned QEMU
 > executables, paths, and SHA-256 values were produced for x86_64 Linux. ARM64 hosts such as
 > Raspberry Pi and Apple Silicon, macOS, and other operating systems are not currently supported.
 > `build.sh` downloads and SHA-256-verifies the pinned QEMU Docker runtime, then installs
@@ -37,14 +37,14 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 
 | `zbmc` name | Accepted function | Exact-build result / measured cold start |
 |-------------|-------------------|------------------------------------------|
-| **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m01s |
-| **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m50s |
-| **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 11m50s |
-| **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | partial - about 6m15s to the last working service |
-| **megarac-hpe** | retained IPMI; Redfish/Web-UI observed but unstable; vendor SSH absent | partial - IPMI has no reliable cold READY time |
+| **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m32s |
+| **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m21s |
+| **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 9m38s |
+| **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | pass - 7m37s |
+| **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s after three automatic cold-boot rerolls; timing is nondeterministic |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
 | **supermicro-x10** | user-net (default): forwarded SSH, IPMI, Redfish, Web-UI; direct-LAN: the same plus guest ICMP; 60s stable hold | pass - 2m38s user-net / 3m11s direct-LAN |
-| **idrac9** | ICMP, SSH, IPMI; Redfish and Web-UI are not accepted in the P4 boot | pass - 12m48s |
+| **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 
 `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. 
@@ -71,7 +71,7 @@ sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools 
 pipx install jefferson
 export PATH="$HOME/.local/bin:$PWD/tools:$PATH"
 ./build.sh                     # install exact QEMU/zipmi + build every ready box
-sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 5 min on the reference host)
+sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 4m30s on the reference host)
 ./tools/zbmc openbmc ssh 'uname -a'
 ./tools/zbmc openbmc ipmi mc info
 ./tools/zbmc openbmc web
@@ -92,7 +92,7 @@ documented emulation adaptations. See [SECURITY.md](SECURITY.md) for the trust a
 
 Every box descriptor pins a QEMU executable, version, machine, and SHA-256. `zbmc` validates all four
 before launch and refuses a changed or incompatible binary. These pins are host-architecture-specific:
-the current v1 build/package path supports **x86_64 Linux only** and ships two patched QEMU 11
+the current 0.1.1 build/package path supports **x86_64 Linux only** and ships two patched QEMU 11
 artifacts plus Debian's exact QEMU 10.0.11 package in one pinned Docker image. Normal users receive
 and verify this package automatically through `build.sh`; these commands reproduce it:
 
@@ -160,6 +160,21 @@ docs/         engineering rationale, per-box deep dives, and cross-box lessons
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
 firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
 ```
+
+Every documentation source has both a GitHub-friendly Markdown form and a styled HTML form. Existing
+Markdown remains authoritative where it existed first; existing hand-authored HTML remains authoritative
+for the reverse-engineering reports. Markdown-to-HTML uses the vendored `zmd2html`; HTML-to-Markdown uses
+Pandoc 3.7.0.2 with its GFM writer. Regenerate or verify the pairs with:
+
+```bash
+tools/install-pandoc-docs
+export PATH="$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH"
+tools/sync-docs --write       # or: --check
+```
+
+The two `*.standalone.html` packaging copies remain HTML-only.
+
+`./tools/zbmc -V` (or `--version`) prints the dispatcher version.
 
 ## The docs, the sweat, the tears
 

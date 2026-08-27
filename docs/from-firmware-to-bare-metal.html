@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>From Firmware to Bare Metal: Virtualizing an AMI MegaRAC BMC under QEMU</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">From Firmware to Bare Metal: Virtualizing an AMI MegaRAC BMC under QEMU</h1>
+  </div>
+</div>
+
+<p>A field report on taking a vendor BMC firmware image — the Advantech
+<strong>ASMB-787</strong>, an AMI <strong>MegaRAC SP-X 4.0</strong>
+running on an <strong>ASPEED AST2600</strong> — from a single
+<code>.ima_enc</code> blob all the way to a booting,
+root-shell-accessible virtual BMC under QEMU. It covers what worked,
+what didn't, and the several walls we hit and how we got over (or
+around) them.</p>
+<p>The goal was a <em>zoo denizen</em>: a virtual BMC you can
+<code>start</code>, <code>console</code> into, and poke at like a real
+one — for security research on the OOB management stack (IPMI, Redfish,
+the web UI) without owning the physical board.</p>
+<blockquote>
+<p><strong>Historical field report (2026-08-23).</strong> The Apple
+Silicon commands below record the original investigation. The supported
+v1 release is x86_64 Linux and uses the tracked QEMU package plus
+<code>./build.sh advantech-asmb787</code>; see the current fleet table
+in the repository README.</p>
+</blockquote>
+<blockquote>
+<p><strong>TL;DR outcome:</strong> full MegaRAC userland boots, IPMIMain
+is stable, all services (redis, lighttpd, Redfish, event/task) come up,
+and you get a <strong>root console</strong> (<code>sysadmin</code> /
+<code>superuser</code>). External network (SSH/Redfish/IPMI over host
+ports) is blocked by a kernel-driver-vs-QEMU incompatibility that is
+<em>fully diagnosed</em> below but needs kernel-level work to fix — so
+the box ships <strong>console-accessible</strong>.</p>
+</blockquote>
+<hr />
+<h2 id="0-environment">0. Environment</h2>
+<p>Everything below ran on:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>macOS (Darwin 25.5.0), Apple Silicon <code>arm64</code></td>
+</tr>
+<tr>
+<td>QEMU</td>
+<td><code>qemu-system-arm</code> <strong>11.0.0</strong> (Homebrew)</td>
+</tr>
+<tr>
+<td>squashfs-tools</td>
+<td>unsquashfs / mksquashfs <strong>4.7</strong></td>
+</tr>
+<tr>
+<td>u-boot-tools</td>
+<td>dumpimage <strong>2026.04</strong></td>
+</tr>
+<tr>
+<td>jefferson</td>
+<td>(pipx) — JFFS2 extractor</td>
+</tr>
+<tr>
+<td>dtc</td>
+<td><strong>1.7.2</strong> (device-tree compiler)</td>
+</tr>
+<tr>
+<td>binwalk</td>
+<td><strong>3.1.0</strong></td>
+</tr>
+<tr>
+<td>python</td>
+<td>3.x</td>
+</tr>
+</tbody>
+</table>
+<p>The target SoC (AST2600, dual Cortex-A7) maps to QEMU's
+<strong><code>ast2600-evb</code></strong> machine. That single fact —
+that a vendor firmware built for the real AST2600 EVB reference platform
+lines up with an EVB machine QEMU already models — is what makes this
+tractable at all.</p>
+<hr />
+<h2 id="1-the-artifact-what-a-firmware-image-actually-is">1. The
+artifact: what a "firmware image" actually is</h2>
+<p>We started with two files:</p>
+<pre><code>encrypted_ASMB-787_20220912.ima_enc      67,109,128 bytes
+BMC Firmware 0.84.zip                     15,894,550 bytes   (a neighbouring Advantech bundle)</code></pre>
+<p><code>file(1)</code> misidentified the <code>.ima_enc</code> (it
+guessed "AmigaOS bitmap font" — ignore it). The name says
+<em>encrypted</em>, and the <code>.ima_enc</code> extension screams AES.
+<strong>It is not encrypted.</strong> Two cheap checks proved that
+immediately:</p>
+<p><strong>Header</strong> — the first bytes are an ARM exception-vector
+table plus U-Boot markers:</p>
+<pre><code>0f00 00ea 14f0 9fe5 14f0 9fe5 ...   ; b 0x44 ; ldr pc,[pc,#0x14] × repeated  (ARM vectors)
+... 4000 0000 ...                    ; @ markers
+... efbe adde ...                    ; 0xdeadbeef  (U-Boot/ASPEED)</code></pre>
+<p><strong>Entropy profile</strong> (per-MB Shannon entropy) — an AES
+blob is ~8.0 bits/byte <em>everywhere</em>; this had clear
+structure:</p>
+<pre><code>  0MB  H≈4.95  ####…      (U-Boot, plaintext)
+  1–4  H≈0–2              (config / padding)
+  5–44 H≈8.00  #########  (the &quot;scary&quot; high-entropy region)
+ 45–63 H≈0                (0xFF/0x00 flash erase padding)
+   64  H≈7.24             (tail: a signing pubkey + module footers)</code></pre>
+<p>That 5–44 MB block at H=8.0 <em>looks</em> encrypted, and that's
+exactly the trap: it's <strong>XZ-compressed SquashFS</strong>, not
+ciphertext. Compression and encryption both flatten entropy to ~8.0; the
+only way to tell them apart is to find structure (magic bytes)
+inside.</p>
+<h3 id="1a-the-format-ami-fmh">1a. The format: AMI FMH</h3>
+<p>Scanning for <code>$MODULE$</code> (AMI's Flash Module Header
+signature) at 64 KB-aligned offsets reveals the partition table baked
+into the image:</p>
+<pre><code>0x000c0000  conf      2048K   (jffs2, config)
+0x002c0000  conf      2048K   (jffs2, the dual/golden copy = &quot;bkupconf&quot;)
+0x004c0000  root     32000K   (squashfs/xz, the main root fs)
+0x02400000  osimage   4096K   (a U-Boot FIT: kernel + device trees)
+0x02800000  www       6144K   (squashfs/xz, the web UI)
+0x02e00000  dre      18432K   (jffs2, redfish/gami subextensions)</code></pre>
+<p>Each module's payload starts <strong>0x10000 (one erase block)
+after</strong> its <code>$MODULE$</code> header — so <code>conf</code>'s
+JFFS2 data is at <code>0xD0000</code>, the root SquashFS is at
+<code>0x4D0000</code>, etc.</p>
+<h3 id="1b-why-binwalk-lied--and-the-two-extraction-gotchas">1b. Why
+binwalk lied — and the two extraction gotchas</h3>
+<p>Running the local <code>binwalk 3.1.0</code> on the image reported
+<strong>"0 file signatures"</strong> — nothing. But a <em>prior</em>
+binwalk run had left an <code>.extracted/</code> dir with real JFFS2
+trees. The lesson:</p>
+<blockquote>
+<p><strong>Gotcha #1 — never trust "binwalk found nothing."</strong> A
+degraded/older signature DB silently skips SquashFS. We found the two
+SquashFS filesystems by scanning for the <code>hsqs</code> superblock
+magic ourselves, reading <code>bytes_used</code> from superblock offset
+<code>0x28</code> (u64 LE) to get the exact size, then carving and
+<code>unsquashfs</code>-ing. The 40 MB "encrypted" blob unpacked into a
+full BusyBox rootfs.</p>
+</blockquote>
+<blockquote>
+<p><strong>Gotcha #2 — jefferson auto-detects JFFS2 endianness <em>per
+file</em>.</strong> Fed the whole 67 MB image it guesses
+<strong>big-endian</strong> and extracts <strong>0 nodes</strong>. Carve
+the single JFFS2 region out first (it's little-endian) and jefferson
+finds all 90 inodes. There is no <code>--little-endian</code> flag;
+isolation is the fix. All of this is codified in <a
+href="../tools/unpack-ami"><code>tools/unpack-ami</code></a>.</p>
+</blockquote>
+<p>The result: <code>unpack-ami firmware.ima_enc</code> →
+<code>rootfs/</code> (2303 files), <code>www/</code> (99),
+<code>conf</code>/<code>subext</code> JFFS2 trees, the FIT, and a
+signing public key — in ~35 s. <strong>The "encryption" was a filename,
+nothing more.</strong></p>
+<hr />
+<h2 id="2-first-contact-does-the-kernel-even-boot">2. First contact:
+does the kernel even boot?</h2>
+<p>Before any userland, the cheapest possible test — boot the
+<em>raw</em> image as an MTD flash and watch U-Boot / the kernel come
+up. The kernel and DTB live inside the <code>osimage</code> FIT
+(<code>d00dfeed</code> magic at <code>0x2400040</code>), and
+<strong>QEMU's <code>-kernel</code> cannot unpack a FIT</strong>, so we
+pull the raw pieces out with <code>dumpimage</code>:</p>
+<pre class="bash"><code>dumpimage -l osimage.itb                 # list: image 0 = &quot;Linux kernel&quot; (load 0x80001000),
+                                         #       image 1 = fdt ast2600evb_a1.dtb
+dumpimage -T flat_dt -p 0 -o kernel.Image osimage.itb
+dumpimage -T flat_dt -p 1 -o dtb-a1.dtb   osimage.itb</code></pre>
+<p>Kernel is <strong>Linux 5.4.11-ami</strong> (armv7l). First boot
+attempt:</p>
+<pre class="bash"><code>qemu-system-arm -M ast2600-evb -m 1024 -display none \
+  -kernel kernel.Image -dtb dtb-a1.dtb -initrd rootfs.sqfs \
+  -drive file=mtdflash.bin,format=raw,if=mtd \
+  -append &quot;console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs \
+           ramdisk_size=131072 maxcpus=1 rootwait init=/bin/sh&quot;</code></pre>
+<p>Two things to note in that command line, both learned the hard
+way:</p>
+<ul>
+<li><strong><code>console=ttyS4</code></strong> — the AST2600 wires the
+console to UART5, which Linux calls <code>ttyS4</code>. Point it at
+<code>ttyS0</code> and you get a silent boot.</li>
+<li><strong><code>maxcpus=1</code></strong> — the EVB is dual-core but
+CPU1 bring-up faults under emulation; cap it in the kernel.</li>
+</ul>
+<h3 id="wall-1--the-flash-chip-size-must-be-exact">Wall #1 — the flash
+chip size must be <em>exact</em></h3>
+<pre><code>qemu-system-arm: w25q512jv device ... requires 67108864 bytes,
+                 mtd0 block backend provides 67109128 bytes</code></pre>
+<p>QEMU's <code>m25p80</code> model of the AST2600 FMC flash
+(<code>w25q512jv</code>, 512 Mbit = <strong>exactly 64 MiB</strong>)
+refuses a backing file that isn't precisely that size — and the
+<code>.ima_enc</code> is 264 bytes over. Fix: truncate the flash copy to
+<code>0x4000000</code>. (Those trailing bytes are module-footer padding;
+nothing boot-relevant.)</p>
+<pre class="bash"><code>truncate -s 67108864 mtdflash.bin</code></pre>
+<p>With that, the kernel boots to a root shell in <strong>~5
+seconds</strong>:</p>
+<pre><code>Platform ASMB-787
+VFS: Mounted root (squashfs filesystem) readonly on device 1:0.
+Run /bin/sh as init process
+/ #</code></pre>
+<p>That single result collapsed most of the risk: kernel boots, our
+carved rootfs mounts, the board self-identifies. Everything after this
+is userland bring-up.</p>
+<hr />
+<h2 id="3-real-init-making-megarac-actually-run">3. Real init: making
+MegaRAC actually run</h2>
+<p><code>init=/bin/sh</code> is a shell, not a BMC. Swapping to
+<code>/sbin/init</code> runs the full sysvinit stack — and that's where
+MegaRAC's central daemon, <strong>IPMIMain</strong>, comes in. It
+reliably <strong>SIGSEGV'd and reboot-looped</strong>.</p>
+<p>This exact failure had been solved before on a sibling box (the HPE
+Cray XD670, same MegaRAC SP-X / <code>ast2600evb_ami</code> platform),
+via Ghidra RE. The two fixes ported cleanly and live in <a
+href="../boxes/advantech-asmb787/qemu-patch-rootfs.sh"><code>boxes/advantech-asmb787/qemu-patch-rootfs.sh</code></a>:</p>
+<p><strong>Fix 1 — the <code>/conf/BMC</code> symlink.</strong> IPMIMain
+opens the <em>literal</em> path <code>/conf/BMC/IPMI.conf</code> to
+build its per-interface state table <code>g_BMCInfo[]</code>. On real
+hardware, platform detection creates
+<code>/conf/BMC → BMC1/ast2600evb_ami</code>. Nothing does that under
+QEMU, so the table never builds and the central message handler
+dereferences an uninitialised field → SIGSEGV → procmgr respawns → 15
+crashes → BMC reboot. We inject a seed block into
+<code>etc/init.d/ipmistack</code> (before every IPMIMain launch) that
+seeds <code>/conf</code> from <code>/etc/defconfig</code> and creates
+the symlink, gated on a <code>/conf/AMI</code> sentinel so it's
+idempotent across respawns.</p>
+<p><strong>Fix 2 — trim <code>IPMI.conf</code> to the hardware QEMU
+actually models.</strong> The EVB gives us LAN (eth0), a Unix domain
+socket, and KCS1–3 — but <strong>no</strong> SOL/serial DMA, no i2c (so
+no IPMB/SMBUS), no SMM config file. Each enabled-but-absent interface
+leaves a half-initialised table entry that the message-handler thread
+later derefs → SIGSEGV. Ghidra RE of <code>IPMIConf.c</code> also turned
+up a Node-Manager guard that self-stops unless <code>NM_IPMB_BUS</code>
+is 0/1/2 <em>and</em> that bus is enabled. So the patch sets:</p>
+<pre><code>SUPPORT_SMM_IFC=0   SUPPORT_SOL_IFC=0   (SERIAL/SMBUS/BT/IPMB already 0 in ASMB defconfig)
+NM_IPMB_BUS=0xFF    (&gt;=3 falls through the guard -&gt; Node-Manager doesn&#39;t self-stop)</code></pre>
+<p>Keep LAN, UDS, KCS. With both fixes IPMIMain runs stable, provisions
+the default <code>sysadmin</code>/<code>superuser</code> user into a
+clean <code>/conf</code>, and the whole stack comes up:</p>
+<pre><code>Starting redis-server ... Starting Redfish Server ... Redfish PAM Authentication Service ...
+Launching Event-Service ... Launching Task-Service ... Interface eth0 is up ...
+AMI525400123458 login:</code></pre>
+<h3 id="wall-2--mounting-conf-from-the-right-mtd-blocks">Wall #2 —
+mounting <code>/conf</code> from the right MTD blocks</h3>
+<p>MegaRAC's compiled <code>/usr/local/bin/mountallapp</code> mounts
+partitions <strong>by <code>/dev/mtdblockN</code> number</strong>,
+driven by <code>/etc/dupfstab</code>:</p>
+<pre><code>/dev/mtdblock1   /conf            jffs2
+/dev/mtdblock3   /usr/local/www   squashfs
+/dev/mtdblock4   /dre             jffs2</code></pre>
+<p>So the <em>ordering</em> of our <code>mtdparts=</code> matters, not
+just the names — and each partition must land exactly on its
+filesystem's magic. Because our <code>mtdflash.bin</code>
+<strong>is</strong> the real linear NOR (unlike the Cray box, whose
+source was a non-linear HPM wrapper), we can point partitions at the
+true data offsets with the <code>@offset</code> syntax:</p>
+<pre><code>mtdparts=1e620000.spi:832k@0(uboot),1984k@0xd0000(conf),1984k@0x2d0000(bkupconf),\
+6144k@0x2810000(www),-@0x2e10000(dre)</code></pre>
+<p><code>mtdblock1</code>=conf lands on the JFFS2 at
+<code>0xD0000</code>, <code>mtdblock3</code>=www on the SquashFS at
+<code>0x2810000</code>, and so on — matching <code>dupfstab</code>
+exactly. <code>/conf</code> mounts read-write, the seed runs, IPMIMain
+provisions its user.</p>
+<p>At this point: <strong><code>zbmc asmb787 console</code> → login
+<code>sysadmin</code>/<code>superuser</code> → uid 0 root
+shell.</strong> Everything local works.</p>
+<hr />
+<h2 id="4-wall-3--the-network-the-long-one">4. Wall #3 — the network.
+The long one.</h2>
+<p>Every remote service (SSH:22, Redfish:443, IPMI RMCP+:623) rides
+<code>eth0</code>. And <code>eth0</code> would not pass a single frame
+to QEMU's user-mode network (slirp). The host-side TCP even
+<em>connects</em> (slirp accepts locally) but SSH dies at "banner
+exchange" — the guest never answers. This took the longest and went
+through the most wrong turns, so here's the full arc.</p>
+<h3 id="the-symptom">The symptom</h3>
+<pre><code>ftgmac100 1e670000.ftgmac eth0: Using NCSI interface
+ftgmac100 1e670000.ftgmac eth0: NCSI: No channel found to configure!</code></pre>
+<p><strong>NC-SI</strong> (Network Controller Sideband Interface, DMTF
+DSP0222) is how a BMC shares the host's physical NIC. The BMC MAC
+negotiates with the NIC over EtherType <code>0x88F8</code> control
+packets (Get Version, Get Capabilities, Select Package/Channel, Get Link
+Status, Enable Channel) before any data flows. Our MAC
+(<code>ftgmac@1e670000</code>, marked <code>use-ncsi</code> in the DTB)
+waits on that negotiation, finds no channel, and never brings the link
+up.</p>
+<h3 id="the-wrong-turns-recorded-so-you-can-skip-them">The wrong turns
+(recorded so you can skip them)</h3>
+<table>
+<thead>
+<tr>
+<th>Attempt</th>
+<th>Flags / edit</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Manual static IP + route</td>
+<td><code>ip addr add 10.0.2.15/24; ip route add default via 10.0.2.2</code></td>
+<td>link "up" but ping gw = 100% loss / TX errors</td>
+</tr>
+<tr>
+<td>Flush firewall</td>
+<td><code>iptables -F; iptables -P INPUT ACCEPT</code></td>
+<td>no change — not a filtering issue</td>
+</tr>
+<tr>
+<td>Strip <code>use-ncsi</code> from DTB</td>
+<td><code>dtc</code> edit, recompile</td>
+<td>driver <em>still</em> does NC-SI</td>
+</tr>
+<tr>
+<td>Add <code>fixed-link</code> to the MAC</td>
+<td><code>fixed-link { speed=&lt;100&gt;; full-duplex; }</code></td>
+<td>carrier=1, but frames still don't traverse</td>
+</tr>
+<tr>
+<td>USB-net (idrac9 trick)</td>
+<td><code>-device usb-net,netdev=n0,bus=usb-bus.0</code></td>
+<td><strong>QEMU hangs</strong> — AST2600 EHCI is high-speed-only,
+<code>usb-net</code> is full-speed → speed mismatch</td>
+</tr>
+<tr>
+<td>Enable the RGMII MAC</td>
+<td><code>1e660000</code> <code>status="okay"</code>, disable
+<code>1e670000</code></td>
+<td>eth0 moves to the phy-backed MAC but driver <em>still</em> forces
+NC-SI</td>
+</tr>
+</tbody>
+</table>
+<p>A lot of that was chasing NC-SI as "the thing to disable." Two facts
+finally reframed it:</p>
+<p><strong>Reframe A — QEMU already <em>is</em> the fake NIC.</strong>
+Wire a socket-netdev straight to the ftgmac and sniff: <strong>zero
+frames</strong> arrive while the kernel is doing NC-SI. QEMU's ftgmac
+model <strong>handles NC-SI internally</strong> and never forwards those
+<code>0x88F8</code> frames to any backend. So building an
+<em>external</em> NC-SI responder is impossible — there's nothing to
+answer. (This killed our planned "fake NIC" daemon before we wrote
+it.)</p>
+<p><strong>Reframe B — it's the guest kernel, not the emulator.</strong>
+The sibling Cray box uses the <em>same</em> QEMU, the <em>same</em>
+<code>-net nic -net user</code>, a DTB with the <em>same</em>
+<code>use-ncsi</code> — and it gets a DHCP lease and serves Redfish. The
+only difference is its kernel: <strong>5.4.184-ami</strong>. Its ftgmac
+driver negotiates with QEMU's built-in responder and brings the link up.
+ASMB-787's <strong>5.4.11-ami</strong> driver is AMI-customised (it
+prints <code>This NCSI chip not support Keep-PHY linkup</code>),
+<strong>forces NC-SI regardless of the DTB</strong>, and its handler
+<em>rejects</em> QEMU's response:</p>
+<pre><code>ftgmac100 1e660000.ftgmac eth0: NCSI: Handler for packet type 0x82 returned -19   (-ENODEV)</code></pre>
+<p>So the wall is a <strong>kernel-driver ↔︎ QEMU-responder protocol
+mismatch</strong>, kernel-side, in an older AMI build. No DTB tweak,
+external responder, or USB-net gets around it.</p>
+<h3 id="the-last-lead--swap-in-the-working-kernel">The last lead — swap
+in the working kernel</h3>
+<p>If 5.4.184 negotiates fine, boot ASMB-787's <em>rootfs</em> on the
+<strong>Cray kernel</strong>. It got further than anything else —
+<code>eth0: Link is Up - 100Mbps/Full</code> on the RGMII MAC
+(<code>1e660000</code>) — then panicked:</p>
+<pre><code>PC is at aspeed_udma_request_chan+0x1f8   &lt;- ast8250_startup -&gt; aspeed_udma_request_tx_chan
+Unhandled fault: page domain fault ... Comm: stty</code></pre>
+<p>The AMI <strong><code>ast8250</code> serial driver hardcodes
+UART-DMA</strong>; QEMU doesn't model that DMA. When ASMB-787's init
+runs <code>stty</code> on a serial, the 5.4.184 kernel dereferences a
+NULL channel → panic. Disabling the <code>uart-dma</code> node and
+stripping <code>dmas</code> from the DTB didn't help — the driver
+ignores the DTB and calls <code>request_tx_chan</code> unconditionally.
+Cray's own rootfs never opens that serial, so Cray never hits it.</p>
+<p>That's the shape of it: the AMI 5.4.11 stack fights QEMU at
+<strong>two</strong> layers in sequence — <strong>NC-SI
+(ftgmac)</strong>, then <strong>UART-DMA (ast8250)</strong> — and
+clearing one exposes the next, on top of 5.4.184-vs-5.4.11 module skew.
+Each is individually solvable with kernel binary-patching or a custom
+QEMU build; none is a one-liner.</p>
+<h3 id="the-compromise">The compromise</h3>
+<p>We shipped the box <strong>console-only</strong>. It's a legitimate
+denizen — the sibling Cray box's <em>primary</em> documented access is
+also its console. Root shell, all services live, full local attack
+surface. The remaining paths to network (any one of: binary-patch the
+ftgmac/ncsi handler in the kernel Image; rebuild QEMU's ftgmac NC-SI to
+satisfy the AMI handler; de-panic the Cray kernel by neutralising every
+DMA-serial open in ASMB-787's init) are documented as a parked,
+multi-session sub-project.</p>
+<hr />
+<h2 id="5-what-you-end-up-with">5. What you end up with</h2>
+<pre><code>tools/unpack-ami            one-command AMI MegaRAC unpacker (the gotchas above, codified)
+tools/zbmc                  the &quot;zoo&quot; dispatcher: zbmc &lt;box&gt; start|console|status|...
+boxes/advantech-asmb787/qemu-patch-rootfs.sh  the two IPMIMain fixes
+boxes/advantech-asmb787/boot.sh               the exact QEMU invocation
+boxes/advantech-asmb787/build.sh              firmware -&gt; boot artifacts
+boxes/advantech-asmb787/zbmc.box              the box descriptor
+firmware/…ima_enc           the source of truth</code></pre>
+<p>Quickstart:</p>
+<pre class="bash"><code>./build.sh advantech-asmb787
+sudo ./tools/zbmc advantech-asmb787 start
+./tools/zbmc advantech-asmb787 status -v</code></pre>
+<h2 id="6-lessons-worth-carrying-to-the-next-bmc">6. Lessons worth
+carrying to the next BMC</h2>
+<ol type="1">
+<li><strong>"Encrypted" is often a filename.</strong> Check the header
+and entropy <em>profile</em> before believing it. Compression and
+encryption both read ~8.0 bits/byte; only structure distinguishes
+them.</li>
+<li><strong>Don't trust "binwalk found nothing."</strong> Scan
+filesystem magics (<code>hsqs</code>, <code>0x1985</code>,
+<code>d00dfeed</code>) yourself; carve by the size field in the
+superblock.</li>
+<li><strong>jefferson picks JFFS2 endianness per file</strong> — isolate
+the region first.</li>
+<li><strong>Match the emulator's exact hardware:</strong> flash chip
+size to the byte, console UART, single-CPU cap, and only the IPMI
+interfaces the machine actually models.</li>
+<li><strong>Mount by the firmware's own rules</strong> — read
+<code>/etc/dupfstab</code>; partition <em>order</em> (mtdblock numbers)
+can matter more than names.</li>
+<li><strong>Diagnose frame-traversal before trying network
+fixes.</strong> One <code>ping &lt;gateway&gt;</code> that shows TX
+errors would have saved hours of DTB edits. Prove where the frames stop
+first.</li>
+<li><strong>The emulator may already implement the sideband.</strong> We
+nearly built an NC-SI responder QEMU didn't need — a socket-netdev sniff
+(zero frames) proved QEMU answers NC-SI itself. The real variable was
+the guest kernel version.</li>
+</ol>
+<p><em>Written up from a live RE session (2026-08). Sibling boxes in the
+same "zoo": HPE Cray XD670 (MegaRAC SP-X, networked), Supermicro X14
+(OpenBMC), Dell iDRAC9/10 (NPCM).</em></p>
+</div>
+</body>
+</html>

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC9 Web Interface — Static Security Scan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC9 Web Interface — Static Security Scan</h1>
+  </div>
+</div>
+
+<p>Static analysis of the exposed web surface in extracted iDRAC9
+firmware. No live testing was performed; every finding is grounded in a
+file:line in the rootfs.</p>
+<ul>
+<li>ROOTFS:
+<code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs</code></li>
+<li>Web roots:
+<code>…/usr/local/www/{restgui,rfservice,scvservice,software,help,debranded,bmcbranded}</code></li>
+<li>Apache config (factory copy, deployed to <code>/etc/apache2</code>):
+<code>…/usr/share/factory/etc/apache2/</code></li>
+<li>GUI = AngularJS 1.x SPA in <code>restgui/</code> (gzipped
+<code>*.js.gz</code> / <code>*.html.gz</code>); vConsole/vMedia =
+separate Angular(modern)+webpack bundles in
+<code>restgui/vconsole/</code> and <code>restgui/vmedia/</code>.</li>
+<li>Decompressed working copy: <code>…/scratchpad/webscan/</code></li>
+</ul>
+<p>Apache paths below are relative to
+<code>usr/share/factory/etc/apache2/conf.d/</code> unless noted.</p>
+<hr />
+<h2 id="1-exposed-surface-map-endpoint--auth--handler">1. Exposed
+surface map (endpoint → auth → handler)</h2>
+<p>Auth model: a FastCGI <strong>Authorizer</strong>
+(<code>fcgi-auth</code> @127.0.0.1:4300) is wired as an Apache
+<code>AuthnzFcgiCheckAuthnProvider</code> over selected
+<code>LocationMatch</code> blocks. Where a block sets
+<code>IS_AUTHNZ_REQUIRED=0</code> or
+<code>SetEnvIf Authorization ^$ IS_AUTHNZ_REQUIRED=0</code>, the request
+is passed to the backend <em>without</em> an Apache auth gate (backend
+may still re-check). HTTP (:80) is redirect-only to HTTPS for GET/HEAD;
+non-GET → 404; OPTIONS → 405; <code>/cgi-bin</code> over HTTP → 404
+(<code>03-vhosts.conf:34-81</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint (prefix)</th>
+<th>Auth required?</th>
+<th>Handler / backend</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/restgui/*</code> (GUI SPA static)</td>
+<td><strong>No</strong> for assets; <code>.html</code> runs MUT
+handler</td>
+<td>Apache static + <code>mut-handler</code>; <code>.gz</code> variants
+auto-served</td>
+<td><code>httpd_gui.conf:20-84</code>,
+<code>fcgi-auth-mut.conf:12</code></td>
+</tr>
+<tr>
+<td><code>/restgui/</code> (bare dir)</td>
+<td>n/a — <strong>403 forbidden</strong></td>
+<td>—</td>
+<td><code>03-vhosts.conf:80-81,206-207</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/*</code> (ReST GUI API)</td>
+<td><strong>Yes</strong> (fcgi-auth, session)</td>
+<td>proxy → <code>fcgirds.socket</code></td>
+<td><code>fcgi-auth.conf:51-60</code>,
+<code>03-vhosts.conf:87-91</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/2015/bmc/info</code> (GET)</td>
+<td><strong>No (authnz bypassed)</strong></td>
+<td>fcgirds</td>
+<td><code>httpd_gui.conf:11-13</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/2016/bmc/language</code> (GET)</td>
+<td><strong>No (authnz bypassed)</strong></td>
+<td>fcgirds</td>
+<td><code>httpd_gui.conf:11-13</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/2012/server/configgroup/iDRAC.userdomain</code>
+(GET)</td>
+<td><strong>No (authnz bypassed)</strong></td>
+<td>fcgirds</td>
+<td><code>httpd_gui.conf:11-13</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/2015/bmc/session</code> (POST, no query)</td>
+<td><strong>Yes</strong> (Basic, fcgi-auth) — login</td>
+<td>fcgirds</td>
+<td><code>fcgi-auth.conf:76-88</code></td>
+</tr>
+<tr>
+<td><code>/sysmgmt/2015/bmc/session</code> (POST
+<code>?authtype=tfa</code>)</td>
+<td>client cert (<code>SSLVerifyClient optional_no_ca</code>)</td>
+<td>backend</td>
+<td><code>03-vhosts.conf:233-238</code></td>
+</tr>
+<tr>
+<td><code>/redfish</code>, <code>/redfish/v1</code> (root)</td>
+<td><strong>No</strong> when no <code>Authorization</code> hdr</td>
+<td>static JSON alias</td>
+<td><code>httpd_redfish.conf:222-228</code></td>
+</tr>
+<tr>
+<td><code>/redfish/v1/{Registries,JSON/JsonSchemas,Schemas,odata,$metadata,openapi.yaml}</code></td>
+<td><strong>No</strong> when no <code>Authorization</code> hdr</td>
+<td>static aliases</td>
+<td><code>httpd_redfish.conf:236-262,499</code></td>
+</tr>
+<tr>
+<td><code>/redfish/v1/Managers/(1|iDRAC.Embedded.1)/PrivilegeRegistry</code></td>
+<td><strong>No</strong> when no <code>Authorization</code> hdr</td>
+<td>static alias</td>
+<td><code>httpd_redfish.conf:256-258,651</code></td>
+</tr>
+<tr>
+<td><code>/redfish/*</code> (everything else)</td>
+<td><strong>Yes</strong> (Basic + session)</td>
+<td>fcgi RF responders @4200-4204</td>
+<td><code>fcgi-auth.conf:104-130</code>,
+<code>httpd_redfish.conf:150-164</code></td>
+</tr>
+<tr>
+<td><code>/redfish/v1/Downloads/&lt;x&gt;</code></td>
+<td><strong>Yes</strong></td>
+<td>static file <code>/mmc1/pel/&lt;x&gt;</code></td>
+<td><code>httpd_redfish.conf:696</code></td>
+</tr>
+<tr>
+<td><code>/redfish/v1/Dell/*.{xml,csv,gz,zip,txt,csr,pem,crt,log,svgz}</code></td>
+<td><strong>Yes</strong></td>
+<td>static aliases to <code>/var/run/wsman/...</code></td>
+<td><code>httpd_redfish.conf:656-696</code></td>
+</tr>
+<tr>
+<td><code>/wsman</code></td>
+<td><strong>Yes</strong> (Basic, fcgi-auth)</td>
+<td><code>wsman-handler</code> (libmodwsman.so)</td>
+<td><code>fcgi-auth.conf:24-46</code>,
+<code>idrac-wsman.conf:4</code></td>
+</tr>
+<tr>
+<td><code>/cgi-bin/(exec|putfile|logout)</code></td>
+<td><strong>Yes</strong> (fcgi-auth)</td>
+<td>ScriptAlias <code>/usr/local/cgi-bin/</code></td>
+<td><code>fcgi-auth.conf:51</code>,
+<code>httpd_rracadm.conf:6</code></td>
+</tr>
+<tr>
+<td><code>/cgi-bin/login</code> (POST)</td>
+<td><strong>No Apache gate</strong> (login is pre-auth)</td>
+<td>proxy → <code>fcgiracadm.socket</code></td>
+<td><code>httpd_rracadm.conf:32-36</code>,
+<code>fcgi-auth.conf:51</code></td>
+</tr>
+<tr>
+<td><code>/cgi-bin/discover?MODE=PROXY</code> (GET)</td>
+<td><strong>No Apache gate</strong></td>
+<td>proxy → <code>fcgiracadm.socket</code></td>
+<td><code>httpd_rracadm.conf:23-30</code></td>
+</tr>
+<tr>
+<td><code>/dtapi</code>, <code>/api</code>,
+<code>/idrac/plugins</code></td>
+<td><strong>Yes</strong> (Basic, <code>SSLRequireSSL</code>)</td>
+<td>proxy → <code>telemetryservice/http.socket</code></td>
+<td><code>fcgi-auth.conf:62-74</code>,
+<code>03-vhosts.conf:102-107</code></td>
+</tr>
+<tr>
+<td><code>/baseboardservice/(HMC|SMC).Embedded.1/*</code></td>
+<td><strong>Yes</strong> (Basic) except bare redfish root</td>
+<td>backend</td>
+<td><code>fcgi-auth.conf:90-102</code>,
+<code>httpd_redfish.conf:230-234</code></td>
+</tr>
+<tr>
+<td><code>/oauth/token</code> (POST)</td>
+<td>n/a (token endpoint, <code>SSLRequireSSL</code>)</td>
+<td>proxy → fcgi @4400</td>
+<td><code>fcgiresponder.conf:7-25</code></td>
+</tr>
+<tr>
+<td><code>/register</code>,<code>/authorize</code>,<code>/cb</code>,<code>/ssh_cert</code>,<code>/token_test</code></td>
+<td>n/a (OAuth/OIDC flow)</td>
+<td>proxy → fcgi @4400</td>
+<td><code>fcgiresponder.conf:1-5</code></td>
+</tr>
+<tr>
+<td><code>/oauth_discovery/*</code></td>
+<td><strong>No — <code>Require all granted</code></strong></td>
+<td>static dir <code>/var/run/oauth_discovery/</code></td>
+<td><code>fcgiresponder.conf:31-36</code></td>
+</tr>
+<tr>
+<td><code>/protected/*</code></td>
+<td><strong>Yes</strong> (<code>AuthType openid-connect</code>,
+valid-user)</td>
+<td>proxy → fcgirds</td>
+<td><code>auth_openidc.conf.orig:7-19</code></td>
+</tr>
+<tr>
+<td><code>/vkvm/</code> (ws)</td>
+<td>backend token</td>
+<td><code>ProxyPass ws://127.0.0.1:5900</code></td>
+<td><code>01-idrac-vconsole.conf:8</code></td>
+</tr>
+<tr>
+<td><code>/vnc/vconsole</code> (ws upgrade)</td>
+<td>backend token</td>
+<td><code>ws://127.0.0.1:5905</code></td>
+<td><code>03-vhosts.conf:121-124</code></td>
+</tr>
+<tr>
+<td><code>/vnc/vmedia</code> (ws upgrade)</td>
+<td>backend token</td>
+<td><code>ws://127.0.0.1:5951</code></td>
+<td><code>03-vhosts.conf:126-129</code></td>
+</tr>
+<tr>
+<td><code>/console</code>
+(+<code>?username&amp;tempUsername&amp;tempPassword</code>)</td>
+<td>redirect → vconsole (MSM SSO)</td>
+<td>rewrite</td>
+<td><code>03-vhosts.conf:142-147</code></td>
+</tr>
+<tr>
+<td><code>/capconsole</code>,<code>/capdata</code>,<code>/bootcapture</code>,<code>/crashcapture</code></td>
+<td><strong>Yes</strong> (fcgi-auth)</td>
+<td>static aliases <code>/var/run/...</code></td>
+<td><code>fcgi-auth.conf:51</code>,
+<code>httpd_gui.conf:118-127</code></td>
+</tr>
+<tr>
+<td><code>/gmdwn/*</code>, <code>/Applications/*</code> (GM/CMC
+SSO)</td>
+<td><strong>Yes</strong> (fcgi-auth)</td>
+<td>static / proxy</td>
+<td><code>fcgi-auth.conf:51</code>, <code>httpd_gui.conf:129</code></td>
+</tr>
+<tr>
+<td><code>/dtapi/rest/v1/.../openapi.yaml</code></td>
+<td><strong>No</strong> (served static, proxy bypass)</td>
+<td>Alias <code>scvservice/Schemas/openapi.yaml</code></td>
+<td><code>03-vhosts.conf:98-99</code></td>
+</tr>
+<tr>
+<td><code>/.well-known/acme-challenge</code></td>
+<td><strong>No</strong></td>
+<td><code>/var/run/apache2</code></td>
+<td><code>03-vhosts.conf:100</code></td>
+</tr>
+<tr>
+<td><code>/index.html</code></td>
+<td><strong>No</strong></td>
+<td>Alias <code>/etc/websockets/index.html</code>,
+<code>Require all granted</code></td>
+<td><code>03-vhosts.conf:224-229</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-findings-ranked-by-severity">2. Findings ranked by
+severity</h2>
+<h3 id="high">HIGH</h3>
+<p><strong>H1 — Stored/DOM XSS: Lifecycle-Controller log / work-note
+<code>message</code> rendered as trusted HTML without escaping.</strong>
+The dashboard and storage LC-log grids bind the server-supplied
+<code>message</code> field via <code>ng-bind-html</code> after wrapping
+it in <code>$sce.trustAsHtml()</code> with <strong>no HTML
+escaping</strong>:</p>
+<ul>
+<li><code>js/controllers/dashboard/dashboardcontroller.js:177</code>
+cellTemplate <code>&lt;span ng-bind-html = row[column.map]&gt;</code>,
+fed at <code>:196</code>
+<code>lcldata[key].message = $sce.trustAsHtml(lcldata[key].message);</code></li>
+<li><code>js/controllers/storage/storageinfocontroller.js:359</code>
+same cellTemplate, fed at <code>:444</code>
+<code>lcldata[key].message = $sce.trustAsHtml(lcldata[key].message);</code></li>
+</ul>
+<p>Why it matters: the same codebase escapes elsewhere —
+<code>js/controllers/system/detailedinfocontroller.js:685</code> does
+<code>$sce.trustAsHtml(commonutility.escapeHtml(attributes[attr]))</code>,
+and <code>js/controllers/groupmanager/groupmanager.js:623</code> wraps
+every field in <code>commonutility.escapeHtml(...)</code>. The
+dashboard/storage paths omit that step, so any HTML/JS that reaches an
+LC-log <code>message</code> renders in an authenticated admin's browser.
+The dashboard grid exposes an <code>add_note</code> action
+(<code>dashboardcontroller.js:181</code>), i.e. work-note text is
+user-supplied and flows back into this field → classic stored XSS. This
+mirrors the previously-documented iDRAC6 stored-XSS-via-logged-string
+pattern. <strong>Caveat (unverified):</strong> needs a live target to
+confirm (a) the backend does not sanitize work-note / LC-log text
+server-side, and (b) the note text reaches this exact
+<code>message</code> field unescaped. Promote to confirmed only after
+that test.</p>
+<h3 id="medium">MEDIUM</h3>
+<p><strong>M1 — Session auth token transported in URL query string (leak
++ fixation surface).</strong>
+<code>js/controllers/logincontroller.js</code>:</p>
+<ul>
+<li><code>:132-134</code> reads <code>xsrf-token</code> <strong>from the
+URL query string</strong> (<code>getUrlVars()['xsrf-token']</code>) and
+stores it in <code>XSRF_TOKEN</code>.</li>
+<li><code>:520</code> uses that value as the Redfish
+<strong><code>X-AUTH-TOKEN</code></strong> header
+(<code>redfish_headers</code>), and <code>:274,:519</code> as the
+<code>XSRF-TOKEN</code> header — i.e. it is the live session credential,
+not a mere anti-CSRF nonce.</li>
+<li><code>:749,:753,:755</code> write it back into navigations:
+<code>window.location.replace("index.html?"+XSRF_TOKEN+"&amp;vconsole")</code>,
+<code>igm.html?"+XSRF_TOKEN</code>.</li>
+</ul>
+<p>Why it matters: auth tokens in the URL leak through browser history,
+the <code>Referer</code> header to any third-party asset, and any
+intermediary/access logs. Accepting the token from an
+attacker-influenceable URL is also a token-fixation foothold. This is
+the SSO/vConsole post-auth handoff path (<code>authResult==7</code>).
+<strong>Caveat:</strong> token lifetime/binding is enforced server-side
+and unverified here; severity depends on whether the token is single-use
+/ IP-bound.</p>
+<p><strong>M2 — Unauthenticated information disclosure on three
+<code>/sysmgmt</code> GETs.</strong> <code>httpd_gui.conf:11-13</code>
+sets <code>IS_AUTHNZ_REQUIRED=0</code> for GET on
+<code>/sysmgmt/2015/bmc/info</code>,
+<code>/sysmgmt/2016/bmc/language</code>, and
+<code>/sysmgmt/2012/server/configgroup/iDRAC.userdomain</code>. The
+login SPA consumes <code>UserDomain</code> pre-auth to populate the
+AD-domain dropdown (<code>logincontroller.js:139-160</code>), so
+configured Active Directory domain names are readable without
+credentials; <code>bmc/info</code> yields model / generation / firmware
+data useful for fingerprinting and version-specific exploit selection.
+Low-sensitivity individually, but unauthenticated.</p>
+<p><strong>M3 — Legacy MSM SSO passes credentials in the URL query
+string.</strong> <code>03-vhosts.conf:142-147</code>:
+<code>/console?username=…&amp;tempUsername=…&amp;tempPassword=…</code>
+is matched and redirected to the vConsole URI. A
+<code>tempPassword</code> (and usernames) in a GET query string lands in
+proxy logs, history and <code>Referer</code>. Marked "Assume MSM
+triggers this only over HTTPS" in-config — TLS hides it on the wire but
+not from logs/history.</p>
+<p><strong>M4 — CSP permits <code>'unsafe-inline'</code> in
+<code>script-src</code>.</strong> <code>httpd_gui.conf:88</code>:
+<code>Content-Security-Policy "default-src 'self'; … script-src 'self' 'unsafe-inline'; … style-src 'self' 'unsafe-inline'; … object-src 'none';"</code>.
+<code>'unsafe-inline'</code> in <code>script-src</code> removes CSP's
+protection against injected inline scripts/event-handlers — exactly the
+class of payload H1 would deliver. <code>object-src 'none'</code>,
+<code>default-src 'self'</code>, and the absence of
+<code>unsafe-eval</code> are good; the inline-script allowance is the
+weak point. (Positive: <code>connect-src</code> restricted to
+<code>'self' wss:</code>.)</p>
+<h3 id="low--informational">LOW / informational</h3>
+<p><strong>L1 — <code>OIDCCryptoPassphrase calvin</code> is a template
+default, not a live secret.</strong>
+<code>auth_openidc.conf.orig:5</code> ships the literal
+<code>calvin</code>, but this is a <code>.orig</code>
+<strong>template</strong>:
+<code>etc/sysapps_script/base_httpd.sh:125-128</code>
+(<code>create_oidc_crypto_passphrase</code>) overwrites it with a random
+16-byte <code>/dev/urandom</code> value, and only when an SSO metadata
+dir exists (<code>base_httpd.sh:653-658</code>); otherwise the conf is
+moved back to <code>.orig</code> and not loaded. So <code>calvin</code>
+is not the operational passphrase. Informational only — flagged because
+the literal is eye-catching and would be a real fleet-shared secret if
+the regeneration step ever fails.</p>
+<p><strong>L2 — <code>/redfish/v1/Downloads/(.*)</code> → static file
+<code>/mmc1/pel/$1</code> (unanchored capture).</strong>
+<code>httpd_redfish.conf:696</code>
+<code>AliasMatch ^/redfish/v1/Downloads/(.*)/?$ "/mmc1/pel/$1"</code>.
+The <code>(.*)</code> is unanchored; path traversal is normally
+neutralised by Apache request-path normalisation (it collapses
+<code>..</code>), and the path is auth-gated, but the raw filesystem map
+of attacker-influenced suffix into <code>/mmc1/pel/</code> warrants a
+focused traversal/symlink test.</p>
+<p><strong>L3 — vConsole/vMedia WebSocket proxies have no Apache auth
+gate.</strong> <code>/vkvm/</code>→5900
+(<code>01-idrac-vconsole.conf:8</code>),
+<code>/vnc/vconsole</code>→5905, <code>/vnc/vmedia</code>→5951
+(<code>03-vhosts.conf:121-129</code>) are reverse-proxied with only
+<code>Upgrade: websocket</code> conditions; no <code>fcgi-auth</code>
+<code>LocationMatch</code> covers them. Authentication is delegated to
+the KVM/vMedia backend's own token (the URL-borne token of M1). Lead for
+the binary RE side.</p>
+<p><strong>L4 — <code>/cgi-bin/login</code> and
+<code>/cgi-bin/discover?MODE=PROXY</code> are not in the fcgi-auth
+set.</strong> <code>fcgi-auth.conf:51</code> only auth-gates
+<code>cgi-bin/(exec|putfile|logout)</code>. <code>login</code> is
+pre-auth by nature; <code>discover?MODE=PROXY</code> (remote-RACADM/MSM
+discovery) reaches <code>fcgiracadm.socket</code> unauthenticated at the
+Apache layer and relies entirely on the remoteracadm backend to
+authorise. Worth confirming the backend's check.</p>
+<p><strong>L5 — <code>Require all granted</code> static dirs.</strong>
+<code>/oauth_discovery/</code> (<code>fcgiresponder.conf:34-36</code>),
+<code>/usr/local/www</code> docroot
+(<code>03-vhosts.conf:213-217</code>), <code>/etc/websockets</code>
+(<code>:225-229</code>), <code>/usr/local/cgi-bin</code>
+(<code>httpd_rracadm.conf:9-13</code>),
+<code>/var/lib/remoteracadm</code>
+(<code>httpd_rracadm.conf:44-48</code>). All serve intentionally-public
+or self-protecting content, but each is an unauthenticated read surface
+to inventory.</p>
+<p><strong>Positive controls observed (no action):</strong>
+<code>TraceEnable off</code> (<code>httpd_tuning.conf:20</code>);
+<code>ServerTokens ProductOnly</code> + <code>ServerSignature Off</code>
+in the active <code>httpd.conf:522-523</code> (the <code>Full</code>
+token in <code>extra/httpd-default.conf:55</code> is
+<strong>not</strong> Included — <code>httpd.conf:482</code>); HSTS
+<code>max-age=31536000; includeSubDomains; preload</code>
+(<code>03-vhosts.conf:178</code>); <code>X-Frame-Options DENY</code>
+global (<code>httpd_tuning.conf:51</code>) + <code>SAMEORIGIN</code> on
+GUI (<code>httpd_gui.conf:90</code>);
+<code>X-Content-Type-Options nosniff</code>
+(<code>httpd_gui.conf:89</code>); <code>Proxy</code> header unset early
+— CVE-2016-5387 httpoxy mitigation (<code>httpd_tuning.conf:65</code>);
+TLS forced to 1.2 with an AEAD-only, no-DH/no-kRSA cipher list
+(<code>00-base.conf:18-21</code>); HTTP/2 module shipped disabled
+(<code>h2.conf.disabled</code>); no app source maps shipped (only
+vendored <code>angular.min.js</code> reference non-present
+<code>.map</code>s); no hardcoded secrets/tokens found in the
+<code>vconsole</code>/<code>vmedia</code> webpack bundles or app
+controllers; no <code>postMessage</code>/message listeners and no
+<code>eval</code>/<code>document.write</code> in app (non-vendored)
+JS.</p>
+<hr />
+<h2 id="3-notable-observations--leads-for-deeper-re">3. Notable
+observations / leads for deeper RE</h2>
+<ol type="1">
+<li><p><strong>Auth and method enforcement live almost entirely in
+Apache rewrite regex.</strong> <code>httpd_redfish.conf</code> alone
+carries hundreds of <code>RewriteCond</code>/<code>RewriteRule</code>
+lines, including the unauthenticated-exclusion gates built from long
+negative-lookahead regexes
+(<code>httpd_redfish.conf:150-164,236,499</code>). A single regex edge
+case (alternate encoding, trailing-slash/<code>;</code>-param, case,
+<code>//</code> collapse) can flip a route between the "auth-required"
+and "served-static / <code>IS_AUTHNZ_REQUIRED=0</code>" branches. This
+is the highest-value fuzzing target on the perimeter: enumerate inputs
+that satisfy a <code>SetEnvIf Authorization ^$</code> /
+<code>IS_AUTHNZ_REQUIRED=0</code> block while still reaching a
+privileged backend handler.</p></li>
+<li><p><strong><code>IS_AUTHNZ_REQUIRED=0</code> is an Apache-layer
+<em>hint</em>, not a decision.</strong> Several blocks relax the Apache
+gate and explicitly defer to the Authorizer/RDS backend
+(<code>fcgi-auth.conf:104-115</code> comment;
+<code>httpd_gui.conf:8-13</code>). The real authorization for those
+routes lives in the <code>fcgi-auth</code> binary (@4300) and the RDS
+responder — out of scope for static web analysis, but the place to
+confirm M2/L4 actually re-check.</p></li>
+<li><p><strong>Token-in-URL pattern (M1) recurs across the
+SSO/GM/vConsole handoff.</strong> <code>logincontroller.js</code> moves
+<code>XSRF_TOKEN</code>/<code>X-AUTH-TOKEN</code> through
+<code>index.html?</code>, <code>igm.html?</code>, and the
+<code>/console?...&amp;vconsole</code> flow. Tracing how the backend
+mints, scopes and expires this token (single-use? IP/session-bound?)
+determines whether M1 is a leak nuisance or a session-hijack primitive.
+Pairs with the documented URL-borne <code>tempPassword</code> MSM path
+(M3).</p></li>
+<li><p><strong>LC-log / work-note rendering inconsistency (H1) suggests
+a class bug.</strong> Grep the full controller set for every
+<code>ng-bind-html</code> + <code>trustAsHtml</code> pair and classify
+each as escaped (<code>escapeHtml</code> applied) vs raw. Confirmed raw
+so far: dashboard, storage. Confirmed escaped: detailedinfo,
+groupmanager. The <code>tooltipmsg</code>/<code>TooltipMesg</code>
+family (<code>commonutility.js:1890-1943</code>, <code>users.js</code>,
+<code>groupmanager.js</code>) should be audited for whether the tooltip
+strings ever carry server/user data vs static localised
+templates.</p></li>
+<li><p><strong><code>oidcErrorTemplate.html</code> auto-POSTs
+<code>error</code>/<code>description</code> into
+<code>start.html</code>.</strong>
+<code>usr/local/www/restgui/oidcErrorTemplate.html</code> is
+<code>&lt;form action="/restgui/start.html?error=%s&amp;description=%s"&gt; ... onload submit</code>.
+The <code>%s</code> are filled by mod_auth_openidc.
+<code>logincontroller.js:118-128</code> reads <code>error</code> and
+compares it to fixed codes (<code>SYS525</code>), emitting only
+translated static strings — so no reflected XSS via <code>error</code>
+in the paths reviewed. Confirm <code>description</code> is never
+reflected into the DOM by <code>start.html</code>/its controller before
+clearing this lead.</p></li>
+<li><p><strong>vConsole/vMedia are modern-Angular webpack
+bundles</strong> (<code>restgui/vconsole/</code>,
+<code>restgui/vmedia/</code>, plus <code>restgui/vconsole.gz</code>
+single-file bundle) distinct from the AngularJS 1.x GUI. They were
+scanned for literal secrets (none found) but not deeply reviewed; the
+KVM/vMedia client + its WebSocket token handling (L3, M1) is a separate
+audit surface.</p></li>
+</ol>
+</div>
+</body>
+</html>

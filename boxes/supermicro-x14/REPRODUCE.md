@@ -3,12 +3,12 @@
 > **Historical reconstruction notes; not a complete current recipe.** The cited `x14.dts`, `mkgpt.py`,
 > and patched init source are not in this repository. The supported build downloads hash-pinned derived
 > artifacts with `./build.sh supermicro-x14`, then cold-starts with
-> `sudo ./tools/zbmc supermicro-x14 start`. Current acceptance is SSH, IPMI, Redfish, and Web-UI.
+> `sudo ./tools/zbmc supermicro-x14 start`. Current acceptance is ICMP, SSH, IPMI, Redfish, and Web-UI.
 > Preserve the steps below as investigation provenance, not a fresh-clone promise.
 
-Clean-room rebuild of the Supermicro X14 virtual BMC (OpenBMC / AST2600) under QEMU, with
-external SSH shell + IPMI + Redfish. Everything except the vendor firmware is in this repo;
-the firmware `.bin` is proprietary (not redistributed) — you supply it.
+Historical clean-room reconstruction of the Supermicro X14 virtual BMC (OpenBMC / AST2600) under
+QEMU, with external SSH shell + IPMI + Redfish. Several reconstruction inputs named below are absent;
+use the hash-pinned derived bundle for the supported path.
 
 ## 0. Prereqs
 - x86_64 Linux. Use the exact patched `qemu-system-arm` pinned in `zbmc.box`.
@@ -91,12 +91,13 @@ qemu-system-arm -m 1024 -M ast2600-evb -display none -no-reboot \
 ```
 (`maxcpus=1` — CPU1 bringup faults; `initcall_blacklist` skips the secure-world init that has no
 TrustZone/OP-TEE/CPLD model under QEMU. `10.0.8.14` = a `lo0` alias.) `shell-x14.sh` wraps this.
-Ready in ~60-70 s. This whole boot skips the vendor SMC secure SPL/OP-TEE chain (direct-kernel).
+The current accepted cold run reached all five checks in 3m31s on the four-core reference host. This
+whole boot skips the vendor SMC secure SPL/OP-TEE chain (direct-kernel).
 
 ## 7. Snapshot once → restore in ~10 s forever after
 ```
-./snapshot-x14.sh svc-snap-shell.gz     # QMP migrate exec:gzip (pauses the VM)
-./restore-svc-x14.sh svc-snap-shell.gz  # qemu -incoming exec:gunzip — network survives (UDP+TCP)
+./snapshot-x14.sh svc-snap-full-working.gz     # QMP migrate exec:gzip (pauses the VM)
+./restore-svc-x14.sh svc-snap-full-working.gz  # qemu -incoming exec:gunzip — network survives (UDP+TCP)
 ```
 Snapshots are gitignored (large binary) — you regenerate them; they are NOT needed to reproduce.
 
@@ -111,4 +112,4 @@ Creds `ADMIN:ADMIN` + `root:0penBmc` were recovered from `/etc/ipmi_pass` with t
 `OPENBMC=` — see `bmc/supermicro/x14sbsc/teardown/openbmc-ipmi-pass.py`.
 
 ## Once built, drive it from the framework
-`./tools/zbmc supermicro-x14 start | status | ssh | ipmi <cmd> | web | snapshot`
+`sudo ./tools/zbmc supermicro-x14 start`, then use `status`, `ssh`, `ipmi <cmd>`, `web`, or `snapshot`.

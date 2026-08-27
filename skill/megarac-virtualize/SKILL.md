@@ -58,11 +58,12 @@ startup, protocol reachability, authentication, and functional behavior.
 
 Current measured boundaries:
 
-- Advantech ASMB-787: retained serial login only; about 11m50s on the reference host. Vendor userland
+- Advantech ASMB-787: retained serial login only; 9m38s on the reference host. Vendor userland
   starts, but external SSH/IPMI/Redfish/Web-UI are not accepted because the old guest rejects QEMU's
   NC-SI response.
-- HPE XD670 MegaRAC: partial. Retained vendor IPMI works; Redfish/Web-UI are unstable; SSH is absent;
-  there is no reliable full-service READY time. Cold IPMIMain startup may reroll after `MsgHndlr` faults.
+- HPE XD670 MegaRAC: retained vendor IPMI is the accepted service; Redfish/Web-UI are unavailable and
+  vendor SSH is absent. The 2026-08-27 cold run reached READY in 8m07s after three automatic rerolls,
+  so its startup time remains nondeterministic.
 
 Console access proves local operator access, not external management functionality. Accept a service
 only through its declared functional probe and preserve the run evidence and console log.

@@ -2,9 +2,9 @@
 
 > **Historical investigation record (2026-08).** This document preserves the experiments and terminology
 > used during bring-up; its per-box table is not the current release contract. Use the fleet table in
-> `README.md`, each `boxes/<name>/zbmc.box`, and live `status -v` output for current behavior. In particular,
-> iDRAC10 is cold-only in the supported package, X14 does not accept Redfish, and MegaRAC-HPE accepts
-> retained IPMI only.
+> `README.md`, each `boxes/<name>/zbmc.box`, and live `status -v` output for current behavior. In the 0.1.1
+> release, iDRAC9 and iDRAC10 are cold-only, X14 accepts Redfish, and MegaRAC-HPE accepts retained IPMI
+> only. Older results in the table below remain historical evidence.
 
 Cross-box patterns distilled from virtualizing nine BMCs across four vendors and three RTOS/Linux stacks
 (Dell iDRAC9/10, Supermicro X14, HPE Cray XD670, Advantech ASMB-787, NVIDIA GB200NVL, vanilla OpenBMC,
@@ -95,10 +95,10 @@ Used on **idrac10, x14, cray**. Cold boot is nondeterministic under single-vCPU 
 
 ### The zbmc dispatcher pattern
 Each box ships a `zbmc.box` descriptor (sourced by `tools/zbmc`) exposing uniform verbs: `zbmc_boot`
-(restore warm snapshot if present, else cold; `ZBMC_COLD=1` forces cold), `zbmc_build`, `zbmc_snapshot`,
+(cold by default; supported X14 and MegaRAC snapshots require `start --warm`), `zbmc_build`, `zbmc_snapshot`,
 `zbmc_restore`, `zbmc_ssh`, `zbmc_ipmi`, `zbmc_ipmi_health`, `zbmc_web`, `zbmc_console`, plus
 `ZBMC_READY_GREP` for a console readiness marker.
-- **Root-direct model**: qemu runs as root (self-elevates via `sudo`) and binds the box's **real IP via a lo0 alias** + standard ports 22/443/623 directly — kills the socat/high-port indirection.
+- **Root-direct model**: qemu runs as root and binds the box's selected **Linux loopback alias** + standard ports 22/443/623 directly — kills the socat/high-port indirection.
 - **IP scheme**: 10.0.7.x = OpenBMC (evb/gb200), 10.0.8.x = Supermicro/MegaRAC (x14/cray/asmb787), 10.0.9.x = Dell (idrac9/10). Each zbmc binds a **specific** IP:22 so it coexists with the host's own sshd.
 - qemu's real pid is found by the **hostfwd signature** (`pgrep -f "hostfwd=udp:$IP:623-:623"`), not `$!` (it's a root child of sudo).
 - Access differs per stack and the descriptor encodes it: Dell/gb200 = IPMI `-K` factory key; x14/cray/evb = password. Health probes route around per-box quirks (x14 uses `channel info 1` because `mc info`=0xff; cray greps for the vendor MfgID).

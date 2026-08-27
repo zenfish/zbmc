@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Getting Started</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Getting Started</h1>
+  </div>
+</div>
+
+<p>This guide takes a fresh x86_64 Linux host from clone to a functional
+virtual BMC. Start with the upstream <code>openbmc</code> image: it is
+the clean control in this repository and has accepted SSH, IPMI,
+Redfish, and Web-UI paths.</p>
+<h2 id="host-boundary">Host boundary</h2>
+<p>zbmc 0.1.1 supports <strong>x86_64 Linux only</strong>. The packaged
+QEMU executables and their SHA-256 contracts do not run on ARM64,
+Raspberry Pi, Apple Silicon, macOS, or other operating systems.
+<code>build.sh</code> rejects an unsupported host before downloading
+anything.</p>
+<p>For one BMC at a time, roughly 2 GiB RAM and 5 GiB free disk is a
+useful starting point. Those are operator guidelines, not enforced
+limits. Cold boot is CPU- and load-sensitive.</p>
+<h2 id="1-install-host-packages">1. Install host packages</h2>
+<p>On Debian 13:</p>
+<pre class="bash"><code>sudo apt update
+sudo apt install docker.io curl git ca-certificates \
+  squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
+  expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
+  iproute2 iputils-ping tcpdump python3-pexpect python3-venv pipx
+pipx install jefferson</code></pre>
+<p>Start Docker if the package did not do so:</p>
+<pre class="bash"><code>sudo systemctl enable --now docker
+sudo docker info</code></pre>
+<p><code>build.sh</code> can use Docker directly or through
+<code>sudo</code>; membership in the <code>docker</code> group is
+optional. Docker group membership is effectively root access, so do not
+add it only to avoid typing <code>sudo</code>.</p>
+<h2 id="2-clone-and-select-the-tools">2. Clone and select the tools</h2>
+<pre class="bash"><code>git clone https://github.com/zenfish/zbmc.git
+cd zbmc
+export PATH=&quot;$PWD/tools:$HOME/.local/bin:$PATH&quot;</code></pre>
+<p>The project has one supported branch: <code>main</code>.</p>
+<h2 id="3-build-the-first-box">3. Build the first box</h2>
+<pre class="bash"><code>./build.sh openbmc</code></pre>
+<p>The first build:</p>
+<ol type="1">
+<li>Downloads and SHA-256-verifies the pinned QEMU Docker archive.</li>
+<li>Loads and validates the exact QEMU 11 ARM/AArch64 and Debian QEMU
+10.0.11 executables.</li>
+<li>Installs an isolated, pinned <code>zipmi</code> environment under
+<code>work/deps/</code>.</li>
+<li>Downloads and verifies the selected firmware or boot bundle.</li>
+<li>Builds or stages artifacts under <code>work/openbmc/</code>.</li>
+</ol>
+<p>Build everything with <code>./build.sh</code>. Preview the registry
+without downloading or building with <code>./build.sh --list</code>.</p>
+<h2 id="4-start-and-follow-it">4. Start and follow it</h2>
+<pre class="bash"><code>sudo ./tools/zbmc openbmc start</code></pre>
+<p><code>start</code> validates the descriptor's QEMU path, SHA-256,
+exact version, machine, and QMP startup before launching firmware. It
+then reports each startup stage and waits for the box's declared
+functional services. OpenBMC took 4m32s on the four-core reference
+host.</p>
+<p>To return immediately while the readiness watcher continues:</p>
+<pre class="bash"><code>sudo ./tools/zbmc openbmc start --no-wait
+./tools/zbmc openbmc status --follow</code></pre>
+<p>Ctrl-C stops following; it does not stop QEMU. The readiness watcher
+and permanent console capture continue in the run evidence
+directory.</p>
+<h2 id="5-use-the-bmc">5. Use the BMC</h2>
+<pre class="bash"><code>./tools/zbmc openbmc status
+./tools/zbmc openbmc status -v
+./tools/zbmc openbmc ssh &#39;uname -a&#39;
+./tools/zbmc openbmc ipmi mc info
+./tools/zbmc openbmc web
+./tools/zbmc openbmc console</code></pre>
+<p>The upstream OpenBMC image uses <code>root</code> /
+<code>0penBmc</code>. <code>status</code> reports current functional
+health; <code>status -v</code> adds the exact probe commands, run
+evidence directory, console log, and follow command. Redfish
+(<code>/redfish/v1/</code>) and the vendor Web-UI root are separate
+checks.</p>
+<p>Stop it with:</p>
+<pre class="bash"><code>sudo ./tools/zbmc openbmc stop</code></pre>
+<p>zbmc refuses to start around, or stop, a QEMU process that is not
+owned by the selected run evidence. An externally discovered process is
+reported as <code>UP (UNMANAGED)</code> and must be handled
+explicitly.</p>
+<h2 id="6-addresses">6. Addresses</h2>
+<p>The default addresses are in <code>zhosts.txt</code> and shown by
+<code>zbmc list</code>. To relocate them, copy
+<code>zbmc.conf.example</code> to the gitignored <code>zbmc.conf</code>
+and set a pool or individual address:</p>
+<pre class="bash"><code>cp zbmc.conf.example zbmc.conf
+
+# Edit zbmc.conf:
+ZBMC_POOL=10.250.0
+# ZBMC_IP_openbmc=192.168.1.100</code></pre>
+<p>Address priority is: per-box <code>ZBMC_IP_&lt;name&gt;</code>, then
+<code>ZBMC_POOL</code>, then <code>ZHOSTS_FILE</code>, then the
+descriptor default. Set
+<code>ZHOSTS_FILE=/absolute/path/zhosts.txt</code> in
+<code>zbmc.conf</code> when a deployment needs a complete site-specific
+map.</p>
+<p>Supermicro X10 defaults to portable QEMU user networking. Its
+forwarded ports appear in <code>status -v</code>. Set
+<code>X10_NET_MODE=direct</code> only on an isolated lab LAN that routes
+the selected address and permits the guest MAC.</p>
+<h2 id="7-choose-another-box">7. Choose another box</h2>
+<pre class="bash"><code>./tools/zbmc list
+./build.sh supermicro-x14
+sudo ./tools/zbmc supermicro-x14 start</code></pre>
+<p>The current measured acceptance boundary is in the README fleet
+table. Important exceptions:</p>
+<ul>
+<li><code>advantech-asmb787</code> is console-only and took 9m38s on the
+reference host.</li>
+<li><code>idrac10</code> reaches SSH, retained IPMI, and its static
+Redfish ServiceRoot, but has no vendor Web-UI.</li>
+<li><code>megarac-hpe</code> accepts retained IPMI only. Cold boot is
+nondeterministic and automatically rerolls an attempt when the vendor
+<code>IPMIMain</code> process hits its known startup race.</li>
+<li><code>idrac9</code> must cold-boot. Its USB network does not survive
+warm migration.</li>
+<li><code>idrac10</code> is cold-only. Its former packaged checkpoint
+carried stale shared state and is no longer a supported release
+path.</li>
+<li><code>megarac-hpe</code> and <code>supermicro-x14</code> use a
+compatible bundled snapshot only with <code>--warm</code>.</li>
+<li>MegaRAC's injected blank-password SSH/telnet paths are not forwarded
+unless <code>ZBMC_INSECURE_LAB_ACCESS=1</code> is explicitly set on an
+isolated host.</li>
+</ul>
+<p>A startup-watch timeout means the readiness deadline ended; it does
+not mean QEMU died. Run <code>status</code> again for current health and
+<code>explain</code> for the recorded startup outcome:</p>
+<pre class="bash"><code>./tools/zbmc supermicro-x14 status -v
+./tools/zbmc supermicro-x14 explain
+./tools/zbmc supermicro-x14 evidence</code></pre>
+<h2 id="evidence-and-trust-boundary">Evidence and trust boundary</h2>
+<p>These images contain vendor default credentials and lab-only
+adaptations. Some boxes reconstruct missing board state while retaining
+vendor services; others interpose or replace a narrow endpoint. A
+working substitute does not prove the replaced vendor component. Read <a
+href="docs/why-bmc-virtualization-is-hard.html">Why Virtualizing BMC
+Firmware Was Hard</a> before using a box as security evidence, and keep
+patched guests on an isolated research host. The Docker runtime uses
+host networking and writable work mounts. It packages exact QEMU builds
+but is not a containment boundary. Read <a
+href="SECURITY.html">SECURITY.md</a> before exposing any guest beyond the
+host.</p>
+<h2 id="glossary">Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BMC</td>
+<td>The server's independent management computer.</td>
+</tr>
+<tr>
+<td>IPMI / RMCP+</td>
+<td>Classic authenticated remote-management protocol.</td>
+</tr>
+<tr>
+<td>Redfish</td>
+<td>REST/JSON management API rooted at <code>/redfish/v1/</code>.</td>
+</tr>
+<tr>
+<td>Web-UI</td>
+<td>Vendor browser interface; distinct from Redfish.</td>
+</tr>
+<tr>
+<td>NC-SI</td>
+<td>Sideband protocol used by a BMC to share a host NIC.</td>
+</tr>
+<tr>
+<td>QMP</td>
+<td>QEMU Machine Protocol, used for validation, control, and compatible
+snapshots.</td>
+</tr>
+<tr>
+<td><code>READY</code></td>
+<td>Every service declared for that run passed its functional
+probe.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</body>
+</html>

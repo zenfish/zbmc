@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual iDRAC9 — STATE &amp; RESUME NOTES</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtual iDRAC9 — STATE &amp; RESUME NOTES</h1>
+  </div>
+</div>
+
+<blockquote>
+<p><strong>Historical investigation record.</strong> The supported
+package is now cold-only with accepted ICMP, SSH, IPMI, and vendor
+Web-UI. Redfish remains unavailable in this P4 boot. The experiments
+below are preserved as evidence, not current operating instructions. Use
+the README and <code>./tools/zbmc idrac9 status -v</code>.</p>
+</blockquote>
+<p><strong>Updated:</strong> 2026-07-16. Read this FIRST to pick the
+project back up cold. Detail lives in the companion docs cited below;
+this is the map + how-to-resume.</p>
+<h2
+id="-2026-07-16--one-command-redfish-image--the-two-image-reality-for-the-zoo">★
+2026-07-16 — ONE-COMMAND Redfish image + the two-image reality (for the
+zoo)</h2>
+<ul>
+<li><strong><code>./redfish-up.sh</code></strong> = one command → P6
+boot + settle + the full bring-up over the ttyS1 CONSOLE (HMC.db seed →
+fcgiodata@4200 → manual httpd → racadm creds) → <strong>authenticated
+redfish-LOCAL 200</strong> (<code>no-auth/badpw→401, valid→200</code>).
+Codifies the 2026-07-05 recipe; drive the box from inside via
+<code>./console.sh</code>. Confirmed live this session.</li>
+<li><strong>TWO IMAGES (single-core can't do both):</strong>
+<code>zbmc idrac9 start</code> = P4 = <strong>IPMI</strong> (fullfw).
+<code>./redfish-up.sh</code> = P6 = <strong>Redfish</strong> (fullfw
+masked). Pick one per boot. The zoo matrix marks idrac9 cells
+P4/P6.</li>
+<li><strong>ipmi-LOCAL works via <code>racadm</code></strong>
+(getsysinfo → FW 7.20.30.50) — Dell's on-box mgmt tool, NOT
+ipmitool.</li>
+<li><strong>redfish-REMOTE (from the Mac / slirp hostfwd) = STILL
+400</strong> <code>Base.1.8.QueryNotSupported</code>. NOT a
+forwarded-query issue (tested: stripping the query on the
+<code>fcgi://…%1/? [P]</code> proxy did NOT fix it; local 200 / remote
+400 unchanged). Repros even from INSIDE the box hitting its own external
+IP (127.0.0.1→200, 10.0.9.9→400) — so it's the slirp-forwarded request
+path (REMOTE_ADDR 10.0.2.2 / Host / responder-internal), not
+Mac-specific. OPEN. redfish is usable LOCALLY only for now.</li>
+<li>Meta-lesson (logged in tasks/lessons.md): READ THIS DOC before
+re-deriving — a session burned ~2h re-hitting the documented
+httpd-cascade wedge + the <code>timeout -s KILL</code> requirement.</li>
+</ul>
+<h2
+id="-latest-2026-07-05--hw-data-model-floor-disproven-200-with-json-is-a-3-step-config-recipe">★
+LATEST (2026-07-05) — "HW-data-model floor" DISPROVEN; 200-with-JSON is
+a 3-step config recipe</h2>
+<p><strong>The 2026-07-04 "floor" conclusion below (struck) was WRONG.
+Re-diagnosed by strace THIS session (the box has
+<code>/usr/bin/strace</code> — no custom ptrace tool needed). Measured
+facts:</strong></p>
+<ol type="1">
+<li><strong>fcgiodata does NOT crash-loop, and datamgr is NOT the
+blocker.</strong> strace of <code>dsm_sa_datamgrd</code> (pid 2833)
+while fcgiodata connects: datamgr <strong>accepts the SMIL connection
+and ANSWERS queries</strong> — returned real <code>lmRootKey</code> data
+(32 bytes) over <code>/var/run/dm/.ipc/dcsmilpipea</code>. The
+connection close is initiated by <strong>fcgiodata</strong> (datamgr
+sees <code>recv()==0</code>), not datamgr. ~25 populators
+(<code>dsm_sa_popproc cfgpop/lmpop/thermpop/...</code>) are up and
+serving. No data-plane floor.</li>
+<li><strong>fcgiodata's real death:</strong> full strace to
+<code>exit_group(1)</code> shows it reads its caches fine, then
+<code>openat("/var/run/unifieddatabase/HMC.db") = -1 ENOENT</code> right
+before exit. <strong><code>HMC.db</code> is a static SEED</strong>, not
+HW-derived: <code>hmc-client.service</code> copies it via
+<code>ExecCondition= cp -f /etc/unifieddatabase/HMC.db /var/run/unifieddatabase/</code>.
+I had <strong>masked <code>hmc-client</code></strong> as a "HW-less
+looper" → the seed copy never ran → fcgiodata dies. The earlier
+<code>SIGILL</code> = benign CPU feature-probe; the
+<code>SIGPIPE</code>/<code>exit_group</code> = self-inflicted teardown
+after the missing DB.</li>
+<li>Copying the seed → <strong>fcgiodata reaches <code>active</code> and
+STAYS</strong> (was <code>activating→failed</code> in ~10s).
+<strong>PROVEN this session:</strong> with (1)+(2) fixed and httpd up,
+the full pipe returns <strong>real Redfish JSON on the wire</strong> —
+<code>GET /redfish/v1/Managers</code> →
+<code>401 application/json Base.1.8.AccessDenied</code> (proper Redfish
+error envelope, not the old 504/000). The odata responder serves. Auth
+then failed only because <code>idrac.users.2</code> (root) was
+<strong>empty/disabled</strong> in cfgdb (20h box lost it) → provision
+via racadm. <strong>LITERAL 200 CONFIRMED (2026-07-05, task B).</strong>
+Baked the <code>HMC.db</code> seed copy into init.p6
+<code>authd.sh</code>, rebuilt, cold-booted clean. On the fresh box:
+<code>HMC.db</code> present (hmcclient:udbm-writer),
+<code>fcgiodata@4200 = active</code>,
+<code>users.2 = root Enabled</code>, httpd up →
+<code>GET /redfish/v1/Managers</code> (root:Calvin123#) returned
+<strong><code>200</code> + real ManagerCollection JSON</strong>
+(<code>{"@odata.type":"#ManagerCollection.ManagerCollection", "Members":[{"@odata.id":"/redfish/v1/Managers/iDRAC.Embedded.1"}],...}</code>).
+The wall is gone. <strong>CAVEAT — load fragility (emulation-inherent,
+not a floor):</strong> single emu core + socket-activated fcgiodata@4200
+(Type=notify) = unstable under repeated traffic. Serves ~1–2 requests
+then intermittent Apache <code>500</code> (fcgiodata instance
+exits/crashes, re-activation races under load). The <code>200</code>
+reproduces only when the box is calm + httpd freshly (re)started.
+ServiceRoot <code>/redfish/v1/</code> also 500s under load.
+<strong>REMAINING POLISH (not blocking):</strong> authd.sh's httpd
+bring-up (<code>httpd -d / -D SSL -k start</code> retry loop) did NOT
+auto-pass the self-test on the timed cold boot (hit the 20min oneshot
+timeout, all 000) — the manual livefix pattern (base_httpd.sh + a
+foreground <code>-D FOREGROUND</code> warm-up, THEN
+<code>-k start</code>) is what bound :443 and yielded 200. Harden
+authd.sh to that pattern + longer TimeoutStartSec so unattended boot
+self-tests green. Also consider a persistent (non-socket-activated)
+fcgiodata to kill the 500 flakiness.</li>
+</ol>
+<h3
+id="recipe-to-a-200-bake-into-initp6-for-cold-boot-validation--task-b">RECIPE
+to a 200 (bake into init.p6 for cold-boot validation — task B)</h3>
+<pre class="sh"><code># 1. seed HMC.db (the copy masked hmc-client would have done)
+cp -f /etc/unifieddatabase/HMC.db /var/run/unifieddatabase/
+chown hmcclient:udbm-writer /var/run/unifieddatabase/HMC.db; chmod 744 /var/run/unifieddatabase/HMC.db
+# 2. httpd up — MUST be CWD=/ (httpd.conf uses relative module paths lib/apache2/modules/*)
+cd / &amp;&amp; /etc/sysapps_script/base_httpd.sh &amp;&amp; setsid /usr/sbin/apachectl start   # listens :443
+# 3. provision root (cfgdb user table empty on this build)
+export RACADM_ACCESS=0x1FF USER=root LOGNAME=root; . /etc/profile
+racadm set idrac.users.2.UserName root;  racadm set idrac.users.2.Password &#39;Calvin123#&#39;
+racadm set idrac.users.2.Privilege 0x1ff; racadm set idrac.users.2.Enable Enabled
+# verify (host-side, run-p6.sh forwards 6443-&gt;:443):
+curl -sk -u &#39;root:Calvin123#&#39; https://localhost:6443/redfish/v1/Managers/iDRAC.Embedded.1</code></pre>
+<p>Note: rootsd drive is <code>snapshot=on</code> → nothing persists;
+cold boot wipes cruft for free (good for B).</p>
+<h3 id="2026-07-04-superseded--kept-for-history"><del>2026-07-04
+(SUPERSEDED — kept for history)</del></h3>
+<p><del>200-with-real-JSON = BLOCKED at the data-plane floor. valid=504:
+fcgiodata crash-loops in provider init; datamgr (no HW inventory) closes
+the SMIL socket (recv==0 + SIGPIPE), exit_group(1). Conclusion:
+hardware-data-model boundary.</del> — <strong>WRONG: datamgr serves
+data; cause was masked <code>hmc-client</code> seed + httpd-down +
+unprovisioned user (see above).</strong> The httpd-oneshot-cgroup
+finding and AUTH-proven results from that day still stand. <strong>HOW
+TO RESUME FAST — the harness (big durable win):</strong></p>
+<ul>
+<li><code>run-p6.sh</code> now boots with <code>-qmp</code>,
+<code>-rtc base=...,clock=vm</code>, a settled box (looper masks).
+<code>authd</code> is GATED (dormant until
+<code>touch /run/authd-go</code>) so the box settles clean for
+iteration.</li>
+<li><strong><code>iterate.sh [-b idrac9|idrac10] &lt;script.sh&gt; &lt;console-log&gt;</code></strong>
+= the fast loop: push a script to the LIVE box, read its output from the
+host serial log (immune to the single-core ssh drops). Turns 15-min
+rebuild+reboot cycles into seconds. Boot once, iterate. Also shared to
+iDRAC10 (see
+<code>bmc/dell/idrac10-virtual/LIVE-ITERATE-HANDOFF.md</code>).</li>
+<li>To reach <code>valid=504</code> (auth working, backend-blocked) on a
+fresh boot: boot <code>run-p6.sh</code>, wait for settle (AIM active,
+load&lt;8), then
+<code>iterate.sh bringup-full.sh logs/p6-live.log</code> (creds + web +
+test).</li>
+<li>RE tools built this session (in project + vilo/ilo9, reusable):
+<code>exitcatch.c/.so</code> (LD_PRELOAD exit-logger),
+<code>ptcatch.c</code> (ptrace syscall tracer), <code>sccatch.c</code>
+(seccomp exit_group trap), <code>ckpt.py</code> (QEMU checkpoint — SAVE
+works, restore blocked on usb-net migratability; see below).
+<strong>CHECKPOINT — USABLE: 15s restore to a 200-ready box, drivable
+via serial shell (2026-07-06).</strong> Golden state:
+<strong><code>img/ckpt/golden-200-ready.gz</code></strong> = the box AT
+Redfish-200-ready (httpd bound, fcgiodata@4200 active, root provisioned,
+HMC.db seeded), saved with the <strong>patched qemu</strong>
+(<code>qemu-system-arm-patched</code>). Restore in ~15s vs ~15min
+boot:</li>
+</ul>
+<pre><code>QEMU_BIN=./qemu-system-arm-patched ./run-p6-restore.sh img/ckpt/golden-200-ready.gz   # loads PAUSED (bg it)
+QEMU_NO_UNPLUG=1 python3 ckpt.py restore-finish /tmp/zbmc-idrac9-qmp.sock             # cont
+./console.sh    # attach to the ttyS1 root shell -&gt; drive the restored box</code></pre>
+<h2
+id="proven-on-the-restored-box-via-ttys1-shell-uptime-continues-from-the-frozen-point-all-daemons-intact-curl--k-https127001redfishv1managers--u-rootcalvin123--200--json-from-inside-how-usb-net-checkpoint-works-now-the-qemu-patch-stock-qemu-marks-usb-net-unmigratable1-so-the-old-flow-unplugged-it-and-npcm-usb-hot-plug-never-re-delivers-to-the-guest---no-net-on-restore-the-patch-qemu-patch0001-usb-net-migratablepatch-built-by-build-qemu-patchedsh-makes-usb-net-migratable-so-it-is-never-unplugged-3-layers-fixed--1-real-vmstatedescription-not-unmigratable-2-migrate-devconfiguration--post_load-set_configuration-else-devconfig-null---usbnet_receive-returns--1-3-migrate-devaltsetting--post_load-set_interface-cdc-data-iface-uses-alt-1-for-its-bulk-endpoints-set_configuration-reset-it-to-alt-0-result-the-slirp-failed-to-send-packet-rx-errors-are-gone-remaining-gap--host-side-network-does-not-survive-restore-from-the-mac-ssh2222--redfish6443-stay-dead-after-restore-the-guests-in-flight-usb-bulk-urbs-submitted-to-the-ehci-before-the-checkpoint-dont-resume-after--incoming-ehci-async-schedule-doesnt-re-issue-them---usbnet-stalls-thats-a-deeper-host-controller-migration-layer-below-usb-net-next-if-pursued-ehci-async-urb-resumption-or-a-clean-usb-device-reset-on-restore-to-force-the-guest-to-drop-stale-urbs--re-enumerate-workaround-works-today-the-console-shellservice-puts-a-root-binsh-on-ttys1-2nd--serial---tmpzbmc-idrac9-ttys1sock-attach-via-consolesh-so-the-restored-box-is-fully-drivable-from-inside-racadm-curl-localhost-redfish200-ipmi-without-host-network-net-selfhealservice-is-present-but-log-only-config-restore-made-its-link-bounce-unnecessary-a-bounce-also-hangs-on-the-ehci-issue-timeentropy-non-issues-clockvm--frozen-state-golden-bundle-gz--boot-artifacts--patched-qemu-binary--patch-checksummed-golden-netsha256-backed-up-to-puffer-puffer-fishtoolzidrac9-virtualgolden-200-ready-net-20260706tar-not-in-git-100m-legacy-the-2026-07-06-redfish-200-readygz-stock-qemu-unplug-flow-no-host-net-either-is-superseded-kept-on-puffer">PROVEN
+on the restored box (via ttyS1 shell): uptime continues from the frozen
+point; all daemons intact;
+<code>curl -k https://127.0.0.1/redfish/v1/Managers -u root:Calvin123# = 200 + JSON</code>
+<strong>from inside</strong>. <strong>HOW usb-net checkpoint works now
+(the qemu-patch/):</strong> stock qemu marks usb-net
+<code>.unmigratable=1</code>, so the old flow unplugged it (and npcm USB
+hot-plug never re-delivers to the guest -&gt; no net on restore). The
+patch (qemu-patch/0001-usb-net-migratable.patch, built by
+build-qemu-patched.sh) makes usb-net migratable so it is NEVER
+unplugged: 3 layers fixed — (1) real VMStateDescription (not
+unmigratable), (2) migrate dev.configuration + post_load
+SET_CONFIGURATION (else dev.config NULL -&gt; usbnet_receive returns
+-1), (3) migrate dev.altsetting[] + post_load SET_INTERFACE (CDC data
+iface uses alt 1 for its bulk endpoints; SET_CONFIGURATION reset it to
+alt 0). Result: the <code>Slirp: Failed to send packet</code> RX errors
+are GONE. <strong>REMAINING GAP — host-side network does NOT survive
+restore.</strong> From the Mac, ssh:2222 / redfish:6443 stay dead after
+restore: the guest's in-flight USB bulk URBs submitted to the
+<strong>EHCI</strong> before the checkpoint don't resume after
+<code>-incoming</code> (EHCI async schedule doesn't re-issue them) -&gt;
+usbnet stalls. That's a deeper host-controller migration layer below
+usb-net. NEXT (if pursued): EHCI async-URB resumption, OR a clean USB
+device-reset-on-restore to force the guest to drop stale URBs +
+re-enumerate. WORKAROUND (works today): the
+<strong>console-shell.service</strong> puts a root /bin/sh on ttyS1 (2nd
+-serial -&gt; <code>/tmp/zbmc-idrac9-ttyS1.sock</code>, attach via
+<code>./console.sh</code>), so the restored box is fully drivable from
+INSIDE (racadm, curl-localhost redfish=200, IPMI) without host network.
+<code>net-selfheal.service</code> is present but log-only
+(config-restore made its link-bounce unnecessary; a bounce also hangs on
+the EHCI issue). Time/entropy non-issues (<code>clock=vm</code> + frozen
+state). GOLDEN BUNDLE (gz + boot artifacts + patched qemu binary +
+patch, checksummed GOLDEN-NET.sha256) backed up to puffer
+<code>Puffer Fish/toolz/idrac9-virtual/golden-200-ready-net-20260706.tar</code>
+(not in git, &gt;100M). LEGACY: the 2026-07-06
+<code>redfish-200-ready.gz</code> (stock-qemu, unplug flow, no host net
+either) is superseded; kept on puffer.</h2>
+<h2 id="what-this-is">What this is</h2>
+<p>A Dell iDRAC9 (server BMC) running entirely in software on this Mac
+under QEMU (<code>-M npcm750-evb</code>, ARMv7 dual-Cortex-A9 = the real
+iDRAC9 Nuvoton NPCM750 SoC), booting Dell's <strong>real</strong>
+firmware (<code>~/phd/bmc/idrac9-firmware/</code>). No PowerEdge
+hardware. Project dir:
+<code>/Volumes/yyy/phd/bmc/dell/idrac9-virtual/</code>.</p>
+<h2 id="current-capabilities-all-live-proven">CURRENT CAPABILITIES (all
+live-proven)</h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>How</th>
+<th>Proof</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Boot to shell + real ARM binaries</strong></td>
+<td><code>./run.sh</code> (Phase 1)</td>
+<td>done</td>
+</tr>
+<tr>
+<td><strong>Full systemd daemon mesh</strong></td>
+<td><code>./run-p2.sh</code> (Phase 2)</td>
+<td>done</td>
+</tr>
+<tr>
+<td><strong>SSH root login</strong></td>
+<td><code>./run-p4.sh</code> then <code>./ssh-in.sh</code></td>
+<td>done</td>
+</tr>
+<tr>
+<td><strong>Live racadm</strong> (cfgdb object-model mesh)</td>
+<td>p4 mesh</td>
+<td>done</td>
+</tr>
+<tr>
+<td><strong>Authenticated IPMI 2.0 (RAKP) as root</strong></td>
+<td><code>./rakp-test.sh</code> (cipher 17, IPMIKey HMAC)</td>
+<td><code>RAKP-COLDBOOT-PROOF.txt</code></td>
+</tr>
+<tr>
+<td><strong>Redfish REST over HTTPS</strong></td>
+<td><code>./start-web.sh</code></td>
+<td><code>REDFISH-PROOF.txt</code></td>
+</tr>
+</tbody>
+</table>
+<p>So the virtual iDRAC9 does <strong>SSH + authenticated IPMI/RAKP +
+Redfish HTTPS</strong> — a real management plane to attack/study.</p>
+<h2 id="the-control-tool--zbmc-use-this">THE CONTROL TOOL —
+<code>zbmc</code> (use this)</h2>
+<p><code>zbmc</code> (in <code>~/phd/bin</code>, init.d-style) is the
+single entry point for every virtual BMC.</p>
+<pre><code>zbmc                       # help: lists boxes + verbs
+zbmc idrac9 status         # qemu / ports / ssh / rakp / redfish health
+zbmc idrac9 start [--build]   # boot detached (+ auto-bring-up web once SSH is up). --no-web to skip
+zbmc idrac9 stop | restart
+zbmc idrac9 ssh [cmd]      # root shell (high port; use THIS not `ssh root@drac9` if macOS Remote Login is on)
+zbmc idrac9 ipmi mc info   # authenticated zipmi — key/cipher/port baked in (no flags to remember)
+zbmc idrac9 web            # bring up httpd + Redfish
+zbmc idrac9 console        # tail serial log
+zbmc idrac9 build          # repack the Phase-4 initramfs (init.p4 + cfgdb seeds) — see build-p4.sh
+zbmc idrac9 net up|down    # map standard ports 623/443/22 -&gt; loopback 10.0.9.9 + /etc/hosts (sudo)</code></pre>
+<p>Per-box descriptor = <code>zbmc.box</code> (ports, IPMIKey,
+<code>zbmc_boot</code>); add a box by dropping a <code>zbmc.box</code>
+in its dir + registering its path in <code>~/phd/bin/zbmc</code>
+REGISTRY. The <code>net up</code> verb (zbmc-net.sh, self-sudo) gives
+<code>zipmi -H drac9 …</code>,
+<code>curl -k https://drac9/redfish/</code>, and
+<code>ssh root@drac9</code> (verified to reach the BMC even with macOS
+Remote Login ON — socat's specific reuseaddr bind on 10.0.9.9:22 wins
+over the wildcard sshd via most-specific match).</p>
+<h2 id="how-to-resume-cold-start--the-raw-scripts-under-zbmc">HOW TO
+RESUME (cold start — the raw scripts under zbmc)</h2>
+<ol type="1">
+<li><strong>Build + boot</strong> the Phase-4 box:
+<pre><code>cd /Volumes/yyy/phd/bmc/dell/idrac9-virtual
+IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh
+./run-p4.sh        # add hostfwd=tcp::6443-:443 to run-p4.sh first if you want web from host</code></pre>
+Boot to the mesh + fullfw takes ~6–15 min under emulation (host-load
+dependent). <code>./ssh-in.sh</code> for a root shell once up (host port
+2222).</li>
+<li><strong>IPMI/RAKP</strong> (udp 6623→623):
+<code>./rakp-test.sh</code> → authenticated <code>mc info</code>
+(Manufacturer 674/Dell).
+<ul>
+<li>Client = <code>~/phd/src/zipmi-git</code> (has <code>-K</code>
+raw-Kuid). Run via
+<code>PYTHONPATH=~/phd/src/zipmi-git python3 -m zipmi.cli.zipmi -H 127.0.0.1 -p 6623 -U root -K 915f32f49a97456d0d6d66eee5ed84c894b414af -I lanplus -C 17 &lt;cmd&gt;</code>
+(the <code>-K</code> is the <strong>first 20 bytes</strong> of the hex
+IPMIKey; cipher <strong>17</strong> required).</li>
+</ul></li>
+<li><strong>Web/Redfish</strong> (tcp 6443→443):
+<code>./start-web.sh</code> (drives the guest over ssh). Then
+<code>curl -k https://localhost:6443/redfish/</code>.</li>
+</ol>
+<h2 id="phase-status-roadmap--indexhtml">PHASE STATUS (roadmap =
+index.html)</h2>
+<ul>
+<li>Phase 1 boot→shell — <strong>done</strong></li>
+<li>Phase 2 systemd mesh — <strong>done</strong></li>
+<li>Phase 3 SSH root — <strong>done</strong></li>
+<li>Phase 4 live racadm mesh — <strong>done</strong></li>
+<li>Phase 5 <strong>RAKP / IPMI auth — DONE</strong> (full chain below;
+<code>RAKP-USER-INVESTIGATION.md</code>)</li>
+<li>Phase 6 <strong>Web/Redfish — Tier A+B DONE</strong> (HTTPS service
+root + /redfish/v1/ HTTP 200 ServiceRoot); Tier C (real auth/GUI)
+remains. <code>start-web.sh</code>, <code>REDFISH-PROOF.txt</code>.</li>
+</ul>
+<h2 id="the-rakp-cold-boot-chain-phase-5--the-hard-won-5-gates">THE RAKP
+COLD-BOOT CHAIN (Phase 5 — the hard-won 5 gates)</h2>
+<p>All baked into <code>build-p4.sh</code> +
+<code>init.p4.custom</code>. Full story + red-herrings in
+<code>RAKP-USER-INVESTIGATION.md</code>. Summary:</p>
+<ol type="1">
+<li><strong>Socket</strong>: fullfw must socket-activate on
+<code>[::]:623</code> (IPv6 dual-stack). It does an unconditional
+<code>setsockopt(IPV6_RECVPKTINFO)</code> that fails on an AF_INET
+socket → fullfw exits. (0.0.0.0:623 was a self-inflicted regression.)
+bindv6only=0 catches the v4 hostfwd.</li>
+<li><strong>UserName load</strong>: <code>Users.2#UserName</code> is
+metadata DBLocation=3 (CV store, broken in emu) → patched to
+DBLocation=2 so root flows EMMC→tmpfs→datacache.</li>
+<li><strong>RAKP1 inclusion predicate (the 0x0d closer)</strong>:
+<code>UserInfoSearchByNameAndPriv</code> needs root's per-channel access
+byte (record[37+ch]) to have priv-nibble≥4 AND bit 0x10. Built from
+<code>IPMIUserInfo.2#UserChannelAccess</code> — our direct seed never
+wrote it → 0x00 → 0x0d. Seed <code>UserChannelAccess=0x14</code> per
+channel.</li>
+<li><strong>HMAC key</strong>: RAKP2/4 keyed with the <strong>first 20
+bytes</strong> of the hex-decoded IPMIKey, cipher 17.</li>
+<li>(defaultusercreated seed kept — removes a bounded 60s park;
+orthogonal.) RED HERRINGS (don't rechase): NIC-index bail (index is 0),
+libsess load-path patch, empty password.</li>
+</ol>
+<h2 id="the-webredfish-recipe-phase-6--in-start-websh">THE WEB/REDFISH
+RECIPE (Phase 6 — in start-web.sh)</h2>
+<p>Built on the running p4 box (drives guest over ssh):</p>
+<ol type="1">
+<li>seed self-signed cert at
+<code>/flash/data0/etc/certs/CA/certs/host.crt</code> +
+<code>/flash/data0/cv/private/host.key</code></li>
+<li><strong>bypass fcgi-auth for /redfish</strong>
+(<code>Require all granted</code>) — the CIAM/PAM authorizer isn't wired
+in mini.target; this is the "always-allow" for the unauthenticated
+Redfish surface.</li>
+<li>odatalite (Redfish responder) = <code>/usr/bin/fcgiodata</code>,
+<code>LD_LIBRARY_PATH=/usr/libexec/odatalite</code>,
+<code>FCGI_ODATA_RESPONDER_PORT=4200</code>, socket-activate
+127.0.0.1:4200.</li>
+<li>httpd: <code>httpd -d /</code> (ServerRoot — modules at
+/lib/apache2/modules) <code>-D SSL</code>,
+<code>RF_RESPONDER=4200</code> in its env (the Redfish rewrite targets
+<code>fcgi://127.0.0.1:$RF_RESPONDER</code>). KNOWN ISSUES: a
+systemd-managed httpd.service (Requires= by fcgi-auth) keeps taking over
+WITHOUT RF_RESPONDER → <code>fcgi://127.0.0.1:/</code> → "DNS lookup
+failure". Workaround: pkill+restart httpd with the env; proper fix =
+mask httpd.service or <code>SetEnv RF_RESPONDER 4200</code>. odatalite
+returns <code>ServiceTemporarilyUnavailable</code> until
+<code>unified-database-model</code> (UDB) is up.</li>
+</ol>
+<h2 id="key-files">KEY FILES</h2>
+<ul>
+<li><code>build-p4.sh</code> / <code>init.p4.custom</code> — build +
+boot the Phase-4 box (all RAKP fixes baked in).</li>
+<li><code>run-p4.sh</code> — QEMU launcher (hostfwd 2222→22, 6623→623;
+add 6443→443 for web).</li>
+<li><code>rakp-test.sh</code> — one-command RAKP auth test.</li>
+<li><code>start-web.sh</code> — web/Redfish bring-up (Tier A+B).</li>
+<li><code>ssh-in.sh</code> — root shell into the running box.</li>
+<li>Docs: <code>RAKP-USER-INVESTIGATION.md</code> (RAKP, exhaustive),
+<code>CV-VAULT-NOTES.md</code> (credential vault + SEKM),
+<code>RAKP-COLDBOOT-PROOF.txt</code>, <code>REDFISH-PROOF.txt</code>,
+<code>index.html</code> (roadmap/landing).</li>
+<li>Firmware: <code>~/phd/bmc/idrac9-firmware/extracted/rootfs</code>
+(the squashfs unpacked, for RE).</li>
+</ul>
+<h2 id="phase-6-tier-b-done-2026-06-28">PHASE 6 TIER-B DONE
+(2026-06-28)</h2>
+<p><code>/redfish/v1/</code> now returns HTTP 200 with ServiceRoot.json
+(724 bytes, real Links tree).</p>
+<p><strong>Root cause of 400</strong>: <code>librootprovider.so</code>
+GET handler only compared URI sub-path with "odata" and "$metadata".
+Anything else (including "v1" = GET /redfish/v1/) hit the error path at
+0xa30.</p>
+<p><strong>Fix</strong>: 4-byte binary patch at offset 0xa30 in
+<code>/usr/libexec/odatalite/librootprovider.so</code>:</p>
+<ul>
+<li>Before: <code>ldr r3, [pc, #136]</code> (error path entry)</li>
+<li>After: <code>b 0x870</code> (8E FF FF EA) — jump to existing
+ServiceRoot.json reader</li>
+<li>0x870 already reads <code>/etc/phit/ServiceRoot.json</code> →
+File2String → response body</li>
+</ul>
+<p><strong>Persistence</strong>: <code>init.p6.custom</code> now copies
+librootprovider.so to tmpfs, applies the 4-byte patch, bind-mounts it
+over the squashfs original — survives cold boot.</p>
+<p><strong>LD_PRELOAD hook retired</strong>:
+<code>idrac9_combined_v28.so</code> no longer needed. UDB
+(<code>unified-database-model.service</code>) creates HMC.db on its own.
+ZMQ stubs not required — UDB provides the ZMQ infrastructure that
+fcgiodata's AttributeListener needs.</p>
+<h2 id="phase-6-tier-b-done-2026-06-28-1">PHASE 6 TIER-B+ DONE
+(2026-06-28)</h2>
+<p>All major Redfish collections 200: /Managers, /Systems, /Chassis +
+Managers/iDRAC.Embedded.1.</p>
+<p><strong>Root cause of SYS403 on /Managers (and /Systems,
+/Chassis)</strong>: <code>libserver-provider.so</code> (62 DT_NEEDED
+entries) failed dlopen because <code>libjob-utils.so</code> was absent
+from the odatalite tmpfs. Without libserver-provider.so loaded, all
+server-provider routes returned SYS403 "resource not found". Secondary:
+even when loaded, <code>GetCurrentUserRedfishPrivilege</code> returns 0
+(no priv) for unauthenticated requests → every handler returns
+"insufficient privileges" (RAC0506).</p>
+<p><strong>Fix 1 — missing library</strong>: copy
+<code>libjob-utils.so</code> from squashfs to the odatalite tmpfs.</p>
+<ul>
+<li>init.p6.custom stages it to <code>/tmp/libjob-utils.so</code> before
+switch_root</li>
+<li>start-web.sh copies to <code>/usr/libexec/odatalite/</code> if not
+present</li>
+</ul>
+<p><strong>Fix 2 — privilege bypass</strong>: patch
+<code>GetCurrentUserRedfishPrivilege</code> at vaddr 0x227c in
+<code>libauthorization-utils.so</code> to
+<code>mov r0, #0x0f; bx lr</code> (returns admin priv
+unconditionally).</p>
+<ul>
+<li>Bytes: <code>0f 00 a0 e3 1e ff 2f e1</code></li>
+<li>init.p6.custom bind-mounts patched copy; survives cold boot.</li>
+</ul>
+<p>Full sweep (2026-06-28, no auth, no LD_PRELOAD): /redfish/v1/ → 200,
+/odata → 200, /$metadata → 200 /SessionService, /AccountService,
+/Registries, /JsonSchemas → 200 /Managers → 200 (iDRAC.Embedded.1),
+/Managers/iDRAC.Embedded.1 → 200 /Systems → 200 (System.Embedded.1),
+/Chassis → 200 (System.Embedded.1)</p>
+<p>GUI (Tier C) — login UI renders but is non-functional: AngularJS init
+XHRs need the DM object model (<code>/sysmgmt/2015/bmc/info</code>,
+ManagerAttributeRegistry). Same ceiling as live sensor data.</p>
+<h2 id="phase-6-tier-d--real-session-auth-in-progress-2026-07-02">PHASE
+6 TIER-D — REAL SESSION AUTH (in progress 2026-07-02)</h2>
+<p>Goal: replace the <code>Require all granted</code> +
+<code>GetCurrentUserRedfishPrivilege→0x0f</code> bypass with the REAL
+credential-validated path:
+<code>POST /redfish/v1/SessionService/Sessions {UserName,Password}</code>
+→ <code>X-Auth-Token</code>; bad creds → 401.</p>
+<p><strong>"CIAM" = AIM.</strong> No service literally named CIAM. The
+session daemon is <strong>AIM</strong> (<code>/usr/bin/aim</code>, dbus
+<code>com.dell.idrac.aim</code>, lib <code>libaim.so.1.2.3</code>). It
+mints + validates session tokens; PAM modules call it.</p>
+<p>Real chain (RE'd from firmware 7.20.30.50, Explore subagent
+2026-07-02):</p>
+<pre><code>apache httpd  (LocationMatch ^/redfish  in /usr/share/factory/etc/apache2/conf.d/fcgi-auth.conf:104)
+  → AuthnzFcgiCheckAuthnProvider fcgi-auth → fcgi://127.0.0.1:4300/   (fcgi-auth.conf:13)
+  → /usr/bin/fcgi-auth (user=authzr, StandardInput=socket via fcgi-auth.socket 127.0.0.1:4300)
+      LD_PRELOAD = pam_local_manager.so pam_ldap_manager.so pam_session_manager.so pam_auth_status.so
+  → PAM service /etc/pam.d/redfish :
+        auth  sufficient pam_ldap_manager   (LDAP; fails-through in emu)
+        auth  sufficient pam_local_manager  → aim_function_execute_DDS(user,pass) → AIM validates
+        auth  required   pam_auth_status
+        session required pam_session_manager → aim_session_started() → mints session id
+  → 200 + X-Auth-Token: &lt;sessid&gt;
+  → apache proxies Sessions POST to fcgiodata@4200 → libserver-provider.so (&quot;Identified as Sessions Post&quot;)
+       → 201 Created + X-Auth-Token
+  subsequent req w/ X-Auth-Token → fcgi-auth again → pam_acct_mgmt → aim_session_get_info(id) → user+priv</code></pre>
+<p>Bring-up order (mini.target, deps dfserver/cfgmgr/httpd/UDB already
+up in p6): <code>aim.service</code> → <code>aim-post.service</code> →
+<code>fcgi-auth.socket</code> + <code>fcgi-auth.service</code>, then
+swap apache <code>/redfish</code> block from
+<code>Require all granted</code> to the AuthnzFcgi provider +
+<code>Require valid-user</code>.</p>
+<ul>
+<li>aim.service: ExecStart=/usr/bin/aim, After/Wants=dfserver; writes
+state to <code>/mnt/persistent_data/data0/aim/persistent/</code> (tmpfs
+in emu — ensure dir exists + writable).</li>
+<li>Credential backend = pam_local_manager → AIM local user store =
+cfgdb Users. <strong>Need root's password attr seeded</strong>
+(Users.2#Password) for local login; IPMI side used IPMIKey, not this.
+EMU RISK FLAGS: pam_ldap (sufficient→harmless fail-through); oauthd
+optional; UDB already up; aim persistent dir on tmpfs. Key files:
+/usr/bin/{aim,fcgi-auth,fcgiodata}, /lib/security/pam_<em>_manager.so,
+/etc/pam.d/redfish, /lib/systemd/system/{aim,fcgi-auth}.</em>,
+/usr/libexec/odatalite/libserver-provider.so.</li>
+</ul>
+<h3
+id="tier-d-progress-2026-07-02-session--reached-authorizer-blocked-on-oauthd-chain">TIER-D
+PROGRESS 2026-07-02 (session) — reached authorizer, blocked on oauthd
+chain</h3>
+<p>State reached this session (box booted, AIM already up from mesh
+boot):</p>
+<ul>
+<li>Restored the REAL <code>&lt;LocationMatch ^/redfish&gt;</code> block
+by copying the pristine factory config
+<code>/usr/share/factory/etc/apache2/conf.d/fcgi-auth.conf</code> over
+the volatile <code>/etc/apache2/conf.d/fcgi-auth.conf</code> (undoes
+start-web.sh's <code>Require all granted</code> bypass).</li>
+<li>fcgiodata (:4200) + fcgi-auth (:4300) must run as
+<strong>systemd-run transient units</strong> (survive ssh disconnect;
+over-ssh backgrounded daemons die on session close — the ControlMaster
+issue).
+<code>systemd-run --unit=tierd-fcgiodata --collect --setenv=LD_LIBRARY_PATH=/usr/libexec/odatalite --setenv=FCGI_ODATA_RESPONDER_PORT=4200 /usr/bin/systemd-socket-activate -l 127.0.0.1:4200 /usr/bin/fcgiodata</code></li>
+<li><strong>fd-0 BREAKTHROUGH</strong>: fcgi-auth is raw libfcgi —
+expects the listening socket on <strong>fd 0</strong>
+(FCGI_LISTENSOCK_FILENO). The real unit uses
+<code>StandardInput=socket</code> (fd 0).
+<code>systemd-socket-activate</code> hands the socket on <strong>fd
+3</strong>, so fcgi-auth spun in oauth-init and never accepted (apache
+hung, Recv-Q piled up). FIX = dup fd3→fd0 in a wrapper:
+<code>systemd-run --unit=tierd-fcgiauth --collect -p User=authzr -p Group=authzr /bin/sh -c '. /etc/global.env; export LD_PRELOAD="/lib/security/pam_local_manager.so /lib/security/pam_ldap_manager.so /lib/security/pam_session_manager.so /lib/security/pam_auth_status.so"; exec systemd-socket-activate -l 127.0.0.1:4300 /bin/sh -c "exec /usr/bin/fcgi-auth 0&lt;&amp;3"'</code>
+After this, apache REACHES the authorizer — hang turned into HTTP 500
+(progress).</li>
+<li><strong>REMAINING WALL = oauthd.</strong> fcgi-auth accepts one
+request, can't emit a full FastCGI response header, exits (apache
+<code>AH02497 Couldn't read from backend</code> → 500 → next req
+<code>Connection refused</code>). Its log shows heavy
+<code>OAuth-lib ddsc</code> activity → fcgi-auth needs
+<strong>oauthd</strong>. oauthd <code>Requires=httpd.service</code> +
+<code>After=oauthinit,sailfish</code> and pulls the deep multi-user
+chain (personality_module, dm-stage2/core...). httpd.service can't run
+here (apachectl exits 1; needs manual <code>httpd -d /</code>); a no-op
+oneshot override for httpd.service completes→inactive so it doesn't
+satisfy oauthd's Requires. This is the mini.target-vs-multi-user
+boundary (the 182-svc thrash).</li>
+<li>httpd MUST stay manual
+(<code>env RF_RESPONDER=4200 httpd -d / -D SSL -k start</code>);
+<strong>mask httpd.service <code>--runtime</code></strong> or it
+respawns <code>/usr/sbin/httpd</code> WITHOUT
+<code>-d /</code>/RF_RESPONDER and steals :443.</li>
+<li>Cert <code>/flash/data0/etc/certs/CA/certs/host.crt</code> (+
+cv/private/host.key) must exist or httpd aborts at 03-vhosts.conf:157;
+re-seed with openssl if <code>/flash/data0</code> was cleared. NEXT
+DECISION (Tier D scope): (A) bring up oauthd's full tree under a broader
+target — risks 182-svc thrash; (B) scoped-faithful: satisfy/stub the
+oauth-lib dep so fcgi-auth does PAM Basic validation only (401/200
+gating) — proves credential-gated Redfish w/o OAuth token mint; (C) ship
+release with the working privilege-bypass Redfish + this documented
+real-auth progress.</li>
+</ul>
+<h3
+id="tier-d-approach-b--real-pam-auth-proven-2026-07-0203-user-chose-b">TIER-D
+APPROACH B — REAL PAM AUTH PROVEN 2026-07-02/03 (user chose B)</h3>
+<p><strong>RESULT: credential-gated Redfish works.</strong>
+no-auth/bad-pw on protected resources → 401 (real PAM
+<code>redfish-basic</code> reject); valid pw → PASSES auth (401→503
+transition = auth gate cleared, reaches backend). fcgi-auth runs the
+genuine PAM stack against the iDRAC user store. NOT the priv-bypass.</p>
+<p>Two RE facts that unblocked it (fcgi-auth binary, general-purpose
+subagent):</p>
+<ul>
+<li><strong>oauthd is a RED HERRING</strong> — Basic auth never calls
+it; <code>oauthd_connection_init</code> failure is non-fatal (branch
+@vaddr 0x32a24 falls through to the FCGX accept loop). The
+<code>**** INTERRUPTED! EXITING ****</code> line is just
+<code>FCGX_Accept_r</code>&lt;0 (normal teardown when apache closes the
+socket), NOT a crash. No binary patch needed. Basic path = PAM service
+<strong><code>redfish-basic</code></strong> (NOT <code>redfish</code>),
+functions @0x44d5c/0x4538c → <code>PAMHelper::authenticate</code>.
+oauthd only on Bearer path.</li>
+<li>fcgi-auth is raw libfcgi: wants the listen socket on <strong>fd
+0</strong>. Real <code>fcgi-auth.service</code> uses
+<code>StandardInput=socket</code> (fd0). Use the REAL systemd socket
+unit — NOT <code>systemd-socket-activate</code> (that hands fd3; a
+<code>0&lt;&amp;3</code> dup works too but the native unit is
+cleaner).</li>
+</ul>
+<p>WORKING RECIPE (on the booted p4/p6 box; AIM comes up with the
+mesh):</p>
+<ol type="1">
+<li>Restore real authorizer:
+<code>cp /usr/share/factory/etc/apache2/conf.d/fcgi-auth.conf /etc/apache2/conf.d/fcgi-auth.conf</code>
+(undoes start-web's <code>Require all granted</code>).</li>
+<li>Satisfy fcgi-auth.service <code>Requires=httpd.service</code>
+WITHOUT running apache under systemd (apachectl exits 1; apache must be
+manual <code>httpd -d /</code>). Drop-in makes httpd.service a no-op
+long-runner: <code>/run/systemd/system/httpd.service.d/tierd.conf</code>
+=
+<code>[Service]\nType=simple\nExecStartPre=\nExecStart=\nExecStop=\nExecStartPost=\nExecStart=/bin/sleep infinity</code>
+; <code>daemon-reload; systemctl restart httpd.service</code> → active.
+(Empty <code>Requires=</code> drop-in reset does NOT work on this
+systemd — that's why the sleep trick.)</li>
+<li><code>systemctl start fcgi-auth.socket</code> (systemd owns :4300,
+hands fd0 to fcgi-auth.service on connect).</li>
+<li>Manual apache:
+<code>env RF_RESPONDER=4200 httpd -d / -D SSL -k start</code>. Cert must
+exist at /flash/data0/etc/certs/CA/certs/host.crt (+cv/private/host.key)
+— reseed if missing.</li>
+<li>Set a POLICY-COMPLIANT root password (plain "calvin" is REJECTED by
+password policy → SHA256Password stays empty → every login fails):
+<code>racadm set iDRAC.Users.2.Password 'Calvin123#'</code> → populates
+SHA256Password. Then Basic <code>root:Calvin123#</code> passes PAM.</li>
+<li>fcgiodata(:4200 systemd-run) +
+UDB(<code>systemctl start unified-database-model.service</code>) for the
+backend. PROOF:
+<code>curl -sk -u root:badpw   https://127.0.0.1:443/redfish/v1/Managers</code>
+→ 401;
+<code>curl -sk -u root:Calvin123# https://…/redfish/v1/Managers</code> →
+passes auth (503 backend). GOTCHA: authzr(uid 1050) gets dbus
+<code>Permission denied</code> reading
+<code>BootstrapUsers.N#UserName</code> from cfgmgr — harmless
+(pam_bootstrap_manager is <code>sufficient</code>, falls through to
+pam_local_manager).</li>
+</ol>
+<p>ACCOUNT-ADD IS REAL, NOT HARDCODED (verified 2026-07-03).
+<code>racadm set iDRAC.Users.3.UserName testuser</code> +
+<code>.Password Test123#</code> + <code>.Enable Enabled</code> +
+<code>.Privilege 0x1ff</code> → stored real SHA256Password → new user
+authenticates to Redfish: <code>testuser:Test123#</code>→passes(503
+backend), <code>testuser:WRONGpw</code>→401. So the write path
+(racadm→cfgdb) + read path (Redfish PAM→cfgdb) work for ARBITRARY new
+accounts. Redfish AccountService POST = same store (works once 200
+works). Native IPMI set-user writes via fullfw to the same (real,
+RAKP-proven) user table — likely works, untested. Password POLICY
+enforced (weak pw rejected). IPMI/RAKP uses IPMIKey (HMAC, derived from
+pw at set).</p>
+<p>503→200 ROOT CAUSE NAILED (RE subagent + live diag 2026-07-03): the
+503 is <strong>NOT from fcgiodata/odata/UDB</strong>. It is
+<strong>Apache's <code>ErrorDocument 503</code></strong>
+(<code>httpd_redfish.conf:187</code> →
+<code>/usr/local/www/rfservice/Error_Docs/redfish_error_503.json</code>),
+fired when <strong>mod_proxy_fcgi can't reach the backend
+responder</strong>. Flow: <code>&lt;LocationMatch ^/redfish&gt;</code> →
+fcgi-auth(:4300) authorizes AND emits
+<code>Variable-RF_RESPONDER:&lt;port&gt;</code> looked up per-URI from
+<code>/usr/share/redfish/rf_resource_info.db</code> (table RedfishUris;
+ServiceRoot→4200) → apache rewrites to
+<code>fcgi://127.0.0.1:&lt;port&gt;</code>. So 503 = responder on that
+port not accepting. HMC.db = RED HERRING (only hmc-client uses it; its
+ExecCondition fails on rack/emu; not needed for ServiceRoot). Live diag:
+<code>AH00957 attempt to connect to 127.0.0.1:4200 failed (Connection refused)</code>
+→ <strong>fcgiodata@4200 was down</strong>, then when started via the
+REAL unit
+(<code>systemctl start fcgiodata@4200.socket fcgiodata@4200.service</code>;
+Type=notify, After=unified-database-model) it <strong>crash-loops
+exit-code 1</strong> during provider init (pids respawn ~11s; never
+reaches sd_notify READY) → requests time out. WHY crash-loop:
+<strong>this box booted <code>mini.target</code> (p4-style), NOT
+p6.</strong> The <code>init.p6.custom</code> odatalite bind-mount
+patches (librootprovider.so <code>b 0x870</code>@0xa30 for the v1 URI;
+libauthorization priv 0x0f@0x227c) are ABSENT
+(<code>mount|grep odatalite</code>=0). Tier B+ served 200
+<em>because</em> it booted p6 with those patches. So the clean 200
+recipe = <strong>boot <code>run-p6.sh</code></strong> (applies init.p6
+odatalite patches) THEN the Tier-D auth bring-up above (restore factory
+fcgi-auth.conf, httpd.service=sleep trick,
+<code>fcgi-auth.socket</code>, real <code>fcgiodata@4200</code> units,
+manual <code>httpd -d / RF_RESPONDER=4200</code>, racadm password) →
+authenticated 200 with real JSON. NOT achievable by more poking on the
+p4 box. TODO: (1) script all of it as start-web-authd.sh on a p6 boot;
+(2) verify testuser can do IPMI RAKP.</p>
+<p>P6 LIVE-200 ATTEMPT 2026-07-03 — every component works, blocked by
+cascade-thrash: Booted <code>run-p6.sh</code> (initramfs.p6.xz).
+CONFIRMED on p6: odatalite patches bind-mounted
+(<code>mount|grep odatalite</code>=2: librootprovider.so +
+libauthorization-utils.so); real authorizer config ships by default (no
+bypass to restore); UDB → <strong>active</strong>;
+<strong>fcgiodata@4200 → active/READY (the p4 crash-loop is
+GONE</strong> once the odatalite patches are present + UDB up); manual
+httpd on 443; fcgi-auth authorizer up. So the full authenticated-200
+pipeline is present. ONLY remaining step = set root creds via racadm —
+and that's where it died. <strong>THE WALL:
+<code>systemctl start {unified-database-model,httpd,fcgiodata@4200}</code>
+PULLS A DEPENDENCY CASCADE</strong> (55 queued jobs: oauthd,
+redfish-eventservice, cmcServer, xmlconfig, dsm-sa-eventmgr… behind
+fullfw) that drives the emulated npcm750 to <strong>load 15+</strong>,
+then sshd drops all connections (10 min continuous ssh-drop) — the
+documented multi-user-thrash dead-end. racadm can't complete (4 sets
+time out &gt;55s under load). Fresh p6 snapshot also has
+<code>Users.2.UserName</code> BLANK → must
+<code>racadm set iDRAC.Users.2.UserName root</code> BEFORE
+<code>.Password</code> (else SWC0296 "user name or password is blank").
+<strong>CORRECTED RECIPE for start-web-authd.sh (creds-first, NO
+cascade):</strong> on a p6 boot, right after mesh-ready (AIM active,
+~160s) and BEFORE any web start: (1)
+<code>racadm set iDRAC.Users.2.UserName root; .Password Calvin123#; .Enable Enabled; .Privilege 0x1ff</code>
+while box is IDLE. (2) Bring up responders WITHOUT
+<code>systemctl start</code> (which pulls the cascade): use
+socket-activation / <code>systemd-run</code> for fcgiodata@4200 +
+fcgi-auth, <code>systemctl start</code> UDB only (needed backend),
+manual <code>httpd -d / RF_RESPONDER=4200</code>. Mask the cascade
+pull-ins (oauthd, redfish-eventservice, cmcServer, xmlconfig, dsm-sa-*)
+first if they still get dragged in. (3) THEN test → expect authenticated
+200. TOOLING NOTE: zbmc ssh wedges for 1hr under high load; the shell
+<code>timeout N</code> (SIGTERM) does NOT kill it — MUST use
+<code>timeout -s KILL N</code> + a short Bash-tool timeout to bound each
+call. STATUS: authenticated-200 not yet demonstrated live (box thrashed
+before the racadm step); every prerequisite proven present on p6.</p>
+<p>P6 200 — THREE boot attempts, THE REAL CONSTRAINT (2026-07-03): the
+authenticated-200 could NOT be landed via ssh orchestration. ROOT CAUSE:
+the guest is <strong>SINGLE-CORE</strong> (p4/p6 DTB = 1 CPU) and the p6
+mini.target boot queues <strong>~68 jobs</strong> (full mesh + web). On
+one emulated Cortex-A9 that saturates the core for 10-15 min and
+<strong>sshd drops ALL connections</strong> during the storm. Adding
+racadm/web bring-up over ssh mid-storm piles onto the pegged core →
+permanent wedge (10-15 min continuous ssh-drop, observed 3×). CPU
+contention with the concurrent iDRAC10 emulator (186% vs 98%) made it
+worse; pausing iDRAC10 helped but the single-core storm alone still
+wedges it. MISTAKE each time: intervened WHILE the boot storm was still
+draining (jobs&gt;0, load 7-14). TWO REAL PATHS to the live 200 (do NOT
+ssh-orchestrate mid-boot): (A) LET IT FULLY SETTLE: boot run-p6.sh, wait
+UNTOUCHED until jobs→0 AND load&lt;3 (single core may need 15-25 min),
+THEN run <code>start-web-authd.sh</code>-style bring-up on the calm box.
+No racadm/web until the boot storm is completely done. (B) BAKE INTO
+init.p6 (robust, recommended for release): inject the bring-up (creds +
+web start + self-test → /tmp/result) as a boot-time step in
+init.p6.custom so the box self-configures WITHOUT interactive ssh; read
+/tmp/result once after settle. Rebuild via build-p6.sh. ARTIFACT:
+<code>start-web-authd.sh</code> (in project + vilo/ilo9) = the full
+cascade-free bring-up + guest-side self-test (creds→httpd.service
+sleep→UDB/fcgiodata@4200/fcgi-auth via --job-mode=ignore-dependencies
+→manual httpd→curl 401/401/200 checks→/tmp/result). Ready to run on a
+SETTLED box or adapt into init.p6. Also consider a <strong>2-CPU
+DTB</strong> for p6 (p4.dts forced 1 CPU for the dm_bufio/workqueue fix;
+if a 2nd core is stable under p6 it would halve the boot-storm wedge) —
+untested, note in [[project_idrac9_virtual_qemu]].</p>
+<p>PATH-2 BAKED INTO init.p6 — 2026-07-04, ~9 boots. tierd-authd.service
+now self-configures at boot (writes result to /dev/console → host boot
+log, NO ssh). SIX boot bugs found+fixed, each real:</p>
+<ol type="1">
+<li>Trigger: was After=multi-user.target which NEVER completes on this
+HW-less emu (usbmap loops 1000s×) → After=basic.target (IS reached) +
+internal readiness wait.</li>
+<li>Thrash: ~68-job boot storm + HW-less restart-loopers peg the single
+core. MASKED the loopers in init.p6
+(usbmap/sensord/vnc/cpld_updated/hmc-client/thermald/oauthd/vmedia/fullfw/
+gpubaseboard/dpumgr/hba-km/rsyslog) → load dropped 12→3.8.
+(fullfw/sensord=IPMI, oauthd=Bearer; none needed for Redfish Basic.
+Un-mask fullfw+sensord for IPMI on a non-Redfish boot.)</li>
+<li>Enable-symlink: my block ran before slirp-net created
+basic.target.wants → <code>mkdir -p</code> it first.</li>
+<li>racadm env: bare systemd script → every <code>racadm set</code>
+fails "current user privilege is not valid". FIX:
+<code>. /etc/profile</code> +
+<code>export RACADM_ACCESS=0x1FF USER=root LC_USERNAME/REMOTE_USERNAME/ LOGNAME=root</code>.
+CONFIRMED works ("racadm set UserName -&gt; Object value modified
+successfully").</li>
+<li>Password timeout: single core → racadm Password set times out. FIX:
+retry until SHA256 populates. CONFIRMED ("password set OK SHA256=BAF9C7…
+after 2 try").</li>
+<li>Cert under load: openssl RSA-2048 heavy → move cert-gen EARLY +
+retry. CONFIRMED (cert OK). PROVEN COMPONENTS (across the ~9 boots, each
+individually green): auth GATE (no-auth/badpw→401); fcgiodata@4200
+active/READY on p6; cert OK; racadm creds set (SHA256 populated).
+<strong>NOT YET aligned in ONE boot: httpd-serving-:443 AND creds-set
+simultaneously.</strong> httpd served (401 gate) in boot authd3 but
+returned 000 in authd5/6 (creds-green boots) — the manual
+<code>httpd -d /</code> vs the boot's own httpd.service ordering +
+single-core timing is NON-DETERMINISTIC. The backend poll only restarts
+httpd if pgrep=0, so a running-but-not-serving httpd (443 not bound,
+likely a boot-httpd.service-vs-manual-httpd :443 conflict) is never
+fixed → 000. NEXT (to close the last mile): (a) in authd backend-poll,
+if code=000 AND httpd running, pkill+restart anyway (handle
+running-but-broken); mask httpd.service from boot auto-start OR ensure
+the manual httpd owns :443 (check apache error_log on a calm box for the
+bind failure). (b) OR 2-CPU DTB to kill the single-core non-determinism.
+All fixes are in init.p6.custom (committed); start-web-authd.sh is the
+standalone equivalent. ROOT PATTERN: single-core emu can't
+deterministically orchestrate the full multi-step web bring-up; more
+cores or a running-but-broken-httpd guard is the fix.</li>
+</ol>
+<p>UPDATE 2026-07-04 (~12 boots) — CREDS FULLY SOLVED, httpd-from-boot
+is the last wall: CONFIRMED reliably green every boot now: settle (load
+~3-7 via masks), cert OK, <strong>password set (SHA256 populates, retry
+×2)</strong>, racadm-env fix. The ONLY remaining failure =
+<strong>manual <code>httpd -d / -D SSL</code> does not start/serve :443
+when launched from the tierd-authd systemd-oneshot</strong> (curl 000,
+apache error_log EMPTY = apache never starts/logs). Yet the SAME
+<code>httpd -d /</code> command WORKS over interactive ssh
+(start-web.sh) and worked in one early boot (authd3, got 401 gate).
+Diagnosis so far:</p>
+<ul>
+<li>httpd.service takeover FIXED: baked
+<code>httpd.service.d/sleep.conf</code> in init.p6 (KEEP ExecStartPre=
+base_httpd.sh, replace only ExecStart with /bin/sleep) so real
+/usr/sbin/httpd never grabs :443. Also run base_httpd.sh in authd before
+manual httpd. Neither made manual httpd serve.</li>
+<li>err EMPTY (not a cert/config error apache would log) → apache isn't
+even reaching startup. Suspect a systemd-oneshot ENV/cwd/fd difference
+vs the interactive shell, OR apache binds a non-127.0.0.1 IP (the SSL
+vhost may bind the configured iDRAC IP, so curl 127.0.0.1:443 = 000
+while the real bound IP would answer — UNVERIFIED; test curl to
+10.0.2.15:443 and to the CurrentIPv4). NEXT (do on a CALM box via ssh,
+not more blind boots): (1) run
+<code>env RF_RESPONDER=4200 httpd -d / -D SSL -k start</code> by hand
+and read /var/log/apache2/error_log + <code>ss -tlnp|grep 443</code> to
+see IF/WHERE it binds. (2) If it binds a non-loopback IP, point authd's
+self-test curl there. (3) ALTERNATIVELY the cleaner fix per start-web
+notes: DON'T neutralize httpd.service — give it a drop-in
+<code>Environment=RF_RESPONDER=4200</code> and let the REAL apache serve
+(it was already binding in the takeover), dropping the manual-httpd
+approach entirely. (4) OR 2-CPU DTB. Interactive path already demo'd
+401/401/503 this session; the p6 self-landing 200 is one httpd-bind
+detail away. All fixes committed to init.p6.custom + start-web-authd.sh.
+FINAL DIAGNOSIS (host+guest checked): <code>pgrep httpd</code>=0,
+nothing on :443 → httpd is NOT running at all (NOT a bind-address
+issue). <code>httpd -d / -D SSL -k start</code> forks a daemon that DIES
+IMMEDIATELY when launched from the tierd-authd <strong>systemd
+oneshot</strong> — almost certainly systemd reaping it via the service
+cgroup (default KillMode=control-group kills the forked daemon when/as
+the oneshot manages its cgroup). Same command persists fine over ssh (no
+oneshot cgroup). THE FIX (next session, high confidence): either (a) run
+apache as a PROPER unit — give httpd.service a drop-in
+<code>Environment=RF_RESPONDER=4200</code> and let the REAL apache serve
+(drop sleep-override + manual httpd entirely; this is the start-web.sh
+"proper fix"), OR (b) launch manual httpd with <code>setsid</code> + set
+the tierd-authd unit <code>KillMode=process</code> (or Type=forking with
+PIDFile) so systemd doesn't reap the apache daemon. This is the last
+blocker; creds + gate + backend all proven. ~13 boots spent; stopping to
+avoid further blind iteration. TRIED + FAILED for the httpd-from-boot
+start (all left err EMPTY, pgrep httpd=0): (1) httpd.service
+sleep-override to stop takeover; (2) keep ExecStartPre=base_httpd.sh +
+run it in authd; (3) KillMode=process + RemainAfterExit on tierd-authd;
+(4) setsid the httpd launch. None made apache start from the oneshot.
+err EMPTY = apache dies/fails BEFORE writing error_log — so it's not
+cert/ config (those log). MUST diagnose interactively on a CALM box
+(idrac10 paused, single ssh): run
+<code>env RF_RESPONDER=4200 httpd -d / -D SSL -k start; echo $?; cat /var/log/apache2/error_log; ss -tlnp|grep 443</code>
+by hand — that one command's exit code + error will reveal it (missing
+ServerRoot dir? apachectl -k needs pidfile? a masked service removed a
+lib/dir apache opens? apache logs to a path that doesn't exist under our
+tmpfs?). STRONGEST UNTRIED FIX: don't fight it — give httpd.service a
+drop-in <code>Environment=RF_RESPONDER=4200</code> and let the REAL
+systemd-managed apache serve (it's a proper service, no oneshot-cgroup
+issue); drop the manual-httpd entirely. That's the start-web.sh "proper
+fix" and avoids the whole boot-oneshot-daemon problem.</li>
+</ul>
+<h2 id="next-work-priority-order">NEXT WORK (priority order)</h2>
+<ol type="1">
+<li>Phase 6 Tier D: wire real fcgi-auth/AIM for authenticated
+Redfish/GUI/WS-Man (SEE ABOVE).</li>
+<li>Explore Redfish attack surface — enumerate /redfish/v1/ tree, OEM
+Dell extensions.</li>
+<li>Security research: Redfish + RAKP + CV-vault surfaces all live to
+attack locally.</li>
+<li>Stability: bake full web bring-up into init.p6 for zero-step cold
+boot.</li>
+</ol>
+<h2 id="quick-facts">QUICK FACTS</h2>
+<ul>
+<li>Fleet secrets carried: root IPMIKey <code>915F32…8964</code>, CV AES
+key <code>00d078…</code>, root pw <code>calvin</code> (see
+<code>reference_idrac9_*</code> memories). The factory IPMIKey only
+holds at default state.</li>
+<li>zipmi client: <code>~/phd/src/zipmi-git</code> (NOT the brew
+<code>zipmi</code> or <code>~/phd/src/zipmi</code>).</li>
+</ul>
+</div>
+</body>
+</html>

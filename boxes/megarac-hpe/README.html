@@ -7,14 +7,13 @@
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 leading-relaxed">
-<nav aria-label="Breadcrumb" style="max-width:64rem;margin:0 auto;padding:0.85rem 1.5rem 0;font-size:0.75rem;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif"><a href="../../../../index.html" style="color:#1d4ed8;text-decoration:none">phd</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../../index.html" style="color:#1d4ed8;text-decoration:none">bmc</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../../index.html" style="color:#1d4ed8;text-decoration:none">HP</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="../index.html" style="color:#1d4ed8;text-decoration:none">cray</a> <span style="color:#cbd5e1">&rsaquo;</span> <a href="index.html" style="color:#1d4ed8;text-decoration:none">xd670-virtual</a> <span style="color:#cbd5e1">&rsaquo;</span> <span style="color:#334155;font-weight:600">README.html</span></nav>
 
 <div class="max-w-4xl mx-auto px-6 py-10">
 
   <aside class="mb-8 border-l-4 border-amber-600 bg-amber-50 p-4 text-sm text-amber-950">
-    <strong>Historical investigation record (2026-07-28).</strong> Current release acceptance is retained
-    IPMI only. Redfish/Web-UI are unstable, vendor SSH is absent, cold boot is the default, and injected
-    blank-password network shells are disabled unless explicitly requested. Use the repository README,
+    <strong>Historical investigation record (2026-07-28).</strong> Current release acceptance is ICMP plus
+    retained IPMI. Redfish/Web-UI are unavailable, vendor SSH is absent, and the 2026-08-27 cold run took
+    8m07s after three automatic rerolls. Injected blank-password network shells are disabled unless requested. Use the repository README,
     SECURITY.md, and <code>zbmc megarac-hpe status -v</code> for current behavior.
   </aside>
 

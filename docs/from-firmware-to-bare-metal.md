@@ -327,7 +327,7 @@ DMA-serial open in ASMB-787's init) are documented as a parked, multi-session su
 tools/unpack-ami            one-command AMI MegaRAC unpacker (the gotchas above, codified)
 tools/zbmc                  the "zoo" dispatcher: zbmc <box> start|console|status|...
 boxes/advantech-asmb787/qemu-patch-rootfs.sh  the two IPMIMain fixes
-boxes/advantech-asmb787/boot-asmb787-svc.sh   the exact QEMU invocation
+boxes/advantech-asmb787/boot.sh               the exact QEMU invocation
 boxes/advantech-asmb787/build.sh              firmware -> boot artifacts
 boxes/advantech-asmb787/zbmc.box              the box descriptor
 firmware/…ima_enc           the source of truth

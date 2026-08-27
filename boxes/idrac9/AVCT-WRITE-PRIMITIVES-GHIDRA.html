@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC9 AVCT Write Primitives — Userspace-Driving ABI (Ghidra RE)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC9 AVCT Write Primitives — Userspace-Driving ABI (Ghidra RE)</h1>
+  </div>
+</div>
+
+<p>Reverse-engineered from the iDRAC9 firmware rootfs ARM kernel modules
+at
+<code>/Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs/lib/modules/5.4.80.idrac/kernel/drivers/dell/</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Size</th>
+<th>Author / desc</th>
+<th>Interface</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>swd-core.ko</code></td>
+<td>36772</td>
+<td>Pablo Arias <a
+href="mailto:pablo.arias@dell.com">pablo.arias@dell.com</a> — "ARM SWD
+support for Infineon and Cypress ARM devices v.0.1.0"</td>
+<td><strong>sysfs</strong> <code>/sys/class/swd/swdt%d/*</code></td>
+</tr>
+<tr>
+<td><code>swd-gpio.ko</code></td>
+<td>5724</td>
+<td>"SWD Linux GPIO support" (depends swd-core)</td>
+<td>registers one port "nuvoton"</td>
+</tr>
+<tr>
+<td><code>vdm.ko</code></td>
+<td>34856</td>
+<td>"AESS VDM Driver", node <code>nuvoton,npcm750-vdm</code></td>
+<td><strong>char dev</strong> <code>/dev/vdm</code></td>
+</tr>
+</tbody>
+</table>
+<p>All four <code>.ko</code> are ELF32 ARM EABI5, <strong>not
+stripped</strong>, GPL — full symbol tables + strings present. All
+loaded and decompiled cleanly in Ghidra (headless,
+<code>DecompToFile.java</code>). No objdump fallback needed (objdump
+used only to confirm <code>_IOC</code> constants and the
+<code>_LC30="vdm"</code> device-node string).</p>
+<p>Tooling note: <code>analyzeHeadless</code> requires the project dir
+to <strong>pre-exist</strong> (<code>mkdir</code> it; do not
+<code>rm -rf</code> it), and <code>-scriptPath</code> is
+<em>additive</em> to <code>~/ghidra_scripts</code> — a clean temp
+scriptdir avoids the OSGi-bundle gotcha.</p>
+<p>Source files: decompiled C at
+<code>/tmp/smm-decompiled/{swd-core,swd-gpio,vdm}.ko.c</code>.</p>
+<p>⚠ <strong>Privilege model (both drivers):</strong> neither module
+calls <code>capable()</code>/<code>CAP_SYS_*</code> anywhere (no such
+import in either symbol table). The <em>only</em> access gate is
+filesystem permissions on <code>/dev/vdm</code> and
+<code>/sys/class/swd/swdt*</code> — root by default. Any process that
+can open those nodes has the full primitive. No length/route/BDF sanity
+gate beyond what is noted per-call below.</p>
+<hr />
+<h2 id="1-swd-coreko--swd-gpioko--neighbor-mcu-swd-reflasher">1.
+swd-core.ko / swd-gpio.ko — neighbor-MCU SWD reflasher</h2>
+<h3 id="11-interface-type-sysfs-not-a-char-dev--ioctl">1.1 Interface
+type: <strong>sysfs</strong>, not a char dev / ioctl</h3>
+<p><code>swd-core</code> creates a class <code>swd</code> and, per
+registered port, a device <code>swdt%d</code>
+(<code>device_create(swd_class,…,"swdt%d", id)</code> @
+<code>swd_device_register</code> <code>0x10238</code>). It exposes
+<strong>sysfs attributes only</strong> — there is no
+<code>/dev/swdtN</code> char node and no
+<code>file_operations</code>/ioctl.</p>
+<p>Attribute table (<code>swd_attrs</code> @ <code>.data:0x5c</code>,
+plus binary attr <code>bin_attr_flash_data</code> @
+<code>0x30</code>):</p>
+<table>
+<thead>
+<tr>
+<th>sysfs file (under <code>/sys/class/swd/swdt0/</code>)</th>
+<th>mode</th>
+<th>handler @addr</th>
+<th>action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>swdck_gpio</code></td>
+<td>rw</td>
+<td><code>swd_store/show_swdck_gpio</code> <code>0x504/0x758</code></td>
+<td>set/get SWD clock GPIO number → <code>info+0x8</code></td>
+</tr>
+<tr>
+<td><code>swdd_gpio</code></td>
+<td>rw</td>
+<td><code>swd_store/show_swdd_gpio</code> <code>0x490/0x73c</code></td>
+<td>set/get SWD data GPIO number → <code>info+0xa</code></td>
+</tr>
+<tr>
+<td><code>access</code></td>
+<td>rw</td>
+<td><code>access_store</code> <code>0x5b4</code> /
+<code>access_show</code> <code>0x7d8</code></td>
+<td>write <code>1</code>→connect SWD line (calls ops <code>access</code>
+fn = <code>gpio_swd_access</code>); <code>0</code>→release. Sets flags
+bit0. <strong>Errors <code>-EINVAL</code> if both gpios not yet
+set.</strong></td>
+</tr>
+<tr>
+<td><code>flash_access</code></td>
+<td>rw</td>
+<td><code>swd_store_flash_access</code> <code>0x8f0</code> /
+<code>swd_show_flash_access</code> <code>0x7b0</code></td>
+<td>write <code>1</code>→<code>DeviceAcquire()</code> (enter SWD
+programming/acquire); <code>0</code>→leave. Sets flags bit1.
+<strong>Requires bit0 (<code>access</code>) first</strong> else
+<code>-ENXIO</code>.</td>
+</tr>
+<tr>
+<td><code>flash_erase</code></td>
+<td>wo</td>
+<td><code>swd_store_flash_erase</code> <code>0x874</code></td>
+<td><code>EraseAllFlash()</code>. <strong>Requires
+flags&amp;3==3</strong> (access+flash_access) else
+<code>-ENXIO</code>.</td>
+</tr>
+<tr>
+<td><code>reset</code></td>
+<td>wo</td>
+<td><code>swd_store_reset</code> <code>0xad4</code></td>
+<td><code>ResetMCU()</code> (toggles target XRES via SWD). Requires
+bit0.</td>
+</tr>
+<tr>
+<td><code>flash_data</code></td>
+<td>rw (bin)</td>
+<td>write <code>swd_write_flash_data</code> <code>0x3c</code> / read
+<code>swd_read_flash_data</code> <code>0x12c</code></td>
+<td><strong>program / read flash bytes</strong> at file offset →
+<code>ProgramFlashRow()</code> / <code>ReadFlashRow()</code>. Requires
+flags&amp;3==3.</td>
+</tr>
+<tr>
+<td><code>flash_size</code> / <code>flash_block_size</code> /
+<code>flash_blocks_num</code></td>
+<td>ro</td>
+<td><code>0x7c4/0x7e8/0x804</code></td>
+<td>geometry (block size 0x80=128 B, set @register)</td>
+</tr>
+<tr>
+<td><code>dev_id</code></td>
+<td>ro</td>
+<td><code>swd_show_dev_id</code> <code>0x9fc</code></td>
+<td><strong>probe / IDCODE</strong> → <code>GetDeviceID()</code> prints
+<code>0x%lx</code>. Requires bit0.</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>ro</td>
+<td><code>swd_show_name</code> <code>0x820</code></td>
+<td>port name string</td>
+</tr>
+</tbody>
+</table>
+<p><code>swddev</code> struct (allocated in
+<code>swd_device_register</code>, stored as <code>dev_get_drvdata</code>
+at <code>dev+0x40</code>): <code>+0x00</code> byte flags (bit0=access,
+bit1=flash_access), <code>+0x04</code> idr id, <code>+0x08</code> name,
+<code>+0x10</code> 0x20-byte ops template (fn ptrs
+swdck_set/swdd_set/swdd_get/swdd_dir + <code>access</code>),
+<code>+0x2c</code> ptr→<code>swd_info</code> {<code>+0</code>=blocksize,
+<code>+2</code>=blocks_num, <code>+6</code>=acquire-fn,
+<code>+8</code>=swdck gpio, <code>+0xa</code>=swdd gpio,
+<code>+0xc</code>=line-reset/access-fn}, <code>+0x30</code> mutex,
+<code>+0x50</code> <code>struct device*</code>.</p>
+<h3 id="12-port-selection--gpio-binding-swd-gpioko">1.2 Port selection /
+GPIO binding (swd-gpio.ko)</h3>
+<p><code>swd-gpio</code> <code>init_module</code> (<code>0x1016c</code>)
+registers exactly <strong>one</strong> port:
+<code>gpio_swd_dev = swd_device_register("nuvoton", &amp;gpio_swd_ops, …)</code>
+→ creates <code>swdt0</code>. <strong>The GPIO pins are not
+hardcoded</strong> — <code>info+0x8/+0xa</code> start at 0; the operator
+must write the pin numbers via
+<code>swdck_gpio</code>/<code>swdd_gpio</code> before
+<code>access=1</code> (otherwise <code>access_store</code> returns
+<code>-EINVAL</code> "gpios need to be defined").
+<code>gpio_swd_access(dev,1)</code> (<code>0x100d8</code>) then
+<code>gpio_request(swdck,"swd clock")</code>+output-high and
+<code>gpio_request(swdd,"swd data")</code>+output-high. Bit-bang ops:
+<code>gpio_swd_swdck_set</code>/<code>swdd_set</code>/<code>swdd_get</code>/<code>swdd_dir</code>
+via <code>gpiod_*_raw</code>.</p>
+<h3 id="13-userspace-reflash-recipe-neighbor-mcu">1.3 Userspace reflash
+recipe (neighbor MCU)</h3>
+<pre class="sh"><code>cd /sys/class/swd/swdt0
+echo &lt;SWDCK_pin&gt; &gt; swdck_gpio      # bind clock GPIO (NPCM GPIO number)
+echo &lt;SWDIO_pin&gt; &gt; swdd_gpio       # bind data  GPIO
+echo 1 &gt; access                    # SWD line-reset + connect  (flags bit0)
+cat   dev_id                       # OPTIONAL probe: prints IDCODE/DPIDR e.g. 0x2ba01477
+echo 1 &gt; flash_access              # DeviceAcquire — enter programming mode (flags bit1)
+echo 1 &gt; flash_erase               # EraseAllFlash
+dd if=newfw.bin of=flash_data bs=128   # ProgramFlashRow per block, offset = file pos
+dd if=flash_data of=verify.bin bs=128  # OPTIONAL read-back  (ReadFlashRow)
+echo 0 &gt; flash_access
+echo 1 &gt; reset                     # ResetMCU → target runs new firmware</code></pre>
+<p>Target families:
+<code>DeviceAcquire</code>/<code>DeviceAcquireInfineon</code>
+(<code>0x2cd0</code>) and <code>DeviceAcquireRenesas</code>
+(<code>0x1b08</code>); Infineon/Cypress PSoC SROM program path
+(<code>ProgramFlashInfineon</code> <code>0x31d8</code>,
+<code>EraseAllFlashInfineon</code> <code>0x30f0</code>,
+<code>GetChipProtectionVal</code>, <code>SetIMO48MHz</code>,
+<code>PollSromStatus</code>). So both Infineon and Renesas neighbor MCUs
+are supported.</p>
+<h3
+id="14--arbitrary-target-memory-rw-dap--ahb-ap--present-but-not-exposed">1.4
+⚠ Arbitrary target-memory R/W (DAP / AHB-AP) — present but NOT
+exposed</h3>
+<p>The module <strong>does</strong> implement full ARM ADIv5 SWD-DP +
+MEM-AP primitives:</p>
+<ul>
+<li><code>Read_IO(ap,addr,*out)</code> <code>0xf78</code> — writes
+MEM-AP <strong>TAR=addr</strong> (SWD hdr <code>0x8b</code>) then reads
+<strong>DRW</strong> (<code>0x9f</code>) ⇒ <strong>arbitrary 32-bit read
+of any target address</strong> (live SRAM, peripheral regs, not just
+flash).</li>
+<li><code>Write_IO(ap,addr,data)</code> <code>0x1004</code> — TAR=addr
+(<code>0x8b</code>) then DRW=data (<code>0xbb</code>) ⇒
+<strong>arbitrary 32-bit write</strong>.</li>
+<li><code>Read_IO_Size</code>/<code>Write_IO_Size</code>
+<code>0x11c0/0x1054</code> — byte/half/word sized via CSW
+(<code>0xa3</code>).</li>
+<li><code>Read_DAP</code>/<code>Write_DAP</code>
+<code>0xf10/0xf3c</code>, <code>GetDeviceID</code> <code>0xb70</code> =
+line-reset + read DPIDR (<code>0xa5</code>).</li>
+</ul>
+<p><strong>These are internal kernel functions only.</strong> They are
+<em>not</em> reachable through the sysfs surface (no attr maps to a
+user-supplied address), and only
+<code>swd_device_register</code>/<code>_unregister</code> are in
+<code>__ksymtab</code> (EXPORT_SYMBOL) —
+<code>Read_IO</code>/<code>Write_IO</code> are not even exported to
+sibling modules. ⇒ From a root shell the SWD interface gives you
+<strong>flash erase/program/read-back, IDCODE probe, and target
+reset</strong> — <em>not</em> a generic peek/poke of the neighbor MCU's
+live memory. To get arbitrary AHB-AP R/W you must add a kernel hook
+(insmod shim calling <code>Read_IO</code>/<code>Write_IO</code>, or
+patch in a sysfs attr); the building blocks are fully present and ready
+at the addresses above.</p>
+<hr />
+<h2 id="2-vdmko--pcie-vendor-defined-message-injector">2. vdm.ko — PCIe
+Vendor-Defined-Message injector</h2>
+<h3 id="21-interface-char-dev-devvdm">2.1 Interface: char dev
+<code>/dev/vdm</code></h3>
+<p><code>init_module</code> (<code>0x11888</code>):
+<code>platform_driver_register</code> (matches DT
+<code>nuvoton,npcm750-vdm</code>),
+<code>alloc_chrdev_region(&amp;vdm_dev,0,1,"vdm")</code> (or fixed major
+via module param <code>majornum</code>),
+<code>cdev_add(vdm_cdev,…)</code>, <code>class_create("vdm")</code>,
+<code>device_create(...,"vdm")</code> ⇒ <strong><code>/dev/vdm</code>,
+minor 0, class <code>/sys/class/vdm/vdm</code></strong>.
+<code>ioremap</code>s the AESS VDM TX/RX register blocks
+(<code>vdm_virt_addr</code>, <code>vdma_virt_addr</code>) + GCR
+<code>0xf0800000</code>, allocates a 0x4000 DMA RX buffer, requests the
+VDMA IRQ (<code>vdma_isr</code>). <code>fops = vdm_fops</code> @
+<code>.data:0x260</code> →
+<code>open=vdm_open, release=vdm_release, read=vdm_read, write=vdm_write, unlocked_ioctl=vdm_ioctl</code>.</p>
+<p>Per-open <strong>instance</strong> struct
+(<code>kmem_cache_alloc</code> in <code>vdm_open</code>
+<code>0x101ec</code>, stored at <code>filp+0xb4</code>):
+<code>+0x08</code> ushort <strong>mBDF</strong> (target PCIe
+Bus/Dev/Func), <code>+0x0c</code> RX ring base, <code>+0x10</code> byte
+"BDF-set" flag, <code>+0x14</code> RX buf size (dflt 0x2000),
+<code>+0x18</code> TX buf ptr, <code>+0x1c</code> TX buf size (dflt
+0x400), <code>+0x20</code> circular-buffer hdr (<code>cbInit</code>),
+<code>+0x3c</code> error/status flags, <code>+0x40</code> byte counter,
+<code>+0x44</code> wait-queue. Each <code>open()</code> is an
+independent RX subscriber keyed by its mBDF.</p>
+<h3 id="22-ioctl-abi--vdm_ioctl--0x11294">2.2 ioctl ABI —
+<code>vdm_ioctl</code> @ <code>0x11294</code></h3>
+<p>Magic type <strong><code>0xe8</code></strong>, arg size 4
+(<code>int</code>). Decoded <code>_IOC(dir,type,nr,size)</code>:</p>
+<table>
+<thead>
+<tr>
+<th>cmd value</th>
+<th>macro</th>
+<th>nr</th>
+<th>action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x4004e801</code></td>
+<td><code>_IOW(0xe8,1,4)</code></td>
+<td>1</td>
+<td><strong>SET_BDF</strong> — copies 3 bytes from arg, packs
+<code>mBDF = bus&lt;&lt;8 | (dev&amp;0x1f)&lt;&lt;3 | (func&amp;7)</code>;
+sets BDF-set flag(+0x10). <em>Required before read/write.</em></td>
+</tr>
+<tr>
+<td><code>0x4004e802</code></td>
+<td><code>_IOW(0xe8,2,4)</code></td>
+<td>2</td>
+<td>SET_TX_BUFSIZE — <code>kfree</code>+<code>kmalloc(arg)</code> TX
+buffer(+0x18), size→+0x1c</td>
+</tr>
+<tr>
+<td><code>0x4004e803</code></td>
+<td><code>_IOW(0xe8,3,4)</code></td>
+<td>3</td>
+<td>SET_RX_BUFSIZE — realloc RX buffer(+0xc), <code>cbInit</code>
+ring</td>
+</tr>
+<tr>
+<td><code>0x4004e804</code></td>
+<td><code>_IOW(0xe8,4,4)</code></td>
+<td>4</td>
+<td>STOP_TX — <code>disable_TX = (arg!=0)</code></td>
+</tr>
+<tr>
+<td><code>0x4004e805</code></td>
+<td><code>_IOW(0xe8,5,4)</code></td>
+<td>5</td>
+<td><strong>RX enable/disable</strong> — arg
+<code>0</code>→<code>vdm_enable_rx()</code>,
+non-0→<code>vdm_disable_rx()</code></td>
+</tr>
+<tr>
+<td><code>0x8004e806</code></td>
+<td><code>_IOR(0xe8,6,4)</code></td>
+<td>6</td>
+<td>GET_BDF — returns 3 bytes {bus,dev,func}</td>
+</tr>
+<tr>
+<td><code>0x4004e807</code></td>
+<td><code>_IOW(0xe8,7,4)</code></td>
+<td>7</td>
+<td>RESET — <code>vdm_reset()</code></td>
+</tr>
+<tr>
+<td><code>0x4004e808</code></td>
+<td><code>_IOW(0xe8,8,4)</code></td>
+<td>8</td>
+<td>SET_TIMEOUT — <code>vdm_set_timeout(arg)</code></td>
+</tr>
+<tr>
+<td><code>0x4004e809</code></td>
+<td><code>_IOW(0xe8,9,4)</code></td>
+<td>9</td>
+<td>REINIT — close+<code>vdm_reset()</code>+open</td>
+</tr>
+<tr>
+<td><code>0x4004e80a</code></td>
+<td><code>_IOW(0xe8,0xa,4)</code></td>
+<td>10</td>
+<td>enable reset-detect poll</td>
+</tr>
+<tr>
+<td><code>0x4004e80b</code></td>
+<td><code>_IOW(0xe8,0xb,4)</code></td>
+<td>11</td>
+<td>GET reset/status flags (copies +0x3c to user;
+<code>8</code>=in-reset)</td>
+</tr>
+<tr>
+<td><code>0x4004e80c</code></td>
+<td><code>_IOW(0xe8,0xc,4)</code></td>
+<td>12</td>
+<td>CLEAR_ERRORS — bit0→<code>vdm_clear_errors</code>, bit2→re-init RX
+ring; <code>flags &amp;= ~arg</code></td>
+</tr>
+<tr>
+<td><code>0x4004e80d</code></td>
+<td><code>_IOW(0xe8,0xd,4)</code></td>
+<td>13</td>
+<td>DUMP_REGS (queue work)</td>
+</tr>
+</tbody>
+</table>
+<p>(Inputs ≤<code>0x4004e803</code> go through a <code>__kmalloc</code>;
+the <code>coproc_*Domain_Access_Control</code> blocks around
+<code>arm_copy_to/from_user</code> are the kernel's uaccess-enable, not
+a security check.)</p>
+<h3 id="23-injecting-a-vdm--vdm_write--0x10da4">2.3 Injecting a VDM —
+<code>vdm_write</code> @ <code>0x10da4</code></h3>
+<p><code>write(fd, buf, count)</code> layout:
+<strong><code>buf[0]</code> = route_type</strong>,
+<strong><code>buf[1..count-1]</code> = VDM payload bytes</strong>. Flow:
+copy <code>count-1</code> payload bytes into the instance TX
+buffer(+0x18); read <code>buf[0]</code> as route_type; then
+<code>vdm_SendMessage(route_type, mBDF, txbuf, count-1)</code>.</p>
+<p>Validation (the <em>only</em> checks):
+<code>count-1 ≤ TX_bufsize</code>(+0x1c) else <code>-EINVAL</code>;
+<code>count ≥ 2</code> else <code>-EINVAL</code>; BDF-set flag(+0x10)
+must be set else <code>-ENXIO</code>; not in PCIe reset
+(<code>vdm_is_in_reset</code>) else <code>-EPIPE</code>;
+<code>disable_TX</code> clear. <strong>No privilege check, no validation
+that the target BDF exists or that the route/payload is
+well-formed.</strong> route_type is coerced: anything not
+<code>0x10</code>/<code>0x12</code> (and not
+<code>0x10</code>/<code>0x13</code>) → forced to <code>0x13</code>.
+Valid route_types:</p>
+<ul>
+<li><strong><code>0x12</code> = Route-by-ID</strong> → message is
+targeted at <code>mBDF</code> (the BDF is byte-swapped into the VDM
+header).</li>
+<li><strong><code>0x10</code> / <code>0x13</code></strong> → route to
+Root Complex / broadcast (BDF not embedded).</li>
+</ul>
+<p><code>vdm_SendMessage</code> @ <code>0x11e94</code> builds the
+message into the AESS TX FIFO (<code>vdm_virt_addr[3]</code>): header
+word <code>0xb41a0000 | (byteswap(mBDF) if route 0x12)</code> —
+<strong><code>0xb41a</code></strong> is the embedded vendor/header tag —
+then control word with length, then payload in 4-byte words, max
+<strong>0x74 (116) bytes per hardware transfer</strong>, looping for
+longer payloads; polls <code>vdm_virt_addr[0]</code> bit0 for done
+(100×<code>nano_delay</code>, returns <code>-EPIPE</code> on timeout).
+Payload length bounded only by the user-set TX buffer.</p>
+<h3 id="24-receiving-vdms--vdm_read--0x1051c">2.4 Receiving VDMs —
+<code>vdm_read</code> @ <code>0x1051c</code></h3>
+<p><code>read(fd, buf, count)</code> drains up to <code>count/4</code>
+32-bit words from the instance RX ring (<code>cbRead</code>) into
+<code>buf</code>, <strong>blocking</strong> on the wait-queue(+0x44)
+until data arrives or a PCIe reset. Returns bytes read, or
+<code>-ENXIO</code> (no BDF set), <code>-EPIPE</code> (reset),
+<code>-ENODATA</code>(-4)/<code>-EOVERFLOW</code>(-11) on ring
+conditions. RX must first be armed with ioctl 5 (arg 0). The IRQ tasklet
+(<code>vdma_isr</code>/<code>receive_packet_func</code>) demuxes inbound
+VDMs to the instance whose <code>mBDF</code> matches the sender BDF;
+unmatched packets go to <code>pVDM_Instance_Default</code> (the instance
+that did <code>SET_BDF</code> with BDF 0). HW/DMA/user-buffer overflow
+and PCIe-bus-reset events are logged and surfaced via the status
+flags(+0x3c).</p>
+<h3 id="25-userspace-inject-recipe">2.5 Userspace inject recipe</h3>
+<pre class="c"><code>#include &lt;sys/ioctl.h&gt;
+#define VDM_SET_BDF    _IOW(0xe8,1,int)   /* 0x4004e801 */
+#define VDM_SET_TXSIZE _IOW(0xe8,2,int)   /* 0x4004e802 */
+#define VDM_RX_ENABLE  _IOW(0xe8,5,int)   /* 0x4004e805 */
+int fd = open(&quot;/dev/vdm&quot;, O_RDWR);
+unsigned char bdf[3] = { bus, dev, func };      /* dev 0-31, func 0-7 */
+ioctl(fd, VDM_SET_BDF,    bdf);                 /* select target endpoint  */
+ioctl(fd, VDM_SET_TXSIZE, (int)4096);           /* (optional) grow TX buf   */
+unsigned char msg[1 + N];
+msg[0] = 0x12;                                  /* route-by-ID to that BDF  */
+memcpy(&amp;msg[1], payload, N);                    /* N VDM payload bytes      */
+write(fd, msg, 1 + N);                          /* INJECT                   */
+/* to sniff replies: */ ioctl(fd, VDM_RX_ENABLE, 0); read(fd, rxbuf, sizeof rxbuf);</code></pre>
+<hr />
+<h2 id="functionaddress-index-for-follow-on-work">Function/address index
+(for follow-on work)</h2>
+<ul>
+<li><strong>swd-core.ko</strong>: <code>swd_device_register 0x1fc</code>
+(EXPORT), <code>DeviceAcquire 0xbc4</code>,
+<code>DeviceAcquireInfineon 0x2cd0</code>,
+<code>DeviceAcquireRenesas 0x1b08</code>,
+<code>EraseAllFlash 0xc98</code>, <code>ProgramFlashRow 0xd50</code>,
+<code>ReadFlashRow 0xe40</code>, <code>ResetMCU 0xe84</code>,
+<code>GetDeviceID 0xb70</code>, <code>Read_IO 0xf78</code>,
+<code>Write_IO 0x1004</code>, <code>Read_IO_Size 0x11c0</code>,
+<code>Write_IO_Size 0x1054</code>, <code>Read_DAP 0xf10</code>,
+<code>Write_DAP 0xf3c</code>, <code>Swd_LineReset 0x1988</code>,
+<code>Swd_ReadPacket 0x16f0</code>,
+<code>Swd_WritePacket 0x1868</code>.</li>
+<li><strong>swd-gpio.ko</strong>: <code>init_module 0x1016c</code>,
+<code>gpio_swd_access 0x100d8</code>, ops
+<code>gpio_swd_ops</code>.</li>
+<li><strong>vdm.ko</strong>: <code>vdm_ioctl 0x11294</code>,
+<code>vdm_write 0x10da4</code>, <code>vdm_read 0x1051c</code>,
+<code>vdm_SendMessage 0x11e94</code>, <code>vdm_open 0x101ec</code>,
+<code>vdm_enable_rx 0x12118</code>, <code>vdm_reset 0x12088</code>,
+<code>init_module 0x11888</code>, fops
+<code>vdm_fops @ .data:0x260</code>.</li>
+</ul>
+<p>Build provenance string in vdm.ko:
+<code>/home/jenkins/agent/workspace/build-arev/externalsrc/drivers-idrac-arm/common-aess-vdm-drv/vdm_common.c</code>.</p>
+</div>
+</body>
+</html>

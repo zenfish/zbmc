@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Why the Dell iDRACs Are Hard (and how the turnkey boxes cheat)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Why the Dell iDRACs Are Hard (and how the turnkey boxes cheat)</h1>
+  </div>
+</div>
+
+<blockquote>
+<p><strong>Historical field note.</strong> The snapshot conclusions
+below describe an earlier investigation state. Current release behavior
+is different: iDRAC9 is cold-only, and iDRAC10 now cold-boots by default
+from fetched artifacts, deterministically generated cfgdb defaults, and
+a per-installation SSH key. The old shared iDRAC10 checkpoint is no
+longer fetched or accepted by <code>start --warm</code>. See
+<code>README.md</code> and <code>SECURITY.md</code> for the current
+contract.</p>
+</blockquote>
+<p>A field note on failure. The OpenBMC boxes in this zoo
+(<code>openbmc</code>, <code>nvidia-obmc</code>) boot in one command;
+the Dell iDRACs took weeks. This preserves why earlier snapshot-first
+approaches were attempted and what they taught us; it is not the current
+operator guide.</p>
+<h2 id="the-turnkey-boxes-cheat">The turnkey boxes cheat</h2>
+<p>An OpenBMC image is <strong>one flash blob</strong> — u-boot + kernel
++ rootfs concatenated — and it boots on a stock QEMU machine with
+<code>-drive if=mtd,snapshot=on</code>. Nothing to assemble,
+deterministic; the current reference runs reached full acceptance in
+4m32s (OpenBMC) and 5m21s (NVIDIA). That's the whole trick behind
+<code>openbmc</code> and <code>nvidia-obmc</code>.</p>
+<p>The iDRACs break <strong>every</strong> assumption in that
+sentence.</p>
+<h2 id="idrac-in-general">iDRAC, in general</h2>
+<ol type="1">
+<li><strong>No flash-boot.</strong> The vendor SPL → u-boot →
+secure-boot/ROT chain won't complete under emulation (no
+TrustZone/OP-TEE/CPLD model). So you can't boot the flash image — you
+must <strong>direct-kernel</strong> boot: carve the kernel, DTB, initrd,
+and rootfs out of the DUP's <code>firmimg</code> (a U-Boot FIT), patch,
+reassemble.</li>
+<li><strong><code>CONFIG_CMDLINE_FORCE</code>.</strong> The iDRAC kernel
+<strong>ignores <code>-append</code></strong> — its compiled-in bootargs
+win. You can't just pass
+<code>root=</code>/<code>console=</code>/<code>init=</code>. You either
+own the initramfs, or <strong>binary-patch the kernel</strong> to blank
+the forced args.</li>
+<li><strong>rootfs on the SD bus.</strong> It must attach as a block
+device on the SDHCI controller
+(<code>-drive if=none,file=… -device sd-card,bus=sd-bus</code> →
+<code>mmcblk0</code>), <strong>padded to a power-of-2</strong> size.
+Generic <code>-sd</code>/<code>if=sd</code> is rejected; the SDHCI node
+must be in the (minimal) DTB or the kernel panics "Cannot open root
+device".</li>
+<li><strong>A proprietary Dell service mesh</strong>, not stock
+systemd/Phosphor. Bringing it up clean is far fussier than "let systemd
+start everything."</li>
+<li><strong>IPMI auth is a key, not a password</strong> (see
+below).</li>
+</ol>
+<p>Any one of these is a speed bump. iDRAC10 hits all of them at
+once.</p>
+<h2 id="idrac10--the-boss-fight-npcm845--aarch64">iDRAC10 — the boss
+fight (NPCM845 / aarch64)</h2>
+<ul>
+<li><strong>Different architecture.</strong>
+<code>qemu-system-aarch64 -M npcm845-evb</code> — nothing from the ARMv7
+boxes carries over.</li>
+<li><strong>4 binary kernel patches</strong> just to boot: blank the
+forced <code>quiet</code>, bump <code>loglevel 0→8</code>, inject
+<code>root=/dev/mmcblk0 … init=/usr/bin/sh</code> (the shell is
+<code>/usr/bin/sh</code>, not <code>/bin/sh</code>).</li>
+<li><strong>The dbus-broker socket-activation lottery.</strong> Cold
+boot <strong>hangs roughly 2 times in 3</strong> under a single TCG vCPU
+— nondeterministically. This is the real killer: you cannot ship a
+<code>build.sh</code> that "just boots" when a third of boots
+wedge.</li>
+<li><strong>Historical snapshot path.</strong> Cold-boot <em>retrying
+until services + IPMI answer</em>, then QMP <code>stop</code> +
+<code>migrate exec:gzip</code> → <code>state.gz</code>. Restore with
+<code>-incoming</code> over a <strong>frozen qcow2 overlay</strong> (NOT
+<code>snapshot=on</code> on the base, or the disk and the migrated RAM
+diverge and it corrupts). On resume you must <strong>loop QMP
+<code>cont</code> until the vCPU reports <code>running</code></strong> —
+a single <code>cont</code> leaves it half-migrated with the network
+silent. Then verify IPMI and <strong>re-restore up to 3×</strong> (a
+migrated UDP socket sometimes resumes silent — the host port is bound
+but the guest never answers).</li>
+<li><strong>Encrypted RAKP.</strong> The login handshake was cracked two
+ways: an <code>shm-shim</code> <code>LD_PRELOAD</code> interposing on
+the session library, and (more durably) a real <code>cfgmgrd</code> fed
+a seeded <code>CfgCurrentValues.db</code> (username must be 16-byte
+<code>MemCmp</code>-padded, the privilege nibble lives at a raw offset,
+the HMAC key at entry+0x11).</li>
+</ul>
+<p>That approach explained the earlier snapshot bundle. The current
+package deliberately does not fetch it: ordinary
+<code>zbmc idrac10 start</code> cold-boots, while
+<code>start --warm</code> fails with an explicit unsupported
+message.</p>
+<h2 id="idrac9--one-notch-easier-one-notch-worse">iDRAC9 — one notch
+easier, one notch worse</h2>
+<p>ARMv7 (NPCM750), so no aarch64 tax, and it <strong>boots and networks
+fine cold</strong> — you can ssh straight in. Its curse is narrow and
+specific: <strong>the only NIC that works is the one that can't survive
+a warm restore.</strong> The npcm750 offers three NICs and every one
+fails a different way (all live-verified, qemu 11.0.0):</p>
+<table>
+<thead>
+<tr>
+<th>NIC</th>
+<th>binds in guest?</th>
+<th>works cold?</th>
+<th>survives <code>-incoming</code>?</th>
+<th>how it fails</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>usb-net</code> (cdc_ether → <code>usb0</code>)</td>
+<td>yes</td>
+<td><strong>yes</strong> (ssh up in ~117 s)</td>
+<td><strong>no</strong></td>
+<td>EHCI async RX URBs don't resume; stock qemu marks it
+<code>.unmigratable=1</code>. A <code>net-selfheal</code> service in the
+initramfs bounces the iface on RX-stall — that loop exists
+<em>because</em> this path is fragile.</td>
+</tr>
+<tr>
+<td>on-chip EMC (<code>npcm7xx-emc</code> → <code>eth2</code>)</td>
+<td><strong>yes</strong> (probes clean, Generic PHY)</td>
+<td><strong>no</strong></td>
+<td>—</td>
+<td>binds DOWN; the instant you bring it up and pass a packet:
+<code>BUG: spinlock bad magic … PC is at 0x0 … Kernel panic — Fatal exception in interrupt</code>.
+Dies in <code>ksoftirqd</code>, takes <code>usb0</code> down with
+it.</td>
+</tr>
+<tr>
+<td>on-chip GMAC (<code>npcm-gmac</code>)</td>
+<td>no</td>
+<td>—</td>
+<td>—</td>
+<td>driver hands phylink a NULL <code>validate</code> cb →
+<code>phylink_validate+0x18</code> PrefetchAbort, kernel jumps to 0 on
+link-up.</td>
+</tr>
+</tbody>
+</table>
+<p>So iDRAC9's warm restore comes back <strong>network-dead</strong>:
+the snapshot is captured on <code>usb-net</code> (the only cold- working
+NIC), and <code>usb-net</code> is exactly the one that doesn't
+re-enumerate on resume. The on-chip NICs that <em>would</em> migrate
+cleanly (like iDRAC10's gmac does) either panic on traffic (EMC) or
+crash on link-up (GMAC). The snapshot gives you the box for
+console/inspection; external IPMI/ssh need a (flaky) cold boot. Awkward
+middle child.</p>
+<h3
+id="tested-and-ruled-out-was-it-a-qemu-regression-try-qemu-910">Tested
+and ruled out: "was it a qemu regression? try qemu 9/10"</h3>
+<p>A reasonable hunch — maybe an older qemu modelled the NPCM NICs
+differently and one of them survived migration. <strong>It isn't a
+version regression.</strong> I have qemu <code>9.1.1</code>,
+<code>10.0.2</code>, <code>10.0.3</code>, and <code>11.0.0</code> side
+by side; <code>-M npcm750-evb</code> attaches the <strong>same four
+on-chip NICs on every one</strong> (2× <code>npcm7xx-emc</code> + 2×
+<code>npcm-gmac</code>), and the EMC
+<code>spinlock bad magic → PC 0x0</code> panic reproduces regardless of
+qemu version. The <code>usb-net</code> <code>.unmigratable=1</code> flag
+has been a standing property across releases, not something that
+regressed. Downgrading qemu changes nothing — 10.0.3 and 11.0.0 present
+iDRAC9 identical hardware and the guest reacts identically. <strong>The
+wall is guest-side</strong> (kernel driver + DTB + an initramfs
+hardwired to the USB-CDC iface), so the real fix lives there, not in the
+qemu version: make an on-chip NIC pass traffic without panicking, then
+capture the snapshot on <em>that</em> NIC. Same effort on any qemu.</p>
+<h2 id="why-ipmitool-fails-and-only-zipmi--k-works">Why
+<code>ipmitool</code> fails and only <code>zipmi -K</code> works</h2>
+<p>RMCP+ (IPMI 2.0) logs in via <strong>RAKP</strong>: the client proves
+it knows the user's key by HMAC'ing the handshake. Normally that key
+<strong>is the password</strong> (ASCII, null-padded to 20 bytes) —
+<code>ipmitool -P calvin</code> HMACs with <code>"calvin\0…"</code>.</p>
+<p>But an iDRAC user's stored credential isn't a hashed password — it's
+a <strong>raw 20-byte binary <code>IPMIKey</code></strong> (the
+fleet-shared factory key, e.g. <code>915F32…</code>). The BMC HMACs the
+RAKP messages with <strong>those 20 bytes</strong>.</p>
+<p>So <code>ipmitool -P calvin</code> HMACs with the wrong key → RAKP2
+integrity check fails → <em>"Unable to establish session."</em>
+<code>calvin</code> is the <strong>web/racadm</strong> password; it has
+nothing to do with IPMI. <code>zipmi -K 915f32…</code> supplies the
+<strong>raw hex key</strong> directly as the RAKP HMAC key → it matches
+→ session up. ipmitool has no flag to substitute a raw binary user key
+for the password (its <code>-k</code> is the <em>Kg</em> "BMC key", a
+different RMCP+ parameter). Hence a tool like <code>zipmi</code> is
+required.</p>
+<p><strong>The finding:</strong> iDRAC ships <strong>one fleet-shared
+20-byte IPMIKey per generation</strong>, extractable from the public
+DUP, identical on every factory/reset unit — so whoever has it
+authenticates as root over IPMI to any of them, no password. iDRAC9 and
+iDRAC10 share the same (unrotated) key.</p>
+<h2 id="racadm">racadm</h2>
+<p>Dell's native CLI — a <strong>different protocol</strong> than IPMI,
+and it uses the <strong>web password (<code>calvin</code>)</strong>, not
+the IPMIKey.
+<code>racadm -r &lt;ip&gt; -u root -p calvin getsysinfo</code> (remote),
+or <code>racadm getsysinfo</code> (local, inside the guest — the iDRAC
+ships it). Status in this repo: the binary <em>runs</em> in-guest, but
+the IPMI-focused snapshot returns <code>RAC1135</code> (its
+data-services "instrumentation" isn't fully up). A full-mesh (P3/P5)
+snapshot, or the remote/docker path against one, is needed to actually
+exercise it — <strong>open item</strong>.</p>
+<h2 id="the-open-improvement-build-from-dup">The open improvement:
+build-from-DUP</h2>
+<p>Shipping warm snapshots is v1 pragmatism, and it's fragile — a
+snapshot restores <strong>only on the exact QEMU it was captured
+with</strong> (change the build → "Missing section footer" on restore).
+The real prize is a <code>build.sh</code> that goes DUP → boot artifacts
+→ <em>reliable</em> boot, without a snapshot:</p>
+<ul>
+<li>Beat the <strong>dbus-broker lottery</strong> deterministically
+(find the racing socket-activation unit and order it, or mask it and
+hand-start the target).</li>
+<li>Reproduce the <strong>4 kernel patches</strong> from the DUP's
+kernel (they're mechanical byte-patches).</li>
+<li>Seed the <strong>RAKP DB</strong> at build time instead of
+interposing at runtime.</li>
+</ul>
+<p>If you make any iDRAC boot reliably from firmware, that box graduates
+from <code>snap</code> to a true from-source turnkey. The recipes and
+findings under <code>boxes/idrac9/</code> and
+<code>boxes/idrac10/</code> (plus <a
+href="zoo-lessons.html">zoo-lessons.md</a>) are the map. Someone more
+skilled than this first pass can absolutely make them better — that's
+the point of writing the wall down.</p>
+</div>
+</body>
+</html>

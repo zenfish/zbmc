@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vanilla evb-ast2600 OpenBMC — historical build record</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Vanilla evb-ast2600 OpenBMC — historical build record</h1>
+  </div>
+</div>
+
+<blockquote>
+<p>This records the earlier local BitBake source build. The current
+turnkey downloader pins a different derived image; consult
+<code>firmware/download-fw.sh</code> for its current SHA-256 and source
+URL.</p>
+</blockquote>
+<ul>
+<li><strong>Image:</strong> evb-ast2600.static.mtd (64 MiB, sha256
+ab6b4c6317f6cd08f15cae8e8663ae06f0429671f9c69d9220898357c998ac35)</li>
+<li><strong>Source:</strong> github.com/openbmc/openbmc @
+5d179dab3c66c8b89e059eeb17b038a2beb435d3
+(3.1.0-dev-294-g5d179dab3c)</li>
+<li><strong>Target:</strong> MACHINE=evb-ast2600, image =
+obmc-phosphor-image (full feature set)</li>
+<li><strong>Built on:</strong> dell 192.168.0.21 (~/openbmc/build-evb),
+8-core/15G, ~Jul 17-18 2026</li>
+<li><strong>Boot:</strong> qemu-system-arm -M ast2600-evb -m 1G
+-nographic -drive file=evb-ast2600.static.mtd,format=raw,if=mtd -nic
+user,hostfwd=... (see boot-test.sh)</li>
+<li><strong>Verified live:</strong> SSH root/0penBmc; Redfish
+ServiceRoot; IPMI-LAN mc info (Mfr 0 = vanilla, FW 3.01)</li>
+<li><strong>Caps:</strong> ssh + redfish + ipmi-remote + ipmi-local all
+green. Manufacturer 0 (no OEM) = clean baseline.</li>
+</ul>
+<h2
+id="build-gotchas-hit-all-self-inflicted-via-kill-to-retune-see-feedback_dont_churn_running_builds">Build
+gotchas hit (all self-inflicted via kill-to-retune; see
+feedback_dont_churn_running_builds)</h2>
+<ul>
+<li>4-thread llvm-native link OOM on 15G RAM -&gt;
+PARALLEL_MAKE:pn-llvm-native="-j 3"</li>
+<li>orphan-kill left stale pkgdata-sysroot -&gt; sqlite3 do_package
+FileExistsError (nuke stale dirs)</li>
+<li>kill mid gawk do_install -&gt; stale image/ -&gt; rm awk fails / 134
+abort (bitbake -c cleansstate gawk)</li>
+<li>SPDX/SBOM final stage is SLOW (~6h at 99%, task 5990/6026) but
+completes — NOT a hang.</li>
+<li>fresh-clone on another host: <code>umask 022</code> required or OE
+sanity checker aborts pre-build.</li>
+</ul>
+<h2 id="localconf-tuning">local.conf tuning</h2>
+<p>BB_NUMBER_THREADS="4"; PARALLEL_MAKE="-j 6";
+PARALLEL_MAKE:pn-llvm-native="-j 3"; pn-nodejs-native="-j 3"
+ERROR_QA:remove="host-user-contaminated" (only if build user is gid
+0)</p>
+</div>
+</body>
+</html>

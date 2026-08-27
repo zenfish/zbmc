@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtualize AMI MegaRAC firmware</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Virtualize AMI MegaRAC firmware</h1>
+  </div>
+</div>
+
+<p>For current boxes, use the packaged x86_64 Linux runtime and
+descriptor:</p>
+<pre class="bash"><code>./build.sh advantech-asmb787   # or: megarac-hpe
+sudo ./tools/zbmc advantech-asmb787 start
+./tools/zbmc advantech-asmb787 status -v
+./tools/zbmc advantech-asmb787 console</code></pre>
+<p>Do not launch an arbitrary <code>qemu-system-arm</code>. The
+descriptors pin and validate the exact executable, version, SHA-256,
+machine, and QMP startup. Do not expose a patched MegaRAC guest outside
+an isolated lab.</p>
+<h2 id="classify-the-input-first">Classify the input first</h2>
+<ul>
+<li>Linear <code>.ima</code>, <code>.ima_enc</code>, <code>.img</code>,
+or raw <code>.bin</code>: use <code>tools/unpack-ami</code>. An
+<code>encrypted</code> filename is often a production-label misnomer;
+distinguish compression from encryption by structure and magic, not
+entropy alone.</li>
+<li>PICMG HPM.1 <code>.hpm</code>: it is a wrapper, not a linear NOR
+image. Follow <code>boxes/megarac-hpe/build-from-hpm.sh</code> to carve
+verified regions and reconstruct flash. Never truncate or attach the HPM
+itself as NOR.</li>
+<li>Scan for FMH <code>$MODULE$</code>, SquashFS <code>hsqs</code>,
+JFFS2 <code>85 19</code>, and FIT/DTB <code>d0 0d fe ed</code>.
+<code>binwalk found nothing</code> is not evidence that the filesystems
+are absent.</li>
+</ul>
+<p><code>tools/unpack-ami</code> writes <code>fw-blobs/</code>,
+extracted trees under <code>fw-filesystems/</code>, JFFS2 output under
+<code>fw-jffs2/</code>, FIT material under <code>fw-fit/</code>, and
+<code>MANIFEST.txt</code>. Install Jefferson with <code>pipx</code>, not
+a system <code>pip</code>, on PEP 668 Debian hosts.</p>
+<h2 id="reconstruct-the-minimum-environment">Reconstruct the minimum
+environment</h2>
+<ol type="1">
+<li>Extract the kernel and DTB from a FIT with <code>dumpimage</code>;
+QEMU <code>-kernel</code> cannot unpack the FIT.</li>
+<li>Determine partition numbering from the image's own mount
+configuration. MegaRAC often mounts by <code>mtdblockN</code>, so names
+alone are insufficient.</li>
+<li>Seed <code>/conf</code> only after its backing filesystem is mounted
+and before its first consumer. Create the exact
+<code>/conf/BMC -&gt; BMC1/&lt;platform&gt;</code> target required by
+that firmware.</li>
+<li>Disable only hardware interfaces proven absent from the emulated
+machine. Advantech and HPE require different KCS/interface masks; there
+is no universal <code>IPMI.conf</code> edit.</li>
+<li>Repack from a clean output with
+<code>mksquashfs ... -noappend</code>. Keep the original filesystem
+immutable.</li>
+<li>Copy the canonical flash to a per-run image before launch. MegaRAC
+writes <code>/conf</code>; attaching the baseline writable destroys
+reproducibility.</li>
+</ol>
+<p>The retained vendor component versus substitute distinction is
+mandatory. <code>/conf</code> seeding, interface masking, and
+board-state reconstruction can preserve the vendor IPMIMain path. HPE's
+direct root console, SMASH replacement, blank-password Dropbear, and
+unauthenticated telnet are injected operator-access substitutions; they
+do not prove vendor SSH, SMASH, or authentication behavior.</p>
+<h2 id="network-and-acceptance">Network and acceptance</h2>
+<p>QEMU's current AST2600 FTGMAC handles NC-SI internally and does not
+forward NC-SI frames to the netdev. An external responder cannot repair
+this path. Diagnose kernel link negotiation separately from service
+startup, protocol reachability, authentication, and functional
+behavior.</p>
+<p>Current measured boundaries:</p>
+<ul>
+<li>Advantech ASMB-787: retained serial login only; 9m38s on the
+reference host. Vendor userland starts, but external
+SSH/IPMI/Redfish/Web-UI are not accepted because the old guest rejects
+QEMU's NC-SI response.</li>
+<li>HPE XD670 MegaRAC: retained vendor IPMI is the accepted service;
+Redfish/Web-UI are unavailable and vendor SSH is absent. The 2026-08-27
+cold run reached READY in 8m07s after three automatic rerolls, so its
+startup time remains nondeterministic.</li>
+</ul>
+<p>Console access proves local operator access, not external management
+functionality. Accept a service only through its declared functional
+probe and preserve the run evidence and console log.</p>
+<p>Read <a href="../../docs/from-firmware-to-bare-metal.html">From
+Firmware Blob to Bare Metal</a> for the Advantech field report and <a
+href="../../docs/why-bmc-virtualization-is-hard.html">Why Virtualizing
+BMC Firmware Was Hard</a> for the evidence taxonomy and current fleet
+limits.</p>
+</div>
+</body>
+</html>

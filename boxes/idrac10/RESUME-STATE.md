@@ -1,8 +1,8 @@
 # Virtual iDRAC10 — STATE & RESUME NOTES
 
 > **Historical investigation record (2026-06-29).** Phase status below is not current. The supported
-> package now cold-boots with SSH, hybrid IPMI, and a static Redfish ServiceRoot; it has no vendor Web-UI.
-> Use the repository README and `./tools/zbmc idrac10 status -v` for current behavior.
+> package now cold-boots to accepted ICMP, SSH, retained IPMI, and a static Redfish ServiceRoot in 7m37s
+> on the reference host; it has no vendor Web-UI. Use the README and `./tools/zbmc idrac10 status -v`.
 
 **Updated:** 2026-06-29. Read this first.
 

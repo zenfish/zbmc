@@ -80,14 +80,14 @@
         <table class="w-full min-w-[720px] border-collapse text-left text-sm">
           <thead><tr class="border-b-2 border-zinc-400"><th class="py-2 pr-3">Box</th><th class="py-2 pr-3">Accepted</th><th class="py-2 pr-3">Reference cold time</th><th class="py-2">Boundary</th></tr></thead>
           <tbody class="divide-y divide-zinc-300">
-            <tr><td class="py-3 font-mono">openbmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>5m01s</td><td>Clean control</td></tr>
-            <tr><td class="py-3 font-mono">nvidia-obmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>4m50s</td><td>OpenBMC with firmware MAC adaptation</td></tr>
+            <tr><td class="py-3 font-mono">openbmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>4m32s</td><td>Clean control</td></tr>
+            <tr><td class="py-3 font-mono">nvidia-obmc</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>5m21s</td><td>OpenBMC with firmware MAC adaptation</td></tr>
             <tr><td class="py-3 font-mono">supermicro-x10</td><td>SSH, IPMI, Redfish, Web-UI</td><td>2m38s user-net</td><td>Research license interposition</td></tr>
-            <tr><td class="py-3 font-mono">supermicro-x14</td><td>ICMP, SSH, IPMI, Web-UI</td><td>4m20s</td><td>Scripted service environment</td></tr>
-            <tr><td class="py-3 font-mono">idrac9</td><td>ICMP, SSH, IPMI</td><td>12m48s</td><td>Cold-only P4 boot</td></tr>
-            <tr><td class="py-3 font-mono">idrac10</td><td>ICMP, SSH, hybrid IPMI, static Redfish</td><td>about 6m15s</td><td>Partial; static HTTP substitute</td></tr>
-            <tr><td class="py-3 font-mono">megarac-hpe</td><td>IPMI</td><td>load-sensitive</td><td>Partial; injected network shells disabled</td></tr>
-            <tr><td class="py-3 font-mono">advantech-asmb787</td><td>Serial console</td><td>11m50s</td><td>External NC-SI path unmodeled</td></tr>
+            <tr><td class="py-3 font-mono">supermicro-x14</td><td>ICMP, SSH, IPMI, Redfish, Web-UI</td><td>3m31s</td><td>Scripted service environment</td></tr>
+            <tr><td class="py-3 font-mono">idrac9</td><td>ICMP, SSH, IPMI, vendor Web-UI</td><td>10m31s</td><td>Cold-only P4 boot; Redfish unavailable</td></tr>
+            <tr><td class="py-3 font-mono">idrac10</td><td>ICMP, SSH, retained IPMI, static Redfish</td><td>7m37s</td><td>No vendor Web-UI; static HTTP substitute</td></tr>
+            <tr><td class="py-3 font-mono">megarac-hpe</td><td>ICMP, retained IPMI</td><td>8m07s after three rerolls</td><td>Nondeterministic cold boot; injected network shells disabled</td></tr>
+            <tr><td class="py-3 font-mono">advantech-asmb787</td><td>Serial console</td><td>9m38s</td><td>External NC-SI path unmodeled</td></tr>
           </tbody>
         </table>
       </div>

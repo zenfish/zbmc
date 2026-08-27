@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC9 fullfw RAKP2/RAKP4 HMAC key — RE result (cipher suite 17, RAKP-HMAC-SHA256)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC9 fullfw RAKP2/RAKP4 HMAC key — RE result (cipher suite 17, RAKP-HMAC-SHA256)</h1>
+  </div>
+</div>
+
+<p>Rootfs: /Users/zen/phd/bmc/idrac9-firmware/extracted/rootfs All
+addresses = libsess.so.9.9.9 (ARMv7) unless noted. Disasm saved
+alongside: libsess_objdump_full.asm, libipmicrypto.asm,
+libdccfg_full.asm, libfnprv_full.asm, libosi_full.asm</p>
+<h2 id="the-key-derivation-chain-binary-proven">The key-derivation chain
+(binary-proven)</h2>
+<p>RAKP1 handler RSSPOnSMWaitRAKP1StateRecvRAKP1 @0x447b6054 -&gt; fills
+the 20-byte HMAC-key buffer at ctrl+19 (ctrl = session-&gt;[8]): 1.
+UserInfoGetUserPWD(chan, idx, dest=ctrl+19, len=20) @call 0x447b6320 def
+@0x447ae198 — copies PLAINTEXT password from in-memory user table record
+(61 bytes/user, password at record+17, strnlen&lt;=20). Empty pw -&gt;
+dest[0]=0. 2. if dest[0]==0 -&gt; UserInfoGetUserHashPWD(chan, name,
+len=20, dest=ctrl+19) @call 0x447b634c def @0x447ae2a0 — calls
+osi_getUserSHA256() (libosi @0x441310ac -&gt; AIM DDS
+"osi_function_getuser_sha256pwd"), gets a 64-hex ASCII string in the
+returned struct (off +0x480), HEX-DECODES it, memcpy FIRST 20 BYTES to
+dest. 3. if dest[0]!=0 -&gt; RSSPReplyRAKP2Msg (88-byte reply). else
+completion 0x0a. (completion 0x0d earlier = user not found, now
+cleared.)</p>
+<p>RAKP2 authcode RSSPReplyRAKP2Msg @0x447b5d64 -&gt;
+RSSPGetRAKPAuthCode @0x447b5280 case msg=1/3: @0x447b537c-94 mov ip,#20
+; &lt;-- KEY LENGTH HARDCODED = 20 add r3,ctrl,#19 ; KEY PTR = ctrl+19
+-&gt; RSSPGetKeyExchangeCode(algo, msg, msglen, key=ctrl+19, keylen=20,
+out) @0x447b51b4 algo 3 (RAKP-HMAC-SHA256, suite 17) -&gt; hmac_SHA256
+@libipmicrypto 0x449c289c hmac_SHA256(data, datalen, key, keylen, out):
+@0x449c2908 __memcpy_chk(k_ipad, key, keylen, 64) -&gt; uses EXACTLY
+keylen(=20) bytes, zero-padded to the 64-byte HMAC block.</p>
+<h2 id="answers">ANSWERS</h2>
+<ol type="1">
+<li>HMAC key = the per-user key buffer ctrl+19 = hex-decode of the
+64-hex value returned by osi_getUserSHA256. For a user with EMPTY
+plaintext Password (our case) this is the IPMIKey-class value (the only
+non-empty 64-hex secret; an empty SHA256Password would give completion
+0x0a, not the observed 88-byte reply).</li>
+<li>ENCODING: the 64-hex ASCII is HEX-DECODED to raw bytes, then
+TRUNCATED TO 20 BYTES (keylen hardcoded 20). NOT the 64 ASCII chars, NOT
+the full 32 raw bytes.</li>
+<li>osi_function_getuser_sha256pwd returns the user's SHA256/IPMIKey
+hash (64 hex). Handler is AIM-runtime-registered (not a static table;
+the libdccfg SHA256Password reader at 0x40e50 is scp_sshkey.c's pubkey
+setter, a red herring). Empty -&gt; hash buffer stays empty -&gt; RAKP1
+emits 0x0a. With our user it returns IPMIKey 915F32...8964.</li>
+<li>KEY fullfw uses = first 20 bytes of hex-decoded IPMIKey:
+915f32f49a97456d0d6d66eee5ed84c894b414af (20 bytes / 40 hex) -&gt; pass
+zipmi -K 915f32f49a97456d0d6d66eee5ed84c894b414af This explains all 3
+prior misses: 32 raw bytes (wrong len), 64 ASCII (wrong len),
+empty.</li>
+<li>RAKP2 msg order built by RSSPGetRAKPAuthCode case 1 matches the IPMI
+2.0 standard (SIDm||SIDc||Rm||Rc||GUIDc||ROLEm||ULENm||UNAMEm); no Dell
+deviation. Failure was the key only. RAKP4 ICV (case 3) uses the SAME
+20-byte key.</li>
+</ol>
+</div>
+</body>
+</html>

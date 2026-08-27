@@ -6,7 +6,7 @@ description: Use when adapting authorized BMC firmware to zbmc/QEMU or diagnosin
 # Virtualize BMC firmware with zbmc
 
 Use the repository contract, not a hand-written QEMU command, for registered boxes. Current runtime
-authority is `README.md`, `tools/zbmc`, the selected `boxes/<name>/zbmc.box`, and tests. The v1 package
+authority is `README.md`, `tools/zbmc`, the selected `boxes/<name>/zbmc.box`, and tests. The 0.1.1 package
 supports x86_64 Linux only.
 
 ```bash
@@ -74,8 +74,8 @@ Choose the least invasive boot path that works:
   declared password plus cipher 17.
 
 Warm migration is box-specific. Use only the descriptor's snapshot/restore behavior with its pinned
-QEMU and matched storage. iDRAC10 warm start is explicit (`start --warm`); iDRAC9 must cold-boot; X14
-and MegaRAC-HPE use their own matched procedures. Re-run every declared functional probe after restore.
+QEMU and matched storage. iDRAC9 and iDRAC10 are cold-only; X14 and MegaRAC-HPE opt into their matched
+snapshots with `start --warm`. Re-run every declared functional probe after restore.
 
 ## Add or change a box
 

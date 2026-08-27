@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>MegaRAC HPE Emulation Status</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -10,12 +15,14 @@
   table code { font-size: 0.8em; background: #f1f5f9; padding: 0.1em 0.3em; border-radius: 3px; }
   .sect-border { border-left: 3px solid #3b82f6; padding-left: 1rem; }
 </style>
+</head>
+<body>
 
 <div class="max-w-3xl mx-auto px-6 py-10 text-slate-800 leading-relaxed">
 
 <aside class="mb-8 border-l-4 border-amber-600 bg-amber-50 p-4 text-sm text-amber-950">
   <strong>Historical status snapshot (2026-08-21).</strong> It records one investigation state, not the
-  current release contract. Current acceptance is retained IPMI only; consult the repository README,
+  current release contract. Current acceptance is ICMP plus retained IPMI; consult the repository README,
   SECURITY.md, and <code>zbmc megarac-hpe status -v</code>.
 </aside>
 
@@ -137,6 +144,8 @@
 └─────────────────────────────────────────────────────────────────┘
 </pre>
 </div>
+</body>
+</html>
 
 <!-- ============================================== -->
 <h2 class="text-lg font-semibold text-slate-900 mb-3">What Works in Detail</h2>
@@ -392,3 +401,5 @@ zbmc megarac-hpe shell
 </footer>
 
 </div>
+</body>
+</html>
