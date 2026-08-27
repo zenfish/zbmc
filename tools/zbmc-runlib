@@ -458,6 +458,7 @@ _zr_wait_ready(){
   local _zr_highest=QEMU _zr_last_probe=0 _zr_last_heartbeat=0 _zr_now_epoch _zr_elapsed_s
   local _zr_console=0 _zr_guest=0 _zr_l2=0 _zr_ssh=0 _zr_ipmi=0 _zr_redfish=0 _zr_webui=0 _zr_console_service=0 _zr_ncsi=0
   local _zr_stability="${ZBMC_STABILITY_SECONDS:-0}" _zr_stable_since=0 _zr_stable_elapsed=0
+  local _zr_restart_grace="${ZBMC_QEMU_RESTART_GRACE:-0}"
   local _zr_required=" ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " _zr_tmp="$ZBMC_RUN_DIR/probes" _zr_console_log
   mkdir -p "$_zr_tmp"
   if [ -r "/proc/$_zr_pid/cmdline" ]; then
@@ -471,6 +472,19 @@ _zr_wait_ready(){
     _zr_console_log="${ZBMC_CONSOLE_LOG:-}"
     [ -f "$_zr_console_log" ] || _zr_console_log="${CONSOLE_LOG:-}"
     if ! ps -p "$_zr_pid" >/dev/null 2>&1; then
+      local _zr_old_pid="$_zr_pid" _zr_replacement= _zr_waited=0
+      while [ "$_zr_waited" -lt "$_zr_restart_grace" ]; do
+        sleep 1; _zr_waited=$((_zr_waited + 1))
+        _zr_replacement=$(running 2>/dev/null || true)
+        [[ "$_zr_replacement" =~ ^[0-9]+$ ]] && ps -p "$_zr_replacement" >/dev/null 2>&1 && break
+        _zr_replacement=
+      done
+      if [ -n "$_zr_replacement" ]; then
+        _zr_pid="$_zr_replacement"
+        printf '%s\n' "$_zr_pid" >"$PIDF"
+        _zr_event QEMU rerolled "launcher replaced pid $_zr_old_pid with $_zr_pid"
+        continue
+      fi
       _zr_archive_logs; _zr_qmp_snapshot; _zr_snapshot failure; _zr_capture_stop
       if [ -f "$ZBMC_RUN_DIR/stop-requested" ]; then
         _zr_event STOPPED stopped "operator requested shutdown"
