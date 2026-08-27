@@ -15,6 +15,7 @@ grep -Fq 'timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_t
 grep -Fq 'timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd"' "$repo/tools/zbmc"
 grep -Fxq 'ZBMC_SSH_PROBE_TIMEOUT=18' "$box"
 grep -Fxq 'ZBMC_HTTP_PROBE_TIMEOUT=18' "$box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="ssh ipmi webui"' "$box"
 grep -Fq 'ConnectTimeout=15' "$box"
 grep -Fq 'X14_BOOT_TOKEN=qemu-x14-svc' "$box"
 grep -Fq 'BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"' "$repo/boxes/supermicro-x14/shell-x14.sh"

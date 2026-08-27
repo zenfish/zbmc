@@ -6,24 +6,19 @@
 #       firmware's /etc/dupfstab. Console on ttyS4.
 # WHY:  first Advantech box in the zoo; sibling of the HPE Cray XD670 (same AMI SP-X / ast2600evb_ami
 #       platform). Unpacked from encrypted_ASMB-787_20220912.ima_enc ("encrypted" is a misnomer — it
-#       is plain XZ-SquashFS; see ~/phd/bin/unpack-ami).
+#       is plain XZ-SquashFS; see tools/unpack-ami).
 #
-# STATUS (2026-08-14): CONSOLE-GREEN. Full MegaRAC userland boots (IPMIMain stable, redis, lighttpd,
-#   Redfish, event/task services). Root console login works. The cray IPMIMain fixes ported clean
-#   (qemu-patch-rootfs.sh: /conf/BMC symlink + IPMI.conf hw-trim -> no MsgHndlr SIGSEGV/reboot loop).
-#   EXTERNAL NET = WIP: the 5.4.11-ami ftgmac won't enable its qemu TX/RX path without completing the
-#   NC-SI enable sequence (qemu ast2600 slirp has no NC-SI responder; cray's newer 5.4.184 kernel forces
-#   the MAC up regardless, this older one does not). Confirmed: fixed-link brings carrier up but ping to
-#   the slirp gateway = 100% loss / TX errors. Fix pending = a socket-netdev NC-SI responder ("fake NIC").
-#   So Redfish/IPMI over host ports are NOT reachable yet — use the console.
+# ACCEPTANCE (2026-08-26): retained serial login only, measured at 11m50s on the reference host.
+# Full MegaRAC userland starts, but the 5.4.11-ami guest rejects QEMU's internal NC-SI response, so
+# external SSH, IPMI, Redfish, and Web-UI are not reachable. QEMU consumes NC-SI before the netdev;
+# an external responder cannot repair this path. Use the console.
 #
 # ACCESS:
 #   Console : zbmc asmb787 console            (serial ttyS4; login sysadmin / superuser -> uid 0 root)
 #             zbmc asmb787 console '<cmd>'    (run one command over the console fifo)
-#   Redfish : WIP (needs NC-SI fix)           https://asmb787bmc/redfish/v1/  (admin/superuser)
-#   IPMI    : WIP (needs NC-SI fix)           zipmi -H asmb787bmc -U admin -P superuser mc info
+#   Network : not accepted; requires a guest-kernel or emulator compatibility fix
 ZBMC_NAME=advantech-asmb787
-ZBMC_DESC="Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP (NC-SI responder)"
+ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - console-only; external networking blocked by NC-SI compatibility"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
@@ -32,7 +27,7 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR"
 # Address comes from zbmc.conf; expose the BMC's native service ports on that address.
 ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
-ZBMC_HINT='zbmc asmb787 console   (login sysadmin/superuser; ext Redfish/IPMI WIP — NC-SI responder)'
+ZBMC_HINT='zbmc advantech-asmb787 console   (login sysadmin/superuser; external networking not accepted)'
 IPMI_USER=admin
 IPMI_PW=superuser
 IPMI_KEY=00
@@ -57,7 +52,7 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
 LOG="$CONSOLE_LOG"
 SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 
-# boot: build artifacts if missing, then background the service boot (real init). ~2 min to login.
+# Boot artifacts if missing, then background the real init path. Reference login time: about 12 minutes.
 zbmc_boot() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
   _zbmc_lo_alias "$ZBMC_IP"

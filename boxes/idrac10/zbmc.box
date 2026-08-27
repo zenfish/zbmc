@@ -2,7 +2,7 @@
 # Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). Root-direct model: qemu runs as root and binds
 # the box's real IP + standard IPMI port (10.0.9.10:623) directly — no socat/high-port hop.
 ZBMC_NAME=idrac10
-ZBMC_DESC="Dell iDRAC10 (NPCM845/aarch64) — Phase-5 RMCP+/RAKP (encrypted) via shm-shim interposes"
+ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; no vendor Web-UI"
 # Portable (clone-and-run): scripts+payloads ship in THIS box dir; boot/img artifacts + the warm
 # ckpt live in work/idrac10 (symlinked here for dogfood; a clone fetches/rebuilds them). Build deps:
 # zig (shm-shim), expect, socat, python.

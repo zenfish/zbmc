@@ -8,6 +8,8 @@ grep -Fxq 'ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
 grep -Fxq 'ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"' "$box/zbmc.box"
+grep -Fq 'partial: IPMI works; Redfish/Web-UI unstable; SSH absent' "$box/zbmc.box"
+grep -Fq 'Never expose this guest outside an isolated lab' "$box/zbmc.box"
 for script in boot.sh boot-megarac-hpe.sh boot-megarac-hpe-svc.sh restore-megarac-hpe.sh; do
   grep -Fq 'QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"' "$box/$script"
 done

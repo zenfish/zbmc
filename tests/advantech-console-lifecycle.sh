@@ -18,6 +18,7 @@ grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$repo/boxes/advantech-asmb787/zbmc.bo
 grep -Fxq 'ZBMC_REQUIRED_SERVICES=console' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fxq 'ZBMC_L2_REQUIRED=0' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fxq 'ZBMC_DEFAULT_NO_WEB=1' "$repo/boxes/advantech-asmb787/zbmc.box"
+! grep -q 'NC-SI responder' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fq "[ -p \"\$SOCK\" ] && printf '\\n' > \"\$SOCK\"" "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fq 'QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"' "$repo/boxes/advantech-asmb787/boot.sh"
 echo "Advantech console lifecycle: PASS"

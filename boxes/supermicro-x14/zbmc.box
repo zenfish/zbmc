@@ -18,7 +18,7 @@
 # Sourced by the `zbmc` dispatcher (~/phd/bin/zbmc). Root-direct model: qemu runs as root and binds
 # the box's real IP + standard ports directly. The wrapped scripts live in the X14 scratch workdir.
 ZBMC_NAME=supermicro-x14
-ZBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — password auth (ADMIN:ADMIN); warm-restore snapshot"
+ZBMC_DESC="Supermicro X14 OpenBMC/AST2600 - cold boot; SSH, IPMI, and Web-UI accepted"
 
 # Scripts + snapshots live in the X14 scratch workdir (restore/snapshot/shell scripts cd there).
 # Portable (clone-and-run): scripts ship in THIS box dir; snapshot + boot artifacts in work/.
@@ -30,6 +30,7 @@ ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_REQUIRED_SERVICES="ssh ipmi webui"
 
 # Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
 ZBMC_IP=$(_zbmc_resolve_ip supermicro-x14 21 10.0.8.14)
