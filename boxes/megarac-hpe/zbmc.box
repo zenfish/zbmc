@@ -55,6 +55,7 @@ ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_QEMU_RESTART_GRACE=15
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 
 # IPMI/Redfish auth = the MegaRAC default IPMI user 'admin'/'superuser' (auto-provisioned by IPMIMain
 # into /conf/BMC1/UserConfig.ini once it runs; verified: RMCP+ mc info + user2=ADMINISTRATOR). NOTE the
