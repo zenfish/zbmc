@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
 OUT="${1:-svc-snap.gz}"
-QMP=/tmp/x14-qmp.sock
+QMP=qmp.sock
 sudo -n chmod 666 "$QMP" 2>/dev/null || true
 python3 - "$OUT" "$QMP" <<'PY'
 import socket,json,time,os,sys

@@ -8,14 +8,14 @@
 # Unlike the warm restore (network-DEAD post -incoming), a live green cold boot has a
 # working guest network -> external ipmitool + curl work. So we brute-force catch one.
 #
-# Console -> /tmp/x14-boot.log (root-owned; read via sudo) for wedge detection.
+# Console -> boot.log (root-owned; read via sudo) for wedge detection.
 # On green: exits 0 with qemu still running. Test:
 #   curl -sk https://10.0.8.14/redfish/v1/ ; ipmitool -I lanplus -H 10.0.8.14 -U ADMIN -P ADMIN mc info
 #
 set -uo pipefail
 cd "$(dirname "$0")"
 IP="${ZBMC_IP:-10.0.8.14}"; QEMU="${QEMU:-$(command -v qemu-system-arm || echo /opt/homebrew/bin/qemu-system-arm)}"; MAX=${1:-8}
-CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-/tmp/x14-boot.log}"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-boot.log}"
 case "$(uname -s)" in Darwin) ifconfig lo0 | grep -q "$IP" || sudo ifconfig lo0 alias "$IP";; *) ip addr show dev lo | grep -q "$IP" || sudo ip addr add "$IP/32" dev lo;; esac
 MASKS="systemd.mask=bmc-shared-lan-discovery.service systemd.mask=com.Supermicro.CPLDInit.service \
 systemd.mask=fan-boot-control.service systemd.mask=obmc-flash-bmc-setenv@.service \
@@ -25,13 +25,13 @@ systemd.mask=systemd-networkd-wait-online.service systemd.mask=com.Supermicro.Le
 for try in $(seq 1 "$MAX"); do
   echo "=== attempt $try/$MAX ==="
   sudo -n pkill -9 -f "ast2600-evb" 2>/dev/null; sleep 2
-  sudo -n rm -f /tmp/x14-boot.log /tmp/x14-qmp.sock
   if [ "$try" -gt 1 ] && sudo -n test -f "$CONSOLE_LOG"; then
     sudo -n cp -f "$CONSOLE_LOG" "$(dirname "$CONSOLE_LOG")/console-attempt-$((try-1)).log"
   fi
+  sudo -n rm -f "$CONSOLE_LOG" qmp.sock
   sudo -n "$QEMU" -m 1024 -M ast2600-evb -display none -no-reboot \
     -serial "file:$CONSOLE_LOG" \
-    -qmp unix:/tmp/x14-qmp.sock,server,nowait \
+    -qmp unix:qmp.sock,server,nowait \
     -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
     -drive file=x14-ce0-64m.img,format=raw,if=mtd \
     -drive file=emmc.img,format=raw,if=sd,index=2 \

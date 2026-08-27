@@ -25,8 +25,10 @@ ZBMC_DESC="Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT, armv7l) — passwor
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/supermicro-x14}"
 SNAP=svc-snap-shell.gz   # canonical warm snapshot: IPMI + Redfish + interactive SSH shell
-ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm
+ZBMC_QEMU=/home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-ftgmac-dynamic-48da50c30ab4/bin/qemu-system-arm
+ZBMC_QEMU_SHA256=ed299dae28d00252854335939380a1d9410f284fc3b918833fc783e5e6ca682c
 ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
 
 # Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
@@ -47,14 +49,14 @@ SSH_PW=ADMIN
 ZBMC_SSH_PROBE_TIMEOUT=18
 ZBMC_HTTP_PROBE_TIMEOUT=18
 
-SSH_PORT=$(_zbmc_pick_port 22 2222)
+SSH_PORT=22
 IPMI_PORT=623
-WEB_PORT=$(_zbmc_pick_port 443 8443)
+WEB_PORT=443
 
-PIDF=/tmp/zbmc-supermicro-x14.pid
-LOG=/tmp/x14-restore-console.log     # restore-svc-x14.sh writes qemu console here
-SOCK=/tmp/x14.sock                   # root-owned serial console unix socket
-CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$LOG}"
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/serial.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
 
 # boot: FAST PATH restores the warm snapshot (~10s, network live). Cold-boot fallback starts the
 # scripted service stack, then leaves its root shell on serial. Prints the qemu pid.
@@ -111,7 +113,7 @@ zbmc_ipmi() {
 zbmc_ipmi_health() {
   local r; r=$(zbmc_ipmi channel info 1)
   if echo "$r" | grep -qE 'Channel Medium Type|Medium type[[:space:]]*:'; then
-    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN — mc info=0xff quirk)"; return 0
+    echo "AUTH OK (zipmi RMCP+; mc info=0xff quirk)"; return 0
   else
     echo "no answer (restore warming/down)"; return 1
   fi
