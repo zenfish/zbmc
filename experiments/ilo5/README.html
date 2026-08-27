@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=74e9f3d059ad084f53f68fbf0d80cf10ded69ed1297f46aa4a87aebdb6faf21e body-sha256=eabf0e85b858788eb56ede707b0cd9a1322bf5cebf43f34febbe8eb0278171d5 -->
+<!-- zmd2html:auto source-sha256=fb7558eb2a5fce26bbe0b05a115c22aeeb32feeeab24e5d65537f9404a155168 body-sha256=a711bf713b6c7dea9e158f9058e58de86f43f6b0a94ec7767c63c15376512591 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>HPE iLO 5: Renode experiment</title>
@@ -63,6 +63,8 @@ export PATH=&quot;$PWD/work/deps/ilo5-python/bin:$PATH&quot;
 ./tools/unpack-ilo5 /full/path/ilo5_241_linux.rpm
 ./tools/unpack-ilo5 --write /full/path/ilo5_241_linux.rpm work/ilo5-241
 ./experiments/ilo5/run-renode work/ilo5-241/modules</code></pre>
+<p>Debian's <code>python3-pycryptodome</code> package exposes the
+compatible <code>Cryptodome</code> namespace and is also supported.</p>
 <p><code>run-renode</code> requires Renode 1.16.1 from release commit
 <code>d66b0c2a</code>; packaging build numbers may differ by platform.
 Set <code>RENODE=/full/path/to/renode</code> when it is not on

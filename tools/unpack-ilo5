@@ -29,10 +29,14 @@ sha256() {
 
 bad=0
 for tool in git python3; do need "$tool" || bad=1; done
-python3 -c 'from Crypto.Cipher import AES' 2>/dev/null || {
-  echo "missing Python Crypto module (install PyPI pycryptodome in the active Python environment)" >&2
+if python3 -c 'from Crypto.Cipher import AES' 2>/dev/null; then
+  crypto_namespace=Crypto
+elif python3 -c 'from Cryptodome.Cipher import AES' 2>/dev/null; then
+  crypto_namespace=Cryptodome
+else
+  echo "missing Python Crypto/Cryptodome module (install pycryptodome or pycryptodomex)" >&2
   bad=1
-}
+fi
 case "$IN" in
   *.fwpkg) need unzip || bad=1; kind=fwpkg ;;
   *.rpm) command -v bsdtar >/dev/null || { need rpm2cpio && need cpio; } || bad=1; kind=rpm ;;
@@ -40,6 +44,19 @@ case "$IN" in
   *) echo "unsupported input: $IN (need .fwpkg, .rpm, or .bin)" >&2; exit 1 ;;
 esac
 [ "$bad" -eq 0 ] || exit 1
+
+toolbox_python() {
+  if [ "$crypto_namespace" = Crypto ]; then
+    python3 "$@"
+  else
+    python3 -c '
+import runpy, sys, Cryptodome
+sys.modules["Crypto"] = Cryptodome
+script = sys.argv.pop(1)
+runpy.run_path(script, run_name="__main__")
+' "$@"
+  fi
+}
 
 printf 'input:   %s\nsha256:  %s\nformat:  %s\ntoolbox: %s @ %s\n' \
   "$IN" "$(sha256 "$IN")" "$kind" "$TOOLBOX_URL" "$TOOLBOX_COMMIT"
@@ -65,7 +82,7 @@ git -C "$OUT/ilo4_toolbox" checkout --quiet "$TOOLBOX_COMMIT"
 TOOLS="$OUT/ilo4_toolbox/scripts/iLO5"
 
 echo "checking: authenticating and decrypting outer envelope"
-(cd "$TOOLS" && python3 ilo5_fw_decrypt.py --infile "$FW" --outfile "$OUT/ilo5.clear.bin") \
+(cd "$TOOLS" && toolbox_python ilo5_fw_decrypt.py --infile "$FW" --outfile "$OUT/ilo5.clear.bin") \
   > "$OUT/outer-decrypt.log" 2>&1
 [ "$(wc -c < "$OUT/ilo5.clear.bin" 2>/dev/null || echo 0)" -gt 1000000 ] || {
   echo "outer AES-GCM authentication failed; see $OUT/outer-decrypt.log" >&2
@@ -73,7 +90,7 @@ echo "checking: authenticating and decrypting outer envelope"
 }
 
 echo "checking: extracting boot and application modules"
-(cd "$TOOLS" && python3 ilo5_extract.py "$OUT/ilo5.clear.bin" "$OUT/modules") \
+(cd "$TOOLS" && toolbox_python ilo5_extract.py "$OUT/ilo5.clear.bin" "$OUT/modules") \
   > "$OUT/module-extract.log" 2>&1
 for file in bootloader1_main.raw kernel_main.bin elf_secure.raw elf_secure.hdr; do
   [ -s "$OUT/modules/$file" ] || { echo "missing extracted module: $file" >&2; exit 1; }
@@ -87,7 +104,7 @@ PY
 case "$version" in
   2.3?|2.41)
     echo "checking: authenticating and decrypting elf_secure $version"
-    (cd "$TOOLS" && python3 ilo5_image_decrypt.py \
+    (cd "$TOOLS" && toolbox_python ilo5_image_decrypt.py \
       --rawfile "$OUT/modules/elf_secure.raw" \
       --hdrfile "$OUT/modules/elf_secure.hdr" \
       --outfile "$OUT/modules/elf_secure.clear.bin" \

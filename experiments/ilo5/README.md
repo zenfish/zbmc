@@ -16,6 +16,9 @@ export PATH="$PWD/work/deps/ilo5-python/bin:$PATH"
 ./experiments/ilo5/run-renode work/ilo5-241/modules
 ```
 
+Debian's `python3-pycryptodome` package exposes the compatible `Cryptodome`
+namespace and is also supported.
+
 `run-renode` requires Renode 1.16.1 from release commit `d66b0c2a`; packaging build numbers may differ by platform. Set `RENODE=/full/path/to/renode` when it is not on `PATH`. Every run records the generated images, UART, Renode log, execution trace, and summary under `work/ilo5/runs/`.
 
 ## Version boundary
