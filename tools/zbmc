@@ -5,6 +5,7 @@
 #   zbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|shell|build|net
 # Boxes are described by zbmc.box files (register their paths in REGISTRY below).
 set -u
+ZBMC_VERSION=0.1.1
 _invoker_pid=$PPID
 _background_pids=()
 _kill_tree(){
@@ -125,6 +126,7 @@ find_box(){
 usage(){
   echo "zbmc — virtual-BMC control"
   echo "usage: zbmc <box> <verb> [args]"
+  echo "       zbmc -V|--version"
   echo
   echo "boxes:"
   printf "  %-20s %-15s %s\n" "NAME" "RESERVED IP" "DESCRIPTION"
@@ -297,6 +299,7 @@ _probe_console(){
 # Allow `ZBMC_SOURCE_ONLY=1 . zbmc` to load helpers without running a verb (tests).
 [ -n "${ZBMC_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
 
+case "${1:-}" in -V|--version|--Version) echo "zbmc $ZBMC_VERSION"; exit 0;; esac
 [ $# -eq 0 ] && { usage; exit 0; }
 
 _need_root(){ # verbs that bind privileged ports or kill qemu need root
