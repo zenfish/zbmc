@@ -21,6 +21,7 @@
 #   .30  idrac9            (Dell iDRAC9 NPCM750)
 #   .31  idrac10           (Dell iDRAC10 NPCM845)
 #   .40  megarac-hpe       (AMI MegaRAC SP-X / HPE XD670)
+#   .41  ieit              (IEIT/Inspur NF5468M6 MegaRAC / AST2500)
 #   .50  advantech-asmb787 (Advantech ASMB-787 MegaRAC SP-X 4.0)
 
 # --- Per-box override: set any individual box IP ---
@@ -34,7 +35,8 @@
 # ZBMC_IP_idrac9=192.168.1.104
 # ZBMC_IP_idrac10=192.168.1.105
 # ZBMC_IP_megarac_hpe=192.168.1.106
-# ZBMC_IP_advantech_asmb787=192.168.1.107
+# ZBMC_IP_ieit=192.168.1.107
+# ZBMC_IP_advantech_asmb787=192.168.1.108
 
 # Supermicro X10 defaults to portable QEMU user networking. On a trusted lab
 # LAN that routes the selected X10 address and permits an additional guest MAC:

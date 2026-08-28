@@ -7,4 +7,5 @@ supermicro-x14       10.0.8.14
 idrac9               10.0.9.9
 idrac10              10.0.9.10
 megarac-hpe          10.0.6.66
+ieit                 10.0.6.67
 advantech-asmb787    10.0.10.10

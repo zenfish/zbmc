@@ -19,7 +19,7 @@ On Debian 13:
 
 ```bash
 sudo apt update
-sudo apt install docker.io curl git ca-certificates \
+sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
   iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \

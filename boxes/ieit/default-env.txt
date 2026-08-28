@@ -1,0 +1,6 @@
+bootcmd=bootm 83000000 85000000
+bootdelay=0
+baudrate=0x1c200
+bootargs=console=ttyS4,115200 root=/dev/ram0 ro rootfstype=cramfs
+autoload=no
+do_memtest=0

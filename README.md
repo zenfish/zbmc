@@ -46,6 +46,7 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 | **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 9m38s |
 | **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | pass - 7m37s |
 | **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s after three automatic cold-boot rerolls; timing is nondeterministic |
+| **ieit** | SSH/SMASH, IPMI, Redfish, vendor Web-UI; user networking, so no ICMP | pass - 1m02s |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
 | **supermicro-x10** | user-net (default): forwarded SSH, IPMI, Redfish, Web-UI; direct-LAN: the same plus guest ICMP; 60s stable hold | pass - 2m38s user-net / 3m11s direct-LAN |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
@@ -69,7 +70,7 @@ Full walkthrough (with a glossary): **[GETTING-STARTED.md](GETTING-STARTED.md)**
 
 ```bash
 # Debian 13 on x86_64
-sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
+sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot squashfs-tools u-boot-tools \
   device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
   netcat-openbsd iproute2 iputils-ping tcpdump libarchive-tools \
   python3-pexpect python3-venv pipx
@@ -131,7 +132,7 @@ broken out by vendor family:
 
 | Subnet | Vendor | Boxes |
 |--------|--------|-------|
-| 10.0.6.x | AMI MegaRAC | megarac-hpe (.66) |
+| 10.0.6.x | AMI MegaRAC | megarac-hpe (.66), IEIT/Inspur (.67) |
 | 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |
 | 10.0.8.x | Supermicro | supermicro-x10 (.10), supermicro-x14 (.14) |
 | 10.0.9.x | Dell iDRAC | idrac9 (.9), idrac10 (.10) |
@@ -145,7 +146,7 @@ to `zbmc.conf` (gitignored) and set **one** of:
 ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
 # ZBMC_POOL=192.168.9    # or a completely different block
 # → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
-#   idrac9=.30, idrac10=.31, megarac-hpe=.40, asmb787=.50
+#   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41, asmb787=.50
 
 # Per-box override — when you only have a few free IPs:
 ZBMC_IP_idrac9=172.16.0.99
