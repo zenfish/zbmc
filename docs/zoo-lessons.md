@@ -98,11 +98,12 @@ Used on **idrac10, x14, cray**. Cold boot is nondeterministic under single-vCPU 
 Each box ships a `zbmc.box` descriptor (sourced by `tools/zbmc`) exposing uniform verbs: `zbmc_boot`
 (cold by default; supported X14 and MegaRAC snapshots require `start --warm`), `zbmc_build`, `zbmc_snapshot`,
 `zbmc_restore`, `zbmc_ssh`, `zbmc_ipmi`, `zbmc_ipmi_health`, `zbmc_web`, `zbmc_console`, plus
-`ZBMC_READY_GREP` for a console readiness marker.
+`ZBMC_READY_GREP` for a bootstrap readiness marker.
 - **Root-direct model**: qemu runs as root and binds the box's selected **Linux loopback alias** + standard ports 22/443/623 directly — kills the socat/high-port indirection.
 - **IP scheme**: 10.0.7.x = OpenBMC (evb/gb200), 10.0.8.x = Supermicro/MegaRAC (x14/cray/asmb787), 10.0.9.x = Dell (idrac9/10). Each zbmc binds a **specific** IP:22 so it coexists with the host's own sshd.
 - qemu's real pid is found by the **hostfwd signature** (`pgrep -f "hostfwd=udp:$IP:623-:623"`), not `$!` (it's a root child of sudo).
 - Access differs per stack and the descriptor encodes it: Dell/gb200 = IPMI `-K` factory key; x14/cray/evb = password. Health probes route around per-box quirks (x14 uses `channel info 1` because `mc info`=0xff; cray greps for the vendor MfgID).
+- **`ZBMC_READY_GREP` is matched against two logs, not one**: the per-run guest serial capture (`ZBMC_CONSOLE_LOG`) *and* the box's own driver log (`$LOG`). Most boxes print their marker on serial, but a host-side bootstrap driver prints to its own stdout instead — X10's `NET_CONFIGURED` comes from `start-x10.py`, never from the guest. Matching only one of the two silently skips the `BOOTSTRAP` stage, and because `ZBMC_PROBE_AFTER_BOOTSTRAP=1` gates every service probe behind it, the box boots and serves normally while the watcher probes nothing and reports `missing: ssh ipmi redfish webui` at the deadline. A healthy box recorded as a failed run is the signature; an empty `probes/` directory in the run evidence confirms it.
 
 ---
 

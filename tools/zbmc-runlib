@@ -462,6 +462,18 @@ PY
   rm -f "$ZBMC_RUN_DIR/health-watch.pid"
 }
 
+# The bootstrap marker lands on the guest serial console for most boxes, but on
+# the driver's own stdout ($LOG) for those whose bootstrap runs host-side: x10
+# prints NET_CONFIGURED from its pexpect driver, which never reaches serial. Check
+# both, as the FIRMWARE stage already does; $LOG is the console log itself for
+# boxes whose descriptor points them at the same file, making the second grep a
+# harmless repeat.
+_zr_ready_marker_seen(){
+  grep -q "${ZBMC_READY_GREP}" "${_zr_console_log:-/dev/null}" 2>/dev/null && return 0
+  [ -n "${LOG:-}" ] && [ "${LOG:-}" != "${_zr_console_log:-}" ] &&
+    grep -q "${ZBMC_READY_GREP}" "$LOG" 2>/dev/null
+}
+
 _zr_probe_service(){ # service output-file
   case "$1" in
     ssh) _probe_ssh >"$2";;
@@ -544,7 +556,7 @@ _zr_wait_ready(){
       _zr_timing FIRMWARE "$_zr_elapsed_s"
     fi
     if [ "$_zr_guest" = 0 ]; then
-      if [ -n "${ZBMC_READY_GREP:-}" ] && grep -q "${ZBMC_READY_GREP}" "${_zr_console_log:-/dev/null}" 2>/dev/null; then
+      if [ -n "${ZBMC_READY_GREP:-}" ] && _zr_ready_marker_seen; then
         _zr_guest=1
         case "$_zr_highest" in QEMU|FIRMWARE) _zr_highest=BOOTSTRAP;; esac
         _zr_event BOOTSTRAP ready "serial bootstrap completed for $ZBMC_IP; $(_zr_expected BOOTSTRAP)"
