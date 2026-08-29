@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=d38a826f25b4b0db95ecc5ee51404ac9bcdf5f960002f93c14a56cba3171ff14 body-sha256=98e99ff7f47d67a7afa81eac600dc04eeaec475b5381a6076a6fc94c0bc3e815 -->
+<!-- zmd2html:auto source-sha256=f2eee252e6c2b0299443883e60c434d53654116eaa737fbede0b10add20b98bc body-sha256=277282016fb129900d9e58731d3ee342785a3eecef43b31067e88fe9d851bb81 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -145,6 +145,17 @@ map.</p>
 forwarded ports appear in <code>status -v</code>. Set
 <code>X10_NET_MODE=direct</code> only on an isolated lab LAN that routes
 the selected address and permits the guest MAC.</p>
+<p>In <code>direct</code> mode the guest sits on a tap under
+<code>br-zbmc</code>, so other hosts reach it only if the bridge
+forwards to that tap. Docker sets the iptables <code>FORWARD</code>
+policy to <code>DROP</code> and loads <code>br_netfilter</code>, which
+silently blackholes that traffic — the BMC keeps answering ARP, so it
+still appears in every neighbour table, but only the bridge host can
+actually talk to it. <code>zbmc-net setup</code> installs the matching
+accept rule for <code>br-zbmc</code> and <code>zbmc-net teardown</code>
+removes it. It is re-applied per <code>setup</code> rather than
+persisted, so if a box answers on the bridge host but not from the LAN,
+re-run <code>sudo ./tools/zbmc-net setup</code>.</p>
 <h2 id="7-choose-another-box">7. Choose another box</h2>
 <pre class="bash"><code>./tools/zbmc list
 ./build.sh supermicro-x14

@@ -156,6 +156,25 @@ ZBMC_IP_openbmc=192.168.1.100
 Priority: per-box `ZBMC_IP_<name>` > pool > `ZHOSTS_FILE` > descriptor default.
 Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
 
+### Direct-mode bridging
+
+`X10_NET_MODE=direct` puts the Supermicro X10 guest on a tap attached to `br-zbmc` alongside the
+physical uplink, so reaching it from anywhere else requires the host to *forward* LAN frames to that
+tap. Docker loads `br_netfilter` and sets the iptables `FORWARD` policy to `DROP`, which breaks exactly
+that path — and breaks it quietly, because ARP is filtered by `arptables` (policy `ACCEPT`) rather than
+`iptables`. The symptom is a BMC that pings fine from the bridge host, resolves to a MAC on every other
+host, and answers none of them.
+
+`zbmc-net setup` installs the scoped counter-rule, and `zbmc-net teardown` removes it:
+
+```bash
+iptables -I DOCKER-USER -i br-zbmc -o br-zbmc -j ACCEPT   # FORWARD when Docker is absent
+```
+
+Only traffic bridged within `br-zbmc` is accepted, so Docker's own container isolation is unchanged.
+The rule is applied by each `setup` rather than written to a persisted firewall config: re-run
+`zbmc-net setup` after a reboot, or after anything that reloads Docker's chains.
+
 ## Layout
 
 ```

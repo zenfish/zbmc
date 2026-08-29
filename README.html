@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=1ca5ad0d4bdef84d5f406580739be2ade49b3b140cad2cb30d9c5fdb4647b439 body-sha256=5a2656bd5747e3c672f56ffd31289732a3ac76ffe7cf2fffdf89e1c3a3795727 -->
+<!-- zmd2html:auto source-sha256=11e03ec67b6ad3993389a31528263d563f8e39c2ab69da6a0b6ca13fcee6f759 body-sha256=325c9f4fb2e5f21e286dae69880181a1f5b877635e23091cfb6d19bcaa74aa6a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -294,6 +294,25 @@ ZBMC_IP_openbmc=192.168.1.100</code></pre>
 <code>ZHOSTS_FILE</code> &gt; descriptor default. Full allocation table
 and examples: <strong><a
 href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
+<h3 id="direct-mode-bridging">Direct-mode bridging</h3>
+<p><code>X10_NET_MODE=direct</code> puts the Supermicro X10 guest on a
+tap attached to <code>br-zbmc</code> alongside the physical uplink, so
+reaching it from anywhere else requires the host to <em>forward</em> LAN
+frames to that tap. Docker loads <code>br_netfilter</code> and sets the
+iptables <code>FORWARD</code> policy to <code>DROP</code>, which breaks
+exactly that path — and breaks it quietly, because ARP is filtered by
+<code>arptables</code> (policy <code>ACCEPT</code>) rather than
+<code>iptables</code>. The symptom is a BMC that pings fine from the
+bridge host, resolves to a MAC on every other host, and answers none of
+them.</p>
+<p><code>zbmc-net setup</code> installs the scoped counter-rule, and
+<code>zbmc-net teardown</code> removes it:</p>
+<pre class="bash"><code>iptables -I DOCKER-USER -i br-zbmc -o br-zbmc -j ACCEPT   # FORWARD when Docker is absent</code></pre>
+<p>Only traffic bridged within <code>br-zbmc</code> is accepted, so
+Docker's own container isolation is unchanged. The rule is applied by
+each <code>setup</code> rather than written to a persisted firewall
+config: re-run <code>zbmc-net setup</code> after a reboot, or after
+anything that reloads Docker's chains.</p>
 <h2 id="layout">Layout</h2>
 <pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)
