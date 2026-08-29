@@ -15,3 +15,6 @@ firmware/*
 zbmc.conf
 __pycache__/
 *.pyc
+
+# local working notes, not part of the repo
+Notes.changes
