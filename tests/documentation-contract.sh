@@ -67,6 +67,7 @@ grep -Fq 'sudo ./tools/zbmc openbmc start' "$repo/GETTING-STARTED.md"
 ! grep -Eq '(^|`)sudo zbmc openbmc start' "$repo/README.md" "$repo/GETTING-STARTED.md"
 grep -Fq 'sudo ./tools/zbmc idrac10 snapshot' "$repo/GETTING-STARTED.md"
 grep -Fq 'sudo ./tools/zbmc idrac10 start --warm' "$repo/GETTING-STARTED.md"
+grep -Fq 'git.trouble.org' "$repo/GETTING-STARTED.md" "$repo/boxes/idrac10/WARM-START.md"
 grep -Fq 'boxes/idrac10/WARM-START.md' "$repo/README.md" "$repo/GETTING-STARTED.md"
 grep -Fq 'Docker packages exact QEMU builds' "$repo/SECURITY.md"
 

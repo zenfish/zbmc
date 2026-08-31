@@ -16,6 +16,8 @@
 # Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP.
 ZBMC_NAME=supermicro-x14
 ZBMC_DESC="Supermicro X14 OpenBMC/AST2600 - cold boot; SSH, IPMI, Redfish, and Web-UI accepted"
+ZBMC_WARM_STATUS=verified
+ZBMC_WARM_FILES="svc-snap-full-working.gz"
 
 # Scripts + snapshots live in the X14 scratch workdir (restore/snapshot/shell scripts cd there).
 # Portable (clone-and-run): scripts ship in THIS box dir; snapshot + boot artifacts in work/.

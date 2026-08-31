@@ -113,6 +113,19 @@ REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
 boxip_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_IP:-}" ); }
+_zbmc_warm_state(){
+  local path
+  case "${ZBMC_WARM_STATUS:-unavailable}" in
+    verified) ;;
+    broken) echo BROKEN; return ;;
+    *) echo UNAVAILABLE; return ;;
+  esac
+  for path in ${ZBMC_WARM_FILES:-}; do
+    [ -f "$ZBMC_DIR/$path" ] || { echo MISSING; return; }
+  done
+  echo READY
+}
+boxwarm_of(){ ( set -u; . "$1" 2>/dev/null; _zbmc_warm_state ); }
 find_box(){
   local want="$1" f name ip
   for f in "${REGISTRY[@]}"; do
@@ -135,7 +148,7 @@ usage(){
   echo
   echo "  (use 'all' as the box to run a verb across every box:  zbmc all status)"
   echo "  (zbmc all status checks boxes sequentially; add -f|--fast-check for parallel probes)"
-  echo "  (just the box and reserved IP:  zbmc list   |   zbmc -l)"
+  echo "  (box, reserved IP, and installed warm capability:  zbmc list   |   zbmc -l)"
   echo
   echo "verbs:"
   echo "  up|start [-v|-d] [--deadline SEC] [--no-wait] [--build] [--no-web] [--warm] [-q PATH|--qemu-path PATH]"
@@ -308,8 +321,9 @@ _need_root(){ # verbs that bind privileged ports or kill qemu need root
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — box names plus reserved IPs (no status).
 if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
+  printf "%-20s %-15s %s\n" "NAME" "RESERVED IP" "WARM"
   for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
-    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %s\n" "$n" "$(boxip_of "$f")"
+    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %-15s %s\n" "$n" "$(boxip_of "$f")" "$(boxwarm_of "$f")"
   done
   exit 0
 fi
@@ -584,7 +598,6 @@ case "$VERB" in
       esac
     done
     set -- "${_start_args[@]}"
-    _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; no launch attempted" >&2; exit 1; }
     while [ $# -gt 0 ]; do
       case "$1" in
         --build) _do_build=1;;
@@ -603,6 +616,22 @@ case "$VERB" in
       shift
     done
     [[ "$_deadline" =~ ^[0-9]+$ ]] || { echo "zbmc: bad deadline '$_deadline'" >&2; exit 2; }
+    if [ -n "${ZBMC_WARM:-}" ]; then
+      case "$(_zbmc_warm_state)" in
+        READY) ;;
+        MISSING)
+          echo "$ZBMC_NAME: warm restore is supported but its checkpoint is not installed" >&2
+          echo "  install it with: ./build.sh $ZBMC_NAME" >&2
+          exit 2 ;;
+        BROKEN)
+          echo "$ZBMC_NAME: warm restore is broken${ZBMC_WARM_REASON:+: $ZBMC_WARM_REASON}" >&2
+          exit 2 ;;
+        *)
+          echo "$ZBMC_NAME: no verified warm restore is available${ZBMC_WARM_REASON:+: $ZBMC_WARM_REASON}" >&2
+          exit 2 ;;
+      esac
+    fi
+    _zbmc_select_qemu || { echo "$ZBMC_NAME: QEMU validation failed; no launch attempted" >&2; exit 1; }
     [ "$_do_build" = 0 ] || _zbmc_run_build || exit 1
     _zr_set_effective_services "$([ "$do_web" = 0 ] && echo 1 || echo 0)"
     ZBMC_ORIGINAL_COMMAND="zbmc $ZBMC_IP $VERB${_original_args:+ $_original_args}"

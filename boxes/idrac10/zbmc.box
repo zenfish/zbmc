@@ -36,6 +36,8 @@ ZBMC_QEMU_SHA256=c4a28a5e76492d50abc977e8f2bb57ddac48fca9e32b9350573ff67ffe9cfc4
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=npcm845-evb
+ZBMC_WARM_STATUS=verified
+ZBMC_WARM_FILES="ckpt/state.gz ckpt/overlay-frozen.qcow2"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
 
 # boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the

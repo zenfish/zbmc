@@ -2,6 +2,8 @@
 # To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
 ZBMC_NAME=idrac9
 ZBMC_DESC="Dell iDRAC9 (NPCM750) - cold boot; SSH/IPMI accepted; Web-UI observed; Redfish not configured"
+ZBMC_WARM_STATUS=broken
+ZBMC_WARM_REASON="restored usb-net is network-dead"
 # Portable (clone-and-run for the cold P4 boot): scripts ship in THIS box dir; boot/img
 # artifacts in work/idrac9 (build-p4.sh rebuilds them from the iDRAC9 DUP — that build still
 # needs the firmware-extraction tree, so on a fresh clone fetch the prebuilt artifacts).

@@ -144,9 +144,10 @@ The current measured acceptance boundary is in the README fleet table. Important
 - `megarac-hpe` accepts retained IPMI only. Cold boot is nondeterministic and automatically rerolls an
   attempt when the vendor `IPMIMain` process hits its known startup race.
 - `idrac9` must cold-boot. Its USB network does not survive warm migration.
-- `idrac10` cold-boots by default. After a cold run reaches READY, create a local matched checkpoint
-  with `sudo ./tools/zbmc idrac10 snapshot`, stop the source, and restore it with
-  `sudo ./tools/zbmc idrac10 start --warm`. See
+- `idrac10` cold-boots by default. Its build downloads a hash-pinned matched checkpoint from
+  `git.trouble.org`; confirm that `./tools/zbmc list` reports `READY`, then restore it with
+  `sudo ./tools/zbmc idrac10 start --warm`. A READY cold guest can replace that checkpoint with
+  `sudo ./tools/zbmc idrac10 snapshot`. See
   [the warm-start runbook](boxes/idrac10/WARM-START.md).
 - `megarac-hpe` and `supermicro-x14` use a compatible bundled snapshot only with `--warm`.
 - MegaRAC's injected blank-password SSH/telnet paths are not forwarded unless

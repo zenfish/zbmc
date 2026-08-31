@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=90a0db7b3a805d649e0ece3935ad95127fcf81211f3e2b2c696f1f9c94daabdf body-sha256=fbb2a807b7f7ef7e4111e7b822acaa47ed3e897351a896319a5c69579c7724d6 -->
+<!-- zmd2html:auto source-sha256=597be6b3ff82cc4042e6bd9b8c5ad4d7739a6a810149364d55b69c9f753006de body-sha256=125c1d3e51624cd5c858637aefc896f55455150f3e25bb616ed1d586afe645b4 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</title>
@@ -53,9 +53,9 @@ table in <code>README.md</code>, each
 <code>boxes/&lt;name&gt;/zbmc.box</code>, and live
 <code>status -v</code> output for current behavior. In the 0.1.1 current
 tree, iDRAC9 is cold-only; iDRAC10 cold-boots by default and supports a
-locally generated warm checkpoint; X14 accepts Redfish; and MegaRAC-HPE
-accepts retained IPMI only. Older results below remain historical
-evidence.</p>
+downloaded, versioned warm checkpoint; X14 accepts Redfish; and
+MegaRAC-HPE accepts retained IPMI only. Older results below remain
+historical evidence.</p>
 </blockquote>
 <p>Cross-box patterns distilled from virtualizing nine BMCs across four
 vendors and three RTOS/Linux stacks (Dell iDRAC9/10, Supermicro X14, HPE
@@ -112,18 +112,18 @@ the initramfs you own</td>
 <td><code>6.12.40</code> AArch64 (4 binary patches)</td>
 <td>direct-kernel
 <code>-kernel Image.boot-patched -dtb qemu-usb-net.dtb</code>; squashfs
-on sd-bus; explicit local <strong>warm checkpoint</strong> (33s
+on sd-bus; explicit downloaded <strong>warm checkpoint</strong> (33s
 measured)</td>
 <td>cold TCP uses <code>usb-net</code>; checkpoint removes that
 non-migratable device and warm host forwards use
 <strong>npcm-gmac</strong> at 10.0.2.15</td>
 <td>migrated 16550 serial socket</td>
-<td>ssh root (per-installation key); IPMI factory IPMIKey
-<code>-K</code>; web root:calvin</td>
+<td>ssh root (matched lab key); IPMI factory IPMIKey <code>-K</code>;
+web root:calvin</td>
 <td>ssh, RAKP/IPMI, Redfish</td>
-<td>cold READY measured at 257s; <code>snapshot</code> saves RAM plus a
-frozen <strong>qcow2 overlay</strong>, and <code>start --warm</code>
-restores the matched local pair</td>
+<td>cold READY measured at 257s; build fetches matched RAM/qcow2 state,
+<code>snapshot</code> can replace it, and <code>start --warm</code>
+restores it</td>
 </tr>
 <tr>
 <td><strong>x14</strong></td>

@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=9dcfc892ddb73dfd2a229b798f4060f8cd98188a8d7e64ca78666c01e33e918d body-sha256=e71445bda9117894d0cc2636ef8d86f78015d7f2b76f6fa5520d7a93788b18b9 -->
+<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=486d2a10d4b8e75a9420904d7b7d7eda4445070b713f46bbefa11558ed28fc8d body-sha256=b246d4c2aa6c487e34fd125c5bd309e0c09912bb0621a2f70f78e3ba3b4bbb1a -->
 
 # zbmc iDRAC10
 
@@ -10,7 +10,7 @@ NPCM845/AArch64 research box. The supported cold boot reached ICMP, SSH, retaine
     sudo ./tools/zbmc idrac10 start
     ./tools/zbmc idrac10 status -v
 
-    # After a cold run reaches READY:
+    # Optional: replace the downloaded checkpoint after a cold run reaches READY:
     sudo ./tools/zbmc idrac10 snapshot
     sudo ./tools/zbmc idrac10 down
     sudo ./tools/zbmc idrac10 start --warm

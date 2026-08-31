@@ -2,9 +2,9 @@
 
 > **Historical field note.** The snapshot conclusions below describe an earlier investigation state.
 > Current release behavior is different: iDRAC9 is cold-only, and iDRAC10 now cold-boots by default from
-> fetched artifacts, deterministically generated cfgdb defaults, and a per-installation SSH key. The old
-> shared iDRAC10 checkpoint is no longer fetched. A new local checkpoint can be created from a READY
-> cold guest and restored explicitly with `start --warm`; see `boxes/idrac10/WARM-START.html`.
+> fetched artifacts and deterministically generated cfgdb defaults. A verified, versioned checkpoint and
+> matching lab SSH key are fetched from `git.trouble.org`; a new local checkpoint can replace them after
+> a READY cold boot. Restore explicitly with `start --warm`; see `boxes/idrac10/WARM-START.html`.
 
 A field note on failure. The OpenBMC boxes in this zoo (`openbmc`, `nvidia-obmc`) boot in one command;
 the Dell iDRACs took weeks. This preserves why earlier snapshot-first approaches were attempted and what
@@ -46,7 +46,8 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
 - **The dbus-broker socket-activation lottery.** Cold boot **hangs roughly 2 times in 3** under a single
   TCG vCPU — nondeterministically. This is the real killer: you cannot ship a `build.sh` that "just boots"
   when a third of boots wedge.
-- **Current local snapshot path.** Cold-boot until services + IPMI answer, then QMP
+- **Current snapshot path.** The standard build fetches a verified matched pair. To replace it, cold-boot
+  until services + IPMI answer, then QMP
   `stop` + `migrate exec:gzip` → `state.gz`. Restore with `-incoming` over a **frozen qcow2 overlay**
   (NOT `snapshot=on` on the base, or the disk and the migrated RAM diverge and it corrupts). On resume you
   must **loop QMP `cont` until the vCPU reports `running`** — a single `cont` leaves it half-migrated with
@@ -57,9 +58,10 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
   the session library, and (more durably) a real `cfgmgrd` fed a seeded `CfgCurrentValues.db` (username
   must be 16-byte `MemCmp`-padded, the privilege nibble lives at a raw offset, the HMAC key at entry+0x11).
 
-The package does not fetch a shared checkpoint. Ordinary `zbmc idrac10 start` cold-boots. After it reaches
-READY, `zbmc idrac10 snapshot` creates a local matched RAM/disk pair and `start --warm` restores it; two
-acceptance runs reached SSH, IPMI, and Redfish READY in 33 seconds.
+The package fetches the versioned matched pair from `git.trouble.org`. Ordinary `zbmc idrac10 start`
+cold-boots; `start --warm` restores the downloaded pair. After a cold run reaches READY,
+`zbmc idrac10 snapshot` can replace it locally. Two acceptance runs reached SSH, IPMI, and Redfish READY
+in 33 seconds.
 
 ## iDRAC9 — one notch easier, one notch worse
 

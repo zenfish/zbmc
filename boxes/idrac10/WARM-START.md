@@ -1,19 +1,19 @@
-<!-- html2md:auto source=boxes/idrac10/WARM-START.html source-sha256=ac6fb5aa5a304b7a565116a792bf87e78a54091ebcc120ded7455ed4c4db39d5 body-sha256=4925881a85b76538a9ed32880fd262be7cf182691fd8515d6c89510e66be160f -->
+<!-- html2md:auto source=boxes/idrac10/WARM-START.html source-sha256=a313e460281b0b2604acb1edf237d8286ca37f2128718e998910c4455ad8c5fb body-sha256=d6ebf5c3af323effba89c1c729dae442c7f31573bf9b90430c79a31f4c9bb80e -->
 
 zbmc / Dell NPCM845
 
 # iDRAC10 warm start
 
-Create a local QEMU checkpoint from a fully READY cold guest, then restore SSH, authenticated RMCP+ IPMI, Redfish, and the serial console in about 33 seconds on the measured Debby runs.
+The standard build downloads a matched warm bundle from git.trouble.org. Restore SSH, authenticated RMCP+ IPMI, Redfish, and the serial console in about 33 seconds on the measured Debby runs, or replace the bundle with a checkpoint from your own READY cold guest.
 
-## Create the checkpoint
+## Install or replace the checkpoint
 
     sudo ./tools/zbmc idrac10 start
     # Wait for READY, then:
     sudo ./tools/zbmc idrac10 snapshot
     sudo ./tools/zbmc idrac10 down
 
-`snapshot` refuses to run until IPMI answers. It atomically replaces the saved RAM state and frozen disk overlay. Stop the source immediately afterward because checkpoint creation hot-unplugs its non-migratable USB NIC.
+`./build.sh idrac10` installs the published checkpoint automatically. Use the commands above only to replace it. `snapshot` refuses to run until IPMI answers and atomically replaces the matched pair. Stop the source immediately afterward because checkpoint creation hot-unplugs its non-migratable USB NIC.
 
 ## Restore and verify
 
@@ -28,7 +28,7 @@ Ordinary `start` remains a cold boot. `--warm` is explicit and fails if either c
     work/idrac10/ckpt/state.gz
     work/idrac10/ckpt/overlay-frozen.qcow2
 
-The RAM stream and qcow2 overlay are a matched pair. They are local generated state, not bundled release artifacts. QEMU migration is version and topology specific; after changing the pinned QEMU, kernel, DTB, disk image, or launch topology, discard the old pair and create a new checkpoint from a successful cold run.
+The RAM stream and qcow2 overlay are a matched pair published under `https://git.trouble.org/zbmc/idrac10/warm-20260831/` with pinned SHA-256 values in `build.sh`. QEMU migration is version and topology specific; after changing the pinned QEMU, kernel, DTB, disk image, or launch topology, create and publish a newly verified pair.
 
 ## Why warm uses one NIC
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=f39f4bf8bcf8f4db8abce97bee04a2a14ec6eb10badcbf096d760056efe203d6 body-sha256=d57d67354f68c7864a876873b6d239aff6a4721ec45a74da41663e3f2d46737f -->
+<!-- zmd2html:auto source-sha256=13dd948dca9514986660fb2965dbde520f0a138f7aac1705a00cd3c3b65e227d body-sha256=5912200bfd05b9d1edcde52292faca6d9b35e75be7ce5359ed4a4ffbbf233beb -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -161,7 +161,8 @@ from completed runs, but cold firmware startup remains load-sensitive.
 Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with
 <code>start --warm</code> because QEMU machine-version drift can
 invalidate a checkpoint. iDRAC9 is cold-only. The iDRAC10 checkpoint is
-generated locally from a READY cold guest rather than bundled; see <a
+downloaded as a hash-pinned matched bundle from
+<code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
 runbook</a>.</p>
 <p>Supermicro X10 defaults to QEMU user networking so it works on cloud
@@ -191,12 +192,11 @@ sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 4m30s on the refer
 ./tools/zbmc openbmc ssh &#39;uname -a&#39;
 ./tools/zbmc openbmc ipmi mc info
 ./tools/zbmc openbmc web</code></pre>
-<p>For iDRAC10, create and use a local warm checkpoint after the first
-successful cold run:</p>
-<pre class="bash"><code>sudo ./tools/zbmc idrac10 start
-sudo ./tools/zbmc idrac10 snapshot   # run only after start reports READY
-sudo ./tools/zbmc idrac10 down
-sudo ./tools/zbmc idrac10 start --warm</code></pre>
+<p>For iDRAC10, the build installs both cold and warm artifacts. Check
+availability, then choose either path:</p>
+<pre class="bash"><code>./tools/zbmc list                     # iDRAC10 should show WARM READY
+sudo ./tools/zbmc idrac10 start --warm
+sudo ./tools/zbmc idrac10 start       # cold remains the default</code></pre>
 <p>No firmware is present in the current checkout; <code>build.sh</code>
 fetches what a box needs via the applicable box recipe or
 <code>firmware/download-fw.sh</code>:</p>
