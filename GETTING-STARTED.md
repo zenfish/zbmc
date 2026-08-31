@@ -19,7 +19,7 @@ On Debian 13:
 
 ```bash
 sudo apt update
-sudo apt install docker.io curl git ca-certificates \
+sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
   iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \
@@ -128,6 +128,14 @@ site-specific map.
 Supermicro X10 defaults to portable QEMU user networking. Its forwarded ports appear in `status -v`.
 Set `X10_NET_MODE=direct` only on an isolated lab LAN that routes the selected address and permits the
 guest MAC.
+
+In `direct` mode the guest sits on a tap under `br-zbmc`, so other hosts reach it only if the bridge
+forwards to that tap. Docker sets the iptables `FORWARD` policy to `DROP` and loads `br_netfilter`,
+which silently blackholes that traffic — the BMC keeps answering ARP, so it still appears in every
+neighbour table, but only the bridge host can actually talk to it. `zbmc-net setup` installs the
+matching accept rule for `br-zbmc` and `zbmc-net teardown` removes it. It is re-applied per `setup`
+rather than persisted, so if a box answers on the bridge host but not from the LAN, re-run
+`sudo ./tools/zbmc-net setup`.
 
 ## 7. Choose another box
 

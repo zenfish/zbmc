@@ -10,9 +10,40 @@ STATE=${ZBMC_NET_STATE:-/run/zbmc-net.state}
 
 need_root() { [ "$(id -u)" = 0 ] || exec sudo -n "$0" "$@"; }
 
+# Docker loads br_netfilter and sets the iptables FORWARD policy to DROP. That
+# makes bridged LAN -> tap frames traverse FORWARD and get dropped, so a guest
+# answers ARP (arptables is a separate, still-ACCEPT policy) and looks present,
+# while every host except this one silently fails to reach it. Re-permit
+# forwarding within our own bridge only; container isolation is untouched.
+forward_chain() {
+  if iptables -S DOCKER-USER >/dev/null 2>&1; then echo DOCKER-USER; else echo FORWARD; fi
+}
+
+ensure_forward_rule() {
+  command -v iptables >/dev/null 2>&1 || return 0
+  local chain
+  chain=$(forward_chain)
+  if iptables -C "$chain" -i "$BR" -o "$BR" -j ACCEPT 2>/dev/null; then return 0; fi
+  if ! iptables -I "$chain" -i "$BR" -o "$BR" -j ACCEPT 2>/dev/null; then
+    echo "zbmc-net: warning: could not add $chain accept rule for $BR;" \
+         "guests may be unreachable from other hosts" >&2
+  fi
+}
+
+# Safe to run unconditionally: the rule only matches $BR, which teardown deletes.
+remove_forward_rule() {
+  command -v iptables >/dev/null 2>&1 || return 0
+  local chain
+  chain=$(forward_chain)
+  while iptables -C "$chain" -i "$BR" -o "$BR" -j ACCEPT 2>/dev/null; do
+    iptables -D "$chain" -i "$BR" -o "$BR" -j ACCEPT 2>/dev/null || break
+  done
+}
+
 setup_bridge() {
   [ -n "$UPLINK" ] || { echo "zbmc-net: cannot determine physical uplink" >&2; return 1; }
   ip link show "$UPLINK" >/dev/null
+  ensure_forward_rule
   if ip link show "$BR" >/dev/null 2>&1; then
     [ -f "$STATE" ] || { echo "zbmc-net: refusing unmanaged bridge $BR" >&2; return 1; }
     return 0
@@ -30,6 +61,7 @@ setup_bridge() {
   : >"$STATE.taps"
   rollback_bridge() {
     set +e
+    remove_forward_rule
     ip link set "$UPLINK" nomaster
     ip addr add "$v4" dev "$UPLINK"
     [ -z "$gw" ] || ip route replace default via "$gw" dev "$UPLINK" onlink
@@ -77,6 +109,7 @@ teardown() {
   if [ -f "$STATE.taps" ]; then
     while IFS= read -r tap; do [ -z "$tap" ] || ip link del "$tap" 2>/dev/null || true; done <"$STATE.taps"
   fi
+  remove_forward_rule
   ip link set "$UPLINK" nomaster
   ip addr add "$V4" dev "$UPLINK" 2>/dev/null || true
   [ -z "$GW" ] || ip route replace default via "$GW" dev "$UPLINK" onlink

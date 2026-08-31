@@ -1,0 +1,125 @@
+# IEIT/Inspur NF5468M6 BMC 7.26.05 (AMI MegaRAC SP-X / ASPEED AST2500).
+#
+# Preserved vendor U-Boot, kernel, rootfs, IPMIMain, Redfish, lighttpd, and SMASH
+# are retained. The build supplies the missing flash-partition mounts, image-1
+# configuration, Web-UI CramFS, and a direct QEMU NIC in place of physical NC-SI.
+# Board EEPROM, host power/PCIe/ME telemetry, and video capture are not modeled;
+# their vendor daemons may log failures but are outside the management-service contract.
+ZBMC_NAME=ieit
+ZBMC_DESC="IEIT/Inspur NF5468M6 MegaRAC/AST2500 - SSH/SMASH, IPMI, Redfish, and vendor Web-UI"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$ROOT/work/ieit}"
+ZBMC_IP=$(_zbmc_resolve_ip ieit 41 10.0.6.67)
+ZBMC_HOST=ieit
+
+ZBMC_QEMU="$ROOT/qemu/runtime/qemu-system-arm"
+ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
+ZBMC_QEMU_MACHINE=ast2500-evb
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
+ZBMC_L2_REQUIRED=0
+ZBMC_STABILITY_SECONDS=10
+ZBMC_READY_DEADLINE=300
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
+ZBMC_EXPECTED_FIRMWARE=3
+ZBMC_EXPECTED_BOOTSTRAP=50
+ZBMC_EXPECTED_READY=70
+
+SSH_USER=admin
+SSH_PW=admin
+SSH_PORT=22
+ZBMC_SSH_PROBE_TIMEOUT=15
+ZBMC_SSH_NOTE='authenticated SMASH CLI; not a Unix shell'
+IPMI_USER=admin
+IPMI_PW=admin
+IPMI_KEY=00
+IPMI_PORT=623
+IPMI_T=8
+IPMI_OPTS="-C 17 -I lanplus"
+WEB_PORT=443
+ZBMC_HTTP_PROBE_TIMEOUT=10
+
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/launcher.log"
+SOCK="$ZBMC_DIR/serial.sock"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
+
+zbmc_boot() {
+    mkdir -p "$ZBMC_DIR"
+    local SUDO= qp= n=0
+    [ "$(id -u)" = 0 ] || SUDO=sudo
+    _zbmc_lo_alias "$ZBMC_IP"
+    grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null ||
+        echo "$ZBMC_IP $ZBMC_HOST" | $SUDO tee -a /etc/hosts >/dev/null
+    : >"$LOG"
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+        IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" \
+        SOCK="$SOCK" QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
+    while [ "$n" -lt 60 ]; do
+        qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1)
+        [ -n "$qp" ] && break
+        sleep 0.25
+        n=$((n + 1))
+    done
+    [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
+    printf '%s\n' "$qp"
+}
+
+zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+zbmc_ready() {
+    local file
+    for file in ieit-runtime.ima kernel.uimage service-ramdisk.uimage build-provenance.txt; do
+        [ -f "$ZBMC_DIR/$file" ] || {
+            echo "not built - run: zbmc ieit build"
+            return 1
+        }
+    done
+    echo "ready (cold boot; preserved vendor services with reconstructed runtime environment)"
+}
+
+zbmc_ssh() {
+    local opts=(-T -o ForwardX11=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+                -o ConnectTimeout=8 -o LogLevel=ERROR -p "$SSH_PORT")
+    if [ "$#" -eq 0 ]; then
+        exec sshpass -p "$SSH_PW" ssh "${opts[@]}" "$SSH_USER@$ZBMC_IP"
+    fi
+    local output rc
+    output=$(sshpass -p "$SSH_PW" ssh "${opts[@]}" "$SSH_USER@$ZBMC_IP" "$@" 2>&1)
+    rc=$?
+    if [ "$*" = 'echo up' ] && [ "$rc" = 0 ] && grep -q '/smashclp>' <<<"$output"; then
+        echo up
+        return 0
+    fi
+    printf '%s\n' "$output"
+    return "$rc"
+}
+
+zbmc_ipmi() {
+    timeout -s KILL "$((IPMI_T + 6))" \
+        env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+        -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" \
+        -C 17 -I lanplus -t "$IPMI_T" "$@" 2>&1
+}
+
+zbmc_web() {
+    local redfish webui
+    redfish=$(curl -sk --max-time 10 -u "$IPMI_USER:$IPMI_PW" \
+        "https://$ZBMC_IP:$WEB_PORT/redfish/v1/" 2>/dev/null)
+    webui=$(curl -sk --max-time 10 -o /dev/null -w '%{http_code}' \
+        "https://$ZBMC_IP:$WEB_PORT/" 2>/dev/null)
+    grep -q '"RedfishVersion"' <<<"$redfish" &&
+        echo "Redfish: READY (/redfish/v1/)" || echo "Redfish: DOWN"
+    case "$webui" in 2??|3??) echo "Web-UI: READY (HTTP $webui)";; *) echo "Web-UI: DOWN (HTTP ${webui:-000})";; esac
+}
+
+zbmc_console() {
+    command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
+    echo "IEIT console -> $SOCK (Ctrl-] to detach)"
+    exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
+}
+
+ZBMC_READY_GREP='Starting lighttpd'

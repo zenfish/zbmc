@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=597be6b3ff82cc4042e6bd9b8c5ad4d7739a6a810149364d55b69c9f753006de body-sha256=125c1d3e51624cd5c858637aefc896f55455150f3e25bb616ed1d586afe645b4 -->
+<!-- zmd2html:auto source-sha256=2ac4dffc319e599bd9d5bfd83a2e22712e895e6e3c478a25e264f701b2d0d817 body-sha256=b4b8d3565c95fcdc42feff4a0bae739401775a487a42ebd39d3666e7cdb69e16 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</title>
@@ -516,7 +516,7 @@ its extract.sh.</li>
 <code>zbmc_ssh</code>, <code>zbmc_ipmi</code>,
 <code>zbmc_ipmi_health</code>, <code>zbmc_web</code>,
 <code>zbmc_console</code>, plus <code>ZBMC_READY_GREP</code> for a
-console readiness marker.</p>
+bootstrap readiness marker.</p>
 <ul>
 <li><strong>Root-direct model</strong>: qemu runs as root and binds the
 box's selected <strong>Linux loopback alias</strong> + standard ports
@@ -533,6 +533,20 @@ IPMI <code>-K</code> factory key; x14/cray/evb = password. Health probes
 route around per-box quirks (x14 uses <code>channel info 1</code>
 because <code>mc info</code>=0xff; cray greps for the vendor
 MfgID).</li>
+<li><strong><code>ZBMC_READY_GREP</code> is matched against two logs,
+not one</strong>: the per-run guest serial capture
+(<code>ZBMC_CONSOLE_LOG</code>) <em>and</em> the box's own driver log
+(<code>$LOG</code>). Most boxes print their marker on serial, but a
+host-side bootstrap driver prints to its own stdout instead — X10's
+<code>NET_CONFIGURED</code> comes from <code>start-x10.py</code>, never
+from the guest. Matching only one of the two silently skips the
+<code>BOOTSTRAP</code> stage, and because
+<code>ZBMC_PROBE_AFTER_BOOTSTRAP=1</code> gates every service probe
+behind it, the box boots and serves normally while the watcher probes
+nothing and reports <code>missing: ssh ipmi redfish webui</code> at the
+deadline. A healthy box recorded as a failed run is the signature; an
+empty <code>probes/</code> directory in the run evidence confirms
+it.</li>
 </ul>
 <hr />
 <p><em>Distilled 2026-08 from a running research zoo. No extracted

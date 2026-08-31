@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=13dd948dca9514986660fb2965dbde520f0a138f7aac1705a00cd3c3b65e227d body-sha256=5912200bfd05b9d1edcde52292faca6d9b35e75be7ce5359ed4a4ffbbf233beb -->
+<!-- zmd2html:auto source-sha256=a83818d7e35432d85e4331dde07005a4d479838fb598a6852548ffc572a46d0b body-sha256=774befcde3c1b56c4ece5ac19ec0ab7fc1eb3e6d9c07fed95970b6f238050e5d -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -137,6 +137,12 @@ absent</td>
 nondeterministic</td>
 </tr>
 <tr>
+<td><strong>ieit</strong></td>
+<td>SSH/SMASH, IPMI, Redfish, vendor Web-UI; user networking, so no
+ICMP</td>
+<td>pass - 1m02s</td>
+</tr>
+<tr>
 <td><strong>supermicro-x14</strong></td>
 <td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
 <td>pass - 3m31s</td>
@@ -181,7 +187,7 @@ Virtualizing BMC Firmware Was Hard</a>.</p>
 href="GETTING-STARTED.html">GETTING-STARTED.md</a></strong>. The short
 version:</p>
 <pre class="bash"><code># Debian 13 on x86_64
-sudo apt install docker.io curl git ca-certificates squashfs-tools u-boot-tools \
+sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot squashfs-tools u-boot-tools \
   device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
   netcat-openbsd iproute2 iputils-ping tcpdump libarchive-tools \
   python3-pexpect python3-venv pipx
@@ -256,7 +262,7 @@ family:</p>
 <tr>
 <td>10.0.6.x</td>
 <td>AMI MegaRAC</td>
-<td>megarac-hpe (.66)</td>
+<td>megarac-hpe (.66), IEIT/Inspur (.67)</td>
 </tr>
 <tr>
 <td>10.0.7.x</td>
@@ -287,7 +293,7 @@ and set <strong>one</strong> of:</p>
 ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
 # ZBMC_POOL=192.168.9    # or a completely different block
 # → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
-#   idrac9=.30, idrac10=.31, megarac-hpe=.40, asmb787=.50
+#   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41, asmb787=.50
 
 # Per-box override — when you only have a few free IPs:
 ZBMC_IP_idrac9=172.16.0.99
@@ -296,6 +302,25 @@ ZBMC_IP_openbmc=192.168.1.100</code></pre>
 <code>ZHOSTS_FILE</code> &gt; descriptor default. Full allocation table
 and examples: <strong><a
 href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
+<h3 id="direct-mode-bridging">Direct-mode bridging</h3>
+<p><code>X10_NET_MODE=direct</code> puts the Supermicro X10 guest on a
+tap attached to <code>br-zbmc</code> alongside the physical uplink, so
+reaching it from anywhere else requires the host to <em>forward</em> LAN
+frames to that tap. Docker loads <code>br_netfilter</code> and sets the
+iptables <code>FORWARD</code> policy to <code>DROP</code>, which breaks
+exactly that path — and breaks it quietly, because ARP is filtered by
+<code>arptables</code> (policy <code>ACCEPT</code>) rather than
+<code>iptables</code>. The symptom is a BMC that pings fine from the
+bridge host, resolves to a MAC on every other host, and answers none of
+them.</p>
+<p><code>zbmc-net setup</code> installs the scoped counter-rule, and
+<code>zbmc-net teardown</code> removes it:</p>
+<pre class="bash"><code>iptables -I DOCKER-USER -i br-zbmc -o br-zbmc -j ACCEPT   # FORWARD when Docker is absent</code></pre>
+<p>Only traffic bridged within <code>br-zbmc</code> is accepted, so
+Docker's own container isolation is unchanged. The rule is applied by
+each <code>setup</code> rather than written to a persisted firewall
+config: re-run <code>zbmc-net setup</code> after a reboot, or after
+anything that reloads Docker's chains.</p>
 <h2 id="layout">Layout</h2>
 <pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)

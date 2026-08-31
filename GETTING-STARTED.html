@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=40206fd3188a2f7ea62bc6fdd9a5ee48c84b446b77379307bbe16f076e5122f5 body-sha256=e83579e157352c222795ffdf59e6d53afe4e1767248f9c38a9bc61a483debea5 -->
+<!-- zmd2html:auto source-sha256=2d1f14cd7827ea2496d6dc68e53afca8ae5051b529fcfb32b82310c8ff777dae body-sha256=ebc2278035d0802de91734f615ee02a632414731f6973efd7ab755c1894346e2 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -61,7 +61,7 @@ limits. Cold boot is CPU- and load-sensitive.</p>
 <h2 id="1-install-host-packages">1. Install host packages</h2>
 <p>On Debian 13:</p>
 <pre class="bash"><code>sudo apt update
-sudo apt install docker.io curl git ca-certificates \
+sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
   iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \
@@ -145,6 +145,17 @@ map.</p>
 forwarded ports appear in <code>status -v</code>. Set
 <code>X10_NET_MODE=direct</code> only on an isolated lab LAN that routes
 the selected address and permits the guest MAC.</p>
+<p>In <code>direct</code> mode the guest sits on a tap under
+<code>br-zbmc</code>, so other hosts reach it only if the bridge
+forwards to that tap. Docker sets the iptables <code>FORWARD</code>
+policy to <code>DROP</code> and loads <code>br_netfilter</code>, which
+silently blackholes that traffic — the BMC keeps answering ARP, so it
+still appears in every neighbour table, but only the bridge host can
+actually talk to it. <code>zbmc-net setup</code> installs the matching
+accept rule for <code>br-zbmc</code> and <code>zbmc-net teardown</code>
+removes it. It is re-applied per <code>setup</code> rather than
+persisted, so if a box answers on the bridge host but not from the LAN,
+re-run <code>sudo ./tools/zbmc-net setup</code>.</p>
 <h2 id="7-choose-another-box">7. Choose another box</h2>
 <pre class="bash"><code>./tools/zbmc list
 ./build.sh supermicro-x14
