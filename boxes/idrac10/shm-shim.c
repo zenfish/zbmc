@@ -1189,3 +1189,23 @@ int PSMgrReadAttr(void *table_entry, unsigned int user_id, void *buf, unsigned i
     }
     return rc;
 }
+
+/* fullfw can reach RMCP+ before its indirect initializer table runs this. */
+static pthread_once_t payload_init_once = PTHREAD_ONCE_INIT;
+
+static void init_ipmi_payload_handler(void) {
+    typedef int (*init_fn)(void);
+    init_fn init = (init_fn)dlsym(RTLD_NEXT, "PayloadMgrInit");
+    if (init)
+        init();
+}
+
+INDIRECT_CALL_TARGET int PayloadMgrProcessPayloadData(void *message, int *result) {
+    typedef int (*process_fn)(void *, int *);
+    static process_fn real_fn;
+
+    pthread_once(&payload_init_once, init_ipmi_payload_handler);
+    if (!real_fn)
+        real_fn = (process_fn)dlsym(RTLD_NEXT, "PayloadMgrProcessPayloadData");
+    return real_fn ? real_fn(message, result) : -1;
+}

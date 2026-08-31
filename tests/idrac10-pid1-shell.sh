@@ -12,6 +12,8 @@ sh -n "$script"
 sh -n "$apache_boot" "$apache_setup"
 grep -q 'PasswordAuthentication no' "$script"
 grep -q 'operator.pub' "$script"
+grep -q -- '--prefix=/run/dm --prefix=/flash/data0/config' "$script"
+grep -q 'cp -a /flash/pd0/ipmi/evb/.' "$script"
 tail -n 12 "$script" | grep -q '^while :; do$'
 tail -n 12 "$script" | grep -q '^    /bin/sh || true$'
 if tail -n 12 "$script" | grep -q '^exit '; then
@@ -22,6 +24,8 @@ grep -A5 '^zbmc_ssh()' "$box" | grep -q 'ssh/operator'
 grep -A5 '^zbmc_console()' "$box" | grep -q 'socat'
 ! grep -q 'pkill .*fullfw' "$driver"
 grep -q 'usb@f0828100' "$overlay"
+grep -q 'lpc-kcs@f0007000' "$overlay"
+grep -q 'compatible = "nuvoton,npcm750-kcs-bmc"' "$overlay"
 grep -q 'target-path = "/cpus"' "$overlay"
 [ "$(grep -c 'cpu@[123] {' "$overlay")" -eq 3 ]
 [ "$(grep -c 'enable-method = "psci"' "$overlay")" -eq 3 ]

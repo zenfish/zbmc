@@ -20,6 +20,8 @@ grep -q '#define IPMI_CMD_TABLE_GOT_OFFSET      0x175e0' "$source_file"
 grep -q '#define IPMI_CMD_TABLE_SIZE_GOT_OFFSET 0x17610' "$source_file"
 grep -q 'selector != 0x0601' "$source_file"
 grep -q 'patch_ipmi_command_table(mfd);' "$source_file"
+grep -q 'dlsym(RTLD_NEXT, "PayloadMgrInit")' "$source_file"
+grep -q 'PayloadMgrProcessPayloadData(void \*message, int \*result)' "$source_file"
 
 real_line="$(grep -n 'found = real_fn(message, out);' <<<"$wrapper" | cut -d: -f1)"
 replace_line="$(grep -n 'out->handler =' <<<"$wrapper" | head -1 | cut -d: -f1)"
@@ -38,7 +40,7 @@ objdump="$(command -v aarch64-linux-gnu-objdump || command -v objdump)"
 "$objdump" -t "$shim" | grep -Eq '[[:space:]]RequestHandleTableSearch$'
 
 disassembly="$("$objdump" -d "$shim")"
-for symbol in RequestHandleTableSearch CmdGetDeviceID shim_get_chassis_status; do
+for symbol in RequestHandleTableSearch CmdGetDeviceID shim_get_chassis_status PayloadMgrProcessPayloadData; do
     awk -v symbol="$symbol" '
         $0 ~ "<" symbol ">:" {
             getline

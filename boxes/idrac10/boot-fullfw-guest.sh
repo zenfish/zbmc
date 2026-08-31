@@ -101,6 +101,12 @@ for lock in datacache_Config_CfgGroup.lock key_map.lock; do
     }
 done
 
+# fullfw and Dell instrumentation share these native data-manager paths. Limit
+# tmpfiles to the writable paths; the complete rule also touches read-only data1.
+systemd-tmpfiles --create --prefix=/run/dm --prefix=/flash/data0/config \
+    /usr/lib/tmpfiles.d/datamgr-idrac.conf
+cp -an /flash/pd0/ipmi/evb/. /flash/data0/config/
+
 echo "=== SHM SHIM ==="
 # SYSV shmget() fails on npcm845-evb QEMU (ipcmk confirms broken).
 # Load LD_PRELOAD shim that replaces shmget/shmat/shmdt/shmctl with
