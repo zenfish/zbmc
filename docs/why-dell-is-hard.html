@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=14682673c0ad67d8e114270894e619403974cca9a335d1d9082ce3980d942f81 body-sha256=401fd82d6bfaa54fc5e0227f2550b50f8b5ec4301a597a0f925aa1f081e15641 -->
+<!-- zmd2html:auto source-sha256=f3ab45d28eff52fb9ac4a5a99eda52afad177cd254b9cb28ca49872d407020e7 body-sha256=03af1793b7462b30f19cc7ad6c9f5c35fd910e93bedcdd7227b97654d1c302a3 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Why the Dell iDRACs Are Hard (and how the turnkey boxes cheat)</title>
@@ -51,9 +51,9 @@ below describe an earlier investigation state. Current release behavior
 is different: iDRAC9 is cold-only, and iDRAC10 now cold-boots by default
 from fetched artifacts, deterministically generated cfgdb defaults, and
 a per-installation SSH key. The old shared iDRAC10 checkpoint is no
-longer fetched or accepted by <code>start --warm</code>. See
-<code>README.md</code> and <code>SECURITY.md</code> for the current
-contract.</p>
+longer fetched. A new local checkpoint can be created from a READY cold
+guest and restored explicitly with <code>start --warm</code>; see
+<code>boxes/idrac10/WARM-START.html</code>.</p>
 </blockquote>
 <p>A field note on failure. The OpenBMC boxes in this zoo
 (<code>openbmc</code>, <code>nvidia-obmc</code>) boot in one command;
@@ -113,8 +113,8 @@ boot <strong>hangs roughly 2 times in 3</strong> under a single TCG vCPU
 — nondeterministically. This is the real killer: you cannot ship a
 <code>build.sh</code> that "just boots" when a third of boots
 wedge.</li>
-<li><strong>Historical snapshot path.</strong> Cold-boot <em>retrying
-until services + IPMI answer</em>, then QMP <code>stop</code> +
+<li><strong>Current local snapshot path.</strong> Cold-boot until
+services + IPMI answer, then QMP <code>stop</code> +
 <code>migrate exec:gzip</code> → <code>state.gz</code>. Restore with
 <code>-incoming</code> over a <strong>frozen qcow2 overlay</strong> (NOT
 <code>snapshot=on</code> on the base, or the disk and the migrated RAM
@@ -123,7 +123,9 @@ diverge and it corrupts). On resume you must <strong>loop QMP
 a single <code>cont</code> leaves it half-migrated with the network
 silent. Then verify IPMI and <strong>re-restore up to 3×</strong> (a
 migrated UDP socket sometimes resumes silent — the host port is bound
-but the guest never answers).</li>
+but the guest never answers). QEMU's <code>usb-net</code> has no
+vmstate, so checkpoint creation removes it and warm SSH, HTTPS, and UDP
+623 use the migrated GMAC.</li>
 <li><strong>Encrypted RAKP.</strong> The login handshake was cracked two
 ways: an <code>shm-shim</code> <code>LD_PRELOAD</code> interposing on
 the session library, and (more durably) a real <code>cfgmgrd</code> fed
@@ -131,11 +133,11 @@ a seeded <code>CfgCurrentValues.db</code> (username must be 16-byte
 <code>MemCmp</code>-padded, the privilege nibble lives at a raw offset,
 the HMAC key at entry+0x11).</li>
 </ul>
-<p>That approach explained the earlier snapshot bundle. The current
-package deliberately does not fetch it: ordinary
-<code>zbmc idrac10 start</code> cold-boots, while
-<code>start --warm</code> fails with an explicit unsupported
-message.</p>
+<p>The package does not fetch a shared checkpoint. Ordinary
+<code>zbmc idrac10 start</code> cold-boots. After it reaches READY,
+<code>zbmc idrac10 snapshot</code> creates a local matched RAM/disk pair
+and <code>start --warm</code> restores it; two acceptance runs reached
+SSH, IPMI, and Redfish READY in 33 seconds.</p>
 <h2 id="idrac9--one-notch-easier-one-notch-worse">iDRAC9 — one notch
 easier, one notch worse</h2>
 <p>ARMv7 (NPCM750), so no aarch64 tax, and it <strong>boots and networks

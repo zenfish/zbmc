@@ -52,8 +52,10 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). 
 `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. 
-Warm snapshots are explicit for MegaRAC-HPE and X14 with `start --warm` because QEMU machine-version
-drift can invalidate a checkpoint. iDRAC9 and the supported iDRAC10 package path are cold-only.
+Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU
+machine-version drift can invalidate a checkpoint. iDRAC9 is cold-only. The iDRAC10 checkpoint is
+generated locally from a READY cold guest rather than bundled; see
+[the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
 Supermicro X10 defaults to QEMU user networking so it works on cloud and other hosts that cannot
 bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTPS ports are shown by
@@ -80,6 +82,15 @@ sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 4m30s on the refer
 ./tools/zbmc openbmc ssh 'uname -a'
 ./tools/zbmc openbmc ipmi mc info
 ./tools/zbmc openbmc web
+```
+
+For iDRAC10, create and use a local warm checkpoint after the first successful cold run:
+
+```bash
+sudo ./tools/zbmc idrac10 start
+sudo ./tools/zbmc idrac10 snapshot   # run only after start reports READY
+sudo ./tools/zbmc idrac10 down
+sudo ./tools/zbmc idrac10 start --warm
 ```
 
 No firmware is present in the current checkout; `build.sh` fetches what a box needs via the applicable

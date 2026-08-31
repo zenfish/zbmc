@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=932431fb9befcce322e5ed0231b8c664c2516da3f598014cf248a3481bc28078 body-sha256=993a67ab2ed0e38dd37a8ff2bfcdf89ce2cc87159abc85d6c7d275c5a67145fe -->
+<!-- zmd2html:auto source-sha256=8478430f67284131be5d368cb18254a8d98b8bbb4021b4d7be67cda2084af095 body-sha256=59d7a5b59f86e257083d2d0cbfd17eeb1635c3892596fcf11863419c6bc7b3c5 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -161,9 +161,11 @@ nondeterministic and automatically rerolls an attempt when the vendor
 <code>IPMIMain</code> process hits its known startup race.</li>
 <li><code>idrac9</code> must cold-boot. Its USB network does not survive
 warm migration.</li>
-<li><code>idrac10</code> is cold-only. Its former packaged checkpoint
-carried stale shared state and is no longer a supported release
-path.</li>
+<li><code>idrac10</code> cold-boots by default. After a cold run reaches
+READY, create a local matched checkpoint with
+<code>sudo ./tools/zbmc idrac10 snapshot</code>, stop the source, and
+restore it with <code>sudo ./tools/zbmc idrac10 start --warm</code>. See
+<a href="boxes/idrac10/WARM-START.html">the warm-start runbook</a>.</li>
 <li><code>megarac-hpe</code> and <code>supermicro-x14</code> use a
 compatible bundled snapshot only with <code>--warm</code>.</li>
 <li>MegaRAC's injected blank-password SSH/telnet paths are not forwarded

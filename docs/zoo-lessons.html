@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=597055ac247043eefa2e71145a768ed7d46b82a4cd981ab167405f365b55fb40 body-sha256=57c80274ebdde9d587996c63de4769181720c662fafa5523a1614c056ea46b40 -->
+<!-- zmd2html:auto source-sha256=90a0db7b3a805d649e0ece3935ad95127fcf81211f3e2b2c696f1f9c94daabdf body-sha256=fbb2a807b7f7ef7e4111e7b822acaa47ed3e897351a896319a5c69579c7724d6 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The BMC Zoo: Engineering Lessons for Running Vendor BMC Firmware Under QEMU</title>
@@ -51,10 +51,11 @@ document preserves the experiments and terminology used during bring-up;
 its per-box table is not the current release contract. Use the fleet
 table in <code>README.md</code>, each
 <code>boxes/&lt;name&gt;/zbmc.box</code>, and live
-<code>status -v</code> output for current behavior. In the 0.1.1
-release, iDRAC9 and iDRAC10 are cold-only, X14 accepts Redfish, and
-MegaRAC-HPE accepts retained IPMI only. Older results in the table below
-remain historical evidence.</p>
+<code>status -v</code> output for current behavior. In the 0.1.1 current
+tree, iDRAC9 is cold-only; iDRAC10 cold-boots by default and supports a
+locally generated warm checkpoint; X14 accepts Redfish; and MegaRAC-HPE
+accepts retained IPMI only. Older results below remain historical
+evidence.</p>
 </blockquote>
 <p>Cross-box patterns distilled from virtualizing nine BMCs across four
 vendors and three RTOS/Linux stacks (Dell iDRAC9/10, Supermicro X14, HPE
@@ -110,20 +111,19 @@ the initramfs you own</td>
 <code>qemu-system-aarch64 -M npcm845-evb</code></td>
 <td><code>6.12.40</code> AArch64 (4 binary patches)</td>
 <td>direct-kernel
-<code>-kernel Image.boot-patched -dtb qemu-gmac.dtb</code>; squashfs on
-sd-bus; <strong>warm-restore snapshot</strong> (~9s, self-healing
-×3)</td>
-<td>on-chip <strong>npcm-gmac</strong> (<code>model=npcm-gmac</code>) +
-slirp; <strong>migrates clean</strong> (unlike idrac9 usb-net); hostfwd
-10.0.9.10</td>
-<td><code>-serial unix:$SOCK</code> (16550 migrates fine)</td>
-<td>ssh root (baked into ckpt); IPMI factory IPMIKey <code>-K</code>;
-web root:calvin</td>
+<code>-kernel Image.boot-patched -dtb qemu-usb-net.dtb</code>; squashfs
+on sd-bus; explicit local <strong>warm checkpoint</strong> (33s
+measured)</td>
+<td>cold TCP uses <code>usb-net</code>; checkpoint removes that
+non-migratable device and warm host forwards use
+<strong>npcm-gmac</strong> at 10.0.2.15</td>
+<td>migrated 16550 serial socket</td>
+<td>ssh root (per-installation key); IPMI factory IPMIKey
+<code>-K</code>; web root:calvin</td>
 <td>ssh, RAKP/IPMI, Redfish</td>
-<td>cold boot = <strong>dbus-broker socket-activate lottery</strong>
-(~2/3 hang); fix = don't cold-boot — QMP <code>migrate</code> warm
-snapshot + frozen <strong>qcow2 overlay</strong> (NOT
-<code>snapshot=on</code>)</td>
+<td>cold READY measured at 257s; <code>snapshot</code> saves RAM plus a
+frozen <strong>qcow2 overlay</strong>, and <code>start --warm</code>
+restores the matched local pair</td>
 </tr>
 <tr>
 <td><strong>x14</strong></td>
@@ -510,7 +510,7 @@ its extract.sh.</li>
 <h3 id="the-zbmc-dispatcher-pattern">The zbmc dispatcher pattern</h3>
 <p>Each box ships a <code>zbmc.box</code> descriptor (sourced by
 <code>tools/zbmc</code>) exposing uniform verbs: <code>zbmc_boot</code>
-(cold by default; supported X14 and MegaRAC snapshots require
+(cold by default; supported iDRAC10, X14, and MegaRAC snapshots require
 <code>start --warm</code>), <code>zbmc_build</code>,
 <code>zbmc_snapshot</code>, <code>zbmc_restore</code>,
 <code>zbmc_ssh</code>, <code>zbmc_ipmi</code>,

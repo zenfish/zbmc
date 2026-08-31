@@ -3,8 +3,8 @@
 > **Historical field note.** The snapshot conclusions below describe an earlier investigation state.
 > Current release behavior is different: iDRAC9 is cold-only, and iDRAC10 now cold-boots by default from
 > fetched artifacts, deterministically generated cfgdb defaults, and a per-installation SSH key. The old
-> shared iDRAC10 checkpoint is no longer fetched or accepted by `start --warm`. See `README.md` and
-> `SECURITY.md` for the current contract.
+> shared iDRAC10 checkpoint is no longer fetched. A new local checkpoint can be created from a READY
+> cold guest and restored explicitly with `start --warm`; see `boxes/idrac10/WARM-START.html`.
 
 A field note on failure. The OpenBMC boxes in this zoo (`openbmc`, `nvidia-obmc`) boot in one command;
 the Dell iDRACs took weeks. This preserves why earlier snapshot-first approaches were attempted and what
@@ -46,18 +46,20 @@ Any one of these is a speed bump. iDRAC10 hits all of them at once.
 - **The dbus-broker socket-activation lottery.** Cold boot **hangs roughly 2 times in 3** under a single
   TCG vCPU — nondeterministically. This is the real killer: you cannot ship a `build.sh` that "just boots"
   when a third of boots wedge.
-- **Historical snapshot path.** Cold-boot *retrying until services + IPMI answer*, then QMP
+- **Current local snapshot path.** Cold-boot until services + IPMI answer, then QMP
   `stop` + `migrate exec:gzip` → `state.gz`. Restore with `-incoming` over a **frozen qcow2 overlay**
   (NOT `snapshot=on` on the base, or the disk and the migrated RAM diverge and it corrupts). On resume you
   must **loop QMP `cont` until the vCPU reports `running`** — a single `cont` leaves it half-migrated with
   the network silent. Then verify IPMI and **re-restore up to 3×** (a migrated UDP socket sometimes
-  resumes silent — the host port is bound but the guest never answers).
+  resumes silent — the host port is bound but the guest never answers). QEMU's `usb-net` has no vmstate,
+  so checkpoint creation removes it and warm SSH, HTTPS, and UDP 623 use the migrated GMAC.
 - **Encrypted RAKP.** The login handshake was cracked two ways: an `shm-shim` `LD_PRELOAD` interposing on
   the session library, and (more durably) a real `cfgmgrd` fed a seeded `CfgCurrentValues.db` (username
   must be 16-byte `MemCmp`-padded, the privilege nibble lives at a raw offset, the HMAC key at entry+0x11).
 
-That approach explained the earlier snapshot bundle. The current package deliberately does not fetch it:
-ordinary `zbmc idrac10 start` cold-boots, while `start --warm` fails with an explicit unsupported message.
+The package does not fetch a shared checkpoint. Ordinary `zbmc idrac10 start` cold-boots. After it reaches
+READY, `zbmc idrac10 snapshot` creates a local matched RAM/disk pair and `start --warm` restores it; two
+acceptance runs reached SSH, IPMI, and Redfish READY in 33 seconds.
 
 ## iDRAC9 — one notch easier, one notch worse
 

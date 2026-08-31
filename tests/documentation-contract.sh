@@ -65,7 +65,9 @@ PY
 grep -Fq 'sudo ./tools/zbmc openbmc start' "$repo/README.md"
 grep -Fq 'sudo ./tools/zbmc openbmc start' "$repo/GETTING-STARTED.md"
 ! grep -Eq '(^|`)sudo zbmc openbmc start' "$repo/README.md" "$repo/GETTING-STARTED.md"
-grep -Fq '`idrac10` is cold-only' "$repo/GETTING-STARTED.md"
+grep -Fq 'sudo ./tools/zbmc idrac10 snapshot' "$repo/GETTING-STARTED.md"
+grep -Fq 'sudo ./tools/zbmc idrac10 start --warm' "$repo/GETTING-STARTED.md"
+grep -Fq 'boxes/idrac10/WARM-START.md' "$repo/README.md" "$repo/GETTING-STARTED.md"
 grep -Fq 'Docker packages exact QEMU builds' "$repo/SECURITY.md"
 
 echo 'current documentation contract: PASS'

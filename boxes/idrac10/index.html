@@ -14,9 +14,16 @@ IPMI, and the static Redfish ServiceRoot in 7m37s on the reference host. It has 
 <h2 class="text-xl font-semibold mt-6 mb-2">Current operation</h2>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>./build.sh idrac10
 sudo ./tools/zbmc idrac10 start
-./tools/zbmc idrac10 status -v</code></pre>
+./tools/zbmc idrac10 status -v
+
+# After a cold run reaches READY:
+sudo ./tools/zbmc idrac10 snapshot
+sudo ./tools/zbmc idrac10 down
+sudo ./tools/zbmc idrac10 start --warm</code></pre>
+<p class="mt-3"><a class="text-blue-700 underline font-semibold" href="WARM-START.html">Warm checkpoint creation, restore, compatibility, and recovery</a></p>
 <h2 class="text-xl font-semibold mt-6 mb-2">Reference and analysis</h2>
 <ul class="list-disc pl-6 space-y-1">
+<li><a class="text-blue-700 underline" href="WARM-START.html">Warm-start operator runbook</a></li>
 <li><a class="text-blue-700 underline" href="idrac10-oem-reference.html">OEM IPMI command reference</a> (<a class="text-blue-700 underline" href="idrac10-oem-reference.standalone.html">standalone copy</a>)</li>
 <li><a class="text-blue-700 underline" href="idrac9-vs-idrac10-oem-diff.html">iDRAC9 versus iDRAC10 OEM command diff</a> (<a class="text-blue-700 underline" href="idrac9-vs-idrac10-oem-diff.standalone.html">standalone copy</a>)</li>
 <li><a class="text-blue-700 underline" href="idrac10-ipmi-commands.html">Raw IPMI command table</a></li>

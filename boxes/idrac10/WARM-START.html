@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>iDRAC10 Warm Start</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100">
+<main class="mx-auto min-h-screen max-w-5xl px-6 py-12 md:px-10">
+<header class="border-b border-cyan-400/40 pb-8">
+<p class="font-mono text-sm uppercase tracking-[0.24em] text-cyan-300">zbmc / Dell NPCM845</p>
+<h1 class="mt-3 text-4xl font-black tracking-tight md:text-6xl">iDRAC10 warm start</h1>
+<p class="mt-4 max-w-3xl text-lg leading-8 text-slate-300">Create a local QEMU checkpoint from a fully READY cold guest, then restore SSH, authenticated RMCP+ IPMI, Redfish, and the serial console in about 33 seconds on the measured Debby runs.</p>
+</header>
+
+<section class="mt-10 grid gap-6 md:grid-cols-2">
+<div class="rounded-xl border border-slate-700 bg-slate-900 p-6">
+<h2 class="text-xl font-bold text-cyan-300">Create the checkpoint</h2>
+<pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-emerald-300"><code>sudo ./tools/zbmc idrac10 start
+# Wait for READY, then:
+sudo ./tools/zbmc idrac10 snapshot
+sudo ./tools/zbmc idrac10 down</code></pre>
+<p class="mt-4 text-sm leading-6 text-slate-300"><code>snapshot</code> refuses to run until IPMI answers. It atomically replaces the saved RAM state and frozen disk overlay. Stop the source immediately afterward because checkpoint creation hot-unplugs its non-migratable USB NIC.</p>
+</div>
+
+<div class="rounded-xl border border-slate-700 bg-slate-900 p-6">
+<h2 class="text-xl font-bold text-amber-300">Restore and verify</h2>
+<pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-emerald-300"><code>sudo ./tools/zbmc idrac10 start --warm
+./tools/zbmc idrac10 status -v
+./tools/zbmc idrac10 ipmi mc info</code></pre>
+<p class="mt-4 text-sm leading-6 text-slate-300">Ordinary <code>start</code> remains a cold boot. <code>--warm</code> is explicit and fails if either checkpoint artifact is absent.</p>
+</div>
+</section>
+
+<section class="mt-8 rounded-xl border border-slate-700 bg-slate-900 p-6">
+<h2 class="text-xl font-bold">Checkpoint artifacts</h2>
+<pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-slate-300"><code>work/idrac10/ckpt/state.gz
+work/idrac10/ckpt/overlay-frozen.qcow2</code></pre>
+<p class="mt-4 leading-7 text-slate-300">The RAM stream and qcow2 overlay are a matched pair. They are local generated state, not bundled release artifacts. QEMU migration is version and topology specific; after changing the pinned QEMU, kernel, DTB, disk image, or launch topology, discard the old pair and create a new checkpoint from a successful cold run.</p>
+</section>
+
+<section class="mt-8 rounded-xl border-l-4 border-amber-400 bg-amber-950/30 p-6">
+<h2 class="text-xl font-bold text-amber-300">Why warm uses one NIC</h2>
+<p class="mt-3 leading-7 text-slate-300">Cold boot uses QEMU <code>usb-net</code> for TCP services, but QEMU 11 reports that device as non-migratable. Snapshot creation removes it before migration. Warm restore keeps the two slirp backend instances required by the migration stream and forwards SSH, HTTPS, and UDP 623 through the migrated NPCM GMAC at <code>10.0.2.15</code>.</p>
+</section>
+
+<section class="mt-8 rounded-xl border border-red-500/40 bg-red-950/20 p-6">
+<h2 class="text-xl font-bold text-red-300">Recovery</h2>
+<p class="mt-3 leading-7 text-slate-300">If restore fails, inspect <code>work/idrac10/ckpt/rqemu.log</code>. Return to the supported cold path with:</p>
+<pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-emerald-300"><code>sudo ./tools/zbmc idrac10 down
+sudo ./tools/zbmc idrac10 start</code></pre>
+</section>
+
+<p class="mt-10 text-sm text-slate-400"><a class="text-cyan-300 underline" href="index.html">Back to the iDRAC10 index</a></p>
+</main>
+</body>
+</html>
