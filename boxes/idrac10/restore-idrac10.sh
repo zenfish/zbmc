@@ -20,9 +20,15 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$W/console-uart.log}"
 TRIES="${RESTORE_TRIES:-3}"
 [ -f "$STATE" ] || { echo "no snapshot at $STATE — run ./boot-live-ckpt.sh first" >&2; exit 1; }
 PORT="${1:-7623}"; BIND="${2:-}"; SSH_PORT="${3:-22}"; WEB_PORT="${4:-443}"
-# real-IP (root) path also forwards tcp:22 -> guest sshd (baked into state.gz); the guest sshd
-# binds :22 on $BIND, coexisting with the Mac's wildcard *:22 (specific-IP bind wins for that IP).
-if [ -n "$BIND" ]; then HOSTFWD="hostfwd=udp:${BIND}:${PORT}-:623,hostfwd=tcp:${BIND}:${SSH_PORT}-:22,hostfwd=tcp:${BIND}:${WEB_PORT}-:443"; VIP="$BIND"; else HOSTFWD="hostfwd=udp::${PORT}-:623"; VIP=127.0.0.1; fi
+# The checkpoint deliberately omits QEMU's non-migratable usb-net device. Route every service
+# through the preserved GMAC interface, which is already configured as 10.0.2.15 in guest RAM.
+if [ -n "$BIND" ]; then
+  HOSTFWD="hostfwd=udp:${BIND}:${PORT}-10.0.2.15:623,hostfwd=tcp:${BIND}:${SSH_PORT}-10.0.2.15:22,hostfwd=tcp:${BIND}:${WEB_PORT}-10.0.2.15:443,hostfwd=tcp:${BIND}:5200-10.0.2.15:5200,hostfwd=tcp:${BIND}:5201-10.0.2.15:5201"
+  VIP="$BIND"
+else
+  HOSTFWD="hostfwd=udp::${PORT}-10.0.2.15:623,hostfwd=tcp::${SSH_PORT}-10.0.2.15:22,hostfwd=tcp::${WEB_PORT}-10.0.2.15:443"
+  VIP=127.0.0.1
+fi
 # privileged port (<1024) or explicit bind IP -> need root (matches zbmc root-direct model)
 SUDO=""; { [ "$PORT" -lt 1024 ] || [ -n "$BIND" ]; } && [ "$(id -u)" -ne 0 ] && SUDO="sudo -n"
 set +x 2>/dev/null   # keep any inherited xtrace/PS4 out of the console log
@@ -40,11 +46,12 @@ restore_once() {   # launch qemu -incoming, resume, echo the pid (or empty on QM
   $SUDO pkill -9 -f "$HOSTFWD" 2>/dev/null || true
   sleep 1; $SUDO rm -f "$SOCK" "$QMP" 2>/dev/null; rm -f "$SOCK" "$QMP" 2>/dev/null || true
   $SUDO nohup "$IDRAC10_QEMU" -M npcm845-evb -m 1G \
-    -kernel boot/Image.boot-patched -dtb boot/qemu-gmac.dtb \
+    -kernel boot/Image.boot-patched -dtb qemu-usb-net.dtb \
     -drive "id=rootsd,if=none,file=$OVL,format=qcow2,snapshot=on" -device sd-card,drive=rootsd,bus=sd-bus \
     -display none -nic user,model=npcm-gmac,"$HOSTFWD" \
+    -netdev user,id=tcpnet,net=10.0.3.0/24,host=10.0.3.2,dhcpstart=10.0.3.15 \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
-    -serial chardev:serial0 -qmp unix:"$QMP",server,nowait \
+    -serial chardev:serial0 -qmp "unix:$QMP,server=on,wait=off" \
     -incoming "exec:gzip -dc < $STATE" \
     >"$W/rqemu.log" 2>&1 &
   local qp=$!; echo "$qp" | $SUDO tee "$W/rqemu.pid" >/dev/null 2>&1 || echo "$qp" >"$W/rqemu.pid"
@@ -90,7 +97,8 @@ PY
 verify() {         # N/5 IPMI answers (per-probe progress -> stderr; count -> stdout)
   local n=0 i
   for i in $(seq 1 5); do
-    if timeout -s KILL 25 zipmi -H "$VIP" -p "$PORT" -U root -K "$K" -t 20 mc info 2>/dev/null \
+    if timeout -s KILL 25 env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+         -H "$VIP" -p "$PORT" -U root -K "$K" -t 20 -R 0 mc info 2>/dev/null \
          | grep -qiE 'Manufacturer|Device Available'; then
       n=$((n+1)); log "    probe $i/5: answered  (${n}/5 up)"
     else
@@ -119,4 +127,5 @@ if [ "$ok" -gt 0 ]; then
   echo "RESTORE OK: IPMI $ok/5  ($VIP:$PORT, pid $QPID; kill: $SUDO kill $QPID)"
 else
   echo "RESTORE FAILED: 0/5 after $TRIES tries (all silent) — box is DOWN; check $W/rqemu.log"
+  exit 1
 fi
