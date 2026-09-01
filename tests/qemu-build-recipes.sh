@@ -3,10 +3,10 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 tool="$repo/tools/build-qemu"
-expected=$'qemu-11-arm\nqemu-11-idrac10'
+expected=$'qemu-11-arm\nqemu-11-idrac10\nqemu-11-lenovo-xcc'
 [ "$($tool --list)" = "$expected" ]
 
-for recipe in qemu-11-arm qemu-11-idrac10; do
+for recipe in qemu-11-arm qemu-11-idrac10 qemu-11-lenovo-xcc; do
   plan="$($tool --plan "$recipe")"
   grep -Fq '98b060da3a4f92b2a994ead5b16a87e783baf77c (v11.0.0)' <<<"$plan"
   grep -Fq 'Build host  : x86_64-linux' <<<"$plan"
@@ -14,6 +14,11 @@ for recipe in qemu-11-arm qemu-11-idrac10; do
   grep -Fq '/home/zen/src/vendor/zbmc-qemu-builds/' <<<"$plan"
   grep -Fq '/home/zen/opt/zbmc-qemu/' <<<"$plan"
 done
+
+lenovo_plan="$($tool --plan qemu-11-lenovo-xcc)"
+grep -Fq "$repo/qemu/patches/lenovo-xcc-fpga-emmc-gp0.patch" <<<"$lenovo_plan"
+grep -Fq 'Machines    : ast2600-evb' <<<"$lenovo_plan"
+grep -Fq 'Boxes       : lenovo-xcc' <<<"$lenovo_plan"
 
 idrac_plan="$($tool --plan qemu-11-idrac10)"
 grep -Fq "$repo/boxes/idrac10/qemu-usb-net-high-speed.patch" <<<"$idrac_plan"

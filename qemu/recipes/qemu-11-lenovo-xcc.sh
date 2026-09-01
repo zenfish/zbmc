@@ -1,0 +1,14 @@
+QEMU_UPSTREAM_COMMIT=98b060da3a4f92b2a994ead5b16a87e783baf77c
+QEMU_UPSTREAM_TAG=v11.0.0
+QEMU_UPSTREAM_VERSION=11.0.0
+QEMU_BUILD_HOST=x86_64-linux
+QEMU_TARGET_LIST=arm-softmmu
+QEMU_BINARY=qemu-system-arm
+QEMU_VARIANT=arm-lenovo-xcc
+QEMU_MACHINES=(ast2600-evb)
+QEMU_BOXES=(lenovo-xcc)
+QEMU_DATA_FILES=()
+QEMU_PATCHES=(
+  "$ROOT/qemu/patches/ftgmac100-rx-descriptor-reuse.patch"
+  "$ROOT/qemu/patches/lenovo-xcc-fpga-emmc-gp0.patch"
+)

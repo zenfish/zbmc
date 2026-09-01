@@ -1,0 +1,781 @@
+From 0331933660e03d0ed369113e0777b0f4ecda1a77 Mon Sep 17 00:00:00 2001
+From: zenfish <zen@trouble.org>
+Date: Tue, 1 Sep 2026 14:36:10 -0700
+Subject: [PATCH 1/2] hw: model Lenovo XCC FPGA and eMMC GP0
+
+---
+ hw/arm/aspeed.c         | 408 +++++++++++++++++++++++++++++++++++++++-
+ hw/sd/sd.c              |  34 +++-
+ hw/sd/sdmmc-internal.h  |   1 +
+ include/hw/arm/aspeed.h |  11 ++
+ 4 files changed, 449 insertions(+), 5 deletions(-)
+
+diff --git a/hw/arm/aspeed.c b/hw/arm/aspeed.c
+index a3db340..2f77f3a 100644
+--- a/hw/arm/aspeed.c
++++ b/hw/arm/aspeed.c
+@@ -13,13 +13,379 @@
+ #include "qapi/error.h"
+ #include "hw/arm/boot.h"
+ #include "hw/arm/aspeed.h"
++#include "exec/cpu-common.h"
++#include "qemu/error-report.h"
++#include "qemu/timer.h"
++
++#define XCC_FPGA_CMD_BASE  0x50000000
++#define XCC_FPGA_DATA_BASE 0x50800000
++#define XCC_FPGA_CTRL_BASE 0x51000000
++#define XCC_FPGA_CMD_SIZE   0x8000
++#define XCC_FPGA_DATA_SIZE  0x4000
++#define XCC_FPGA_CTRL_SIZE  0x1000
++#define XCC_FPGA_RING       0x400
++#define XCC_FPGA_DOORBELL   0xf06
++#define XCC_FPGA_PENDING    0xf05
++#define XCC_FPGA_REQUEST_MAX (6 + 1024 + 1)
++#define XCC_PTABLES_BASE     0x80000000
++#define XCC_PTABLES_SIZE     0x8000
++
++static const hwaddr xcc_fpga_bases[] = {
++    XCC_FPGA_CMD_BASE, XCC_FPGA_DATA_BASE, XCC_FPGA_CTRL_BASE,
++};
++
++static const uint64_t xcc_fpga_sizes[] = {
++    XCC_FPGA_CMD_SIZE, XCC_FPGA_DATA_SIZE, XCC_FPGA_CTRL_SIZE,
++};
++
++static unsigned int xcc_fpga_read_count;
++static uint8_t xcc_fpga_fifo[4096];
++static unsigned int xcc_fpga_fifo_pos;
++static unsigned int xcc_fpga_transaction;
++static uint32_t xcc_fpga_command;
++static uint8_t xcc_fpga_request[XCC_FPGA_REQUEST_MAX];
++static unsigned int xcc_fpga_request_length;
++static unsigned int xcc_fpga_response_length;
++static bool xcc_fpga_collecting_write;
++static bool xcc_fpga_i2c_operation_complete;
++static bool xcc_fpga_i2c_status_logged;
++static QEMUTimer *xcc_ptables_timer;
++static uint8_t xcc_ptables_data[XCC_PTABLES_SIZE];
++static bool xcc_ptables_valid;
++static unsigned int xcc_ptables_polls;
++
++static uint8_t xcc_fpga_crc8_byte(uint8_t crc, uint8_t value)
++{
++    crc ^= value;
++    for (unsigned int bit = 0; bit < 8; bit++) {
++        crc = (crc & 1) ? (crc >> 1) ^ 0xe0 : crc >> 1;
++    }
++    return crc;
++}
++
++static uint8_t xcc_fpga_response_crc(const uint8_t *request,
++                                     unsigned int request_length,
++                                     const uint8_t *response,
++                                     unsigned int payload_length)
++{
++    uint8_t crc = 0xff;
++
++    for (unsigned int i = 0; i < request_length; i++) {
++        crc = xcc_fpga_crc8_byte(crc, request[i]);
++    }
++    for (unsigned int i = 1; i <= payload_length + 1; i++) {
++        crc = xcc_fpga_crc8_byte(crc, response[i]);
++    }
++    return crc;
++}
++
++static uint8_t xcc_fpga_request_crc(void)
++{
++    uint8_t crc = 0xff;
++
++    for (unsigned int i = 0; i < xcc_fpga_request_length; i++) {
++        crc = xcc_fpga_crc8_byte(crc, xcc_fpga_request[i]);
++    }
++    return crc;
++}
++
++static unsigned int xcc_fpga_expected_write_length(void)
++{
++    if (!(xcc_fpga_request[0] & 0x40)) {
++        /* Four-byte header, byte 3 payload length, request CRC. */
++        return 4 + xcc_fpga_request[3] + 1;
++    }
++    if (xcc_fpga_request_length >= 6) {
++        /* Extended writes encode payload length in 16-byte units. */
++        return 6 + xcc_fpga_request[5] * 16 + 1;
++    }
++    return 0;
++}
++
++static void xcc_fpga_refresh_response_integrity(void)
++{
++    unsigned int integrity_index = xcc_fpga_response_length + 2;
++
++    g_assert(integrity_index < sizeof(xcc_fpga_fifo));
++    xcc_fpga_fifo[integrity_index] =
++        xcc_fpga_response_crc(xcc_fpga_request, xcc_fpga_request_length,
++                              xcc_fpga_fifo, xcc_fpga_response_length);
++}
++
++static void xcc_ptables_install(void *opaque)
++{
++    CPUState *cpu = first_cpu;
++    vaddr pc;
++
++    if (!xcc_ptables_valid) {
++        return;
++    }
++    pc = CPU_GET_CLASS(cpu)->get_pc(cpu);
++    if (pc < 0x80008000 || pc >= 0xc0000000) {
++        if (++xcc_ptables_polls < 10000) {
++            timer_mod(xcc_ptables_timer,
++                      qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 100 * SCALE_US);
++        } else {
++            error_report("xcc-fpga: PTABLES handoff timed out");
++        }
++        return;
++    }
++    cpu_physical_memory_write(XCC_PTABLES_BASE, xcc_ptables_data,
++                              sizeof(xcc_ptables_data));
++    fprintf(stderr,
++            "xcc-fpga: installed PTABLES at 0x80000000 after pc=0x%" PRIx64
++            "\n", (uint64_t)pc);
++}
++
++static uint64_t xcc_fpga_read(void *opaque, hwaddr offset, unsigned size)
++{
++    AspeedXccFpgaWindow *window = opaque;
++    uint8_t *buf = window->machine->xcc_fpga_buf[window->index];
++    uint64_t value = 0;
++
++    if (window->index == 0 && offset == 0 &&
++        xcc_fpga_fifo_pos + size <= sizeof(xcc_fpga_fifo)) {
++        memcpy(&value, xcc_fpga_fifo + xcc_fpga_fifo_pos, size);
++        xcc_fpga_fifo_pos += size;
++    } else {
++        memcpy(&value, buf + offset, size);
++    }
++    if (xcc_fpga_read_count < 500) {
++        fprintf(stderr,
++                "xcc-fpga: read[%u] window=%u offset=0x%04" HWADDR_PRIx
++                " size=%u value=0x%016" PRIx64 "\n",
++                xcc_fpga_read_count, window->index, offset, size, value);
++    }
++    xcc_fpga_read_count++;
++    return value;
++}
++
++static void xcc_fpga_complete(AspeedMachineState *bmc)
++{
++    uint8_t *cmd = bmc->xcc_fpga_buf[0];
++    uint8_t *ctrl = bmc->xcc_fpga_buf[2];
++    unsigned int slot = cmd[0] & 0x7f;
++    uint8_t *desc = cmd + XCC_FPGA_RING + slot * 0x10;
++
++    fprintf(stderr,
++            "xcc-fpga: slot=%u desc="
++            "%02x %02x %02x %02x %02x %02x %02x %02x "
++            "%02x %02x %02x %02x %02x %02x %02x %02x\n",
++            slot, desc[0], desc[1], desc[2], desc[3],
++            desc[4], desc[5], desc[6], desc[7], desc[8],
++            desc[9], desc[10], desc[11], desc[12], desc[13],
++            desc[14], desc[15]);
++
++    desc[0] = 2;
++    cmd[1] = slot;
++    ctrl[XCC_FPGA_PENDING] = 1;
++}
++
++static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
++                           unsigned size)
++{
++    AspeedXccFpgaWindow *window = opaque;
++    AspeedMachineState *bmc = window->machine;
++    uint8_t *buf = bmc->xcc_fpga_buf[window->index];
++
++    memcpy(buf + offset, &value, size);
++    if (bmc->xcc_fpga_write_count < 500) {
++        fprintf(stderr,
++                "xcc-fpga: write[%u] window=%u offset=0x%04" HWADDR_PRIx
++                " size=%u value=0x%016" PRIx64 "\n",
++                bmc->xcc_fpga_write_count, window->index, offset, size,
++                value);
++    }
++    bmc->xcc_fpga_write_count++;
++    if (window->index == 0 && offset == 0 && size == 4 &&
++        !xcc_fpga_collecting_write &&
++        (xcc_fpga_transaction == 0 || xcc_fpga_fifo_pos != 0)) {
++        unsigned int payload_length = value >> 24;
++        unsigned int integrity_index = payload_length + 2;
++        uint8_t integrity;
++
++        if (xcc_fpga_transaction != 0) {
++            fprintf(stderr,
++                    "xcc-fpga: transaction=%u command=0x%08x bytes-read=%u\n",
++                    xcc_fpga_transaction - 1, xcc_fpga_command,
++                    xcc_fpga_fifo_pos);
++        }
++        xcc_fpga_command = value;
++        xcc_fpga_request_length = sizeof(xcc_fpga_command);
++        for (unsigned int i = 0; i < xcc_fpga_request_length; i++) {
++            xcc_fpga_request[i] = value >> (i * 8);
++        }
++        memset(xcc_fpga_fifo, 0, sizeof(xcc_fpga_fifo));
++        if (value == 0x10000000) {
++            memset(xcc_fpga_fifo + 2, 0xff, 16);
++        }
++        if (value == 0x01410200 && xcc_fpga_i2c_operation_complete) {
++            xcc_fpga_fifo[1] = 0x01;
++        }
++        xcc_fpga_response_length = payload_length;
++        xcc_fpga_fifo_pos = 0;
++        xcc_fpga_collecting_write = xcc_fpga_request[0] & 0x80;
++        if (xcc_fpga_collecting_write) {
++            xcc_fpga_response_length = 0;
++            fprintf(stderr,
++                    "xcc-fpga: transaction=%u write-request-length=%u"
++                    " pending\n",
++                    xcc_fpga_transaction, xcc_fpga_request_length);
++        } else {
++            g_assert(integrity_index < sizeof(xcc_fpga_fifo));
++            xcc_fpga_refresh_response_integrity();
++            if (value == 0x01410200 && xcc_fpga_i2c_operation_complete &&
++                !xcc_fpga_i2c_status_logged) {
++                fprintf(stderr,
++                        "xcc-fpga: first post-completion 0x01410200 fifo="
++                        "%02x %02x %02x %02x\n",
++                        xcc_fpga_fifo[0], xcc_fpga_fifo[1],
++                        xcc_fpga_fifo[2], xcc_fpga_fifo[3]);
++                xcc_fpga_i2c_status_logged = true;
++            }
++            integrity = xcc_fpga_fifo[integrity_index];
++            fprintf(stderr,
++                    "xcc-fpga: transaction=%u payload-length=%u"
++                    " response-integrity-index=%u value=0x%02x\n",
++                    xcc_fpga_transaction, payload_length, integrity_index,
++                    integrity);
++        }
++        xcc_fpga_transaction++;
++    } else if (window->index == 0 && offset == 0 &&
++               xcc_fpga_fifo_pos == 0 &&
++               xcc_fpga_request_length + size <= sizeof(xcc_fpga_request)) {
++        unsigned int expected_length;
++        unsigned int header_length;
++        uint8_t request_crc;
++
++        for (unsigned int i = 0; i < size; i++) {
++            xcc_fpga_request[xcc_fpga_request_length + i] = value >> (i * 8);
++        }
++        xcc_fpga_request_length += size;
++        request_crc = xcc_fpga_request_crc();
++        expected_length = xcc_fpga_expected_write_length();
++        header_length = (xcc_fpga_request[0] & 0x40) ? 6 : 4;
++        if (xcc_fpga_collecting_write &&
++            ((expected_length != 0 &&
++              xcc_fpga_request_length == expected_length) ||
++             (expected_length == 0 &&
++              xcc_fpga_request_length > header_length &&
++              request_crc == 0))) {
++            if (request_crc != 0) {
++                error_report("xcc-fpga: transaction=%u invalid write request"
++                             " CRC 0x%02x",
++                             xcc_fpga_transaction - 1, request_crc);
++            } else {
++                xcc_fpga_collecting_write = false;
++                xcc_fpga_response_length = 0;
++                if (xcc_fpga_request_length == 6 &&
++                    xcc_fpga_request[0] == 0x80 &&
++                    xcc_fpga_request[1] == 0x02 &&
++                    xcc_fpga_request[2] == 0x41 &&
++                    xcc_fpga_request[3] == 0x01 &&
++                    xcc_fpga_request[4] == 0x80) {
++                    xcc_fpga_i2c_operation_complete = true;
++                    fprintf(stderr,
++                            "xcc-fpga: transaction=%u I2C operation complete\n",
++                            xcc_fpga_transaction - 1);
++                }
++                xcc_fpga_refresh_response_integrity();
++                fprintf(stderr,
++                        "xcc-fpga: transaction=%u write-request-complete"
++                        " length=%u response-integrity=0x%02x\n",
++                        xcc_fpga_transaction - 1, xcc_fpga_request_length,
++                        xcc_fpga_fifo[2]);
++            }
++        } else if (xcc_fpga_collecting_write) {
++            fprintf(stderr,
++                    "xcc-fpga: transaction=%u write-request-length=%u"
++                    " expected=%u pending\n",
++                    xcc_fpga_transaction - 1, xcc_fpga_request_length,
++                    expected_length);
++        } else {
++            if (xcc_fpga_request_length == 6 &&
++                (xcc_fpga_request[0] & 0x40)) {
++                xcc_fpga_response_length = xcc_fpga_request[5] * 16;
++            }
++            xcc_fpga_refresh_response_integrity();
++            fprintf(stderr,
++                    "xcc-fpga: transaction=%u request-length=%u"
++                    " response-integrity-index=%u value=0x%02x\n",
++                    xcc_fpga_transaction - 1, xcc_fpga_request_length,
++                    xcc_fpga_response_length + 2,
++                    xcc_fpga_fifo[xcc_fpga_response_length + 2]);
++        }
++    }
++    if (window->index == 2 && offset <= XCC_FPGA_DOORBELL &&
++        offset + size > XCC_FPGA_DOORBELL &&
++        buf[XCC_FPGA_DOORBELL] & 1) {
++        xcc_fpga_complete(bmc);
++    }
++}
++
++static const MemoryRegionOps xcc_fpga_ops = {
++    .read = xcc_fpga_read,
++    .write = xcc_fpga_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++    .valid = {
++        .min_access_size = 1,
++        .max_access_size = 8,
++    },
++    .impl = {
++        .min_access_size = 1,
++        .max_access_size = 8,
++    },
++};
++
++static void aspeed_xcc_fpga_init(AspeedMachineState *bmc)
++{
++    static const char * const names[] = {
++        "xcc-fpga-command", "xcc-fpga-data", "xcc-fpga-control",
++    };
++    g_autofree char *contents = NULL;
++    gsize length = 0;
++    g_autoptr(GError) error = NULL;
++
++    if (!bmc->xcc_ptables_file ||
++        !g_file_get_contents(bmc->xcc_ptables_file, &contents, &length,
++                             &error)) {
++        error_report("xcc-fpga: cannot read PTABLES file: %s",
++                     error ? error->message : "path not configured");
++    } else if (length != sizeof(xcc_ptables_data) ||
++               memcmp(contents, "PTABLES", 7) != 0) {
++        error_report("xcc-fpga: invalid PTABLES file %s",
++                     bmc->xcc_ptables_file);
++    } else {
++        memcpy(xcc_ptables_data, contents, length);
++        xcc_ptables_valid = true;
++    }
++
++    for (unsigned int i = 0; i < ARRAY_SIZE(xcc_fpga_bases); i++) {
++        bmc->xcc_fpga_buf[i] = g_malloc0(xcc_fpga_sizes[i]);
++        bmc->xcc_fpga_window[i].machine = bmc;
++        bmc->xcc_fpga_window[i].index = i;
++        memory_region_init_io(&bmc->xcc_fpga_mr[i], OBJECT(bmc),
++                              &xcc_fpga_ops, &bmc->xcc_fpga_window[i],
++                              names[i], xcc_fpga_sizes[i]);
++        memory_region_add_subregion(get_system_memory(), xcc_fpga_bases[i],
++                                    &bmc->xcc_fpga_mr[i]);
++    }
++
++    /* Lenovo's probe accepts an interface descriptor beginning with 0x80. */
++    bmc->xcc_fpga_buf[0][0x300] = 0x80;
++    xcc_ptables_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL,
++                                     xcc_ptables_install, NULL);
++    timer_mod(xcc_ptables_timer,
++              qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 100 * SCALE_US);
++    fprintf(stderr,
++            "xcc-fpga: model enabled; PTABLES handoff scheduled\n");
++}
+ #include "hw/arm/aspeed_soc.h"
+ #include "hw/arm/machines-qom.h"
+ #include "hw/block/flash.h"
+ #include "hw/gpio/pca9552.h"
+ #include "hw/gpio/pca9554.h"
+ #include "system/block-backend.h"
+-#include "qemu/error-report.h"
+ #include "qemu/units.h"
+ #include "hw/core/qdev-clock.h"
+ #include "system/system.h"
+@@ -187,6 +553,10 @@ static void aspeed_machine_init(MachineState *machine)
+     aspeed_connect_serial_hds_to_uarts(bmc);
+     qdev_realize(DEVICE(bmc->soc), NULL, &error_abort);
+ 
++    if (bmc->xcc_fpga) {
++        aspeed_xcc_fpga_init(bmc);
++    }
++
+     if (defaults_enabled()) {
+         aspeed_board_init_flashes(&bmc->soc->fmc,
+                               bmc->fmc_model ? bmc->fmc_model : amc->fmc_model,
+@@ -273,11 +643,36 @@ static void aspeed_set_mmio_exec(Object *obj, bool value, Error **errp)
+     ASPEED_MACHINE(obj)->mmio_exec = value;
+ }
+ 
++static bool aspeed_get_xcc_fpga(Object *obj, Error **errp)
++{
++    return ASPEED_MACHINE(obj)->xcc_fpga;
++}
++
++static void aspeed_set_xcc_fpga(Object *obj, bool value, Error **errp)
++{
++    ASPEED_MACHINE(obj)->xcc_fpga = value;
++}
++
++static char *aspeed_get_xcc_ptables_file(Object *obj, Error **errp)
++{
++    return g_strdup(ASPEED_MACHINE(obj)->xcc_ptables_file);
++}
++
++static void aspeed_set_xcc_ptables_file(Object *obj, const char *value,
++                                        Error **errp)
++{
++    AspeedMachineState *bmc = ASPEED_MACHINE(obj);
++
++    g_free(bmc->xcc_ptables_file);
++    bmc->xcc_ptables_file = g_strdup(value);
++}
++
+ static void aspeed_machine_instance_init(Object *obj)
+ {
+     AspeedMachineClass *amc = ASPEED_MACHINE_GET_CLASS(obj);
+ 
+     ASPEED_MACHINE(obj)->mmio_exec = false;
++    ASPEED_MACHINE(obj)->xcc_fpga = false;
+     ASPEED_MACHINE(obj)->hw_strap1 = amc->hw_strap1;
+ }
+ 
+@@ -343,6 +738,17 @@ static void aspeed_set_bmc_console(Object *obj, const char *value, Error **errp)
+ 
+ static void aspeed_machine_class_props_init(ObjectClass *oc)
+ {
++    object_class_property_add_bool(oc, "xcc-fpga",
++                                   aspeed_get_xcc_fpga,
++                                   aspeed_set_xcc_fpga);
++    object_class_property_set_description(oc, "xcc-fpga",
++                           "Enable the experimental Lenovo XCC FPGA MMIO model");
++    object_class_property_add_str(oc, "xcc-ptables-file",
++                                  aspeed_get_xcc_ptables_file,
++                                  aspeed_set_xcc_ptables_file);
++    object_class_property_set_description(oc, "xcc-ptables-file",
++                           "Load Lenovo XCC PTABLES for direct kernel boot");
++
+     object_class_property_add_bool(oc, "execute-in-place",
+                                    aspeed_get_mmio_exec,
+                                    aspeed_set_mmio_exec);
+diff --git a/hw/sd/sd.c b/hw/sd/sd.c
+index 37f6e07..b8fdfe9 100644
+--- a/hw/sd/sd.c
++++ b/hw/sd/sd.c
+@@ -164,6 +164,7 @@ struct SDState {
+     uint8_t spec_version;
+     uint64_t boot_part_size;
+     uint64_t rpmb_part_size;
++    uint64_t gp0_part_size;
+     BlockBackend *blk;
+     uint8_t boot_config;
+ 
+@@ -511,6 +512,8 @@ static const uint8_t sd_csd_rw_mask[16] = {
+ static void emmc_set_ext_csd(SDState *sd, uint64_t size)
+ {
+     uint32_t sectcount = size >> HWBLOCK_SHIFT;
++    uint32_t gp0_mult = sd->gp0_part_size / (512 * KiB);
++    uint32_t max_enh_mult = (size + sd->gp0_part_size) / (512 * KiB);
+ 
+     memset(sd->ext_csd, 0, sizeof(sd->ext_csd)); /* FIXME only RW at reset */
+ 
+@@ -539,6 +542,16 @@ static void emmc_set_ext_csd(SDState *sd, uint64_t size)
+     sd->ext_csd[EXT_CSD_REV] = 5;
+     sd->ext_csd[EXT_CSD_RPMB_MULT] = sd->rpmb_part_size / (128 * KiB);
+     sd->ext_csd[EXT_CSD_PARTITION_SUPPORT] = 0b111;
++    sd->ext_csd[EXT_CSD_MAX_ENH_SIZE_MULT] = max_enh_mult;
++    sd->ext_csd[EXT_CSD_MAX_ENH_SIZE_MULT + 1] = max_enh_mult >> 8;
++    sd->ext_csd[EXT_CSD_MAX_ENH_SIZE_MULT + 2] = max_enh_mult >> 16;
++    sd->ext_csd[EXT_CSD_GP_SIZE_MULT] = gp0_mult;
++    sd->ext_csd[EXT_CSD_GP_SIZE_MULT + 1] = gp0_mult >> 8;
++    sd->ext_csd[EXT_CSD_GP_SIZE_MULT + 2] = gp0_mult >> 16;
++    if (sd->gp0_part_size) {
++        sd->ext_csd[EXT_CSD_PARTITION_SETTING_COMPLETED] = 1;
++        sd->ext_csd[EXT_CSD_PARTITION_ATTRIBUTE] = 1 << 1;
++    }
+ 
+     /* Mode segment (RW) */
+     sd->ext_csd[EXT_CSD_PART_CONFIG] = sd->boot_config;
+@@ -868,7 +881,7 @@ static uint32_t sd_blk_len(SDState *sd)
+  * partitions is the "boot-partition-size" property, the one of the RPMB
+  * partition is 'rpmb-partition-size'.
+  */
+-static uint32_t sd_part_offset(SDState *sd)
++static uint64_t sd_part_offset(SDState *sd)
+ {
+     unsigned partition_access;
+ 
+@@ -887,6 +900,8 @@ static uint32_t sd_part_offset(SDState *sd)
+         return sd->boot_part_size * 1;
+     case EXT_CSD_PART_CONFIG_ACC_RPMB:
+         return sd->boot_part_size * 2;
++    case EXT_CSD_PART_CONFIG_ACC_GP0:
++        return sd->boot_part_size * 2 + sd->rpmb_part_size + sd->size;
+     default:
+          g_assert_not_reached();
+     }
+@@ -925,7 +940,8 @@ static void sd_reset(DeviceState *dev)
+     }
+     size = sect << HWBLOCK_SHIFT;
+     if (sd_is_emmc(sd)) {
+-        size -= sd->boot_part_size * 2 + sd->rpmb_part_size;
++        size -= sd->boot_part_size * 2 + sd->rpmb_part_size +
++                sd->gp0_part_size;
+     }
+ 
+     sect = sd_addr_to_wpnum(size) + 1;
+@@ -1433,7 +1449,8 @@ static void emmc_function_switch(SDState *sd, uint32_t arg)
+ 
+         if (((part == EXT_CSD_PART_CONFIG_ACC_BOOT1 ||
+               part == EXT_CSD_PART_CONFIG_ACC_BOOT2) && !sd->boot_part_size) ||
+-            (part == EXT_CSD_PART_CONFIG_ACC_RPMB && !sd->rpmb_part_size)) {
++            (part == EXT_CSD_PART_CONFIG_ACC_RPMB && !sd->rpmb_part_size) ||
++            (part == EXT_CSD_PART_CONFIG_ACC_GP0 && !sd->gp0_part_size)) {
+             qemu_log_mask(LOG_GUEST_ERROR,
+                           "MMC switching to illegal partition\n");
+             sd->card_status |= R_CSR_SWITCH_ERROR_MASK;
+@@ -3081,7 +3098,8 @@ static void sd_realize(DeviceState *dev, Error **errp)
+         blk_size = blk_getlength(sd->blk);
+     }
+     if (blk_size >= 0) {
+-        blk_size -= sd->boot_part_size * 2 + sd->rpmb_part_size;
++        blk_size -= sd->boot_part_size * 2 + sd->rpmb_part_size +
++                    sd->gp0_part_size;
+         if (blk_size > SDSC_MAX_CAPACITY) {
+             if (sd_is_emmc(sd) &&
+                 !QEMU_IS_ALIGNED(blk_size, 1 << HWBLOCK_SHIFT)) {
+@@ -3132,6 +3150,13 @@ static void sd_realize(DeviceState *dev, Error **errp)
+                           "The RPMB partition size must be multiples of 128K"
+                           "and not larger than 16384K.\n");
+     }
++    if (!QEMU_IS_ALIGNED(sd->gp0_part_size, 512 * KiB)) {
++        g_autofree char *size_str = size_to_str(sd->gp0_part_size);
++
++        error_setg(errp, "Invalid GP0 partition size: %s", size_str);
++        error_append_hint(errp,
++                          "The GP0 partition size must be a multiple of 512K.\n");
++    }
+ }
+ 
+ static void emmc_realize(DeviceState *dev, Error **errp)
+@@ -3156,6 +3181,7 @@ static const Property emmc_properties[] = {
+     DEFINE_PROP_UINT64("boot-partition-size", SDState, boot_part_size, 0),
+     DEFINE_PROP_UINT8("boot-config", SDState, boot_config, 0x0),
+     DEFINE_PROP_UINT64("rpmb-partition-size", SDState, rpmb_part_size, 0),
++    DEFINE_PROP_UINT64("gp0-partition-size", SDState, gp0_part_size, 0),
+ };
+ 
+ static void sdmmc_common_class_init(ObjectClass *klass, const void *data)
+diff --git a/hw/sd/sdmmc-internal.h b/hw/sd/sdmmc-internal.h
+index c115f47..e974a2c 100644
+--- a/hw/sd/sdmmc-internal.h
++++ b/hw/sd/sdmmc-internal.h
+@@ -119,6 +119,7 @@ DECLARE_OBJ_CHECKERS(SDState, SDCardClass, SDMMC_COMMON, TYPE_SDMMC_COMMON)
+ #define EXT_CSD_PART_CONFIG_ACC_BOOT1           (0x1)
+ #define EXT_CSD_PART_CONFIG_ACC_BOOT2           (0x2)
+ #define EXT_CSD_PART_CONFIG_ACC_RPMB            (0x3)
++#define EXT_CSD_PART_CONFIG_ACC_GP0              (0x4)
+ 
+ #define EXT_CSD_PART_CONFIG_EN_MASK             (0x7 << 3)
+ #define EXT_CSD_PART_CONFIG_EN_BOOT0            (0x1 << 3)
+diff --git a/include/hw/arm/aspeed.h b/include/hw/arm/aspeed.h
+index a00238e..4dad109 100644
+--- a/include/hw/arm/aspeed.h
++++ b/include/hw/arm/aspeed.h
+@@ -15,6 +15,11 @@
+ 
+ typedef struct AspeedMachineState AspeedMachineState;
+ 
++typedef struct AspeedXccFpgaWindow {
++    AspeedMachineState *machine;
++    unsigned int index;
++} AspeedXccFpgaWindow;
++
+ #define TYPE_ASPEED_MACHINE       MACHINE_TYPE_NAME("aspeed")
+ typedef struct AspeedMachineClass AspeedMachineClass;
+ DECLARE_OBJ_CHECKERS(AspeedMachineState, AspeedMachineClass,
+@@ -42,6 +47,12 @@ struct AspeedMachineState {
+     char *fmc_model;
+     char *spi_model;
+     uint32_t hw_strap1;
++    bool xcc_fpga;
++    char *xcc_ptables_file;
++    MemoryRegion xcc_fpga_mr[3];
++    AspeedXccFpgaWindow xcc_fpga_window[3];
++    uint8_t *xcc_fpga_buf[3];
++    unsigned int xcc_fpga_write_count;
+ };
+ 
+ struct AspeedMachineClass {
+-- 
+2.54.0
+
+
+From b7a98e01f2d64be68a6179d45d83ad179c7d6fb5 Mon Sep 17 00:00:00 2001
+From: zenfish <zen@trouble.org>
+Date: Tue, 1 Sep 2026 14:45:35 -0700
+Subject: [PATCH 2/2] hw: bound Lenovo XCC transaction tracing
+
+---
+ hw/arm/aspeed.c | 84 ++++++++++++++++++++++++++++---------------------
+ 1 file changed, 49 insertions(+), 35 deletions(-)
+
+diff --git a/hw/arm/aspeed.c b/hw/arm/aspeed.c
+index 2f77f3a..4f1c667 100644
+--- a/hw/arm/aspeed.c
++++ b/hw/arm/aspeed.c
+@@ -27,6 +27,7 @@
+ #define XCC_FPGA_DOORBELL   0xf06
+ #define XCC_FPGA_PENDING    0xf05
+ #define XCC_FPGA_REQUEST_MAX (6 + 1024 + 1)
++#define XCC_FPGA_TRACE_LIMIT 500
+ #define XCC_PTABLES_BASE     0x80000000
+ #define XCC_PTABLES_SIZE     0x8000
+ 
+@@ -150,7 +151,7 @@ static uint64_t xcc_fpga_read(void *opaque, hwaddr offset, unsigned size)
+     } else {
+         memcpy(&value, buf + offset, size);
+     }
+-    if (xcc_fpga_read_count < 500) {
++    if (xcc_fpga_read_count < XCC_FPGA_TRACE_LIMIT) {
+         fprintf(stderr,
+                 "xcc-fpga: read[%u] window=%u offset=0x%04" HWADDR_PRIx
+                 " size=%u value=0x%016" PRIx64 "\n",
+@@ -167,14 +168,16 @@ static void xcc_fpga_complete(AspeedMachineState *bmc)
+     unsigned int slot = cmd[0] & 0x7f;
+     uint8_t *desc = cmd + XCC_FPGA_RING + slot * 0x10;
+ 
+-    fprintf(stderr,
+-            "xcc-fpga: slot=%u desc="
+-            "%02x %02x %02x %02x %02x %02x %02x %02x "
+-            "%02x %02x %02x %02x %02x %02x %02x %02x\n",
+-            slot, desc[0], desc[1], desc[2], desc[3],
+-            desc[4], desc[5], desc[6], desc[7], desc[8],
+-            desc[9], desc[10], desc[11], desc[12], desc[13],
+-            desc[14], desc[15]);
++    if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
++        fprintf(stderr,
++                "xcc-fpga: slot=%u desc="
++                "%02x %02x %02x %02x %02x %02x %02x %02x "
++                "%02x %02x %02x %02x %02x %02x %02x %02x\n",
++                slot, desc[0], desc[1], desc[2], desc[3],
++                desc[4], desc[5], desc[6], desc[7], desc[8],
++                desc[9], desc[10], desc[11], desc[12], desc[13],
++                desc[14], desc[15]);
++    }
+ 
+     desc[0] = 2;
+     cmd[1] = slot;
+@@ -189,7 +192,7 @@ static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
+     uint8_t *buf = bmc->xcc_fpga_buf[window->index];
+ 
+     memcpy(buf + offset, &value, size);
+-    if (bmc->xcc_fpga_write_count < 500) {
++    if (bmc->xcc_fpga_write_count < XCC_FPGA_TRACE_LIMIT) {
+         fprintf(stderr,
+                 "xcc-fpga: write[%u] window=%u offset=0x%04" HWADDR_PRIx
+                 " size=%u value=0x%016" PRIx64 "\n",
+@@ -204,7 +207,8 @@ static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
+         unsigned int integrity_index = payload_length + 2;
+         uint8_t integrity;
+ 
+-        if (xcc_fpga_transaction != 0) {
++        if (xcc_fpga_transaction != 0 &&
++            xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
+             fprintf(stderr,
+                     "xcc-fpga: transaction=%u command=0x%08x bytes-read=%u\n",
+                     xcc_fpga_transaction - 1, xcc_fpga_command,
+@@ -227,10 +231,12 @@ static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
+         xcc_fpga_collecting_write = xcc_fpga_request[0] & 0x80;
+         if (xcc_fpga_collecting_write) {
+             xcc_fpga_response_length = 0;
+-            fprintf(stderr,
+-                    "xcc-fpga: transaction=%u write-request-length=%u"
+-                    " pending\n",
+-                    xcc_fpga_transaction, xcc_fpga_request_length);
++            if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
++                fprintf(stderr,
++                        "xcc-fpga: transaction=%u write-request-length=%u"
++                        " pending\n",
++                        xcc_fpga_transaction, xcc_fpga_request_length);
++            }
+         } else {
+             g_assert(integrity_index < sizeof(xcc_fpga_fifo));
+             xcc_fpga_refresh_response_integrity();
+@@ -244,11 +250,13 @@ static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
+                 xcc_fpga_i2c_status_logged = true;
+             }
+             integrity = xcc_fpga_fifo[integrity_index];
+-            fprintf(stderr,
+-                    "xcc-fpga: transaction=%u payload-length=%u"
+-                    " response-integrity-index=%u value=0x%02x\n",
+-                    xcc_fpga_transaction, payload_length, integrity_index,
+-                    integrity);
++            if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
++                fprintf(stderr,
++                        "xcc-fpga: transaction=%u payload-length=%u"
++                        " response-integrity-index=%u value=0x%02x\n",
++                        xcc_fpga_transaction, payload_length, integrity_index,
++                        integrity);
++            }
+         }
+         xcc_fpga_transaction++;
+     } else if (window->index == 0 && offset == 0 &&
+@@ -290,30 +298,36 @@ static void xcc_fpga_write(void *opaque, hwaddr offset, uint64_t value,
+                             xcc_fpga_transaction - 1);
+                 }
+                 xcc_fpga_refresh_response_integrity();
++                if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
++                    fprintf(stderr,
++                            "xcc-fpga: transaction=%u write-request-complete"
++                            " length=%u response-integrity=0x%02x\n",
++                            xcc_fpga_transaction - 1,
++                            xcc_fpga_request_length, xcc_fpga_fifo[2]);
++                }
++            }
++        } else if (xcc_fpga_collecting_write) {
++            if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
+                 fprintf(stderr,
+-                        "xcc-fpga: transaction=%u write-request-complete"
+-                        " length=%u response-integrity=0x%02x\n",
++                        "xcc-fpga: transaction=%u write-request-length=%u"
++                        " expected=%u pending\n",
+                         xcc_fpga_transaction - 1, xcc_fpga_request_length,
+-                        xcc_fpga_fifo[2]);
++                        expected_length);
+             }
+-        } else if (xcc_fpga_collecting_write) {
+-            fprintf(stderr,
+-                    "xcc-fpga: transaction=%u write-request-length=%u"
+-                    " expected=%u pending\n",
+-                    xcc_fpga_transaction - 1, xcc_fpga_request_length,
+-                    expected_length);
+         } else {
+             if (xcc_fpga_request_length == 6 &&
+                 (xcc_fpga_request[0] & 0x40)) {
+                 xcc_fpga_response_length = xcc_fpga_request[5] * 16;
+             }
+             xcc_fpga_refresh_response_integrity();
+-            fprintf(stderr,
+-                    "xcc-fpga: transaction=%u request-length=%u"
+-                    " response-integrity-index=%u value=0x%02x\n",
+-                    xcc_fpga_transaction - 1, xcc_fpga_request_length,
+-                    xcc_fpga_response_length + 2,
+-                    xcc_fpga_fifo[xcc_fpga_response_length + 2]);
++            if (xcc_fpga_transaction < XCC_FPGA_TRACE_LIMIT) {
++                fprintf(stderr,
++                        "xcc-fpga: transaction=%u request-length=%u"
++                        " response-integrity-index=%u value=0x%02x\n",
++                        xcc_fpga_transaction - 1, xcc_fpga_request_length,
++                        xcc_fpga_response_length + 2,
++                        xcc_fpga_fifo[xcc_fpga_response_length + 2]);
++            }
+         }
+     }
+     if (window->index == 2 && offset <= XCC_FPGA_DOORBELL &&
+-- 
+2.54.0
+
