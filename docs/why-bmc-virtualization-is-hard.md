@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/why-bmc-virtualization-is-hard.html source-sha256=065ed49b6966504a69c351ceb3e83653588e58b7acfc71c203e8924e35b1135a body-sha256=74b7d2f3a51ebb78b801b7b79f5a642f3717ee5becfd22b253f5b8b4170aff2b -->
+<!-- html2md:auto source=docs/why-bmc-virtualization-is-hard.html source-sha256=78ca1b1809c8b4322096c3e67c445ddf111ae1a1e56674fa3a99d3e6ca879695 body-sha256=7fbeb13ad5c2e3c61ae05b692d27ce48ab3b2da65ebf1f1d4a90410f1801d198 -->
 
 ## Why, oh Why?
 
@@ -183,7 +183,7 @@ These are the release acceptance results, not claims of perfect physical-hardwar
 | idrac9 | ICMP, SSH, IPMI, vendor Web-UI; Redfish unavailable; USB-net warm restore is network-dead | Pass | 10m31s |
 | advantech-asmb787 | Serial login; external networking remains unresolved, with the old NC-SI path the leading explanation | Console pass | 9m38s |
 | idrac10 | ICMP, SSH, retained IPMI through vendor `fullfw` with auth, state, and selected command interposition; static Redfish ServiceRoot; no vendor Web-UI | Pass | 7m37s |
-| megarac-hpe | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | Pass | 8m07s after three rerolls; nondeterministic |
+| megarac-hpe | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | Pass | 8m07s total; fourth attempt succeeded after three rerolls |
 
 ## Remaining limits
 

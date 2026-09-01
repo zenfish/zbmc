@@ -1,8 +1,8 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=afc7148214f6533ecca71e9a93de9e771f26a555fc4627f07f7b0bdcf5b61c55 body-sha256=2496cf4d2419f38d5ea7bbd53390f56df85e914e500c4aa7e1e26b84cac981e7 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=f104221f91c92c4bc1c748017aeb1f968c89ce25790d0a35ab3d3b24f512c043 body-sha256=e0d7bcc038176a87ad09479024964ee1e734bd63b28adcb5184019a428130977 -->
 
 # zbmc HPE XD670 MegaRAC
 
-AMI MegaRAC SP-X on AST2600. The 2026-08-27 cold run reached retained IPMI in 8m07s after three automatic `IPMIMain` crash rerolls. Redfish/Web-UI were unavailable and vendor SSH is not part of the accepted path.
+AMI MegaRAC SP-X on AST2600. The 2026-08-27 cold run reached retained IPMI in 8m07s total; its fourth attempt succeeded after three automatic `IPMIMain` crash rerolls. Redfish/Web-UI were unavailable and vendor SSH is not part of the accepted path.
 
 ## Current operation
 

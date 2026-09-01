@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=a83818d7e35432d85e4331dde07005a4d479838fb598a6852548ffc572a46d0b body-sha256=774befcde3c1b56c4ece5ac19ec0ab7fc1eb3e6d9c07fed95970b6f238050e5d -->
+<!-- zmd2html:auto source-sha256=082d509a417169889430fd6fdf873920efd8c3dc030a396e224a2a95f86cacda body-sha256=fddd7b9b8add1bd81f7df261b670fc16a43b7a97ebcd1eb2012cd0694fd4c10a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -133,14 +133,14 @@ NC-SI path</td>
 <td><strong>megarac-hpe</strong></td>
 <td>ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH
 absent</td>
-<td>pass - 8m07s after three automatic cold-boot rerolls; timing is
-nondeterministic</td>
+<td>pass - 8m07s total; fourth cold-boot attempt succeeded after three
+<code>IPMIMain</code> crash rerolls</td>
 </tr>
 <tr>
 <td><strong>ieit</strong></td>
-<td>SSH/SMASH, IPMI, Redfish, vendor Web-UI; user networking, so no
-ICMP</td>
-<td>pass - 1m02s</td>
+<td>IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport
+is not a Unix shell; user networking, so no ICMP</td>
+<td>pass - 1m55s</td>
 </tr>
 <tr>
 <td><strong>supermicro-x14</strong></td>

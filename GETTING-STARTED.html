@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=2d1f14cd7827ea2496d6dc68e53afca8ae5051b529fcfb32b82310c8ff777dae body-sha256=ebc2278035d0802de91734f615ee02a632414731f6973efd7ab755c1894346e2 -->
+<!-- zmd2html:auto source-sha256=2b343ba2a5a78d556c1c9c2648d49af0ce4dce317071dae57f3fa78596221efc body-sha256=f71c0de96ae506b9247e651cfbfe8f3e502eab5c5cb2ddb99a9a45ea64f5ee3e -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -169,7 +169,13 @@ reference host.</li>
 Redfish ServiceRoot, but has no vendor Web-UI.</li>
 <li><code>megarac-hpe</code> accepts retained IPMI only. Cold boot is
 nondeterministic and automatically rerolls an attempt when the vendor
-<code>IPMIMain</code> process hits its known startup race.</li>
+<code>IPMIMain</code> process hits its known startup race. The published
+8m07s result was total wall time for four attempts: three crashed and
+the fourth succeeded.</li>
+<li><code>ieit</code> accepts IPMI, Redfish, and the vendor Web-UI. Its
+optional <code>zbmc ieit clp</code> endpoint is SMASH/CLP over SSH
+transport, not a Unix shell, and is not part of cold-boot
+readiness.</li>
 <li><code>idrac9</code> must cold-boot. Its USB network does not survive
 warm migration.</li>
 <li><code>idrac10</code> cold-boots by default. Its build downloads a

@@ -5,16 +5,18 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 box="$repo/boxes/ieit"
 
 for script in "$box/build.sh" "$box/build-rootfs.sh" "$box/boot.sh" \
-              "$box/rootfs-overlay/commerDiagnoseServer-wrapper.sh"; do
+              "$box/rootfs-overlay/commerDiagnoseServer-wrapper.sh" \
+              "$box/rootfs-overlay/host-complex-wrapper.sh"; do
     bash -n "$script"
 done
 
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_VERSION=11.0.0' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2500-evb' "$box/zbmc.box"
-grep -Fxq 'ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="ipmi redfish webui"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_L2_REQUIRED=0' "$box/zbmc.box"
-grep -Fxq "ZBMC_SSH_NOTE='authenticated SMASH CLI; not a Unix shell'" "$box/zbmc.box"
+grep -Fxq 'ZBMC_TIMING_PROFILE=management-no-clp' "$box/zbmc.box"
+grep -Fq 'IEIT SSH exposes SMASH/CLP, not a Unix shell' "$box/zbmc.box"
 grep -Fxq "ZBMC_READY_GREP='Starting lighttpd'" "$box/zbmc.box"
 grep -Fxq 'IPMI_OPTS="-C 17 -I lanplus"' "$box/zbmc.box"
 grep -Fq -- '-C 17 -I lanplus -t "$IPMI_T"' "$box/zbmc.box"
@@ -47,11 +49,13 @@ web="$tmp/web"
 mock_bin="$tmp/bin"
 packed="$tmp/packed-rootfs"
 stage="$tmp/stage"
-mkdir -p "$fixture"/{bin,sbin,etc/init.d,etc/rcS.d,etc/rc6.d,etc/rc7.d,etc/rc8.d,etc/rc9.d,usr/local/bin,usr/local/sbin,usr/local/www} \
+mkdir -p "$fixture"/{bin,sbin,etc/init.d,etc/rcS.d,etc/rc3.d,etc/rc6.d,etc/rc7.d,etc/rc8.d,etc/rc9.d,usr/local/bin,usr/local/sbin,usr/local/www} \
     "$conf/BMC1/wolfpass" "$web/Java" "$mock_bin" "$packed"
 
 for file in bin/sh sbin/init etc/init.d/mountall.sh etc/init.d/ncsicfg.sh \
-            etc/init.d/phycfg.sh etc/init.d/commerDiagnoseServer; do
+            etc/init.d/phycfg.sh etc/init.d/commerDiagnoseServer \
+            etc/init.d/commer_server etc/init.d/commer_poweroffscan_server \
+            etc/init.d/commerSelfManagerServer; do
     printf '#!/bin/sh\nexit 0\n' >"$fixture/$file"
     chmod 0755 "$fixture/$file"
 done
@@ -66,6 +70,9 @@ ln -s ../init.d/commerDiagnoseServer "$fixture/etc/rc6.d/K27commerDiagnoseServer
 ln -s ../init.d/commerDiagnoseServer "$fixture/etc/rc7.d/K27commerDiagnoseServer"
 ln -s ../init.d/commerDiagnoseServer "$fixture/etc/rc8.d/K27commerDiagnoseServer"
 ln -s ../init.d/commerDiagnoseServer "$fixture/etc/rc9.d/K88commerDiagnoseServer"
+ln -s ../init.d/commer_server "$fixture/etc/rcS.d/S32commer_server"
+ln -s ../init.d/commer_poweroffscan_server "$fixture/etc/rcS.d/S33commer_poweroffscan_server"
+ln -s ../init.d/commerSelfManagerServer "$fixture/etc/rc3.d/S99commerSelfManagerServer"
 printf 'ipmi service\n' >"$fixture/usr/local/bin/IPMIMain"
 printf 'web service\n' >"$fixture/usr/local/sbin/lighttpd"
 printf 'ipmi config\n' >"$conf/BMC1/wolfpass/IPMI.conf"
@@ -120,6 +127,12 @@ grep -Fxq 'vendor diagnostic' \
     "$result/etc/init.d/commerDiagnoseServer.vendor.sh"
 grep -Fq 'CommerDiagnose disabled' \
     "$result/etc/init.d/commerDiagnoseServer"
+test -x "$result/etc/init.d/commer_server.vendor.sh"
+test -x "$result/etc/init.d/commer_poweroffscan_server.vendor.sh"
+test -x "$result/etc/init.d/commerSelfManagerServer.vendor.sh"
+grep -Fq 'host power/PCIe/ME hardware is not modeled' "$result/etc/init.d/commer_server"
+grep -Fq 'host power/PCIe/ME hardware is not modeled' "$result/etc/init.d/commer_poweroffscan_server"
+grep -Fq 'host power/PCIe/ME hardware is not modeled' "$result/etc/init.d/commerSelfManagerServer"
 test "$(readlink "$result/etc/rcS.d/S46commerDiagnoseServer")" = \
     ../init.d/commerDiagnoseServer
 test "$(readlink "$result/etc/rc9.d/S30commerDiagnoseServer")" = \

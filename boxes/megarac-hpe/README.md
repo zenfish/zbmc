@@ -1,6 +1,6 @@
-<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=e6d3514776ff2748a24a4674aee5c126ebf6c52ae3b45071d5c9c8d963b8f96f body-sha256=ea7b95578c195885a090e2d676f4e086b18ec797cae851e9becedca790171cff -->
+<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=28cea9cedddb4a076f4f4cbe8e35e2d0faf9a99c6de594907114d9f608cc4ad7 body-sha256=c4d7b816dbf32a39605f899f33fc558f71bfb610bee3dfda585527348486af88 -->
 
-**Historical investigation record (2026-07-28).** Current release acceptance is ICMP plus retained IPMI. Redfish/Web-UI are unavailable, vendor SSH is absent, and the 2026-08-27 cold run took 8m07s after three automatic rerolls. Injected blank-password network shells are disabled unless requested. Use the repository README, SECURITY.md, and `zbmc megarac-hpe status -v` for current behavior.
+**Historical investigation record (2026-07-28).** Current release acceptance is ICMP plus retained IPMI. Redfish/Web-UI are unavailable, vendor SSH is absent, and the 2026-08-27 cold run took 8m07s total; its fourth attempt succeeded after three automatic rerolls. Injected blank-password network shells are disabled unless requested. Use the repository README, SECURITY.md, and `zbmc megarac-hpe status -v` for current behavior.
 
 # Virtual HPE Cray XD670 BMC
 

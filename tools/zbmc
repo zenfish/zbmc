@@ -159,7 +159,8 @@ usage(){
   echo "  status [-f] [-v]  concise health; -v explains checks; -f follows startup (default verb)"
   echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
   echo "  evidence [RUN_ID] show the run evidence directory and its files"
-  echo "  ssh [cmd]         SSH into the box (dropbear; sysadmin/blank)"
+  echo "  ssh [cmd]         SSH into boxes that expose a Unix shell"
+  echo "  clp               management CLP over SSH transport (supported boxes only)"
   echo "  telnet            telnet into the box (mini_telnetd; no auth; port 23)"
   echo "  ipmi <cmd...>     authenticated zipmi (e.g. zbmc idrac9 ipmi mc info)"
   echo "  web               bring up httpd + Redfish"
@@ -1126,6 +1127,7 @@ PY
       break
     done ;;
   ssh)    zbmc_ssh "$@" ;;
+  clp)    declare -F zbmc_clp >/dev/null && zbmc_clp "$@" || { echo "zbmc: '$ZBMC_NAME' has no CLP verb"; exit 2; } ;;
   telnet) declare -F zbmc_telnet >/dev/null && zbmc_telnet "$@" || { nc "$ZBMC_IP" "${TELNET_PORT:-23}"; } ;;
   ipmi)  [ $# -eq 0 ] && { echo "usage: zbmc $ZBMC_NAME ipmi <cmd...>  (e.g. mc info)"; exit 2; }; Z "$@" ;;
   web)   zbmc_web "$@" ;;

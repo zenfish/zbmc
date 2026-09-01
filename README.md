@@ -45,8 +45,8 @@ it is a reproducibility baseline, not a promise that every vendor service is com
 | **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m21s |
 | **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 9m38s |
 | **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | pass - 7m37s |
-| **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s after three automatic cold-boot rerolls; timing is nondeterministic |
-| **ieit** | SSH/SMASH, IPMI, Redfish, vendor Web-UI; user networking, so no ICMP | pass - 1m02s |
+| **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s total; fourth cold-boot attempt succeeded after three `IPMIMain` crash rerolls |
+| **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
 | **supermicro-x10** | user-net (default): forwarded SSH, IPMI, Redfish, Web-UI; direct-LAN: the same plus guest ICMP; 60s stable hold | pass - 2m38s user-net / 3m11s direct-LAN |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |

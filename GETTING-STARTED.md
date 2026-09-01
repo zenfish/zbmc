@@ -150,7 +150,10 @@ The current measured acceptance boundary is in the README fleet table. Important
 - `advantech-asmb787` is console-only and took 9m38s on the reference host.
 - `idrac10` reaches SSH, retained IPMI, and its static Redfish ServiceRoot, but has no vendor Web-UI.
 - `megarac-hpe` accepts retained IPMI only. Cold boot is nondeterministic and automatically rerolls an
-  attempt when the vendor `IPMIMain` process hits its known startup race.
+  attempt when the vendor `IPMIMain` process hits its known startup race. The published 8m07s result
+  was total wall time for four attempts: three crashed and the fourth succeeded.
+- `ieit` accepts IPMI, Redfish, and the vendor Web-UI. Its optional `zbmc ieit clp` endpoint is
+  SMASH/CLP over SSH transport, not a Unix shell, and is not part of cold-boot readiness.
 - `idrac9` must cold-boot. Its USB network does not survive warm migration.
 - `idrac10` cold-boots by default. Its build downloads a hash-pinned matched checkpoint from
   `git.trouble.org`; confirm that `./tools/zbmc list` reports `READY`, then restore it with

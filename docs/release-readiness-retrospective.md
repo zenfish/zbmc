@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/release-readiness-retrospective.html source-sha256=7b4bab48e04f983ea5153355bad5f1468e66dc7745cf55a8f177ec4fc6059c69 body-sha256=ee679933a430c60be2ee844224dbf4ee8940b1b9038eebcd073e5ca7a5b346be -->
+<!-- html2md:auto source=docs/release-readiness-retrospective.html source-sha256=8c24d447e5ffd433ae9320d714c19f2034611dc38fba2f8af766ae2f40b34fb1 body-sha256=2455cce5d4325d631276b05f21e52c1ceaa10018afdb97d0be5dd13b0c4b4350 -->
 
 Repository audit · 2026-08-27
 
@@ -62,7 +62,7 @@ The important distinction is not “real versus fake.” It is whether the vendo
 | supermicro-x14 | ICMP, SSH, IPMI, Redfish, Web-UI | 3m31s | Scripted service environment |
 | idrac9 | ICMP, SSH, IPMI, vendor Web-UI | 10m31s | Cold-only P4 boot; Redfish unavailable |
 | idrac10 | ICMP, SSH, retained IPMI, static Redfish | 7m37s | No vendor Web-UI; static HTTP substitute |
-| megarac-hpe | ICMP, retained IPMI | 8m07s after three rerolls | Nondeterministic cold boot; injected network shells disabled |
+| megarac-hpe | ICMP, retained IPMI | 8m07s total; fourth attempt succeeded after three rerolls | Nondeterministic cold boot; injected network shells disabled |
 | advantech-asmb787 | Serial console | 9m38s | External NC-SI path unmodeled |
 
 ## Remaining release risks

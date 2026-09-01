@@ -42,6 +42,14 @@ mv "$ROOT/etc/init.d/commerDiagnoseServer" \
 install -m 0755 "$HERE/rootfs-overlay/commerDiagnoseServer-wrapper.sh" \
     "$ROOT/etc/init.d/commerDiagnoseServer"
 
+# These applications register with procmonitor and then exit when the host
+# complex is absent. After 15 respawns procmonitor reboots the entire BMC.
+for service in commer_server commer_poweroffscan_server commerSelfManagerServer; do
+    mv "$ROOT/etc/init.d/$service" "$ROOT/etc/init.d/$service.vendor.sh"
+    install -m 0755 "$HERE/rootfs-overlay/host-complex-wrapper.sh" \
+        "$ROOT/etc/init.d/$service"
+done
+
 # The preserved Web-UI is a separate firmware CramFS. The legacy Java remote-console
 # clients exceed this kernel's ramdisk ceiling; the HTML5 UI and KVM client remain.
 rmdir "$ROOT/usr/local/www"
@@ -65,7 +73,13 @@ test -x "$VERIFY/etc/init.d/zbmc-runtime.sh"
 test -x "$VERIFY/etc/init.d/ncsicfg.vendor.sh"
 test -x "$VERIFY/etc/init.d/phycfg.vendor.sh"
 test -x "$VERIFY/etc/init.d/commerDiagnoseServer.vendor.sh"
+test -x "$VERIFY/etc/init.d/commer_server.vendor.sh"
+test -x "$VERIFY/etc/init.d/commer_poweroffscan_server.vendor.sh"
+test -x "$VERIFY/etc/init.d/commerSelfManagerServer.vendor.sh"
 grep -q 'CommerDiagnose disabled' "$VERIFY/etc/init.d/commerDiagnoseServer"
+grep -q 'host power/PCIe/ME hardware is not modeled' "$VERIFY/etc/init.d/commer_server"
+grep -q 'host power/PCIe/ME hardware is not modeled' "$VERIFY/etc/init.d/commer_poweroffscan_server"
+grep -q 'host power/PCIe/ME hardware is not modeled' "$VERIFY/etc/init.d/commerSelfManagerServer"
 test "$(readlink "$VERIFY/etc/rcS.d/S06mountall.sh")" = ../init.d/mountall.sh
 test "$(readlink "$VERIFY/etc/rcS.d/S46commerDiagnoseServer")" = \
     ../init.d/commerDiagnoseServer

@@ -62,7 +62,8 @@ Current measured boundaries:
   starts, but external SSH/IPMI/Redfish/Web-UI are not accepted because the old guest rejects QEMU's
   NC-SI response.
 - HPE XD670 MegaRAC: retained vendor IPMI is the accepted service; Redfish/Web-UI are unavailable and
-  vendor SSH is absent. The 2026-08-27 cold run reached READY in 8m07s after three automatic rerolls,
+  vendor SSH is absent. The 2026-08-27 cold run reached READY in 8m07s total; its fourth attempt
+  succeeded after three automatic rerolls,
   so its startup time remains nondeterministic.
 
 Console access proves local operator access, not external management functionality. Accept a service

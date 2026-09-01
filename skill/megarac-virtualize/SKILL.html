@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=231a571729fd7d48110ba2faa7225923a795f138ee6089dd68576ccf5bfb61c7 body-sha256=0c728fabea07733ba9d0dca3fa2cdc62a314d8addd450350523a258a39c4612e -->
+<!-- zmd2html:auto source-sha256=a3197635fec94099be06914526f609b544077fd97072885950d29c63e2440212 body-sha256=f819332125f199ad7657e8442d2a6f10282c1d27e60ea9d53338bb4090f8eeac -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Virtualize AMI MegaRAC firmware</title>
@@ -118,8 +118,9 @@ SSH/IPMI/Redfish/Web-UI are not accepted because the old guest rejects
 QEMU's NC-SI response.</li>
 <li>HPE XD670 MegaRAC: retained vendor IPMI is the accepted service;
 Redfish/Web-UI are unavailable and vendor SSH is absent. The 2026-08-27
-cold run reached READY in 8m07s after three automatic rerolls, so its
-startup time remains nondeterministic.</li>
+cold run reached READY in 8m07s total; its fourth attempt succeeded
+after three automatic rerolls, so its startup time remains
+nondeterministic.</li>
 </ul>
 <p>Console access proves local operator access, not external management
 functionality. Accept a service only through its declared functional
