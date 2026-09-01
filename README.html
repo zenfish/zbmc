@@ -148,6 +148,12 @@ Redfish is disabled</td>
 <td>partial - Web-UI pass in 9m40s; 15m cold readiness deadline</td>
 </tr>
 <tr>
+<td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
+<td>vendor Web-UI; user networking, so no ICMP; IPMI receives requests
+without replying and SSH resets before key exchange</td>
+<td>partial - Web-UI pass at guest uptime 6m04s plus a 60s stable hold</td>
+</tr>
+<tr>
 <td><strong>supermicro-x14</strong></td>
 <td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
 <td>pass - 3m31s</td>
@@ -171,7 +177,7 @@ small four-core Intel system). <code>zbmc</code> learns timing profiles
 from completed runs, but cold firmware startup remains load-sensitive.
 Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with
 <code>start --warm</code> because QEMU machine-version drift can
-invalidate a checkpoint. iDRAC9 is cold-only. The iDRAC10 checkpoint is
+invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is
 downloaded as a hash-pinned matched bundle from
 <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
@@ -262,8 +268,9 @@ family:</p>
 <tbody>
 <tr>
 <td>10.0.6.x</td>
-<td>AMI MegaRAC</td>
-<td>megarac-hpe (.66), IEIT/Inspur (.67)</td>
+<td>Vendor firmware</td>
+<td>megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68),
+lenovo-xcc (.69)</td>
 </tr>
 <tr>
 <td>10.0.7.x</td>
@@ -294,7 +301,8 @@ and set <strong>one</strong> of:</p>
 ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
 # ZBMC_POOL=192.168.9    # or a completely different block
 # → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
-#   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41, asmb787=.50
+#   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41,
+#   irmc-fujitsu=.42, lenovo-xcc=.43, asmb787=.50
 
 # Per-box override — when you only have a few free IPs:
 ZBMC_IP_idrac9=172.16.0.99

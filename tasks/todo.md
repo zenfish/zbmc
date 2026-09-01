@@ -14,3 +14,17 @@ The original GitHub run failed because the new iLO5 contract requires `Crypto.Ci
 `tools/sync-docs` also accepts one or more `.md` or `.html` selectors, preserves those selectors during post-write verification, and leaves its no-argument repository-wide behavior unchanged.
 
 Verified with `python3 -m py_compile tools/sync-docs`, `bash tests/sync-docs-cli.sh`, targeted Markdown/HTML checks, `bash tests/run`, and `git diff --check`.
+
+# Integrate Lenovo XCC
+
+- [x] Build and pin the Lenovo-specific QEMU 11 runtime.
+- [x] Publish and hash-pin the preserved cold-boot artifacts.
+- [x] Add the standard address allocation, cold boot, and WebUI readiness contract.
+- [x] Synchronize the HTML and Markdown operator documentation.
+- [ ] Cold-boot and verify the 60-second stability hold on Debby.
+
+## Review
+
+The Lenovo XCC runtime preserves the vendor kernel and root filesystem, adds the minimum platform emulation required for the FPGA/eMMC startup path, and declares only the reproduced vendor WebUI. IPMI and SSH remain explicitly disabled in the service contract. Warm start remains unadvertised until migration is tested successfully.
+
+Static verification passed with the Lenovo runtime test, QEMU recipe test, all 45 documentation pairs, and the repository documentation contract. Live Debby verification remains before completion.

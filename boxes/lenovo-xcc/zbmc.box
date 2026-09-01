@@ -1,0 +1,87 @@
+# Lenovo XClarity Controller preserved Newyork-pass1 runtime.
+#
+# HTTPS is verified. The guest opens UDP/623 but does not answer RMCP+, and SSH
+# resets before key exchange; neither is part of the readiness contract.
+ZBMC_NAME=lenovo-xcc
+ZBMC_DESC="Lenovo XClarity Controller / AST2600 - vendor Web-UI"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$ROOT/work/lenovo-xcc}"
+ZBMC_IP=$(_zbmc_resolve_ip lenovo-xcc 43 10.0.6.69)
+ZBMC_HOST=lenovo-xcc
+
+ZBMC_QEMU="$ROOT/qemu/runtime/qemu-system-arm-lenovo-xcc"
+ZBMC_QEMU_SHA256=05de4c762687e826445b418c365e8da6dff051e6a2fe244ed0bbc161fa2e7e9f
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
+ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_REQUIRED_SERVICES="webui"
+ZBMC_DISABLED_SERVICES="ssh ipmi redfish"
+ZBMC_L2_REQUIRED=0
+ZBMC_STABILITY_SECONDS=60
+ZBMC_READY_DEADLINE=900
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
+ZBMC_EXPECTED_FIRMWARE=5
+ZBMC_EXPECTED_BOOTSTRAP=90
+ZBMC_EXPECTED_READY=480
+
+SSH_USER=USERID
+SSH_PW=PASSW0RD
+SSH_PORT=22
+IPMI_USER=USERID
+IPMI_PW=PASSW0RD
+IPMI_KEY=00
+IPMI_PORT=623
+IPMI_T=15
+IPMI_OPTS="-C 17 -I lanplus"
+WEB_PORT=443
+HTTP_PORT=80
+ZBMC_HTTP_PROBE_TIMEOUT=15
+
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/launcher.log"
+SOCK="$ZBMC_DIR/serial.sock"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  local qp= n=0
+  _zbmc_lo_alias "$ZBMC_IP"
+  : >"$LOG"
+  ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+    IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
+    HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" \
+    QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
+  while [ "$n" -lt 60 ]; do
+    qp=$(pgrep -f "hostname=lenovo-xcc.*hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1)
+    [ -n "$qp" ] && break
+    sleep 0.25
+    n=$((n + 1))
+  done
+  [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
+  printf '%s\n' "$qp"
+}
+
+zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+zbmc_ready() {
+  local file
+  for file in kernel.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
+    [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc lenovo-xcc build"; return 1; }
+  done
+  echo "ready (cold boot; preserved XCC Web-UI, IPMI/SSH disabled)"
+}
+
+zbmc_web() {
+  curl -sk --max-time 15 -o /dev/null -w 'Lenovo XCC Web-UI: HTTP %{http_code}\n' \
+    "https://$ZBMC_IP:$WEB_PORT/"
+}
+
+zbmc_console() {
+  command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
+  echo "Lenovo XCC console -> $SOCK (Ctrl-] to detach)"
+  exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
+}
+
+ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'

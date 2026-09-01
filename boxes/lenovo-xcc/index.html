@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lenovo XCC runtime | zbmc</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-stone-950 text-stone-100 antialiased">
+  <main class="mx-auto max-w-5xl px-6 py-16">
+    <p class="font-mono text-sm uppercase tracking-[0.25em] text-amber-400">zbmc / preserved firmware</p>
+    <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
+    <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
+
+    <section class="mt-12 grid gap-4 sm:grid-cols-3">
+      <article class="border border-emerald-500/40 bg-emerald-950/30 p-6">
+        <p class="font-mono text-xs uppercase tracking-widest text-emerald-400">Verified</p>
+        <p class="mt-3 text-2xl font-bold">HTTPS 200</p>
+        <p class="mt-2 text-stone-300">Vendor page identifies as XCC Web Server and Lenovo XClarity Controller 2.</p>
+      </article>
+      <article class="border border-amber-500/40 bg-amber-950/30 p-6">
+        <p class="font-mono text-xs uppercase tracking-widest text-amber-400">Cold only</p>
+        <p class="mt-3 text-2xl font-bold">~6 minutes</p>
+        <p class="mt-2 text-stone-300">Web-ready at guest uptime 364 seconds; verified again after the 60-second hold.</p>
+      </article>
+      <article class="border border-rose-500/40 bg-rose-950/30 p-6">
+        <p class="font-mono text-xs uppercase tracking-widest text-rose-400">Not declared</p>
+        <p class="mt-3 text-2xl font-bold">IPMI / SSH</p>
+        <p class="mt-2 text-stone-300">UDP/623 receives requests without replies. SSH resets before key exchange.</p>
+      </article>
+    </section>
+
+    <section class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">What the runtime changes</h2>
+      <p class="mt-4 leading-7 text-stone-300">The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces <code class="text-amber-300">vpdoctor</code> with a sleeping process because the physical watchdog/platform contract is unavailable. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.</p>
+    </section>
+
+    <section class="mt-12 grid gap-8 md:grid-cols-2">
+      <div>
+        <h2 class="text-2xl font-bold">Run</h2>
+        <pre class="mt-4 overflow-x-auto bg-black p-5 text-sm text-emerald-300"><code>./tools/zbmc lenovo-xcc build
+sudo ./tools/zbmc lenovo-xcc start
+./tools/zbmc lenovo-xcc web
+./tools/zbmc lenovo-xcc status</code></pre>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold">Pinned inputs</h2>
+        <ul class="mt-4 space-y-3 text-stone-300">
+          <li>Preserved zImage with block-spliced observer initramfs</li>
+          <li>Lenovo DTB, reconstructed SRAM, and PTABLES</li>
+          <li>Compressed 7 GiB initialized eMMC image</li>
+          <li>QEMU 11 FPGA/eMMC GP0 patch with bounded tracing</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
+  </main>
+</body>
+</html>

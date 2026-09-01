@@ -9,4 +9,5 @@ idrac10              10.0.9.10
 megarac-hpe          10.0.6.66
 ieit                 10.0.6.67
 irmc-fujitsu         10.0.6.68
+lenovo-xcc           10.0.6.69
 advantech-asmb787    10.0.10.10

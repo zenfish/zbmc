@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec /home/zen/opt/zbmc-qemu/qemu-11.0.0-98b060da-arm-lenovo-xcc-dynamic-258e373c3c0e/bin/qemu-system-arm "$@"

@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=31770517528121eefadb7d7ef24410f68cc058b6f4d750e75e55c58ec773a76e body-sha256=52a8ba24413627960b8a4a32d6458a1d64913d566df9f05d3942bf62beeabff9 -->
+<!-- html2md:auto source=README.html source-sha256=9e693433f11d936f55f45c8580d8e0d245c91fed51ab7b4d0e71b049204dd148 body-sha256=01cb2e50916fdbdec1f6f887bbe073b5f1fe9e8d97b26a659e5822e7a5123d68 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -31,11 +31,12 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s total; fourth cold-boot attempt succeeded after three `IPMIMain` crash rerolls |
 | **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI does not answer and Redfish is disabled | partial - Web-UI pass in 9m40s; 15m cold readiness deadline |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI receives requests without replying and SSH resets before key exchange | partial - Web-UI pass at guest uptime 6m04s plus a 60s stable hold |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
 | **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
 
-These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 is cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
 Supermicro X10 uses the same loopback-alias allocation and standard service ports as the rest of the zoo. QEMU user networking forwards those ports to its private guest address.
 
@@ -96,7 +97,7 @@ By default, each box binds to a Linux loopback alias in the **10.0.{6,7,8,9}.x**
 
 | Subnet | Vendor | Boxes |
 |----|----|----|
-| 10.0.6.x | AMI MegaRAC | megarac-hpe (.66), IEIT/Inspur (.67) |
+| 10.0.6.x | Vendor firmware | megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68), lenovo-xcc (.69) |
 | 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |
 | 10.0.8.x | Supermicro | supermicro-x10 (.10), supermicro-x14 (.14) |
 | 10.0.9.x | Dell iDRAC | idrac9 (.9), idrac10 (.10) |
@@ -108,7 +109,8 @@ If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf
     ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
     # ZBMC_POOL=192.168.9    # or a completely different block
     # → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
-    #   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41, asmb787=.50
+    #   idrac9=.30, idrac10=.31, megarac-hpe=.40, ieit=.41,
+    #   irmc-fujitsu=.42, lenovo-xcc=.43, asmb787=.50
 
     # Per-box override — when you only have a few free IPs:
     ZBMC_IP_idrac9=172.16.0.99

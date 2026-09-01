@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7af253c7c5f12fce5b1702ccb0aa66c8f86403eba07af0a07858153d9af466a5 body-sha256=6fa9c7600b0da9651ecc9c39f0f63e600503387988e1fe3ab6c552ef6df90c93 -->
+<!-- zmd2html:auto source-sha256=1d04b8d46623b385512fc5a1dd5141f3f1e159ca850e32aded0303ab1366729f body-sha256=c7be20412a003543f849b70a8b8c7c37049584b12a710ccb0cecb1de5688f7ec -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -77,6 +77,28 @@ repository-wide behavior unchanged.</p>
 <p>Verified with <code>python3 -m py_compile tools/sync-docs</code>,
 <code>bash tests/sync-docs-cli.sh</code>, targeted Markdown/HTML checks,
 <code>bash tests/run</code>, and <code>git diff --check</code>.</p>
+<h1 id="integrate-lenovo-xcc">Integrate Lenovo XCC</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Build and pin the
+Lenovo-specific QEMU 11 runtime.</label></li>
+<li><label><input type="checkbox" checked="" />Publish and hash-pin the
+preserved cold-boot artifacts.</label></li>
+<li><label><input type="checkbox" checked="" />Add the standard address
+allocation, cold boot, and WebUI readiness contract.</label></li>
+<li><label><input type="checkbox" checked="" />Synchronize the HTML and
+Markdown operator documentation.</label></li>
+<li><label><input type="checkbox" />Cold-boot and verify the 60-second
+stability hold on Debby.</label></li>
+</ul>
+<h2 id="review-1">Review</h2>
+<p>The Lenovo XCC runtime preserves the vendor kernel and root
+filesystem, adds the minimum platform emulation required for the
+FPGA/eMMC startup path, and declares only the reproduced vendor WebUI.
+IPMI and SSH remain explicitly disabled in the service contract. Warm
+start remains unadvertised until migration is tested successfully.</p>
+<p>Static verification passed with the Lenovo runtime test, QEMU recipe
+test, all 45 documentation pairs, and the repository documentation
+contract. Live Debby verification remains before completion.</p>
 </div>
 </body>
 </html>
