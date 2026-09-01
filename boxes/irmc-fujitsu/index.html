@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>zbmc Fujitsu iRMC S6</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<main class="max-w-5xl mx-auto bg-white p-8 my-6 shadow-lg rounded-lg">
+<h1 class="text-3xl font-bold mb-3">Fujitsu iRMC S6</h1>
+<p class="mb-5">RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model.
+The preserved vendor Web UI works. RMCP+ IPMI starts but does not answer, and Redfish is intentionally disabled.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Operation</h2>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>./build.sh irmc-fujitsu
+sudo ./tools/zbmc irmc-fujitsu start
+./tools/zbmc irmc-fujitsu status -v
+./tools/zbmc irmc-fujitsu ipmi mc info</code></pre>
+<p>The cold build downloads five SHA-256-pinned artifacts from
+<code>https://git.trouble.org/zbmc/irmc-fujitsu/</code>. The guest uses the third emulated NIC;
+the first two slots are retained because the firmware binds its management interface by hardware index.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Accepted boundary</h2>
+<ul class="list-disc pl-6 space-y-1">
+<li><strong>Verified:</strong> cold boot reaches SysV runlevel 3 and the preserved Fujitsu HTTPS Web UI answers.</li>
+<li><strong>Unknown:</strong> <code>IPMIMain</code> launches, but UDP/623 requests receive no RMCP+ response.</li>
+<li><strong>Known broken:</strong> starting <code>FTS_RedfishService</code> causes a reproducible <code>helper.ko</code> <code>fwinfo2</code> NULL dereference with this reduced QEMU topology, so the boot disables it.</li>
+<li><strong>Not accepted:</strong> SSH reaches the vendor-gated <code>defshell</code>, not a Unix command shell.</li>
+</ul>
+<p>The Debby acceptance run <code>20260901T054304Z-62f6d82f-9aa2-4f98-8e5e-98a425cd2667</code>
+reached HTTP 200 at 9m22s and passed the stability hold at 9m40s.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Cold artifact set</h2>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto text-xs"><code>e139d58349922e59b763d5d1824e8fb60865524c206dda3b975769d5c4641df3  kernel.bin
+877bcd44fd590e800035ac221d386fc6908cb20ddcc575708ad1558bec758592  system-patched.dtb
+aed0ce8eb706180b21e798acad707d26f2e7a9e5d8d6f5933ec3ad7f2f13ad14  initramfs.cpio.gz
+e029ad09372a37c400b30446701440f905a855042174d3222e542261acbb152c  flash64.img
+4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78  rootfs-sd.img</code></pre>
+</main>
+</body>
+</html>

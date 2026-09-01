@@ -24,7 +24,7 @@ arm_plan="$($tool --plan qemu-11-arm)"
 grep -Fq 'Data files  : npcm7xx_bootrom.bin' <<<"$arm_plan"
 grep -Fq "$repo/qemu/patches/ftgmac100-rx-descriptor-reuse.patch" <<<"$arm_plan"
 grep -Fq 'Machines    : ast2500-evb ast2600-evb gb200nvl-bmc npcm750-evb supermicrox11-bmc' <<<"$arm_plan"
-grep -Fq 'Boxes       : idrac9 ieit megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14' <<<"$arm_plan"
+grep -Fq 'Boxes       : idrac9 ieit irmc-fujitsu megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14' <<<"$arm_plan"
 
 common_path='qemu/runtime/qemu-system-arm'
 common_sha='ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6'

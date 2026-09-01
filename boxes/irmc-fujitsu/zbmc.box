@@ -1,0 +1,108 @@
+# Fujitsu iRMC S6, RX2540 M7 firmware 02.63S / SDR 03.67.
+#
+# The preserved AMI MegaRAC IPMIMain and Fujitsu FTS_WebServer run under the
+# AST2600 model. FTS_RedfishService is disabled because its helper.ko fwinfo2
+# read reproducibly NULL-dereferences with the single-FMC QEMU topology.
+ZBMC_NAME=irmc-fujitsu
+ZBMC_DESC="Fujitsu iRMC S6 / AST2600 - vendor Web-UI; IPMI under investigation"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$ROOT/work/irmc-fujitsu}"
+ZBMC_IP=$(_zbmc_resolve_ip irmc-fujitsu 42 10.0.6.68)
+ZBMC_HOST=irmc-fujitsu
+
+ZBMC_QEMU="$ROOT/qemu/runtime/qemu-system-arm"
+ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6
+ZBMC_QEMU_MAJOR=11
+ZBMC_QEMU_VERSION=11.0.0
+ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_REQUIRED_SERVICES="webui"
+ZBMC_DISABLED_SERVICES="redfish"
+ZBMC_L2_REQUIRED=0
+ZBMC_STABILITY_SECONDS=15
+ZBMC_READY_DEADLINE=900
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
+ZBMC_EXPECTED_FIRMWARE=5
+ZBMC_EXPECTED_BOOTSTRAP=180
+ZBMC_EXPECTED_READY=720
+
+SSH_USER=sysadmin
+SSH_PW=superuser
+SSH_PORT=22
+IPMI_USER=admin
+IPMI_PW=admin
+IPMI_KEY=00
+IPMI_PORT=623
+IPMI_T=15
+IPMI_OPTS="-C 17 -I lanplus"
+WEB_PORT=443
+ZBMC_HTTP_PROBE_TIMEOUT=12
+
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/launcher.log"
+SOCK="$ZBMC_DIR/serial.sock"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  local SUDO= qp= n=0
+  [ "$(id -u)" = 0 ] || SUDO=sudo
+  _zbmc_lo_alias "$ZBMC_IP"
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null ||
+    echo "$ZBMC_IP $ZBMC_HOST" | $SUDO tee -a /etc/hosts >/dev/null
+  : >"$LOG"
+  ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+    IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" \
+    SOCK="$SOCK" QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
+  while [ "$n" -lt 60 ]; do
+    qp=$(pgrep -f "hostname=irmc-fujitsu.*hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1)
+    [ -n "$qp" ] && break
+    sleep 0.25
+    n=$((n + 1))
+  done
+  [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
+  printf '%s\n' "$qp"
+}
+
+zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+zbmc_ready() {
+  local file
+  for file in kernel.bin system-patched.dtb initramfs.cpio.gz flash64.img rootfs-sd.img build-provenance.txt; do
+    [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc irmc-fujitsu build"; return 1; }
+  done
+  echo "ready (cold boot; Web-UI works, IPMI under investigation, Redfish disabled)"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$((IPMI_T + 6))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" \
+    -C 17 -I lanplus -t "$IPMI_T" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local output
+  output=$(zbmc_ipmi mc info 2>&1) || { echo "no authenticated IPMI answer"; return 1; }
+  grep -q 'IPMI Version\|Manufacturer' <<<"$output" || { echo "invalid IPMI response"; return 1; }
+  echo "AUTH OK (Fujitsu iRMC S6 RMCP+)"
+}
+
+zbmc_web() {
+  curl -sk --max-time 12 -o /dev/null -w 'Fujitsu iRMC Web-UI: HTTP %{http_code}\n' \
+    "https://$ZBMC_IP:$WEB_PORT/"
+}
+
+zbmc_ssh() {
+  echo "iRMC SSH uses the firmware-gated defshell; it is not a Unix shell" >&2
+  exec sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=10 -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_console() {
+  command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
+  echo "Fujitsu iRMC console -> $SOCK (Ctrl-] to detach)"
+  exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
+}
+
+ZBMC_READY_GREP='INIT: Entering runlevel: 3'

@@ -6,6 +6,6 @@ QEMU_TARGET_LIST=arm-softmmu
 QEMU_BINARY=qemu-system-arm
 QEMU_VARIANT=arm-ftgmac
 QEMU_MACHINES=(ast2500-evb ast2600-evb gb200nvl-bmc npcm750-evb supermicrox11-bmc)
-QEMU_BOXES=(idrac9 ieit megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14)
+QEMU_BOXES=(idrac9 ieit irmc-fujitsu megarac-hpe nvidia-obmc openbmc supermicro-x10 supermicro-x14)
 QEMU_DATA_FILES=(npcm7xx_bootrom.bin)
 QEMU_PATCHES=("$ROOT/qemu/patches/ftgmac100-rx-descriptor-reuse.patch")

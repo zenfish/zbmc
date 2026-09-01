@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=082d509a417169889430fd6fdf873920efd8c3dc030a396e224a2a95f86cacda body-sha256=fddd7b9b8add1bd81f7df261b670fc16a43b7a97ebcd1eb2012cd0694fd4c10a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc — a zoo of virtual BMCs under QEMU</title>
@@ -141,6 +140,12 @@ absent</td>
 <td>IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport
 is not a Unix shell; user networking, so no ICMP</td>
 <td>pass - 1m55s</td>
+</tr>
+<tr>
+<td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
+<td>vendor Web-UI; user networking, so no ICMP; IPMI does not answer and
+Redfish is disabled</td>
+<td>partial - Web-UI pass in 9m40s; 15m cold readiness deadline</td>
 </tr>
 <tr>
 <td><strong>supermicro-x14</strong></td>
