@@ -7,7 +7,6 @@ WD="${WD:-$ROOT/work/lenovo-xcc}"
 QEMU_BIN="${ZBMC_QEMU:-qemu-system-arm}"
 IP="${IP:-127.0.0.1}"
 SSH_PORT="${SSH_PORT:-5022}"
-HTTP_PORT="${HTTP_PORT:-5080}"
 HTTPS_PORT="${HTTPS_PORT:-5443}"
 IPMI_PORT="${IPMI_PORT:-5623}"
 SOCK="${SOCK:-$WD/serial.sock}"
@@ -28,7 +27,7 @@ nohup "$QEMU_BIN" \
   -global emmc.boot-partition-size=4194304 \
   -global emmc.gp0-partition-size=3565158400 \
   -device "loader,file=$WD/sram.bin,addr=0x10000000,force-raw=on" \
-  -netdev "user,id=net0,hostname=lenovo-xcc,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$HTTP_PORT-:80,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623" \
+  -netdev "user,id=net0,hostname=lenovo-xcc,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623" \
   -net nic,model=ftgmac100,netdev=net0,macaddr=52:54:00:12:34:60 \
   -netdev user,id=net1 -net nic,model=ftgmac100,netdev=net1,macaddr=52:54:00:12:34:61 \
   -netdev user,id=net2 -net nic,model=ftgmac100,netdev=net2,macaddr=52:54:00:12:34:62 \

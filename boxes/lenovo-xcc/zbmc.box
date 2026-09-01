@@ -51,7 +51,7 @@ zbmc_boot() {
   _zbmc_lo_alias "$ZBMC_IP"
   : >"$LOG"
   ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
-    IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
+    IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" \
     HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" \
     QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
   while [ "$n" -lt 60 ]; do
