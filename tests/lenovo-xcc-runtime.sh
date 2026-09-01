@@ -19,6 +19,7 @@ grep -Fxq "ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'" "$box/zbmc.box"
 
 grep -Fq -- 'xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin' "$box/boot.sh"
 grep -Fq -- '-global emmc.gp0-partition-size=3565158400' "$box/boot.sh"
+grep -Fq -- 'if=sd,index=2,snapshot=on' "$box/boot.sh"
 grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
 ! grep -Fq 'hostfwd=tcp:$IP:$HTTP_PORT-:80' "$box/boot.sh"
 grep -Fq 'hostfwd=udp:$IP:$IPMI_PORT-:623' "$box/boot.sh"

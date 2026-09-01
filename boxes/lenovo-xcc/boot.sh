@@ -23,7 +23,7 @@ nohup "$QEMU_BIN" \
   -M "ast2600-evb,xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin" -m 1G \
   -kernel "$WD/kernel.zImage" -dtb "$WD/xcc.dtb" \
   -append 'console=ttyS4,115200 earlyprintk clk_ignore_unused loglevel=8' \
-  -drive "file=$WD/emmc.qcow2,format=qcow2,if=sd,snapshot=on" \
+  -drive "file=$WD/emmc.qcow2,format=qcow2,if=sd,index=2,snapshot=on" \
   -global emmc.boot-partition-size=4194304 \
   -global emmc.gp0-partition-size=3565158400 \
   -device "loader,file=$WD/sram.bin,addr=0x10000000,force-raw=on" \
