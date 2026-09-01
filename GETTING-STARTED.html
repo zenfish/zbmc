@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=2b343ba2a5a78d556c1c9c2648d49af0ce4dce317071dae57f3fa78596221efc body-sha256=f71c0de96ae506b9247e651cfbfe8f3e502eab5c5cb2ddb99a9a45ea64f5ee3e -->
+<!-- zmd2html:auto source-sha256=7d17767d3b1a24cad1cd5840d724e146f05323910006c0cbd6661711a0db66c1 body-sha256=d2bbb5eca803ed65d178fd7eb5953d659e727adebae5a7a83e7b841d901c1eaa -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -141,21 +141,9 @@ descriptor default. Set
 <code>ZHOSTS_FILE=/absolute/path/zhosts.txt</code> in
 <code>zbmc.conf</code> when a deployment needs a complete site-specific
 map.</p>
-<p>Supermicro X10 defaults to portable QEMU user networking. Its
-forwarded ports appear in <code>status -v</code>. Set
-<code>X10_NET_MODE=direct</code> only on an isolated lab LAN that routes
-the selected address and permits the guest MAC.</p>
-<p>In <code>direct</code> mode the guest sits on a tap under
-<code>br-zbmc</code>, so other hosts reach it only if the bridge
-forwards to that tap. Docker sets the iptables <code>FORWARD</code>
-policy to <code>DROP</code> and loads <code>br_netfilter</code>, which
-silently blackholes that traffic — the BMC keeps answering ARP, so it
-still appears in every neighbour table, but only the bridge host can
-actually talk to it. <code>zbmc-net setup</code> installs the matching
-accept rule for <code>br-zbmc</code> and <code>zbmc-net teardown</code>
-removes it. It is re-applied per <code>setup</code> rather than
-persisted, so if a box answers on the bridge host but not from the LAN,
-re-run <code>sudo ./tools/zbmc-net setup</code>.</p>
+<p>Supermicro X10 follows the same model: its selected address is a
+loopback alias, and QEMU forwards standard ports 22, 443, and 623 to the
+private guest network.</p>
 <h2 id="7-choose-another-box">7. Choose another box</h2>
 <pre class="bash"><code>./tools/zbmc list
 ./build.sh supermicro-x14

@@ -9,12 +9,9 @@ set -u
 SELF="$(cd "$(dirname "$0")" && pwd)"   # scripts live here (repo box dir)
 WD="${WD:-$SELF}"; export WD          # artifacts/logs (env override; default self)
 IP="${ZBMC_IP:-10.0.8.10}"; export X10_HOSTIP="$IP"
-NET_MODE="${X10_NET_MODE:-user}"
-TAP="${X10_TAP:-ztap-x10}"
 LOG="$WD/x10-start.log"; mkdir -p "$WD"
 
-if [ "$NET_MODE" = direct ]; then MATCH="ifname=$TAP"
-else MATCH="hostfwd=udp:$IP:623-:623"; fi
+MATCH="hostfwd=udp:$IP:623-:623"
 qemu_pid() {
   local p
   p=$(pgrep -f "^[^ ]*/qemu-system-arm .*$MATCH" | head -1)

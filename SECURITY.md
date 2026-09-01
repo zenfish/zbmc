@@ -14,8 +14,6 @@ issue.
 - Run on a dedicated x86_64 Linux research host and keep the default addresses host-local.
 - Docker packages exact QEMU builds, but uses host networking and writable work mounts. It is not a
   containment boundary.
-- `X10_NET_MODE=direct` moves the host uplink into a bridge. Use it only on a recoverable lab host with
-  an explicitly selected uplink.
 - QEMU, console, QMP, captures, and evidence commonly run as root or contain root-controlled data.
 - Do not route a virtual BMC to an untrusted network. Vendor defaults and research credentials are public.
 

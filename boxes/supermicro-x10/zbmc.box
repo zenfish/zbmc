@@ -17,9 +17,8 @@
 #          e.g.  zipmi -H 10.0.8.10 -U ADMIN -P ADMIN -C 11 mc info
 #   scan : zipmi -H 10.0.8.10 -U ADMIN -P ADMIN scan cipher-suites   -> [0..14]
 #
-# NET: QEMU user networking is the portable default. It binds host forwards on
-#      the loopback alias without changing the physical uplink. Direct-LAN TAP
-#      mode remains available with X10_NET_MODE=direct on a compatible lab LAN.
+# NET: QEMU user networking binds standard service ports on the selected Linux
+#      loopback alias, matching the rest of the zoo.
 #
 # Sourced by the repository's `tools/zbmc` dispatcher.
 ZBMC_NAME=supermicro-x10
@@ -51,46 +50,15 @@ SSH_USER=ADMIN
 SSH_PW=ADMIN
 IPMI_PORT=623
 
-X10_NET_MODE="${X10_NET_MODE:-user}"
-X10_TAP=ztap-x10
-X10_AUX_TAP=ztap-x10-aux
-_x10_forwarded_port() {
-  local guest_port="$1" line rule port
-  line=$(pgrep -af "^[^ ]*/qemu-system-arm .*hostfwd=udp:$ZBMC_IP:$ZBMC_HOSTPORT-:623" | head -1) || return 1
-  line=${line//,/ }
-  for rule in $line; do
-    case "$rule" in
-      hostfwd=tcp:"$ZBMC_IP":*-:"$guest_port")
-        port=${rule#hostfwd=tcp:$ZBMC_IP:}
-        echo "${port%-:$guest_port}"
-        return 0
-        ;;
-    esac
-  done
-  return 1
-}
-if [ "$X10_NET_MODE" = direct ]; then
-  SSH_PORT=22
-  WEB_PORT=443
-  X10_NETMASK=255.0.0.0
-  X10_GATEWAY=10.0.0.1
-  ZBMC_L2_REQUIRED=1
-  ZBMC_CAPTURE_INTERFACES="br-zbmc $X10_TAP $X10_AUX_TAP"
-else
-  X10_NET_MODE=user
-  SSH_PORT=$(_x10_forwarded_port 22 || _zbmc_pick_port 22 2222 10022)
-  WEB_PORT=$(_x10_forwarded_port 443 || _zbmc_pick_port 443 8443 6443 10443)
-  X10_NETMASK=255.255.255.0
-  X10_GATEWAY=10.0.2.2
-  ZBMC_L2_REQUIRED=0
-  ZBMC_CAPTURE_INTERFACES=""
-fi
+SSH_PORT=22
+WEB_PORT=443
+ZBMC_L2_REQUIRED=0
+ZBMC_CAPTURE_INTERFACES=""
 ZBMC_QEMU="$_XREPO/qemu/runtime/qemu-system-arm"
 ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=supermicrox11-bmc
-export X10_NET_MODE X10_TAP X10_AUX_TAP X10_NETMASK X10_GATEWAY
 export X10_SSH_PORT="$SSH_PORT" X10_WEB_PORT="$WEB_PORT" ZBMC_QEMU
 
 PIDF="$ZBMC_DIR/zbmc.pid"
@@ -114,18 +82,11 @@ ZBMC_EXPECTED_BOOTSTRAP=130
 ZBMC_EXPECTED_L2=95
 ZBMC_EXPECTED_READY=190
 
-# boot: prepare either a loopback alias or direct-LAN TAPs, then launch the
-# detached driver; it prints the qemu pid on NET_CONFIGURED.
+# boot: add the selected loopback alias, then launch the detached driver; it
+# prints the qemu pid on NET_CONFIGURED.
 # Write that pid to PIDF as the reliable handle for the dispatcher's running().
 zbmc_boot() {
-  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  if [ "$X10_NET_MODE" = direct ]; then
-    $SUDO ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
-    $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_TAP" "${SUDO_USER:-${USER}}" || return 1
-    $SUDO "$PROJ_DIR/../../tools/zbmc-net" add-tap "$X10_AUX_TAP" "${SUDO_USER:-${USER}}" || return 1
-  else
-    _zbmc_lo_alias "$ZBMC_IP" || return 1
-  fi
+  _zbmc_lo_alias "$ZBMC_IP" || return 1
   mkdir -p "$ZBMC_DIR"
   WD="$ZBMC_DIR" X10_MASTER="$X10_MASTER" ZBMC_IP="$ZBMC_IP" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
     X10_QEMU="$ZBMC_QEMU" X10_LAUNCH_ONLY=1 X10_PACKET_DIR="${ZBMC_RUN_DIR:-$ZBMC_DIR}/packets" \
@@ -135,13 +96,7 @@ zbmc_boot() {
   echo "$qp"
 }
 
-zbmc_running() {
-  if [ "$X10_NET_MODE" = direct ]; then
-    pgrep -f "^[^ ]*/qemu-system-arm .*ifname=$X10_TAP" | head -1
-  else
-    pgrep -f "^[^ ]*/qemu-system-arm .*hostfwd=udp:$ZBMC_IP:$ZBMC_HOSTPORT-:623" | head -1
-  fi
-}
+zbmc_running() { pgrep -f "^[^ ]*/qemu-system-arm .*hostfwd=udp:$ZBMC_IP:$ZBMC_HOSTPORT-:623" | head -1; }
 
 zbmc_build() { echo "x10 boots the flat flash directly (no snapshot). Master: $X10_MASTER (fetch: firmware/download-fw.sh supermicro-x10; orig BMC_X10AST2400-32M_20210528_03.93_STD.bin). Cold boot ~60s."; }
 zbmc_ready() {

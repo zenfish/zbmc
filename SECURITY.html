@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=4d7a4245aa504663d3976b5eeb86df2c051de5af91337121b362492c78eb4c41 body-sha256=aec16823f3832858d484b45d6e71cc0232c73ab2987116cc753a06b5382e6b70 -->
+<!-- zmd2html:auto source-sha256=79dfe0ba91d47a76626d516feb5c992e11b2c96250ee93076a3f615172bedeba body-sha256=4f8d81a1501261f40708cd868316372ffa960e4df72cdcb4f67999ba5c08b771 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Security Policy</title>
@@ -59,9 +59,6 @@ or customer data in a public issue.</p>
 addresses host-local.</li>
 <li>Docker packages exact QEMU builds, but uses host networking and
 writable work mounts. It is not a containment boundary.</li>
-<li><code>X10_NET_MODE=direct</code> moves the host uplink into a
-bridge. Use it only on a recoverable lab host with an explicitly
-selected uplink.</li>
 <li>QEMU, console, QMP, captures, and evidence commonly run as root or
 contain root-controlled data.</li>
 <li>Do not route a virtual BMC to an untrusted network. Vendor defaults

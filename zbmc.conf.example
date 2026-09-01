@@ -37,7 +37,3 @@
 # ZBMC_IP_megarac_hpe=192.168.1.106
 # ZBMC_IP_ieit=192.168.1.107
 # ZBMC_IP_advantech_asmb787=192.168.1.108
-
-# Supermicro X10 defaults to portable QEMU user networking. On a trusted lab
-# LAN that routes the selected X10 address and permits an additional guest MAC:
-# X10_NET_MODE=direct

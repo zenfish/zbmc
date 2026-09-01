@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=168e5d08c59efa6660ce83c36bad3fde05c7399b2fa268fa6cdddd3a61cc9e2e body-sha256=59b02029c5dab5e2c72961731274a59181ecd9e3941d9b9cc2930a43c5f72cad -->
+<!-- html2md:auto source=README.html source-sha256=31770517528121eefadb7d7ef24410f68cc058b6f4d750e75e55c58ec773a76e body-sha256=52a8ba24413627960b8a4a32d6458a1d64913d566df9f05d3942bf62beeabff9 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -32,12 +32,12 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI does not answer and Redfish is disabled | partial - Web-UI pass in 9m40s; 15m cold readiness deadline |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
-| **supermicro-x10** | user-net (default): forwarded SSH, IPMI, Redfish, Web-UI; direct-LAN: the same plus guest ICMP; 60s stable hold | pass - 2m38s user-net / 3m11s direct-LAN |
+| **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 is cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
-Supermicro X10 defaults to QEMU user networking so it works on cloud and other hosts that cannot bridge an additional guest MAC onto the physical LAN. Its forwarded SSH and HTTPS ports are shown by `zbmc supermicro-x10 status -v`. Set `X10_NET_MODE=direct` in `zbmc.conf` only when the selected X10 address is routable on the host LAN; direct mode adds ICMP and TAP packet capture.
+Supermicro X10 uses the same loopback-alias allocation and standard service ports as the rest of the zoo. QEMU user networking forwards those ports to its private guest address.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md). The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
@@ -115,16 +115,6 @@ If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf
     ZBMC_IP_openbmc=192.168.1.100
 
 Priority: per-box `ZBMC_IP_<name>` \> pool \> `ZHOSTS_FILE` \> descriptor default. Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
-
-### Direct-mode bridging
-
-`X10_NET_MODE=direct` puts the Supermicro X10 guest on a tap attached to `br-zbmc` alongside the physical uplink, so reaching it from anywhere else requires the host to *forward* LAN frames to that tap. Docker loads `br_netfilter` and sets the iptables `FORWARD` policy to `DROP`, which breaks exactly that path — and breaks it quietly, because ARP is filtered by `arptables` (policy `ACCEPT`) rather than `iptables`. The symptom is a BMC that pings fine from the bridge host, resolves to a MAC on every other host, and answers none of them.
-
-`zbmc-net setup` installs the scoped counter-rule, and `zbmc-net teardown` removes it:
-
-    iptables -I DOCKER-USER -i br-zbmc -o br-zbmc -j ACCEPT   # FORWARD when Docker is absent
-
-Only traffic bridged within `br-zbmc` is accepted, so Docker's own container isolation is unchanged. The rule is applied by each `setup` rather than written to a persisted firewall config: re-run `zbmc-net setup` after a reboot, or after anything that reloads Docker's chains.
 
 ## Layout
 

@@ -154,9 +154,9 @@ Redfish is disabled</td>
 </tr>
 <tr>
 <td><strong>supermicro-x10</strong></td>
-<td>user-net (default): forwarded SSH, IPMI, Redfish, Web-UI;
-direct-LAN: the same plus guest ICMP; 60s stable hold</td>
-<td>pass - 2m38s user-net / 3m11s direct-LAN</td>
+<td>forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s
+stable hold</td>
+<td>pass - 2m38s</td>
 </tr>
 <tr>
 <td><strong>idrac9</strong></td>
@@ -176,13 +176,9 @@ downloaded as a hash-pinned matched bundle from
 <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
 runbook</a>.</p>
-<p>Supermicro X10 defaults to QEMU user networking so it works on cloud
-and other hosts that cannot bridge an additional guest MAC onto the
-physical LAN. Its forwarded SSH and HTTPS ports are shown by
-<code>zbmc supermicro-x10 status -v</code>. Set
-<code>X10_NET_MODE=direct</code> in <code>zbmc.conf</code> only when the
-selected X10 address is routable on the host LAN; direct mode adds ICMP
-and TAP packet capture.</p>
+<p>Supermicro X10 uses the same loopback-alias allocation and standard
+service ports as the rest of the zoo. QEMU user networking forwards
+those ports to its private guest address.</p>
 <p>Full per-box boot method, network trick, and gotchas: <a
 href="docs/zoo-lessons.html">docs/zoo-lessons.md</a>. The project-wide
 retrospective is <a href="docs/why-bmc-virtualization-is-hard.html">Why
@@ -307,25 +303,6 @@ ZBMC_IP_openbmc=192.168.1.100</code></pre>
 <code>ZHOSTS_FILE</code> &gt; descriptor default. Full allocation table
 and examples: <strong><a
 href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
-<h3 id="direct-mode-bridging">Direct-mode bridging</h3>
-<p><code>X10_NET_MODE=direct</code> puts the Supermicro X10 guest on a
-tap attached to <code>br-zbmc</code> alongside the physical uplink, so
-reaching it from anywhere else requires the host to <em>forward</em> LAN
-frames to that tap. Docker loads <code>br_netfilter</code> and sets the
-iptables <code>FORWARD</code> policy to <code>DROP</code>, which breaks
-exactly that path — and breaks it quietly, because ARP is filtered by
-<code>arptables</code> (policy <code>ACCEPT</code>) rather than
-<code>iptables</code>. The symptom is a BMC that pings fine from the
-bridge host, resolves to a MAC on every other host, and answers none of
-them.</p>
-<p><code>zbmc-net setup</code> installs the scoped counter-rule, and
-<code>zbmc-net teardown</code> removes it:</p>
-<pre class="bash"><code>iptables -I DOCKER-USER -i br-zbmc -o br-zbmc -j ACCEPT   # FORWARD when Docker is absent</code></pre>
-<p>Only traffic bridged within <code>br-zbmc</code> is accepted, so
-Docker's own container isolation is unchanged. The rule is applied by
-each <code>setup</code> rather than written to a persisted firewall
-config: re-run <code>zbmc-net setup</code> after a reboot, or after
-anything that reloads Docker's chains.</p>
 <h2 id="layout">Layout</h2>
 <pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)

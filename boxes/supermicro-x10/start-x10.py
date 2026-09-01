@@ -49,14 +49,11 @@ HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
 HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
 SSH_HPORT = os.environ.get("X10_SSH_PORT", "22")
 WEB_HPORT = os.environ.get("X10_WEB_PORT", "443")
-NET_MODE = os.environ.get("X10_NET_MODE", "user")
-TAP = os.environ.get("X10_TAP", "ztap-x10")
-AUX_TAP = os.environ.get("X10_AUX_TAP", "ztap-x10-aux")
-GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP if NET_MODE == "direct" else "10.0.2.15")
-NETMASK = os.environ.get("X10_NETMASK", "255.0.0.0" if NET_MODE == "direct" else "255.255.255.0")
-GATEWAY = os.environ.get("X10_GATEWAY", "10.0.0.1" if NET_MODE == "direct" else "10.0.2.2")
-IFACE = os.environ.get("X10_IFACE", "eth1" if NET_MODE == "direct" else "eth0")
-SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.0.24" if NET_MODE == "direct" else "10.0.2.2")
+GUEST_IP = os.environ.get("X10_GUEST_IP", "10.0.2.15")
+NETMASK = os.environ.get("X10_NETMASK", "255.255.255.0")
+GATEWAY = os.environ.get("X10_GATEWAY", "10.0.2.2")
+IFACE = os.environ.get("X10_IFACE", "eth0")
+SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.2.2")
 import shutil as _sh
 QEMU = os.environ.get("X10_QEMU") or os.environ.get("ZBMC_QEMU") or _sh.which("qemu-system-arm")
 if not QEMU:
@@ -98,22 +95,10 @@ if QEMU_PLUGIN:
     qemu_cmd += ["-plugin", QEMU_PLUGIN]
 if FTGMAC_GUARD:
     qemu_cmd += ["-global", f"ftgmac100.guard={FTGMAC_GUARD}"]
-if NET_MODE == "direct":
-    qemu_cmd += [
-        # Bridge both AST2400 MACs so controller ordering cannot silently put
-        # the guest's configured interface on a translated backend.
-        "-netdev", f"tap,id=bmcnet,ifname={TAP},script=no,downscript=no",
-        "-net", "nic,netdev=bmcnet",
-        "-netdev", f"tap,id=bmcaux,ifname={AUX_TAP},script=no,downscript=no",
-        "-net", "nic,netdev=bmcaux",
-        "-object", f"filter-dump,id=netcap,netdev=bmcnet,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-primary.pcap')}",
-        "-object", f"filter-dump,id=auxcap,netdev=bmcaux,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-aux.pcap')}",
-    ]
-else:
-    qemu_cmd += [
-        "-net", "nic",
-        "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
-    ]
+qemu_cmd += [
+    "-net", "nic",
+    "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
+]
 qemu_proc = subprocess.Popen(qemu_cmd)
 with open(RUN_MANIFEST, "w", encoding="utf-8") as manifest:
     json.dump({
