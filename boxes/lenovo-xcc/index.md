@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=c6fbf809f7986765c97298c4a60891823ef9f194d6aaaed6d6e25e35b0fb40f9 body-sha256=5ec3825a425bf5368ed92189d145a9b3ed53fe0a2c8be4c29129657972f5dcbe -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=70b17b5371cead7c8679282e14cbf851a8250a68048b70ffb5cb9cdb27f00894 body-sha256=28b1b87dbb5bcd07bb9ccd0a977a5a1024478554e4a553a2c096b7fbfafbd6d9 -->
 
 zbmc / preserved firmware
 
@@ -14,9 +14,9 @@ Vendor page identifies as XCC Web Server and Lenovo XClarity Controller 2.
 
 Cold only
 
-~6 minutes
+~46 minutes
 
-Web-ready at guest uptime 364 seconds; verified again after the 60-second hold.
+The default contract reached READY on Debby in 46m06s, including the 60-second hold.
 
 Not declared
 
@@ -26,7 +26,7 @@ UDP/623 receives requests without replies. SSH resets before key exchange.
 
 ## What the runtime changes
 
-The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces `vpdoctor` with a sleeping process because the physical watchdog/platform contract is unavailable. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.
+The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces `vpdoctor` with a sleeping process because the physical watchdog/platform contract is unavailable. The AST2600 watchdog remains modeled, but QEMU ignores its reset action: under slower TCG execution it expires before XCC finishes starting services. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.
 
 ## Run
 

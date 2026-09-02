@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=9e693433f11d936f55f45c8580d8e0d245c91fed51ab7b4d0e71b049204dd148 body-sha256=01cb2e50916fdbdec1f6f887bbe073b5f1fe9e8d97b26a659e5822e7a5123d68 -->
+<!-- html2md:auto source=README.html source-sha256=523efc93e5c9df5d271752e873351675da312bf71264499362c66c60a5dded9e body-sha256=58a8f5f1f69c8faf21bf82eb458b9dcebc8cd44d1725fab01585a4608dc3be90 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -31,7 +31,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s total; fourth cold-boot attempt succeeded after three `IPMIMain` crash rerolls |
 | **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI does not answer and Redfish is disabled | partial - Web-UI pass in 9m40s; 15m cold readiness deadline |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI receives requests without replying and SSH resets before key exchange | partial - Web-UI pass at guest uptime 6m04s plus a 60s stable hold |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI receives requests without replying and SSH resets before key exchange | partial - Web-UI READY in 46m06s including a 60s stable hold; 60m cold readiness deadline |
 | **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
 | **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |

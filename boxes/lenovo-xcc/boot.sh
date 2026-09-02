@@ -36,5 +36,5 @@ nohup "$QEMU_BIN" \
   -display none -monitor none \
   -qmp "unix:$QMP,server=on,wait=off" \
   -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
-  -serial chardev:serial0 -no-reboot >"$LAUNCH_LOG" 2>&1 &
+  -serial chardev:serial0 -watchdog-action none -no-reboot >"$LAUNCH_LOG" 2>&1 &
 echo "$!"

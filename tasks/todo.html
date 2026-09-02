@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=1d04b8d46623b385512fc5a1dd5141f3f1e159ca850e32aded0303ab1366729f body-sha256=c7be20412a003543f849b70a8b8c7c37049584b12a710ccb0cecb1de5688f7ec -->
+<!-- zmd2html:auto source-sha256=a13872b0a2a4b4b01cd82e0c4b2870cfc66a53dabbd3b865de6a53ac1e64be91 body-sha256=3395c22fae6b8a05dce54c7129944fe176c6da8dbe2a7b5c31029ea1e8972af6 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -87,8 +87,8 @@ preserved cold-boot artifacts.</label></li>
 allocation, cold boot, and WebUI readiness contract.</label></li>
 <li><label><input type="checkbox" checked="" />Synchronize the HTML and
 Markdown operator documentation.</label></li>
-<li><label><input type="checkbox" />Cold-boot and verify the 60-second
-stability hold on Debby.</label></li>
+<li><label><input type="checkbox" checked="" />Cold-boot and verify the
+60-second stability hold on Debby.</label></li>
 </ul>
 <h2 id="review-1">Review</h2>
 <p>The Lenovo XCC runtime preserves the vendor kernel and root
@@ -96,9 +96,14 @@ filesystem, adds the minimum platform emulation required for the
 FPGA/eMMC startup path, and declares only the reproduced vendor WebUI.
 IPMI and SSH remain explicitly disabled in the service contract. Warm
 start remains unadvertised until migration is tested successfully.</p>
-<p>Static verification passed with the Lenovo runtime test, QEMU recipe
-test, all 45 documentation pairs, and the repository documentation
-contract. Live Debby verification remains before completion.</p>
+<p>Debby run
+<code>20260902T071810Z-f43e4719-cfe5-49fe-b034-69bed9d53719</code>
+survived the former 16-minute watchdog-reset boundary and reached
+terminal READY in 46m06s with the vendor WebUI healthy through its
+60-second hold. QEMU's watchdog reset action is suppressed while the
+AST2600 watchdog remains modeled. The cold readiness deadline is 60
+minutes. The focused runtime test, full repository suite, and all
+documentation pairs pass.</p>
 </div>
 </body>
 </html>

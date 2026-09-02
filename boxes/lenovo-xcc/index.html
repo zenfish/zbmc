@@ -20,8 +20,8 @@
       </article>
       <article class="border border-amber-500/40 bg-amber-950/30 p-6">
         <p class="font-mono text-xs uppercase tracking-widest text-amber-400">Cold only</p>
-        <p class="mt-3 text-2xl font-bold">~6 minutes</p>
-        <p class="mt-2 text-stone-300">Web-ready at guest uptime 364 seconds; verified again after the 60-second hold.</p>
+        <p class="mt-3 text-2xl font-bold">~46 minutes</p>
+        <p class="mt-2 text-stone-300">The default contract reached READY on Debby in 46m06s, including the 60-second hold.</p>
       </article>
       <article class="border border-rose-500/40 bg-rose-950/30 p-6">
         <p class="font-mono text-xs uppercase tracking-widest text-rose-400">Not declared</p>
@@ -32,7 +32,7 @@
 
     <section class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
       <h2 class="text-2xl font-bold">What the runtime changes</h2>
-      <p class="mt-4 leading-7 text-stone-300">The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces <code class="text-amber-300">vpdoctor</code> with a sleeping process because the physical watchdog/platform contract is unavailable. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.</p>
+      <p class="mt-4 leading-7 text-stone-300">The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces <code class="text-amber-300">vpdoctor</code> with a sleeping process because the physical watchdog/platform contract is unavailable. The AST2600 watchdog remains modeled, but QEMU ignores its reset action: under slower TCG execution it expires before XCC finishes starting services. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.</p>
     </section>
 
     <section class="mt-12 grid gap-8 md:grid-cols-2">

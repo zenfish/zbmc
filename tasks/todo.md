@@ -21,10 +21,10 @@ Verified with `python3 -m py_compile tools/sync-docs`, `bash tests/sync-docs-cli
 - [x] Publish and hash-pin the preserved cold-boot artifacts.
 - [x] Add the standard address allocation, cold boot, and WebUI readiness contract.
 - [x] Synchronize the HTML and Markdown operator documentation.
-- [ ] Cold-boot and verify the 60-second stability hold on Debby.
+- [x] Cold-boot and verify the 60-second stability hold on Debby.
 
 ## Review
 
 The Lenovo XCC runtime preserves the vendor kernel and root filesystem, adds the minimum platform emulation required for the FPGA/eMMC startup path, and declares only the reproduced vendor WebUI. IPMI and SSH remain explicitly disabled in the service contract. Warm start remains unadvertised until migration is tested successfully.
 
-Static verification passed with the Lenovo runtime test, QEMU recipe test, all 45 documentation pairs, and the repository documentation contract. Live Debby verification remains before completion.
+Debby run `20260902T071810Z-f43e4719-cfe5-49fe-b034-69bed9d53719` survived the former 16-minute watchdog-reset boundary and reached terminal READY in 46m06s with the vendor WebUI healthy through its 60-second hold. QEMU's watchdog reset action is suppressed while the AST2600 watchdog remains modeled. The cold readiness deadline is 60 minutes. The focused runtime test, full repository suite, and all documentation pairs pass.
