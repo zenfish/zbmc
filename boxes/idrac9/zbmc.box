@@ -29,6 +29,7 @@ ZBMC_READY_DEADLINE="${ZBMC_READY_DEADLINE:-1800}"     # P4 mesh + hard pre-full
 ZBMC_REQUIRED_SERVICES="ssh ipmi webui"
 
 PIDF="$ZBMC_DIR/zbmc.pid"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
 LOG="$CONSOLE_LOG"
 ZBMC_QEMU="$(cd "$PROJ_DIR/../.." && pwd)/qemu/runtime/qemu-system-arm"
@@ -47,10 +48,12 @@ zbmc_boot() {
   : > "$LOG"
   # Bind the selected loopback IP and standard ports directly; use root for privileged host forwards.
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO rm -f "$QMP_SOCK"
   _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   $SUDO nohup "$ZBMC_QEMU" -M npcm750-evb -m 1G -display none \
+    -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -kernel boot/uImage.patched -dtb "$dtb" -initrd boot/initramfs.p4.xz \
     -drive id=rootsd,if=none,file=img/sd256.img,format=raw,snapshot=on \
     -device sd-card,drive=rootsd,bus=sd-bus \
