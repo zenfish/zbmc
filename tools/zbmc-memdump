@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Capture guest-visible and QEMU-private memory from one managed BMC."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import socket
+import subprocess
+import sys
+import time
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def qmp_path(pid, configured, argv):
+    candidates = [configured] if configured else []
+    for index, value in enumerate(argv[:-1]):
+        if value == "-qmp":
+            candidates.append(argv[index + 1])
+    cwd = Path(f"/proc/{pid}/cwd").resolve()
+    for value in candidates:
+        if value.startswith("unix:"):
+            value = value[5:].split(",", 1)[0]
+        path = Path(value)
+        if not path.is_absolute():
+            path = cwd / path
+        if path.is_socket():
+            return path.resolve()
+    raise RuntimeError("could not find QEMU's QMP Unix socket")
+
+
+class QMP:
+    def __init__(self, path):
+        self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.socket.connect(str(path))
+        self.file = self.socket.makefile("rwb", buffering=0)
+        self.events = []
+        greeting = self._read()
+        if "QMP" not in greeting:
+            raise RuntimeError(f"bad QMP greeting: {greeting}")
+        self.command("qmp_capabilities")
+
+    def _read(self):
+        line = self.file.readline()
+        if not line:
+            raise RuntimeError("QMP connection closed")
+        return json.loads(line)
+
+    def command(self, name, arguments=None):
+        request = {"execute": name}
+        if arguments is not None:
+            request["arguments"] = arguments
+        self.file.write((json.dumps(request) + "\r\n").encode())
+        while True:
+            reply = self._read()
+            if "event" in reply:
+                self.events.append(reply)
+                continue
+            if "error" in reply:
+                raise RuntimeError(f"QMP {name}: {reply['error']}")
+            return reply["return"]
+
+
+def main():
+    if len(sys.argv) != 5:
+        raise SystemExit("usage: zbmc-memdump PID QMP_SOCKET OUTPUT_DIR BMC_NAME")
+    pid, configured_qmp, output, name = int(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), sys.argv[4]
+    raw_cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    argv = [value.decode(errors="surrogateescape") for value in raw_cmdline if value]
+    executable = Path(f"/proc/{pid}/exe").resolve()
+    qmp_socket = qmp_path(pid, configured_qmp, argv)
+    output.mkdir(parents=True, exist_ok=False)
+    owner_uid = int(os.environ.get("SUDO_UID", os.getuid()))
+    owner_gid = int(os.environ.get("SUDO_GID", os.getgid()))
+    os.chown(output, owner_uid, owner_gid)
+    os.chmod(output, 0o700)
+    started = time.time()
+    errors = []
+    resumed = False
+    (output / "command.txt").write_text(shlex.join(argv) + "\n", encoding="utf-8")
+
+    qmp = QMP(qmp_socket)
+    initial = qmp.command("query-status")
+    was_running = bool(initial.get("running"))
+    metadata = {"initial-status": initial}
+    for command in ("query-cpus-fast", "query-block", "query-memory-devices"):
+        try:
+            metadata[command] = qmp.command(command)
+        except RuntimeError as error:
+            metadata[command] = {"error": str(error)}
+
+    try:
+        if was_running:
+            qmp.command("stop")
+            for _ in range(100):
+                if not qmp.command("query-status").get("running"):
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("QEMU did not pause within 10 seconds")
+
+        for source, target in (("maps", "qemu.maps"), ("smaps", "qemu.smaps"),
+                               ("status", "qemu.status"), ("limits", "qemu.limits")):
+            (output / target).write_bytes(Path(f"/proc/{pid}/{source}").read_bytes())
+        for filename, command in (
+            ("memory-map.txt", "info mtree -f"),
+            ("ramblocks.txt", "info ramblock"),
+            ("device-tree.txt", "info qtree"),
+            ("cpu-registers.txt", "info registers"),
+        ):
+            try:
+                text = qmp.command("human-monitor-command", {"command-line": command})
+                (output / filename).write_text(text, encoding="utf-8")
+            except RuntimeError as error:
+                metadata[command] = {"error": str(error)}
+
+        guest = (output / "guest-memory.elf").resolve()
+        qmp.command("dump-guest-memory", {"paging": False, "protocol": f"file:{guest}"})
+
+        for spec in os.environ.get("ZBMC_MEMDUMP_REGIONS", "").split():
+            region_name, address, size = spec.split(":")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", region_name):
+                raise RuntimeError(f"invalid named memory region: {region_name}")
+            target = (output / f"{region_name}.bin").resolve()
+            qmp.command("pmemsave", {
+                "val": int(address, 0), "size": int(size, 0), "filename": str(target),
+            })
+
+        prefix = output.resolve() / "qemu.core"
+        result = subprocess.run(
+            ["gcore", "-a", "-o", str(prefix), str(pid)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        (output / "gcore.log").write_text(result.stdout, encoding="utf-8")
+        produced = Path(f"{prefix}.{pid}")
+        if result.returncode or not produced.is_file():
+            raise RuntimeError(f"gcore failed with status {result.returncode}; see gcore.log")
+        produced.rename(output / "qemu.core")
+
+        gdb_script = os.environ.get("ZBMC_MEMDUMP_GDB_SCRIPT")
+        if gdb_script:
+            result = subprocess.run(
+                ["gdb", "-nx", "-batch", "-x", gdb_script, str(executable), str(output / "qemu.core")],
+                cwd=output, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            )
+            (output / "gdb-extract.log").write_text(result.stdout, encoding="utf-8")
+            if result.returncode:
+                raise RuntimeError(f"device-state extraction failed with status {result.returncode}; see gdb-extract.log")
+    except Exception as error:
+        errors.append(str(error))
+    finally:
+        if was_running:
+            try:
+                qmp.command("cont")
+                resumed = True
+            except Exception as error:
+                errors.append(f"failed to resume QEMU: {error}")
+
+    metadata["events"] = qmp.events
+    try:
+        metadata["final-status"] = qmp.command("query-status")
+    except Exception as error:
+        metadata["final-status"] = {"error": str(error)}
+        errors.append(f"could not verify final QEMU status: {error}")
+    (output / "qmp.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    artifacts = {}
+    for path in sorted(output.iterdir()):
+        if path.is_file() and path.name != "manifest.json":
+            stat = path.stat()
+            artifacts[path.name] = {
+                "bytes": stat.st_size,
+                "allocated_bytes": stat.st_blocks * 512,
+                "sha256": sha256(path),
+            }
+    manifest = {
+        "schema": 1,
+        "bmc": name,
+        "pid": pid,
+        "qemu_executable": str(executable),
+        "qemu_executable_sha256": sha256(executable),
+        "qmp_socket": str(qmp_socket),
+        "started_epoch": started,
+        "finished_epoch": time.time(),
+        "initially_running": was_running,
+        "resumed": resumed,
+        "complete": not errors,
+        "errors": errors,
+        "coverage": {
+            "guest-memory.elf": "guest physical RAM in QEMU ELF vmcore format",
+            "qemu.core": "all host mappings gcore can read, including QEMU-private device state",
+            "qemu.maps": "host virtual-address map needed to interpret qemu.core",
+            "qmp.json": "CPU, block, memory-device, run-state, and QMP event metadata",
+            "memory-map.txt": "flattened guest physical memory map, including named SRAM and MMIO",
+            "ramblocks.txt": "QEMU RAM blocks with sizes, offsets, and host virtual addresses",
+            "device-tree.txt": "QEMU device hierarchy and properties",
+            "cpu-registers.txt": "CPU register state at the frozen capture point",
+        },
+        "artifacts": artifacts,
+    }
+    (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    for path in output.iterdir():
+        if path.is_file():
+            os.chown(path, owner_uid, owner_gid)
+            os.chmod(path, 0o600)
+    if errors:
+        print(f"{name}: incomplete memory dump: {output}", file=sys.stderr)
+        for error in errors:
+            print(f"  {error}", file=sys.stderr)
+        return 1
+    print(f"{name}: memory dump complete: {output}")
+    print(f"  guest RAM: {artifacts['guest-memory.elf']['bytes']} bytes")
+    print(f"  QEMU core: {artifacts['qemu.core']['bytes']} bytes")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,7 +2,7 @@
 # zbmc — virtual-BMC control (init.d-style). One tool for every emulated BMC.
 #   zbmc                         list boxes + verbs (help)
 #   zbmc <box>                   status of that box
-#   zbmc <box> <verb> [args]     start|stop|restart|status|ssh|ipmi|web|console|shell|build|net
+#   zbmc <box> <verb> [args]     start|stop|restart|status|memdump|ssh|ipmi|web|console|shell|build|net
 # Boxes are described by zbmc.box files (register their paths in REGISTRY below).
 set -u
 ZBMC_VERSION=0.1.1
@@ -159,6 +159,7 @@ usage(){
   echo "  status [-f] [-v]  concise health; -v explains checks; -f follows startup (default verb)"
   echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
   echo "  evidence [RUN_ID] show the run evidence directory and its files"
+  echo "  memdump [DIR]     pause once; dump guest RAM, QEMU process memory, and metadata"
   echo "  ssh [cmd]         SSH into boxes that expose a Unix shell"
   echo "  clp               management CLP over SSH transport (supported boxes only)"
   echo "  telnet            telnet into the box (mini_telnetd; no auth; port 23)"
@@ -316,8 +317,8 @@ _probe_console(){
 case "${1:-}" in -V|--version|--Version) echo "zbmc $ZBMC_VERSION"; exit 0;; esac
 [ $# -eq 0 ] && { usage; exit 0; }
 
-_need_root(){ # verbs that bind privileged ports or kill qemu need root
-  case "$1" in up|start|down|stop|restart|shell|snapshot|restore) return 0;; esac; return 1; }
+_need_root(){ # verbs that bind privileged ports or control qemu need root
+  case "$1" in up|start|down|stop|restart|shell|snapshot|restore|memdump) return 0;; esac; return 1; }
 
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — box names plus reserved IPs (no status).
@@ -342,6 +343,7 @@ if [ "$BOX" = all ] || [ "$BOX" = ls ]; then
     fi
   done
   _all_args=("${_all_filtered[@]}")
+  [ "$verb" != memdump ] || { echo "zbmc: memdump one box at a time" >&2; exit 2; }
   td="$_REPO/work/.zbmc-all-tmp.$$"; rm -rf "$td"; mkdir -p "$td"; [ -t 1 ] && export ZBMC_COLOR=1
   # root check for the whole fleet — fail once up front, not N times in subprocesses
   _all_run_as_me=0
@@ -745,6 +747,18 @@ case "$VERB" in
     exec "$0" "$BOX" up "${_restart_args[@]}" ;;
   explain) _zr_explain "${1:-}" ;;
   evidence) _zr_evidence "${1:-}" ;;
+  memdump)
+    [ $# -le 1 ] || { echo "usage: zbmc $ZBMC_NAME memdump [OUTPUT_DIR]" >&2; exit 2; }
+    command -v gcore >/dev/null 2>&1 || {
+      echo "zbmc: memdump needs gcore (Debian: sudo apt install gdb)" >&2; exit 2;
+    }
+    p=$(running) || { echo "$ZBMC_NAME is DOWN - no memory to dump" >&2; exit 1; }
+    if ! _zr_load "" 2>/dev/null || ! _zr_owns_qemu_pid "$p"; then
+      echo "$ZBMC_NAME: refusing to pause unmanaged qemu pid $p" >&2
+      exit 1
+    fi
+    _dump_dir="${1:-$ZBMC_DIR/memdumps/$(date -u +%Y%m%dT%H%M%SZ)-$(_zr_guid)}"
+    "$_SELF/zbmc-memdump" "$p" "${QMP_SOCK:-${QMP:-}}" "$_dump_dir" "$ZBMC_NAME" ;;
   status)
     _follow=0; ZBMC_DETAIL=0
     for _a in "$@"; do case "$_a" in

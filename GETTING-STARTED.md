@@ -21,6 +21,7 @@ On Debian 13:
 sudo apt update
 sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
+  gdb \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
   iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \
   python3-venv pipx
@@ -104,6 +105,27 @@ Stop it with:
 ```bash
 sudo ./tools/zbmc openbmc stop
 ```
+
+To capture both guest-visible RAM and QEMU-private memory such as emulated device SRAM:
+
+```bash
+sudo ./tools/zbmc openbmc memdump
+```
+
+`memdump` pauses a managed BMC once, writes `guest-memory.elf`, `qemu.core`, QMP/process metadata,
+the physical-memory map, RAM-block map, device tree, CPU registers, any box-specific named regions,
+and a SHA-256 manifest under `work/<box>/memdumps/`, then resumes a BMC that was running. The ELF
+file is guest physical memory; the host core also contains QEMU device-model allocations and globals.
+It is a forensic capture, not a warm-boot checkpoint. Pass an explicit output directory as the final
+argument when the default location is unsuitable. Dump one BMC at a time and allow roughly twice its
+configured RAM plus QEMU overhead as free disk space.
+
+Lenovo XCC additionally emits its physical SRAM, three private FPGA windows, FPGA FIFO/request state,
+PTABLES state, and decoded FPGA counters. These come from the same frozen capture point; MMIO is not
+read directly because reads from the emulated FPGA command window have side effects.
+
+`file`, `readelf`/`eu-readelf`, `gdb`, and `jq` inspect the resulting cores and manifest. QEMU process
+cores are normally sparse files; preserve their holes with `tar --sparse` when moving them.
 
 zbmc refuses to start around, or stop, a QEMU process that is not owned by the selected run evidence.
 An externally discovered process is reported as `UP (UNMANAGED)` and must be handled explicitly.

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7d17767d3b1a24cad1cd5840d724e146f05323910006c0cbd6661711a0db66c1 body-sha256=d2bbb5eca803ed65d178fd7eb5953d659e727adebae5a7a83e7b841d901c1eaa -->
+<!-- zmd2html:auto source-sha256=c43f0f6f3a0a49fc15885c92074c46b5d2668b0ebdcd6ba25f4a2dadd8f47ddc body-sha256=f3f8ebda63507d9597ac17db785d58c34483637431db8f197f7d139202e02afa -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting Started</title>
@@ -63,6 +63,7 @@ limits. Cold boot is CPU- and load-sensitive.</p>
 <pre class="bash"><code>sudo apt update
 sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot \
   squashfs-tools u-boot-tools device-tree-compiler qemu-utils \
+  gdb \
   expect gcc-aarch64-linux-gnu sshpass socat netcat-openbsd \
   iproute2 iputils-ping tcpdump libarchive-tools python3-pexpect \
   python3-venv pipx
@@ -121,6 +122,29 @@ evidence directory, console log, and follow command. Redfish
 checks.</p>
 <p>Stop it with:</p>
 <pre class="bash"><code>sudo ./tools/zbmc openbmc stop</code></pre>
+<p>To capture both guest-visible RAM and QEMU-private memory such as
+emulated device SRAM:</p>
+<pre class="bash"><code>sudo ./tools/zbmc openbmc memdump</code></pre>
+<p><code>memdump</code> pauses a managed BMC once, writes
+<code>guest-memory.elf</code>, <code>qemu.core</code>, QMP/process
+metadata, the physical-memory map, RAM-block map, device tree, CPU
+registers, any box-specific named regions, and a SHA-256 manifest under
+<code>work/&lt;box&gt;/memdumps/</code>, then resumes a BMC that was
+running. The ELF file is guest physical memory; the host core also
+contains QEMU device-model allocations and globals. It is a forensic
+capture, not a warm-boot checkpoint. Pass an explicit output directory
+as the final argument when the default location is unsuitable. Dump one
+BMC at a time and allow roughly twice its configured RAM plus QEMU
+overhead as free disk space.</p>
+<p>Lenovo XCC additionally emits its physical SRAM, three private FPGA
+windows, FPGA FIFO/request state, PTABLES state, and decoded FPGA
+counters. These come from the same frozen capture point; MMIO is not
+read directly because reads from the emulated FPGA command window have
+side effects.</p>
+<p><code>file</code>, <code>readelf</code>/<code>eu-readelf</code>,
+<code>gdb</code>, and <code>jq</code> inspect the resulting cores and
+manifest. QEMU process cores are normally sparse files; preserve their
+holes with <code>tar --sparse</code> when moving them.</p>
 <p>zbmc refuses to start around, or stop, a QEMU process that is not
 owned by the selected run evidence. An externally discovered process is
 reported as <code>UP (UNMANAGED)</code> and must be handled

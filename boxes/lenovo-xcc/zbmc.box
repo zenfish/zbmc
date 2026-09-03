@@ -44,6 +44,9 @@ LOG="$ZBMC_DIR/launcher.log"
 SOCK="$ZBMC_DIR/serial.sock"
 QMP_SOCK="$ZBMC_DIR/qmp.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
+ZBMC_MEMDUMP_REGIONS="sram:0x10000000:0x16400"
+ZBMC_MEMDUMP_GDB_SCRIPT="$PROJ_DIR/memdump.gdb"
+export ZBMC_MEMDUMP_REGIONS ZBMC_MEMDUMP_GDB_SCRIPT
 
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"

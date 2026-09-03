@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=79dfe0ba91d47a76626d516feb5c992e11b2c96250ee93076a3f615172bedeba body-sha256=4f8d81a1501261f40708cd868316372ffa960e4df72cdcb4f67999ba5c08b771 -->
+<!-- zmd2html:auto source-sha256=e0b20f51c2808dc3ae9bc74d6aaa33818f13fd21e53a3b59a937d749ed414e01 body-sha256=74c950338d88abf0a0a7d81bdc4c50f6a91f0670228dd978d74abd339c781223 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Security Policy</title>
@@ -82,6 +82,14 @@ is authorized before starting that box.</li>
 <li>Some retained snapshots can contain guest TLS/SSH host identities
 and captured runtime configuration. They are lab fixtures, not identity
 templates.</li>
+<li><code>memdump</code> captures guest RAM plus QEMU-private device
+memory. Its output can contain passwords, IPMI session keys, TLS private
+keys, cookies, tokens, and machine-specific state. The bundle is owned
+by the original invoking UID/GID
+(<code>SUDO_UID</code>/<code>SUDO_GID</code> under sudo), with directory
+mode <code>0700</code> and file mode <code>0600</code>. Do not publish
+or attach it as ordinary run evidence without reviewing and redacting
+it.</li>
 </ul>
 <h2 id="artifact-provenance">Artifact provenance</h2>
 <p>Build recipes pin every fetched file by SHA-256. A hash proves

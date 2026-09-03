@@ -29,6 +29,10 @@ issue.
   be exercised. Confirm that your use is authorized before starting that box.
 - Some retained snapshots can contain guest TLS/SSH host identities and captured runtime configuration.
   They are lab fixtures, not identity templates.
+- `memdump` captures guest RAM plus QEMU-private device memory. Its output can contain passwords, IPMI
+  session keys, TLS private keys, cookies, tokens, and machine-specific state. The bundle is owned by
+  the original invoking UID/GID (`SUDO_UID`/`SUDO_GID` under sudo), with directory mode `0700` and file
+  mode `0600`. Do not publish or attach it as ordinary run evidence without reviewing and redacting it.
 
 ## Artifact provenance
 
