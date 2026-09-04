@@ -36,16 +36,19 @@ printf 'prompt: ###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n'
 printf '[285 : 343 WARNING][IPMBIfc.c:752]IPMBIfc.c : Error sending IPMB packet to Slave 0x16\n'
 printf 'GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n'
 printf 'one-off error remains visible\n'
+printf '/conf # '
+sleep 2
 EOF
 chmod +x "$tmp/socat"
-quiet=$(PATH="$tmp:$PATH" BOX="$box" bash -c '
+quiet=$(timeout 0.5 env PATH="$tmp:$PATH" BOX="$box" bash -c '
   _zbmc_resolve_ip() { echo 127.0.0.1; }
   . "$BOX/zbmc.box"
   SOCK=/tmp/fixture.sock
   zbmc_console --nostderr
-')
+' || :)
 [[ "$quiet" == *'prompt: '* ]]
 [[ "$quiet" == *'one-off error remains visible'* ]]
+[[ "$quiet" == *'/conf # '* ]]
 [[ "$quiet" != *'retry count over'* ]]
 [[ "$quiet" != *'Error sending IPMB packet'* ]]
 [[ "$quiet" != *'retry count exceeded'* ]]

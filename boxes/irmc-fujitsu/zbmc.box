@@ -109,11 +109,43 @@ zbmc_console() {
   command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   echo "Fujitsu iRMC console -> $SOCK (Ctrl-] to detach)"
   if [ "$nostderr" = 1 ]; then
-    socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK" | sed -u \
-      -e 's/###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over//g' \
-      -e 's/\[[0-9][0-9]* : [0-9][0-9]* WARNING\]\[IPMBIfc.c:752\]IPMBIfc.c : Error sending IPMB packet to Slave 0x16//g' \
-      -e 's/GetRTCTimeViaESPI L\.231: ERROR: retry count exceeded(ret:-1)//g' \
-      -e '/^[[:space:]\r]*$/d'
+    command -v python3 >/dev/null || { echo "need python3 for --nostderr" >&2; return 1; }
+    socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK" | python3 -u -c '
+import os
+import re
+
+exact = (
+    b"###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over",
+    b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)",
+)
+ipmb = re.compile(rb"\[[0-9]+ : [0-9]+ WARNING\]\[IPMBIfc\.c:752\]IPMBIfc\.c : Error sending IPMB packet to Slave 0x16\r?\n")
+pending = b""
+
+while True:
+    chunk = os.read(0, 4096)
+    if not chunk:
+        break
+    pending += chunk
+    while pending:
+        matched = next((text for text in exact if pending.startswith(text)), None)
+        if matched is not None:
+            pending = pending[len(matched):]
+            continue
+        if any(text.startswith(pending) for text in exact):
+            break
+        if pending.startswith(b"["):
+            newline = pending.find(b"\n")
+            if newline < 0:
+                break
+            line, pending = pending[:newline + 1], pending[newline + 1:]
+            if not ipmb.fullmatch(line):
+                os.write(1, line)
+            continue
+        os.write(1, pending[:1])
+        pending = pending[1:]
+
+os.write(1, pending)
+'
     return "${PIPESTATUS[0]}"
   fi
   exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
