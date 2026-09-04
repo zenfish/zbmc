@@ -165,7 +165,7 @@ usage(){
   echo "  telnet            telnet into the box (mini_telnetd; no auth; port 23)"
   echo "  ipmi <cmd...>     authenticated zipmi (e.g. zbmc idrac9 ipmi mc info)"
   echo "  web               bring up httpd + Redfish"
-  echo "  console           live console (box must be up): interactive serial login on"
+  echo "  console [--nostderr] live console; --nostderr filters recurring firmware diagnostics when supported"
   echo "                    boxes with a console (megarac-hpe, nvidia-obmc); else tail -f the log"
   echo "  shell             boot init=/bin/sh — unrestricted root, no net/IPMI (RE; megarac-hpe)"
   echo "  build             rebuild the boot image"

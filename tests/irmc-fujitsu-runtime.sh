@@ -27,6 +27,29 @@ grep -Fq 'irmc_diag_root' "$box/boot.sh"
 grep -Fq '/newroot/usr/local/bin/remman' "$box/build.sh"
 grep -Fq "busybox echo 'exec /bin/sh -i'" "$box/build.sh"
 grep -Fq 'getty -n -l /usr/local/bin/remman' "$box/build.sh"
+
+tmp=$(mktemp -d)
+trap 'rm -f "$tmp/socat"; rmdir "$tmp"' EXIT
+cat >"$tmp/socat" <<'EOF'
+#!/usr/bin/env bash
+printf 'prompt: ###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n'
+printf '[285 : 343 WARNING][IPMBIfc.c:752]IPMBIfc.c : Error sending IPMB packet to Slave 0x16\n'
+printf 'GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n'
+printf 'one-off error remains visible\n'
+EOF
+chmod +x "$tmp/socat"
+quiet=$(PATH="$tmp:$PATH" BOX="$box" bash -c '
+  _zbmc_resolve_ip() { echo 127.0.0.1; }
+  . "$BOX/zbmc.box"
+  SOCK=/tmp/fixture.sock
+  zbmc_console --nostderr
+')
+[[ "$quiet" == *'prompt: '* ]]
+[[ "$quiet" == *'one-off error remains visible'* ]]
+[[ "$quiet" != *'retry count over'* ]]
+[[ "$quiet" != *'Error sending IPMB packet'* ]]
+[[ "$quiet" != *'retry count exceeded'* ]]
+
 grep -Fq 'RMCP+ IPMI starts but does not answer' "$box/index.html"
 grep -Eq '^irmc-fujitsu[[:space:]]+10\.0\.6\.68$' "$repo/zhosts.txt"
 grep -Fq 'irmc-fujitsu' "$repo/qemu/recipes/qemu-11-arm.sh"
