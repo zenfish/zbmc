@@ -100,8 +100,22 @@ zbmc_ssh() {
 }
 
 zbmc_console() {
+  local nostderr=0
+  if [ "${1:-}" = --nostderr ]; then
+    nostderr=1
+    shift
+  fi
+  [ "$#" -eq 0 ] || { echo "usage: zbmc irmc-fujitsu console [--nostderr]" >&2; return 2; }
   command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   echo "Fujitsu iRMC console -> $SOCK (Ctrl-] to detach)"
+  if [ "$nostderr" = 1 ]; then
+    socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK" | sed -u \
+      -e 's/###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over//g' \
+      -e 's/\[[0-9][0-9]* : [0-9][0-9]* WARNING\]\[IPMBIfc.c:752\]IPMBIfc.c : Error sending IPMB packet to Slave 0x16//g' \
+      -e 's/GetRTCTimeViaESPI L\.231: ERROR: retry count exceeded(ret:-1)//g' \
+      -e '/^[[:space:]\r]*$/d'
+    return "${PIPESTATUS[0]}"
+  fi
   exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
 }
 
