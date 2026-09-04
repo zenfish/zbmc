@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=a13872b0a2a4b4b01cd82e0c4b2870cfc66a53dabbd3b865de6a53ac1e64be91 body-sha256=3395c22fae6b8a05dce54c7129944fe176c6da8dbe2a7b5c31029ea1e8972af6 -->
+<!-- zmd2html:auto source-sha256=3b6b3c6c372eee74d284d60a7a630655279b4cefb908f58931f17bb180c06c94 body-sha256=ab0748805f7cef806e7c7c82a210c3f5ca994a4ea1c0f46ed93e5ceab13adc05 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -104,6 +104,22 @@ terminal READY in 46m06s with the vendor WebUI healthy through its
 AST2600 watchdog remains modeled. The cold readiness deadline is 60
 minutes. The focused runtime test, full repository suite, and all
 documentation pairs pass.</p>
+<h1 id="ilo5-svcsilo-bring-up">iLO5 svcsILO bring-up</h1>
+<h2 id="review-2">Review</h2>
+<p>The live Debby run in
+<code>work/ilo5-debby-attempt-139/renode.log</code> proved the tracked
+<code>gxp_dev.py</code> fix is on-path and changes behavior in the
+previously blocked svcsILO startup region. Before the fix, repeated
+control-register reads after event-service init returned
+<code>0x0</code>; with the fix, the same run shows persisted read-backs
+like <code>off=0xb0 -&gt; 0x808</code>,
+<code>off=0xc4 -&gt; 0x704</code>, and <code>off=0xa0 -&gt; 0x101</code>
+before the guest clears them.</p>
+<p>That run also reaches <code>SVCSILO_MAIN</code>, crosses
+<code>phase=after-event-service-init</code>, and continues to later
+<code>ILOMAIN_COMMAND</code> handling. This verifies the narrowest
+correct change in the device model: preserve non-mailbox register writes
+so later firmware reads can observe guest-programmed state.</p>
 </div>
 </body>
 </html>
