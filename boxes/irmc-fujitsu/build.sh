@@ -15,6 +15,8 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
+SHELL_INITRAMFS_VERSION=1
+
 mkdir -p "$WD"
 for row in "${files[@]}"; do
   IFS='|' read -r file expected <<<"$row"
@@ -28,7 +30,44 @@ for row in "${files[@]}"; do
   fi
 done
 
+shell_initramfs="$WD/initramfs-shell.cpio.gz"
+shell_stamp="$WD/.initramfs-shell-version"
+if [ ! -f "$shell_initramfs" ] || [ "$WD/initramfs.cpio.gz" -nt "$shell_initramfs" ] ||
+   [ "$(cat "$shell_stamp" 2>/dev/null)" != "$SHELL_INITRAMFS_VERSION" ]; then
+  for tool in cpio gzip python3; do
+    command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 1; }
+  done
+  shell_tree=$(mktemp -d)
+  trap 'rm -rf "$shell_tree"' EXIT
+  (cd "$shell_tree" && gzip -dc "$WD/initramfs.cpio.gz" | cpio -idm --quiet)
+  python3 - "$shell_tree/init" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+marker = "busybox mount --move /proc /newroot/proc\n"
+addition = """if busybox grep -qw irmc_diag_shell /proc/cmdline; then
+  busybox printf '#!/bin/sh\\nexec /bin/sh -i\\n' > /diag-shell
+  busybox chmod 0755 /diag-shell
+  busybox mount --bind /diag-shell /newroot/usr/local/bin/remman \\
+    && busybox echo "[irmc-init] diagnostic shell enabled"
+fi
+"""
+if text.count(marker) != 1:
+    raise SystemExit("unexpected base initramfs /init")
+path.write_text(text.replace(marker, addition + marker))
+PY
+  (cd "$shell_tree" && find . -print0 | sort -z |
+    cpio --null -o -H newc --quiet | gzip -1) >"$shell_initramfs.part"
+  mv "$shell_initramfs.part" "$shell_initramfs"
+  printf '%s\n' "$SHELL_INITRAMFS_VERSION" >"$shell_stamp"
+  rm -rf "$shell_tree"
+  trap - EXIT
+fi
+
 printf 'source=Fujitsu iRMC S6 RX2540 M7 02.63S / SDR 03.67\n' >"$WD/build-provenance.txt"
 printf 'source_flash_sha256=89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86ba96d6016ce2ed\n' >>"$WD/build-provenance.txt"
 printf '%s\n' "${files[@]}" >>"$WD/build-provenance.txt"
+printf 'derived_initramfs_shell_sha256=%s\n' "$(sha256sum "$shell_initramfs" | awk '{print $1}')" >>"$WD/build-provenance.txt"
 echo "Fujitsu iRMC S6 runtime ready in $WD"
