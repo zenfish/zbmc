@@ -1,0 +1,2 @@
+2026-09-04 | ilo5-run-ownership | worked around root-owned attempt artifacts manually | reclaim ownership at the end of self-contained runs so reruns clone cleanly | fixes the lifecycle bug once instead of adding per-attempt exceptions
+2026-09-04 | ilo5-host-split | searched the local clone for Debby-only runtime dumps | check HOSTS.md and inspect the canonical Debby work tree first | runtime evidence is host-local even when paths look repository-relative

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=a13872b0a2a4b4b01cd82e0c4b2870cfc66a53dabbd3b865de6a53ac1e64be91 body-sha256=3395c22fae6b8a05dce54c7129944fe176c6da8dbe2a7b5c31029ea1e8972af6 -->
+<!-- zmd2html:auto source-sha256=c913e62d766a8d59c85ffd0a5ff742930ba31e55f1a83e2fe81956844e6a9bae body-sha256=cd20fb9141142551c9a7bb2b2829657a0f69e3f0fde049ebe77e0c94765809a6 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -104,6 +104,54 @@ terminal READY in 46m06s with the vendor WebUI healthy through its
 AST2600 watchdog remains modeled. The cold readiness deadline is 60
 minutes. The focused runtime test, full repository suite, and all
 documentation pairs pass.</p>
+<h1 id="ilo5-svcsilo-bring-up">iLO5 svcsILO bring-up</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Recover the prior Debby
+runtime state and verify saved svcsILO dumps.</label></li>
+<li><label><input type="checkbox" checked="" />Replace the incorrect
+physical-dump address model with the proven virtual image.</label></li>
+<li><label><input type="checkbox" checked="" />Trace the
+<code>0x12070</code> path through both <code>memset</code> calls to
+synchronous config IPC.</label></li>
+<li><label><input type="checkbox" checked="" />Prove a svcsILO-scoped
+default-config fastpath advances the former deadlock.</label></li>
+<li><label><input type="checkbox" />Localize the next wait after the
+final default-config request and obtain guest network
+readiness.</label></li>
+</ul>
+<h2 id="review-2">Review</h2>
+<p>The live Debby run in
+<code>work/ilo5-debby-attempt-139/renode.log</code> proved the tracked
+<code>gxp_dev.py</code> fix is on-path and changes behavior in the
+previously blocked svcsILO startup region. Before the fix, repeated
+control-register reads after event-service init returned
+<code>0x0</code>; with the fix, the same run shows persisted read-backs
+like <code>off=0xb0 -&gt; 0x808</code>,
+<code>off=0xc4 -&gt; 0x704</code>, and <code>off=0xa0 -&gt; 0x101</code>
+before the guest clears them.</p>
+<p>That run also reaches <code>SVCSILO_MAIN</code>, crosses
+<code>phase=after-event-service-init</code>, and continues to later
+<code>ILOMAIN_COMMAND</code> handling. This verifies the narrowest
+correct change in the device model: preserve non-mailbox register writes
+so later firmware reads can observe guest-programmed state.</p>
+<p>Attempt 142 recovered the authoritative 151,552-byte virtual dump
+from attempt 126 and proved the previous
+<code>ALLOC30</code>/<code>REQ19</code> hook labels came from treating
+non-contiguous physical pages as a linear virtual image. Corrected hooks
+show both zeroing calls return; the actual block is the shared
+<code>0x01882918</code> wrapper, which builds syscall descriptor
+<code>0x98</code> and waits in SVC 0 for an absent config backend.</p>
+<p>A fingerprint-scoped runtime fastpath now returns transport success
+while retaining each caller's pre-zeroed response buffer as
+factory/default configuration. The live run advances through nine
+requests, including OEM property get/set and command 2/3 state traffic.
+It has not reached the later <code>0x11e50</code> milestone, and
+<code>10.0.2.15</code> still does not answer ARP or ports 22/23/80/443,
+so no tracked fastpath patch is ready to commit yet. Evidence is
+preserved on Debby in
+<code>work/ilo5-debby-attempt-142/renode.sync-config-block.log</code>,
+<code>renode.oem-fastpath-next-block.log</code>, and the current
+<code>renode.log</code>.</p>
 </div>
 </body>
 </html>
