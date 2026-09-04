@@ -69,7 +69,7 @@ zbmc_boot() {
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
   local file
-  for file in kernel.bin system-patched.dtb initramfs.cpio.gz flash64.img rootfs-sd.img build-provenance.txt; do
+  for file in kernel.bin system-patched.dtb initramfs.cpio.gz initramfs-shell.cpio.gz flash64.img rootfs-sd.img build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc irmc-fujitsu build"; return 1; }
   done
   echo "ready (cold boot; Web-UI works, IPMI under investigation, Redfish disabled)"
