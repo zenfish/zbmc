@@ -28,3 +28,11 @@ Verified with `python3 -m py_compile tools/sync-docs`, `bash tests/sync-docs-cli
 The Lenovo XCC runtime preserves the vendor kernel and root filesystem, adds the minimum platform emulation required for the FPGA/eMMC startup path, and declares only the reproduced vendor WebUI. IPMI and SSH remain explicitly disabled in the service contract. Warm start remains unadvertised until migration is tested successfully.
 
 Debby run `20260902T071810Z-f43e4719-cfe5-49fe-b034-69bed9d53719` survived the former 16-minute watchdog-reset boundary and reached terminal READY in 46m06s with the vendor WebUI healthy through its 60-second hold. QEMU's watchdog reset action is suppressed while the AST2600 watchdog remains modeled. The cold readiness deadline is 60 minutes. The focused runtime test, full repository suite, and all documentation pairs pass.
+
+# iLO5 svcsILO bring-up
+
+## Review
+
+The live Debby run in `work/ilo5-debby-attempt-139/renode.log` proved the tracked `gxp_dev.py` fix is on-path and changes behavior in the previously blocked svcsILO startup region. Before the fix, repeated control-register reads after event-service init returned `0x0`; with the fix, the same run shows persisted read-backs like `off=0xb0 -> 0x808`, `off=0xc4 -> 0x704`, and `off=0xa0 -> 0x101` before the guest clears them.
+
+That run also reaches `SVCSILO_MAIN`, crosses `phase=after-event-service-init`, and continues to later `ILOMAIN_COMMAND` handling. This verifies the narrowest correct change in the device model: preserve non-mailbox register writes so later firmware reads can observe guest-programmed state.

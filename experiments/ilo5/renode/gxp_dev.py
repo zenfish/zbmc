@@ -22,4 +22,6 @@ elif request.IsRead:
 else:
     if request.Offset == 0x34:
         LASTCMD[0] = request.Value & 0xff      # remember the command byte to echo at 0x30
+    else:
+        REGISTERS[request.Offset] = request.Value
     self.InfoLog("gxp_dev WRITE off=0x%x val=0x%x" % (request.Offset, request.Value))

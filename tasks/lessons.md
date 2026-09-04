@@ -1,0 +1,1 @@
+2026-09-04 | ilo5-run-ownership | worked around root-owned attempt artifacts manually | reclaim ownership at the end of self-contained runs so reruns clone cleanly | fixes the lifecycle bug once instead of adding per-attempt exceptions
