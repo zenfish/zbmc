@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=2
+SHELL_INITRAMFS_VERSION=3
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -53,6 +53,12 @@ addition = """if busybox grep -qw irmc_diag_shell /proc/cmdline; then
   busybox chmod 0755 /diag-shell
   busybox mount --bind /diag-shell /newroot/usr/local/bin/remman \\
     && busybox echo "[irmc-init] diagnostic shell enabled"
+fi
+if busybox grep -qw irmc_diag_root /proc/cmdline; then
+  busybox sed 's|^co:2345789:respawn:.*|co:2345789:respawn:/sbin/getty -n -l /usr/local/bin/remman -L console 38400 vt100|' \\
+    /newroot/etc/inittab > /diag-inittab
+  busybox mount --bind /diag-inittab /newroot/etc/inittab \\
+    && busybox echo "[irmc-init] unauthenticated root console enabled"
 fi
 """
 if text.count(marker) != 1:

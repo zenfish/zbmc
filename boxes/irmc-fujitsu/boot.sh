@@ -23,7 +23,7 @@ nohup "$QEMU_BIN" \
   -M ast2600-evb,fmc-model=w25q512jv -m 1024 \
   -kernel "$WD/kernel.bin" -dtb "$WD/system-patched.dtb" \
   -initrd "$WD/initramfs-shell.cpio.gz" \
-  -append 'console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 imagebooted=1 nosmp irqchip.gicv2_force_probe=1 loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 irmc_no_redfish irmc_diag_shell' \
+  -append 'console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 imagebooted=1 nosmp irqchip.gicv2_force_probe=1 loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 irmc_no_redfish irmc_diag_shell irmc_diag_root' \
   -drive "file=$WD/flash64.img,format=raw,if=mtd,snapshot=on" \
   -drive "file=$WD/rootfs-sd.img,format=raw,if=sd,snapshot=on" \
   -display none -monitor none \
