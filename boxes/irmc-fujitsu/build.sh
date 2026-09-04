@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=1
+SHELL_INITRAMFS_VERSION=2
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -48,7 +48,8 @@ path = pathlib.Path(sys.argv[1])
 text = path.read_text()
 marker = "busybox mount --move /proc /newroot/proc\n"
 addition = """if busybox grep -qw irmc_diag_shell /proc/cmdline; then
-  busybox printf '#!/bin/sh\\nexec /bin/sh -i\\n' > /diag-shell
+  busybox echo '#!/bin/sh' > /diag-shell
+  busybox echo 'exec /bin/sh -i' >> /diag-shell
   busybox chmod 0755 /diag-shell
   busybox mount --bind /diag-shell /newroot/usr/local/bin/remman \\
     && busybox echo "[irmc-init] diagnostic shell enabled"
