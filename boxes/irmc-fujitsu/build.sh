@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=5
+SHELL_INITRAMFS_VERSION=6
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -61,7 +61,7 @@ if busybox grep -qw irmc_diag_root /proc/cmdline; then
     && busybox echo "[irmc-init] unauthenticated root console enabled"
 fi
 if busybox grep -qw irmc_diag_ipmi /proc/cmdline; then
-  busybox cat > /newroot/usr/local/bin/irmc-ipmi-prep <<'EOF'
+  busybox cat > /irmc-ipmi-prep <<'EOF'
 #!/bin/sh
 busybox mkdir -p /conf/BMC1
 if [ ! -f /conf/BMC1/LanIfccfg.ini ]; then
@@ -101,10 +101,11 @@ busybox awk '
 busybox mv /conf/BMC1/LanIfccfg.ini.ipmi /conf/BMC1/LanIfccfg.ini
 fi
 EOF
-  busybox chmod 0755 /newroot/usr/local/bin/irmc-ipmi-prep
+  busybox chmod 0755 /irmc-ipmi-prep
+  busybox mount --bind /irmc-ipmi-prep /newroot/usr/local/bin/irmc-ipmi-prep
   busybox awk 'index($0, "/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr") { print "/usr/local/bin/irmc-ipmi-prep" } { print }' \
-    /newroot/etc/init.d/ipmistack > /newroot/etc/init.d/ipmistack.ipmi
-  busybox mv /newroot/etc/init.d/ipmistack.ipmi /newroot/etc/init.d/ipmistack
+    /newroot/etc/init.d/ipmistack > /ipmistack.ipmi
+  busybox mount --bind /ipmistack.ipmi /newroot/etc/init.d/ipmistack
   busybox echo '[irmc-init] diagnostic IPMI LAN hook installed'
 fi
 """
