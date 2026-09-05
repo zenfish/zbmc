@@ -124,30 +124,71 @@ exact = (
     b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\r\n",
     b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n",
 )
-ipmb = re.compile(rb"\[[0-9]+ : [0-9]+ WARNING\]\[IPMBIfc\.c:752\]IPMBIfc\.c : Error sending IPMB packet to Slave 0x16\r?\n")
+line_prefixes = (
+    b"[",
+    b"bt:",
+    b"Initialize power control",
+    b"Node Manager SlaveAddr:",
+    b"pwcpDeviceInit()",
+    b"fts_NM_errorRecovery():",
+    b"fts_NM_RecvGetDeviceId():",
+    b"PCIe Function1:",
+    b"fts_PCIe_initStatusSem():",
+)
+diagnostic_line = re.compile(
+    rb"(?:"
+    rb"bt:[0-9]+: .*"
+    rb"|Initialize power control"
+    rb"|Node Manager SlaveAddr: .*"
+    rb"|pwcpDeviceInit\(\)"
+    rb"|fts_NM_errorRecovery\(\): .*"
+    rb"|fts_NM_RecvGetDeviceId\(\): .*"
+    rb"|PCIe Function1: .*"
+    rb"|fts_PCIe_initStatusSem\(\): .*"
+    rb"|\[[0-9]+ : [0-9]+ (?:INFO|WARNING|CRITICAL)\].*(?:IPMBIfc\.c|irmcPCIeSignalHndlr\.c|libipmi_uds_session\.c|UDSIfc\.c|procmonitor\.c).*"
+    rb")\r?\n"
+)
 pending = b""
+suppress_blank = False
 
 def filtered(chunk):
-    global pending
+    global pending, suppress_blank
     output = bytearray()
     pending += chunk
     while pending:
+        if suppress_blank:
+            if pending.startswith(b"\r\n"):
+                pending = pending[2:]
+                continue
+            if pending.startswith(b"\n"):
+                pending = pending[1:]
+                continue
+            if pending == b"\r":
+                break
         matched = next((text for text in exact if pending.startswith(text)), None)
         if matched is not None:
             pending = pending[len(matched):]
+            suppress_blank = True
             continue
         if any(text.startswith(pending) for text in exact):
             break
-        if pending.startswith(b"["):
+        possible_line = tuple(prefix for prefix in line_prefixes if prefix.startswith(pending) or pending.startswith(prefix))
+        if possible_line:
+            if not any(pending.startswith(prefix) for prefix in line_prefixes):
+                break
             newline = pending.find(b"\n")
             if newline < 0:
                 break
             line, pending = pending[:newline + 1], pending[newline + 1:]
-            if not ipmb.fullmatch(line):
+            if diagnostic_line.fullmatch(line):
+                suppress_blank = True
+            else:
                 output += line
+                suppress_blank = False
             continue
         output += pending[:1]
         pending = pending[1:]
+        suppress_blank = False
     return output
 
 terminal = 0
