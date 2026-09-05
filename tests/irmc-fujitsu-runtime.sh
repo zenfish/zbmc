@@ -56,6 +56,13 @@ connection.sendall(
     b"prompt: ###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n"
     b"[285 : 343 WARNING][IPMBIfc.c:752]IPMBIfc.c : Error sending IPMB packet to Slave 0x16\n"
     b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n"
+    b"bt:8325: /usr/local/bin/FTS_PCIeFunction1(main+0xc4) [0x13e7c]\n"
+    b"[8325 : 8325 WARNING][irmcPCIeSignalHndlr.c:88]  Received SIGSEGV\n\n"
+    b"Initialize power control\n"
+    b"Node Manager SlaveAddr: 0x2C\n"
+    b"pwcpDeviceInit()\n"
+    b"fts_NM_errorRecovery(): Start simple error recovery. Error flags: 0008\n\n"
+    b"fts_NM_RecvGetDeviceId(): GetDeviceId CC: 0xC0\n\n"
     b"one-off error remains visible\n/conf # "
 )
 
@@ -72,6 +79,11 @@ assert b"/conf # " in output, output
 assert b"retry count over" not in output, output
 assert b"Error sending IPMB packet" not in output, output
 assert b"retry count exceeded" not in output, output
+assert b"FTS_PCIeFunction1" not in output, output
+assert b"Received SIGSEGV" not in output, output
+assert b"Initialize power control" not in output, output
+assert b"Node Manager" not in output, output
+assert b"fts_NM_" not in output, output
 
 os.write(terminal, b"\x1d")
 os.waitpid(pid, 0)
