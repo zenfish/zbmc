@@ -106,13 +106,17 @@ zbmc_console() {
     shift
   fi
   [ "$#" -eq 0 ] || { echo "usage: zbmc irmc-fujitsu console [--nostderr]" >&2; return 2; }
-  command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   echo "Fujitsu iRMC console -> $SOCK (Ctrl-] to detach)"
   if [ "$nostderr" = 1 ]; then
     command -v python3 >/dev/null || { echo "need python3 for --nostderr" >&2; return 1; }
-    socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK" | python3 -u -c '
+    python3 -u -c '
 import os
 import re
+import select
+import socket
+import sys
+import termios
+import tty
 
 exact = (
     b"###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over",
@@ -121,10 +125,9 @@ exact = (
 ipmb = re.compile(rb"\[[0-9]+ : [0-9]+ WARNING\]\[IPMBIfc\.c:752\]IPMBIfc\.c : Error sending IPMB packet to Slave 0x16\r?\n")
 pending = b""
 
-while True:
-    chunk = os.read(0, 4096)
-    if not chunk:
-        break
+def filtered(chunk):
+    global pending
+    output = bytearray()
     pending += chunk
     while pending:
         matched = next((text for text in exact if pending.startswith(text)), None)
@@ -139,15 +142,46 @@ while True:
                 break
             line, pending = pending[:newline + 1], pending[newline + 1:]
             if not ipmb.fullmatch(line):
-                os.write(1, line)
+                output += line
             continue
-        os.write(1, pending[:1])
+        output += pending[:1]
         pending = pending[1:]
+    return output
 
-os.write(1, pending)
-'
-    return "${PIPESTATUS[0]}"
+terminal = 0
+old_settings = termios.tcgetattr(terminal)
+connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+connection.connect(sys.argv[1])
+tty.setraw(terminal)
+try:
+    while True:
+        readable, _, _ = select.select((terminal, connection), (), ())
+        if terminal in readable:
+            data = os.read(terminal, 4096)
+            if not data:
+                break
+            escape = data.find(b"\x1d")
+            if escape >= 0:
+                if escape:
+                    connection.sendall(data[:escape])
+                break
+            connection.sendall(data)
+        if connection in readable:
+            data = connection.recv(4096)
+            if not data:
+                break
+            output = filtered(data)
+            if output:
+                os.write(1, output)
+finally:
+    if pending:
+        os.write(1, pending)
+    termios.tcsetattr(terminal, termios.TCSADRAIN, old_settings)
+    connection.close()
+' "$SOCK"
+    return
   fi
+  command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
 }
 

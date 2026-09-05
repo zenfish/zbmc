@@ -29,29 +29,57 @@ grep -Fq "busybox echo 'exec /bin/sh -i'" "$box/build.sh"
 grep -Fq 'getty -n -l /usr/local/bin/remman' "$box/build.sh"
 
 tmp=$(mktemp -d)
-trap 'rm -f "$tmp/socat"; rmdir "$tmp"' EXIT
-cat >"$tmp/socat" <<'EOF'
-#!/usr/bin/env bash
-printf 'prompt: ###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n'
-printf '[285 : 343 WARNING][IPMBIfc.c:752]IPMBIfc.c : Error sending IPMB packet to Slave 0x16\n'
-printf 'GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n'
-printf 'one-off error remains visible\n'
-printf '/conf # '
-sleep 2
-EOF
-chmod +x "$tmp/socat"
-quiet=$(timeout 0.5 env PATH="$tmp:$PATH" BOX="$box" bash -c '
-  _zbmc_resolve_ip() { echo 127.0.0.1; }
-  . "$BOX/zbmc.box"
-  SOCK=/tmp/fixture.sock
-  zbmc_console --nostderr
-' || :)
-[[ "$quiet" == *'prompt: '* ]]
-[[ "$quiet" == *'one-off error remains visible'* ]]
-[[ "$quiet" == *'/conf # '* ]]
-[[ "$quiet" != *'retry count over'* ]]
-[[ "$quiet" != *'Error sending IPMB packet'* ]]
-[[ "$quiet" != *'retry count exceeded'* ]]
+trap 'rmdir "$tmp"' EXIT
+python3 - "$box" "$tmp" <<'PY'
+import os
+import pty
+import select
+import socket
+import sys
+import time
+
+box, tmp = sys.argv[1:]
+socket_path = os.path.join(tmp, "serial.sock")
+listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+listener.bind(socket_path)
+listener.listen(1)
+listener.settimeout(3)
+
+pid, terminal = pty.fork()
+if pid == 0:
+    env = os.environ | {"BOX": box, "TEST_SOCK": socket_path}
+    command = '_zbmc_resolve_ip() { echo 127.0.0.1; }; . "$BOX/zbmc.box"; SOCK="$TEST_SOCK"; zbmc_console --nostderr'
+    os.execvpe("bash", ("bash", "-c", command), env)
+
+connection, _ = listener.accept()
+connection.sendall(
+    b"prompt: ###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n"
+    b"[285 : 343 WARNING][IPMBIfc.c:752]IPMBIfc.c : Error sending IPMB packet to Slave 0x16\n"
+    b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n"
+    b"one-off error remains visible\n/conf # "
+)
+
+output = bytearray()
+deadline = time.monotonic() + 3
+while b"/conf # " not in output and time.monotonic() < deadline:
+    readable, _, _ = select.select((terminal,), (), (), 0.1)
+    if readable:
+        output += os.read(terminal, 4096)
+
+assert b"prompt: " in output, output
+assert b"one-off error remains visible" in output, output
+assert b"/conf # " in output, output
+assert b"retry count over" not in output, output
+assert b"Error sending IPMB packet" not in output, output
+assert b"retry count exceeded" not in output, output
+
+os.write(terminal, b"\x1d")
+os.waitpid(pid, 0)
+connection.close()
+listener.close()
+os.close(terminal)
+os.unlink(socket_path)
+PY
 
 grep -Fq 'RMCP+ IPMI starts but does not answer' "$box/index.html"
 grep -Eq '^irmc-fujitsu[[:space:]]+10\.0\.6\.68$' "$repo/zhosts.txt"
