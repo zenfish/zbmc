@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=3
+SHELL_INITRAMFS_VERSION=4
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -59,6 +59,23 @@ if busybox grep -qw irmc_diag_root /proc/cmdline; then
     /newroot/etc/inittab > /diag-inittab
   busybox mount --bind /diag-inittab /newroot/etc/inittab \\
     && busybox echo "[irmc-init] unauthenticated root console enabled"
+fi
+if busybox grep -qw irmc_diag_ipmi /proc/cmdline; then
+  busybox cat > /irmc-ipmi-enable <<'EOF'
+#!/bin/sh
+while [ ! -f /newroot/conf/BMC1/LanIfccfg.ini ]; do busybox sleep 1; done
+busybox awk '
+  /^\[LANIfcConfig\/LanIfcConfig\/0\]$/ { section = 1 }
+  /^\[LANIfcConfig\/LanIfcConfig\/[123]\]$/ { section = 0 }
+  section && /^Enabled=0$/ { print "Enabled=1"; next }
+  section && /^Up_Status=0$/ { print "Up_Status=1"; next }
+  { print }
+' /newroot/conf/BMC1/LanIfccfg.ini > /newroot/conf/BMC1/LanIfccfg.ini.ipmi
+busybox mv /newroot/conf/BMC1/LanIfccfg.ini.ipmi /newroot/conf/BMC1/LanIfccfg.ini
+busybox echo '[irmc-init] diagnostic IPMI LAN enabled'
+EOF
+  busybox chmod 0755 /irmc-ipmi-enable
+  /irmc-ipmi-enable &
 fi
 """
 if text.count(marker) != 1:
