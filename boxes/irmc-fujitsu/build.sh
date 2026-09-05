@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=7
+SHELL_INITRAMFS_VERSION=8
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -59,55 +59,6 @@ if busybox grep -qw irmc_diag_root /proc/cmdline; then
     /newroot/etc/inittab > /diag-inittab
   busybox mount --bind /diag-inittab /newroot/etc/inittab \\
     && busybox echo "[irmc-init] unauthenticated root console enabled"
-fi
-if busybox grep -qw irmc_diag_ipmi /proc/cmdline; then
-  busybox cat > /irmc-ipmi-prep <<'EOF'
-#!/bin/sh
-busybox mkdir -p /conf/BMC1
-if [ ! -f /conf/BMC1/LanIfccfg.ini ]; then
-  busybox cat > /conf/BMC1/LanIfccfg.ini <<'CFG'
-[LANIfcConfig/LanIfcConfig/0]
-Chnum=2
-ifname=eth0
-Enabled=1
-Up_Status=1
-Ethindex=0
-Chtype=1
-
-[LANIfcConfig/LanIfcConfig/3]
-ifname=usb0
-Ethindex=2
-Up_Status=0
-Chnum=7
-Enabled=0
-Chtype=3
-
-[LANIfcConfig/LanIfcConfig/2]
-Chtype=1
-Enabled=0
-ifname=bond0
-Chnum=2
-Ethindex=0
-Up_Status=0
-CFG
-else
-busybox awk '
-  /^\[LANIfcConfig\/LanIfcConfig\/0\]$/ { section = 1 }
-  /^\[LANIfcConfig\/LanIfcConfig\/[123]\]$/ { section = 0 }
-  section && /^Enabled=0$/ { print "Enabled=1"; next }
-  section && /^Up_Status=0$/ { print "Up_Status=1"; next }
-  { print }
-' /conf/BMC1/LanIfccfg.ini > /conf/BMC1/LanIfccfg.ini.ipmi
-busybox mv /conf/BMC1/LanIfccfg.ini.ipmi /conf/BMC1/LanIfccfg.ini
-fi
-EOF
-  busybox chmod 0755 /irmc-ipmi-prep
-  busybox mount --bind /irmc-ipmi-prep /newroot/usr/local/bin/irmc-ipmi-prep
-  busybox awk 'index($0, "/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr") { print "/usr/local/bin/irmc-ipmi-prep" } { print }' \
-    /newroot/etc/init.d/ipmistack > /ipmistack.ipmi
-  busybox chmod 0755 /ipmistack.ipmi
-  busybox mount --bind /ipmistack.ipmi /newroot/etc/init.d/ipmistack
-  busybox echo '[irmc-init] diagnostic IPMI LAN hook installed'
 fi
 """
 if text.count(marker) != 1:
