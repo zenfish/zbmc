@@ -63,6 +63,8 @@ connection.sendall(
     b"pwcpDeviceInit()\n"
     b"fts_NM_errorRecovery(): Start simple error recovery. Error flags: 0008\n\n"
     b"fts_NM_RecvGetDeviceId(): GetDeviceId CC: 0xC0\n\n"
+    b"/conf # ls /conf/\x1b[Ju[285 : 405 CRITICAL][libipmi_uds_session.c:618]Send_RAW_IPMI2_0_UDS_Command: NetFN and command mismatched NetFnLUN : 06 (expected : 0A), Command : 01 (expected : 10)\r\n"
+    b"/conf # ls /conf/user_home/\x1b[J[8932 : 8932 CRITICAL][libipmi_uds_session.c:629]Send_RAW_IPMI2_0_UDS_Command: Response too big: 5 (expected max: 1). NetfnLUN: 00, command: 01.\r\n"
     b"one-off error remains visible\n/conf # "
 )
 
@@ -84,6 +86,9 @@ assert b"Received SIGSEGV" not in output, output
 assert b"Initialize power control" not in output, output
 assert b"Node Manager" not in output, output
 assert b"fts_NM_" not in output, output
+assert b"NetFN and command mismatched" not in output, output
+assert b"Response too big" not in output, output
+assert b"\x1b[Ju" in output, output
 
 os.write(terminal, b"\x1d")
 os.waitpid(pid, 0)

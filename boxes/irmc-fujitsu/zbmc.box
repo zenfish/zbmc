@@ -148,6 +148,7 @@ diagnostic_line = re.compile(
     rb"|\[[0-9]+ : [0-9]+ (?:INFO|WARNING|CRITICAL)\].*(?:IPMBIfc\.c|irmcPCIeSignalHndlr\.c|libipmi_uds_session\.c|UDSIfc\.c|procmonitor\.c).*"
     rb")\r?\n"
 )
+ansi_csi = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]")
 pending = b""
 suppress_blank = False
 
@@ -165,6 +166,19 @@ def filtered(chunk):
                 continue
             if pending == b"\r":
                 break
+        if pending.startswith(b"\x1b"):
+            control = ansi_csi.match(pending)
+            if control is not None:
+                output += control.group()
+                pending = pending[control.end():]
+                suppress_blank = False
+                continue
+            if pending == b"\x1b" or pending.startswith(b"\x1b["):
+                break
+            output += pending[:1]
+            pending = pending[1:]
+            suppress_blank = False
+            continue
         matched = next((text for text in exact if pending.startswith(text)), None)
         if matched is not None:
             pending = pending[len(matched):]
