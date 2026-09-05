@@ -119,8 +119,10 @@ import termios
 import tty
 
 exact = (
-    b"###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over",
-    b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)",
+    b"###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\r\n",
+    b"###(ESPI):haGetEspiPCHRTC(RX) : ERROR: retry count over\n",
+    b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\r\n",
+    b"GetRTCTimeViaESPI L.231: ERROR: retry count exceeded(ret:-1)\n",
 )
 ipmb = re.compile(rb"\[[0-9]+ : [0-9]+ WARNING\]\[IPMBIfc\.c:752\]IPMBIfc\.c : Error sending IPMB packet to Slave 0x16\r?\n")
 pending = b""
