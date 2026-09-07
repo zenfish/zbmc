@@ -3,6 +3,7 @@
 if request.IsInit:
     REGISTERS = {
         0x20: 0x00000000,
+        0x3b: 0x20,  # Primary interface has a valid non-NC-SI PHY.
     }
     # Gate 5: gxp_dev @0xD1000000 is a register MAILBOX. The driver poll @0x41021834 does:
     #   strb cmd,[0x34] ; r3=[0x30] ; cmp cmd,(r3>>24) ; if eq -> result = r3 & 0x00ffffff
