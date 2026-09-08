@@ -9,7 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/$(basename "$HERE")}}"
-MIRROR="https://git.trouble.org/zbmc/megarac-hpe"
+MIRROR="https://git.trouble.org/zbmc/megarac-hpe/cold-20260908"
 mkdir -p "$WD"
 sha() { shasum -a256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
 

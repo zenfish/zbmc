@@ -6,7 +6,7 @@
 # not evidence of vendor SSH/SMASH authentication. Never expose this guest outside an isolated lab.
 # See docs/why-bmc-virtualization-is-hard.html for the evidence boundary and historical results.
 ZBMC_NAME=megarac-hpe
-ZBMC_DESC="HPE XD670 MegaRAC/AST2600 - IPMI, Redfish, and Web-UI root; vendor SSH absent"
+ZBMC_DESC="HPE XD670 MegaRAC/AST2600 - IPMI, Redfish, and Web-UI login; vendor SSH absent"
 ZBMC_WARM_STATUS=broken
 ZBMC_WARM_REASON="saved ASPEED SRAM is 0x17000; current model requires 0x18000"
 
@@ -107,6 +107,27 @@ zbmc_shell() {
 zbmc_redfish_health() {
   curl -skf --max-time 12 -u "$IPMI_USER:$IPMI_PW" \
     "https://$ZBMC_IP:$WEB_PORT/redfish/v1/Managers" 2>/dev/null | grep -q 'Manager Collection'
+}
+# Exercise the vendor UI's own login path and first dashboard API, then close the session.
+zbmc_webui_health() {
+  local jar login token uid dashboard rc=1
+  jar=$(mktemp)
+  login=$(curl -skf --max-time 12 -c "$jar" \
+    --data-urlencode "username=$IPMI_USER" --data-urlencode "password=$IPMI_PW" \
+    "https://$ZBMC_IP:$WEB_PORT/api/session" 2>/dev/null) || login=
+  token=$(printf '%s' "$login" | sed -n 's/.*"CSRFToken": "\([^"]*\)".*/\1/p')
+  if [ -n "$token" ]; then
+    uid=$(curl -skf --max-time 12 -b "$jar" -H "X-CSRFTOKEN: $token" \
+      "https://$ZBMC_IP:$WEB_PORT/api/settings/users/user_id?username=$IPMI_USER" 2>/dev/null |
+      sed -n 's/.*"user_id": \([0-9][0-9]*\).*/\1/p')
+    [ -n "$uid" ] && dashboard=$(curl -skf --max-time 12 -b "$jar" -H "X-CSRFTOKEN: $token" \
+      "https://$ZBMC_IP:$WEB_PORT/api/settings/dashboardinfo?user_id=$uid&channel_id=1&user_name=$IPMI_USER" 2>/dev/null) || dashboard=
+    printf '%s' "$dashboard" | grep -q '"privilege": "administrator"' && rc=0
+    curl -sk --max-time 5 -b "$jar" -H "X-CSRFTOKEN: $token" -X DELETE \
+      "https://$ZBMC_IP:$WEB_PORT/api/session" >/dev/null 2>&1 || true
+  fi
+  rm -f "$jar"
+  return "$rc"
 }
 zbmc_web() {
   if zbmc_redfish_health; then
