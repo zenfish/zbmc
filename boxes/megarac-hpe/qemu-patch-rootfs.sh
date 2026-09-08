@@ -3,35 +3,31 @@
 # Apply the emulation adaptations that let the Cray XD670 MegaRAC SP-X firmware run under qemu
 # ast2600-evb. Called by extract.sh on the freshly-unsquashed rootfs before repacking.
 #
-# Two fixes, both traced by Ghidra RE of IPMIMain / libipmimsghndlr.so / libipmistack.so (2026-07-28):
+# These rootfs adaptations align vendor configuration with the emulated machine. The final 2026-09-08
+# GetDevID repair is owned by build-from-hpm.sh, which preserves the firmware-info FMH in NOR.
 #
 # FIX 1 — /conf seed + /conf/BMC symlink (etc/init.d/ipmistack).
 #   IPMIMain opens the LITERAL path /conf/BMC/IPMI.conf to build its per-instance g_BMCInfo[] table.
 #   Nothing creates the /conf/BMC -> BMC1/<platform> symlink under qemu (on HW the JFFS2 /conf seed +
-#   platform detection do it). Missing it -> interface table never built -> MsgHndlr @0x14864 derefs
-#   an uninitialised g_BMCInfo field -> SIGSEGV -> procmgr respawns -> 15 crashes -> BMC reboot loop.
+#   platform detection do it), so seed the expected configuration before IPMIMain starts.
 #   We seed /conf from /etc/defconfig and create the symlink before the first IPMIMain launch, gated
 #   on a /conf/AMI sentinel (idempotent; /conf is persistent so it survives procmgr respawns).
 #   (Also stages /tmp/devmap.xml for sdrgen/spx_restservice — orthogonal to the crash but harmless.)
 #
-# FIX 2 — make the IPMI.conf consistent with qemu's hardware so IPMIMain doesn't crash or self-stop.
-#   qemu ast2600-evb provides: LAN (eth0), UDS (unix socket), KCS1-3 (ast-kcs-bmc). It has NO
-#   /dev/ttyS2/ttyS3 (kernel wires only ttyS0/ttyS4) and NO i2c adapters (/sys/bus/i2c empty). A stock
+# FIX 2 — make IPMI.conf consistent with qemu's modeled hardware.
+#   qemu ast2600-evb provides: LAN (eth0), UDS (unix socket), KCS1-3 (ast-kcs-bmc). It has no ttyS2,
+#   no usable host peer for ttyS3 SOL, and no i2c adapters (/sys/bus/i2c empty). A stock
 #   IPMI.conf enables SERIAL/SOL (ttyS2/3), IPMB x5 + SMBUS (i2c), SMM (needs absent Smmchcfg.ini) and
-#   BT (needs /dev/ipmi-bt-host); each leaves a half-initialised table entry the central MsgHndlr
-#   thread later derefs -> SIGSEGV -> procmgr 15x -> BMC reboot. Ghidra RE of IPMIConf.c also found a
-#   Node-Manager guard: it self-stops unless NM_IPMB_BUS is 0/1/2 AND that IPMB bus is enabled; the
+#   BT (needs /dev/ipmi-bt-host). Ghidra RE of IPMIConf.c found a Node-Manager guard: it self-stops
+#   unless NM_IPMB_BUS is 0/1/2 and that IPMB bus is enabled; the
 #   disable value is NM_IPMB_BUS=0xFF (>=3 falls through the check). So: disable every absent-hardware
-#   interface AND set NM_IPMB_BUS=0xFF. KCS1-3 also disabled: even though ast-kcs-bmc hw exists,
-#   keeping KCS enabled caused early crashes (interface init failures → table corruption).
-#   Kept ON: LAN, UDS, DCMI (needs GROUP_EXTN, which stays 1).
-#   Result: IPMIMain runs stable and UDS server /var/UDSocket1 listens from boot.
+#   interface AND set NM_IPMB_BUS=0xFF. Keep KCS1-3 enabled: qemu supplies all three devices, and the
+#   accepted rootfs does too. Kept ON: LAN, UDS, KCS1-3, DCMI and GROUP_EXTN.
 #
-# STATUS (2026-08-20): all fixes applied → cold boot stable (0 IPMIMain SIGSEGVs on 3rd try),
-#   UDS listens (/var/UDSocket1), MsgHndlr health counter updates via UDS clients → thread monitor
-#   never fires, admin/superuser provisioned at boot, authenticated Redfish + LAN IPMI UDP/623 work.
+# STATUS (2026-09-08): two clean attempt-1 boots with the deterministic image reached authenticated
+#   Redfish Managers and LAN IPMI and held all required services continuously for at least 60 seconds.
 #   Shell: dropbear SSH on port 22 (sysadmin/blank; musl soft-float ARMv5T static); mini_telnetd on
-#   port 23 (no auth, direct /bin/sh). Warm QMP snapshot at work/cray-snap.gz restores in ~10s.
+#   port 23 (no auth, direct /bin/sh). The old warm QMP snapshot is incompatible with current QEMU.
 set -eu
 R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 
@@ -39,10 +35,9 @@ R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
 IPMISTACK="$R/etc/init.d/ipmistack"
 SEED='    mkdir -p /conf /var/tmp\n    if [ ! -f /conf/AMI ]; then\n        cp -a /etc/defconfig/* /conf/ 2>/dev/null\n        ln -sfn BMC1/ast2600evb_ami /conf/BMC\n        touch /conf/AMI\n    fi\n    { [ -f /tmp/devmap.xml ] || cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; }\n'
 # insert the seed block immediately before every "/usr/local/bin/IPMIMain --daemonize" line
-# ALSO: append `>/dev/null 2>&1` INLINE (same line as IPMIMain) so its crash-loop spam doesn't
-# drown the console tty. Console readability is critical when FIX 5 replaces getty with /bin/sh -i.
-# Anchor perl regex on the FULL line including trailing whitespace/newline to keep redirect on same line.
-perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)(\n)}{${SEED}\$1\$2 >/dev/null 2>&1\$3}g" "$IPMISTACK"
+# Keep IPMIMain diagnostics on serial: the cold-start health gate uses its exact MsgHndlr SIGSEGV
+# message to reject a bad attempt instead of waiting for an external timeout.
+perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)(\n)}{${SEED}\$1\$2\$3}g" "$IPMISTACK"
 
 # --- FIX 2: disable the hardware-less IPMI interfaces in the seed IPMI.conf ------------------------
 IC="$R/etc/defconfig/BMC1/ast2600evb_ami/IPMI.conf"
@@ -52,9 +47,6 @@ sed -i.bak -E \
  -e 's/^([[:space:]]*SUPPORT_SMM_IFC=)1/\10/' \
  -e 's/^([[:space:]]*SUPPORT_SMBUS_IFC=)1/\10/' \
  -e 's/^([[:space:]]*SUPPORT_BT_IFC=)1/\10/' \
- -e 's/^([[:space:]]*SUPPORT_KCS1_IFC=)1/\10/' \
- -e 's/^([[:space:]]*SUPPORT_KCS2_IFC=)1/\10/' \
- -e 's/^([[:space:]]*SUPPORT_KCS3_IFC=)1/\10/' \
  -e 's/^([[:space:]]*PRIMARY_IPMB_SUPPORT=)1/\10/' \
  -e 's/^([[:space:]]*SECONDARY_IPMB_SUPPORT=)1/\10/' \
  -e 's/^([[:space:]]*THIRD_IPMB_SUPPORT=)1/\10/' \
@@ -202,19 +194,13 @@ sed -i 's|^sysadmin:[^:]*:|sysadmin::|' /conf/shadow 2>/dev/null || true
 { [ -f /tmp/devmap.xml ] || \
   cp /etc/devmaps/MSB3/G593-SD0-AAQ1-HP0.xml /tmp/devmap.xml 2>/dev/null || \
   cp /etc/devmaps/empty.xml /tmp/devmap.xml 2>/dev/null; } || true
-# libunix.so.13 waits for /var/tmp/rc-init-complete before calling listen() on /var/UDSocket1.
-# Without this file, UDS refuses connections for ~6 min (until S99zz-rc-init-complete creates it),
-# which matches the thread monitor's 36x10s=360s window exactly -> restart -> double-reg SIGSEGV.
-# Creating it here (S07, before IPMIMain starts at S22) makes UDS accept immediately at startup.
-mkdir -p /var/tmp
-touch /var/tmp/rc-init-complete
 CONFSEED
 chmod 0755 "$R/etc/rcS.d/S07conf-seed.sh"
 
-echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf: kept LAN/UDS/DCMI, disabled KCS1/2/3"
+echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf keeps qemu-backed LAN/UDS/KCS1-3/DCMI"
 echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable, UDS listens, authed Redfish works"
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
 echo "[qemu-patch] inittab console: getty -> /bin/sh -i (no login prompt, direct root shell)"
-echo "[qemu-patch] S07conf-seed.sh -> seeds /conf + rc-init-complete early; UDS listens from boot"
+echo "[qemu-patch] S07conf-seed.sh -> seeds /conf before early consumers"
 echo "[qemu-patch] sysadmin /etc/passwd shell: /usr/local/bin/defshell -> /bin/sh; shadow pw hash cleared"
 echo "[qemu-patch] dropbear SSH on port 22 (sysadmin/blank via -B); telnetd on port 23 (no auth)"

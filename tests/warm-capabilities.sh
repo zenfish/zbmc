@@ -6,7 +6,7 @@ out=$($repo/tools/zbmc list)
 
 grep -Eq '^NAME +RESERVED IP +WARM$' <<<"$out"
 grep -Eq '^idrac10 +[^ ]+ +(READY|MISSING)$' <<<"$out"
-grep -Eq '^megarac-hpe +[^ ]+ +(READY|MISSING)$' <<<"$out"
+grep -Eq '^megarac-hpe +[^ ]+ +BROKEN$' <<<"$out"
 grep -Eq '^supermicro-x14 +[^ ]+ +(READY|MISSING)$' <<<"$out"
 grep -Eq '^idrac9 +[^ ]+ +BROKEN$' <<<"$out"
 grep -Eq '^openbmc +[^ ]+ +UNAVAILABLE$' <<<"$out"
@@ -18,6 +18,13 @@ if $repo/tools/zbmc idrac9 start --warm --run-as-me >"${TMPDIR:-/tmp}/zbmc-warm-
   exit 1
 fi
 grep -Fq 'warm restore is broken: restored usb-net is network-dead' "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
+rm -f "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
+
+if $repo/tools/zbmc megarac-hpe start --warm --run-as-me >"${TMPDIR:-/tmp}/zbmc-warm-test.$$" 2>&1; then
+  echo 'megarac-hpe unexpectedly accepted --warm' >&2
+  exit 1
+fi
+grep -Fq 'warm restore is broken: saved ASPEED SRAM is 0x17000; current model requires 0x18000' "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
 rm -f "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
 
 echo 'warm capabilities: PASS'

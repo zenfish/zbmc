@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # start-megarac-hpe-green.sh — boot the Cray XD670 BMC and RETRY until IPMIMain comes up healthy.
 #
-# WHY: After a patch (KCS disabled + early rc-init-complete), cold boots mostly stabilize within 2 early
-#      IPMIMain SIGSEGVs then come up clean. Occasionally a boot still crash-loops (>2 SIGSEGVs); this
-#      script re-rolls in that case. Prefer restore-megarac-hpe.sh (warm snap, ~10s) over cold-boot rerolls.
-#      Cold-boot is needed only if no snapshot exists or the flash needs to be reset.
+# The image builder preserves the vendor firmware-info FMH required by GetDevID. Retries remain an
+# operational fallback for failed emulation starts; a MsgHndlr SIGSEGV is never considered healthy.
+# Warm restore is currently incompatible with QEMU's larger ASPEED SRAM model.
 #
 # HEALTHY  = authenticated IPMI works without an IPMIMain SIGSEGV.
 # RUN: IP=10.0.6.66 WD=/path/to/work/megarac-hpe ./start-megarac-hpe-green.sh   (prints qemu pid on green)
@@ -21,6 +20,10 @@ LOG="${ZBMC_CONSOLE_LOG:-$WD/svc.log}"
 
 # scope to THIS box (hostname=megarac-hpe in its hostfwd) — bare '-M ast2600-evb' kills every ast2600 zoo box.
 kill_qemu(){ $SUDO pkill -f 'hostname=megarac-hpe' 2>/dev/null; pkill -f "tail -f $WD/cin" 2>/dev/null; sleep 2; }
+keep_qemu=0
+cleanup(){ [ "$keep_qemu" = 1 ] || kill_qemu; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
 
 for t in $(seq 1 "$TRIES"); do
   echo "[green] boot attempt $t/$TRIES" >&2
@@ -65,9 +68,13 @@ for t in $(seq 1 "$TRIES"); do
   done
   if [ "$ok" = 1 ]; then
     qp=$(pgrep -f "hostfwd=udp:$IP:$IPMI_PORT-:623" | head -1)
-    echo "[green] HEALTHY on attempt $t — qemu $qp" >&2
-    echo "$qp"; exit 0
+    if [ -n "$qp" ] && ps -p "$qp" >/dev/null 2>&1; then
+      keep_qemu=1
+      echo "[green] HEALTHY on attempt $t — qemu $qp" >&2
+      echo "$qp"; exit 0
+    fi
+    echo "[green] attempt $t: IPMI passed but QEMU PID was not live — reroll" >&2
   fi
 done
-echo "[green] no healthy boot in $TRIES tries — IPMIMain race; try again or build a warm snapshot" >&2
+echo "[green] no healthy boot in $TRIES tries" >&2
 exit 1
