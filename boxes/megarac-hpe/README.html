@@ -5,10 +5,10 @@
 <body class="bg-slate-950 text-slate-200"><main class="mx-auto max-w-5xl px-5 py-10 space-y-8">
 <header><p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">zbmc box · verified 2026-09-08</p>
 <h1 class="mt-2 text-4xl font-bold text-white">HPE XD670 MegaRAC on QEMU</h1>
-<p class="mt-3 text-slate-300">A cold boot of the preserved AMI MegaRAC SP-X firmware on the AST2600 model. Native IPMI and authenticated Redfish are required; the HTTPS root is checked separately.</p></header>
+<p class="mt-3 text-slate-300">A cold boot of the preserved AMI MegaRAC SP-X firmware on the AST2600 model. Native IPMI, authenticated Redfish, and the vendor Web-UI login/dashboard path are required.</p></header>
 <section class="grid gap-4 sm:grid-cols-3">
 <div class="rounded-xl border border-emerald-700 bg-emerald-950/40 p-4"><h2 class="font-semibold text-emerald-300">IPMI</h2><p class="mt-1 text-sm">Verified RMCP+ on UDP/623 with <code>admin</code>/<code>superuser</code>.</p></div>
-<div class="rounded-xl border border-emerald-700 bg-emerald-950/40 p-4"><h2 class="font-semibold text-emerald-300">Redfish</h2><p class="mt-1 text-sm">Authenticated <code>/redfish/v1/Managers</code> must stay healthy for 60 seconds.</p></div>
+<div class="rounded-xl border border-emerald-700 bg-emerald-950/40 p-4"><h2 class="font-semibold text-emerald-300">Redfish + Web UI</h2><p class="mt-1 text-sm">Managers plus Web-UI session/dashboard APIs must stay healthy for 60 seconds.</p></div>
 <div class="rounded-xl border border-amber-700 bg-amber-950/40 p-4"><h2 class="font-semibold text-amber-300">Warm start</h2><p class="mt-1 text-sm">Broken: the saved ASPEED SRAM is 0x17000 bytes; current QEMU requires 0x18000.</p></div>
 </section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">Start and use it</h2>
@@ -18,17 +18,17 @@ sudo -E ./tools/zbmc megarac-hpe up --deadline 900
 ./tools/zbmc megarac-hpe ipmi mc info
 curl -sk -u admin:superuser https://10.250.0.40/redfish/v1/Managers
 sudo -E ./tools/zbmc megarac-hpe stop</code></pre>
-<p class="mt-3 text-sm text-slate-400">Expected cold READY time is about seven minutes. The firmware brings Redfish up and down twice during initialization; READY is withheld until the authenticated Managers collection remains healthy through the full hold.</p></section>
+<p class="mt-3 text-sm text-slate-400">Expected cold READY time is about seven minutes. Authenticated Managers alternated between success and failure twice during initialization; READY is withheld until all functional probes remain healthy through the full hold.</p></section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">What was repaired</h2>
 <ol class="mt-4 list-decimal space-y-3 pl-6 text-slate-300">
 <li><span class="font-semibold text-white">Firmware-info FMH preserved.</span> The generated NOR had omitted the 0x140-byte module at HPM offset <code>0x3ef028f</code>. Without it, <code>/proc/ractrends/Helper/FwInfo</code> lacked <code>FW_CODEBASEVERSION</code>, and <code>GetDevID</code> called <code>strncpy(destination, NULL, 8)</code>.</li>
 <li><span class="font-semibold text-white">Fixed partitions encoded in the DTB.</span> The QEMU image uses explicit uboot, conf, bkupconf, extlog, www, and root ranges instead of vendor <code>ami,spx-fmh</code> discovery.</li>
 <li><span class="font-semibold text-white">The accepted rootfs behavior restored.</span> KCS1–3 remain enabled; the premature <code>rc-init-complete</code> marker, SIGSEGV preload tracer, and timing-gate heartbeat are absent. IPMIMain diagnostics remain visible.</li>
-<li><span class="font-semibold text-white">Readiness made functional.</span> IPMI, authenticated Redfish Managers, and the HTTPS root are all required continuously for 60 seconds.</li>
+<li><span class="font-semibold text-white">Readiness made functional.</span> IPMI, authenticated Redfish Managers, and the Web UI's own session/dashboard APIs are all required continuously for 60 seconds.</li>
 </ol></section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">Rebuild from the HPM</h2>
 <pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-cyan-300"><code>boxes/megarac-hpe/build-from-hpm.sh work/megarac-hpe-build</code></pre>
-<p class="mt-3 text-sm text-slate-300">The builder verifies HPM SHA-256 <code class="break-all">4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76</code>, fixes the SquashFS creation time, and normalizes patched files to the firmware build epoch. Two independent builds compared byte-for-byte equal.</p>
+<p class="mt-3 text-sm text-slate-300">The builder verifies HPM SHA-256 <code class="break-all">4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76</code>, fixes the SquashFS creation time, and normalizes patched files to the firmware build epoch. Two independent builds compared byte-for-byte equal. The accepted bundle is published without replacing historical files under <code>megarac-hpe/cold-20260908/</code>.</p>
 <div class="mt-4 overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-slate-400"><tr><th class="py-2">Artifact</th><th>SHA-256</th></tr></thead><tbody class="font-mono text-xs">
 <tr><td class="py-2 font-sans">kernel.Image</td><td>94843f212aaccfe311b34b874711ccbb387e5fe9d8a6caf4e3583bfbc18958e1</td></tr>
 <tr><td class="py-2 font-sans">dtb-a1.dtb</td><td>57699dc066fd995075f234acd9b489461bda28a9e6f91b6b275363cb338b5939</td></tr>
@@ -36,6 +36,6 @@ sudo -E ./tools/zbmc megarac-hpe stop</code></pre>
 <tr><td class="py-2 font-sans">mtdflash.bin</td><td>d64412d0d0c13fc6bb03f52ea35bedf8762919a5c069c51a808e5e374b8e252e</td></tr>
 </tbody></table></div></section>
 <section class="rounded-xl border border-rose-800 bg-rose-950/30 p-6"><h2 class="text-xl font-semibold text-rose-300">Evidence boundary</h2>
-<p class="mt-2 text-sm">The normal contract verifies vendor IPMI and Redfish plus only the Web-UI root response—not an authenticated browser workflow. Vendor SSH is absent. Optional injected Dropbear, telnet, direct root console, and SMASH replacement are diagnostic substitutions; enable them only in an isolated lab with <code>ZBMC_INSECURE_LAB_ACCESS=1</code>.</p></section>
+<p class="mt-2 text-sm">The normal contract verifies vendor IPMI and Redfish plus successful Web-UI session creation and administrator dashboard data. A rendered-browser screenshot was unavailable in this session. Vendor SSH is absent. Optional injected Dropbear, telnet, direct root console, and SMASH replacement are diagnostic substitutions; enable them only in an isolated lab with <code>ZBMC_INSECURE_LAB_ACCESS=1</code>.</p></section>
 <footer class="text-sm text-slate-500">Detailed evidence: <a class="text-cyan-400 underline" href="EMULATION-STATUS.html">EMULATION-STATUS.html</a>.</footer>
 </main></body></html>
