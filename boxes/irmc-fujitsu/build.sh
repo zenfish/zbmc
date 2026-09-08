@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=3
+SHELL_INITRAMFS_VERSION=8
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
