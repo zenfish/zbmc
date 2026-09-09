@@ -99,8 +99,9 @@ listed=$("$fixture/tools/zbmc" list)
 expect "$listed" "fake                 127.0.0.1"
 
 down=$("$fixture/tools/zbmc" fake status)
-[ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
+[ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild\nAuth' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
 expect "$down" "Last run  : READY after 10m 12s; UP for 9m 48s; STOPPED — operator requested shutdown"
+expect "$down" "Auth      : root/test"
 [[ "$down" != *"had reached READY"* ]] || { printf 'redundant highest stage:\n%s\n' "$down" >&2; exit 1; }
 
 cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
@@ -167,7 +168,7 @@ printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/qemu.pid"
 ps -o lstart= -p "$$" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > "$TEST_ROOT/runs/run-1/qemu.start"
 printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
-[ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
+[ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nAuth\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
 [[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - ICMP, SSH, IPMI, Web-UI]"

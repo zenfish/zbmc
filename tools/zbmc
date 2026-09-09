@@ -948,6 +948,7 @@ PY
       else
         echo "$(_colored_state FAILED) ($_rmsg)"
       fi
+      printf "%-9s : %s%s/%s%s\n" "Auth" "$CP" "$IPMI_USER" "$IPMI_PW" "$CZ"
       if [ "$_running" = 0 ]; then break; fi
       if [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then
         _l2st=na; _l2nt=
