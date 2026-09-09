@@ -1,7 +1,8 @@
 # Lenovo XClarity Controller preserved Newyork-pass1 runtime.
 #
-# HTTPS is verified. The guest opens UDP/623 but does not answer RMCP+, and SSH
-# resets before key exchange; neither is part of the readiness contract.
+# HTTPS and the emulator-only serial root shell are verified. The guest opens
+# UDP/623 but does not answer RMCP+, and SSH resets before key exchange; neither
+# network protocol is part of the readiness contract.
 ZBMC_NAME=lenovo-xcc
 ZBMC_DESC="Lenovo XClarity Controller / AST2600 - vendor Web-UI"
 
@@ -70,10 +71,10 @@ zbmc_boot() {
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
   local file
-  for file in kernel.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
+  for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc lenovo-xcc build"; return 1; }
   done
-  echo "ready (cold boot; preserved XCC Web-UI, IPMI/SSH disabled)"
+  echo "ready (cold boot; XCC Web-UI + emulator-only serial root shell, IPMI/SSH disabled)"
 }
 
 zbmc_web() {

@@ -23,10 +23,10 @@
         <p class="mt-3 text-2xl font-bold">~46 minutes</p>
         <p class="mt-2 text-stone-300">The default contract reached READY on Debby in 46m06s, including the 60-second hold.</p>
       </article>
-      <article class="border border-rose-500/40 bg-rose-950/30 p-6">
-        <p class="font-mono text-xs uppercase tracking-widest text-rose-400">Not declared</p>
-        <p class="mt-3 text-2xl font-bold">IPMI / SSH</p>
-        <p class="mt-2 text-stone-300">UDP/623 receives requests without replies. SSH resets before key exchange.</p>
+      <article class="border border-cyan-500/40 bg-cyan-950/30 p-6">
+        <p class="font-mono text-xs uppercase tracking-widest text-cyan-400">Verified</p>
+        <p class="mt-3 text-2xl font-bold">Serial root shell</p>
+        <p class="mt-2 text-stone-300">The host-local console socket provides an emulator-only diagnostic shell; network SSH remains disabled.</p>
       </article>
     </section>
 
@@ -40,18 +40,24 @@
         <h2 class="text-2xl font-bold">Run</h2>
         <pre class="mt-4 overflow-x-auto bg-black p-5 text-sm text-emerald-300"><code>./tools/zbmc lenovo-xcc build
 sudo ./tools/zbmc lenovo-xcc start
+./tools/zbmc lenovo-xcc console
 ./tools/zbmc lenovo-xcc web
 ./tools/zbmc lenovo-xcc status</code></pre>
       </div>
       <div>
         <h2 class="text-2xl font-bold">Pinned inputs</h2>
         <ul class="mt-4 space-y-3 text-stone-300">
-          <li>Preserved zImage with block-spliced observer initramfs</li>
+          <li>Preserved zImage plus a deterministic block-spliced serial-shell derivative</li>
           <li>Lenovo DTB, reconstructed SRAM, and PTABLES</li>
           <li>Compressed 7 GiB initialized eMMC image</li>
           <li>QEMU 11 FPGA/eMMC GP0 patch with bounded tracing</li>
         </ul>
       </div>
+    </section>
+
+    <section class="mt-12 border-l-4 border-cyan-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Diagnostic console</h2>
+      <p class="mt-4 leading-7 text-stone-300">Lenovo’s normal <code class="text-cyan-300">lcw_login</code> requires a response signed by a vendor debug key that is not present in the firmware. The derived kernel changes only the built-in initramfs: before normal <code class="text-cyan-300">switch_root</code>, it bind-mounts an emulator-only getty launcher over the serial login script. The original kernel, eMMC, root filesystem, and appended DTBs remain unchanged. Access is limited to the host Unix socket exposed by <code class="text-cyan-300">zbmc console</code>.</p>
     </section>
 
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>

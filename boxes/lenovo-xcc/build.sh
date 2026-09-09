@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/lenovo-xcc}}"
 MIRROR=https://git.trouble.org/zbmc/lenovo-xcc
+SHELL_KERNEL_SHA256=1984706eedb75b76f0ceccac4f57f46c2b2f0c2b47b1bde256d2c0f609ea8c13
 
 files=(
   'kernel.zImage|809502472131dc103f2be2d4445f1ca8521dfdb13adba0fb1180cb037b382eac'
@@ -28,6 +29,20 @@ for row in "${files[@]}"; do
   fi
 done
 
+for tool in lzop python3; do
+  command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 1; }
+done
+if [ ! -f "$WD/kernel-shell.zImage" ] ||
+   [ "$(sha256sum "$WD/kernel-shell.zImage" | awk '{print $1}')" != "$SHELL_KERNEL_SHA256" ]; then
+  python3 "$HERE/build-shell-kernel.py" "$WD/kernel.zImage" "$WD/kernel-shell.zImage.part"
+  [ "$(sha256sum "$WD/kernel-shell.zImage.part" | awk '{print $1}')" = "$SHELL_KERNEL_SHA256" ] || {
+    echo "SHA-256 mismatch: kernel-shell.zImage" >&2
+    exit 1
+  }
+  mv "$WD/kernel-shell.zImage.part" "$WD/kernel-shell.zImage"
+fi
+
 printf 'source=Lenovo XCC 6.92 preserved Newyork-pass1 runtime\n' >"$WD/build-provenance.txt"
 printf '%s\n' "${files[@]}" >>"$WD/build-provenance.txt"
+printf 'derived_shell_kernel_sha256=%s\n' "$SHELL_KERNEL_SHA256" >>"$WD/build-provenance.txt"
 echo "Lenovo XCC runtime ready in $WD"
