@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=a00123ee0c56c47c5603e3577c02b04822cc6205e8d0f64dc53bcdbb46903cb2 body-sha256=e3c323766bdc533fae740cd07de03bd4f125ba3072a94870f16fa85e1ce6da64 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=1fcd247948f0a62510e999bb4f9c14406196bc250094264a95952cb24e5f094a body-sha256=689bed3b428709fbd7f8f98b55b9e087dcb538f2bea85487680c11a6f1b9bc43 -->
 
 zbmc / preserved firmware
 
@@ -27,6 +27,8 @@ The host-local console socket provides an emulator-only diagnostic shell; networ
 ## What the runtime changes
 
 The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces `vpdoctor` with a sleeping process because the physical watchdog/platform contract is unavailable. The AST2600 watchdog remains modeled, but QEMU ignores its reset action: under slower TCG execution it expires before XCC finishes starting services. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.
+
+Lenovo's DHCP hook receives QEMU's lease but its `avctifconfig` control path does not install the accepted address in Linux. The emulator-only getty hook waits for Lenovo's own DHCP completion marker, then installs QEMU user networking's fixed `10.0.2.15/24` address and `10.0.2.2` default route. Health probing waits for both this network marker and the vendor's Web-Available marker.
 
 ## Run
 
