@@ -42,6 +42,9 @@ ZBMC_QEMU_MACHINE=npcm845-evb
 ZBMC_WARM_STATUS=verified
 ZBMC_WARM_FILES="ckpt/state.gz ckpt/overlay-frozen.qcow2 ckpt/network-mode"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
+# A cold boot while the full zoo is resident can spend more than 15 minutes in
+# interpreted SQLite/config-daemon initialization on the 4-core lab host.
+ZBMC_READY_DEADLINE=2100
 ZBMC_GUEST_PREFIX="${ZBMC_GUEST_PREFIX:-8}"
 ZBMC_GUEST_GATEWAY="${ZBMC_GUEST_GATEWAY:-10.0.0.1}"
 

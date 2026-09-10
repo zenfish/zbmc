@@ -340,7 +340,7 @@ echo "CFGMGRD PID=$CFGPID"
 # SHM plus a functional internal GetAttribute returning the seeded root user.
 echo "=== WAITING FOR CFGMGRD READINESS ==="
 CFG_READY=0
-for i in $(seq 1 120); do
+for i in $(seq 1 900); do
     kill -0 "$DCMGRPID" 2>/dev/null || {
         echo "IPMI_FAILED: dcmgr exited before cfgmgrd became ready"
         cat /tmp/dcmgr.log 2>/dev/null || true
