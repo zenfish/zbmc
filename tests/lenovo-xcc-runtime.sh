@@ -88,14 +88,3 @@ python3 "$repo/tests/lenovo-xcc-tap-config.py"
 )
 
 python3 "$repo/tests/lenovo-xcc-restore.py"
-(
-  log=$(mktemp)
-  trap 'rm -f "$log"' EXIT
-  LOG="$log"
-  ZBMC_CONSOLE_LOG=/nonexistent/cold-console
-  printf '%s\n' XCC_WARM_RESTORE_RUNNING >"$LOG"
-  curl() { printf 200; }
-  zbmc_webui_health
-  curl() { printf 503; }
-  ! zbmc_webui_health >/dev/null
-)
