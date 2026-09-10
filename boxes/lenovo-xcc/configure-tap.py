@@ -5,7 +5,7 @@ import sys
 import time
 
 
-def configure(sock_path, address, prefix, gateway, timeout=300):
+def configure(sock_path, address, prefix, gateway, timeout=900):
     deadline = time.monotonic() + timeout
     with socket.socket(socket.AF_UNIX) as sock:
         while True:
