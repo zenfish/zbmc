@@ -21,7 +21,13 @@ def patch(path, address, gateway):
         f"ping -c 1 -W 1 {gateway} >/dev/null 2>&1 || "
         "{ ip link set eth0 down; sleep 1; ip link set eth0 up; }; sleep 2"
     )
+    if keepalive not in text:
+        raise ValueError("X14 init does not contain the expected network keepalive")
     text = text.replace(keepalive, recovery)
+    text = text.replace(
+        "re-assert the hostfwd IP.",
+        "re-assert the direct TAP address and recover a stalled emulated link.",
+    )
     path.write_text(text)
 
 
