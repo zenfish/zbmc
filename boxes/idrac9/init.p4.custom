@@ -344,8 +344,8 @@ EOS
 $BB chmod +x /newroot/run/dbg.sh
 
 U=/newroot/run/systemd/system
-E=/newroot/etc/systemd/system.conf.d
-$BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/dbus.socket.d $E
+E=/newroot/run/systemd/system.conf.d
+$BB mkdir -p $U/mini.target.wants $U/dbus-broker.service.d $U/dbus.socket.d $E
 # Do not arm the emulated NPCM hardware watchdog. Under QEMU the guest has been
 # observed to reboot while the long-running virt debug/fullfw/Redfish bring-up is
 # still active, with the console showing:
@@ -353,8 +353,7 @@ $BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/d
 #   Set hardware watchdog to 1min 26s.
 # followed by a fresh Phase-4 init banner while QEMU stays alive. That makes
 # readiness nondeterministic and masks the actual IPMI/Redfish state.
-printf '[Manager]\nLogLevel=info\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $U/system.conf.d/zz.conf
-printf '[Manager]\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $E/zz-zbmc-watchdog.conf
+printf '[Manager]\nLogLevel=info\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $E/zz-zbmc-watchdog.conf
 # The datamgr->populator chain starts populators via systemd, pulling in the eMMC-persistence
 # services (early-mount, setup-flash) which mount /flash/data0 READ-ONLY over our tmpfs -> lmcfg
 # unreadable -> racadm SWC0242. Drop-in no-op (not mask) keeps dependents' ordering satisfied
