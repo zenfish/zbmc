@@ -53,6 +53,7 @@ for grp in ("CurrentIPv4", "IPv4", "IPv4Static", "NICStatic"):
 for grp in ("CurrentIPv4", "IPv4"):
     NET_OVERRIDE[("iDRAC.Embedded.1", grp, "Enable")] = "1"
     NET_OVERRIDE[("iDRAC.Embedded.1", grp, "DHCPEnable")] = "0"
+NET_OVERRIDE[("iDRAC.Embedded.1", "IPMILan", "Enable")] = "1"
 
 if os.path.exists(out_path):
     os.remove(out_path)

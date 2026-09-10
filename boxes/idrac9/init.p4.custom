@@ -288,12 +288,11 @@ sleep 2
     kill -9 $_old_fullfw 2>/dev/null || true
     sleep 2
   fi
-  # MEASURE (2): strace fullfw startup -> what does it OPEN to read the IPMI user table?
   # bind [::]:623 = IPv6 DUAL-STACK (NOT 0.0.0.0). fullfw's UDPCreateInstance does an unconditional
   # setsockopt(IPV6_RECVPKTINFO) that returns -1 on an AF_INET socket -> RMCPCreateSocketInstance
   # fail -> fullfw exits, never services udp/623. Stock fullfw.socket uses BindIPv6Only=both for the
-  # same reason. bindv6only=0 means this v6 socket still receives the SLIRP v4 hostfwd
-  # (udp:6623->623) as v4-mapped, so the host RAKP client reaches it. (Earlier 0.0.0.0:623 was the
+  # same reason. bindv6only=0 means this v6 socket receives direct-L2 IPv4 as v4-mapped, so the
+  # host RAKP client reaches it. (Earlier 0.0.0.0:623 was the
   # cold-boot-listen regression — fullfw listens cold with [::]:623.)
   # sensor-shm/job-event gate SAFETY + diagnostic (RE: libdelldaemon job-event framework).
   # fullfw's IPMIPreInit calls WaitForAJobEvent(job=4, event=2, 0xffffffff) = INFINITE busy-poll
@@ -306,22 +305,16 @@ sleep 2
   # The pre/post log makes the slot state visible every boot (regression canary). shmwrite calls the
   # same Dell_shm_memwrite(41,{2},16,1) API the real producer uses.
   echo "  jobevt(4,2) poke: pre=$(shmread -s41 -o16 -l1 2>/dev/null); $(echo 0x2 | shmwrite -s41 -o16 -l1 2>&1); post=$(shmread -s41 -o16 -l1 2>/dev/null)"
-  setsid sh -c 'cd /flash/data0/BMC_Data; USER=root exec strace -f -e trace=openat -o /tmp/ffu systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' </dev/null >/tmp/ff.out 2>&1 &
+  setsid sh -c 'cd /flash/data0/BMC_Data; USER=root exec systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' </dev/null >/tmp/ff.out 2>&1 &
   sleep 40
-  FFPID=$(pgrep -f '/bin/fullfw' | head -1)
-  echo "  fullfw procs:$(pgrep -fc '/bin/fullfw') mainpid=$FFPID  ssa:$(pgrep -fc 'systemd-socket-activate')"
-  echo "  -- fullfw opens (user-table sources) --"
-  grep -aE 'avctpasswd|userdb|Users|datacache_Config_CfgStr|/var/lib/cfgdb|/flash/data0/cv|passwd' /tmp/ffu 2>/dev/null | grep -avE '\.so|/lib/|/usr/share/factory' | sort -u | head -15 | sed 's/^/    /'
+  FFPID=$(pgrep -x fullfw | head -1)
+  echo "  fullfw procs:$(pgrep -xc fullfw) mainpid=$FFPID  ssa:$(pgrep -fc 'systemd-socket-activate')"
   # 623 = 0x026F. Check BOTH IPv4 and IPv6 udp tables (socket-activate may bind v6).
   echo "  ★ /proc/net/udp  026F: [$(grep -iE ':026F ' /proc/net/udp 2>/dev/null|head -1)]"
   echo "  ★ /proc/net/udp6 026F: [$(grep -iE ':026F ' /proc/net/udp6 2>/dev/null|head -1)]"
   echo "  ss -uln: $(ss -uln 2>/dev/null | grep -E ':623|:62' | tr '\n' '|')"
   echo "  all v4 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp 2>/dev/null|sort -u|tr '\n' ' ')"
   echo "  all v6 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp6 2>/dev/null|sort -u|tr '\n' ' ')"
-  # what is fullfw doing live? attach strace for 10s -> bind attempts / what it loops on
-  timeout 11 strace -f -p "$FFPID" -e trace=socket,bind,connect,recvfrom,sendto,poll,nanosleep,openat -o /tmp/ffp 2>/dev/null
-  echo "  fullfw live socket/bind/connect:"; grep -E 'bind\(|socket\(|connect\(' /tmp/ffp 2>/dev/null | grep -ivE '\.so|/lib' | sort -u | head -12 | sed 's/^/    /'
-  echo "  fullfw live loop (last 10):"; tail -10 /tmp/ffp 2>/dev/null | sed 's/^/    /'
   echo "  ff.out tail:"; tail -12 /tmp/ff.out 2>/dev/null | sed 's/^/    /'
   echo "  -- journal LAN/ipv4 errors (libtcpi LANIPConfig) --"
   journalctl -b --no-pager 2>/dev/null | grep -iE 'ipv4|LANIP|tcpi|Failed to read|not expecting NIC|RMCP|VLANLinkUp' | tail -10 | sed 's/^/    /'
