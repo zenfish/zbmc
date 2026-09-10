@@ -19,7 +19,9 @@ grep -Fq 'E=/newroot/run/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.cust
 ! grep -q 'E=/newroot/etc/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.custom"
 grep -Fq 'early-net: NIC=$NIC' "$repo/boxes/idrac9/init.p4.custom"
 early_net_line=$(grep -n 'early-net: NIC=' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
+tmpfiles_line=$(grep -n '^systemd-tmpfiles --create' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 sshd_line=$(grep -n '/usr/sbin/sshd -f' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
+[ "$early_net_line" -lt "$tmpfiles_line" ]
 [ "$early_net_line" -lt "$sshd_line" ]
 grep -Fq 'CVIP="${CVIP:-10.250.0.30}"' "$repo/boxes/idrac9/build-p4.sh"
 grep -Fq 'CVPREFIX="${CVPREFIX:-8}"' "$repo/boxes/idrac9/build-p4.sh"
