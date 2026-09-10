@@ -11,6 +11,17 @@ def patch(path, address, gateway):
         raise ValueError("X14 init does not contain the expected SLiRP network template")
     text = text.replace("10.0.2.15/24", f"{address}/8")
     text = text.replace("10.0.2.15", address).replace("10.0.2.2", gateway)
+    keepalive = (
+        f"ip addr show eth0 2>/dev/null | grep -q {address} || "
+        f"{{ ip addr add {address}/8 dev eth0 2>/dev/null; ip link set eth0 up; }}; sleep 2"
+    )
+    recovery = (
+        f"ip addr show eth0 2>/dev/null | grep -q {address} || "
+        f"ip addr add {address}/8 dev eth0 2>/dev/null; "
+        f"ping -c 1 -W 1 {gateway} >/dev/null 2>&1 || "
+        "{ ip link set eth0 down; sleep 1; ip link set eth0 up; }; sleep 2"
+    )
+    text = text.replace(keepalive, recovery)
     path.write_text(text)
 
 
