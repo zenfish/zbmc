@@ -944,7 +944,8 @@ PY
       else _rmsg="unknown (no zbmc_ready)"; _rrc=1; fi
       if [ "$_rrc" = 0 ]; then
         _rmsg="${_rmsg#ready}"
-        echo "$(_colored_state READY)$_rmsg"
+        _rmsg="${_rmsg# }"
+        echo "$(_colored_state READY)${_rmsg:+ $_rmsg}"
       else
         echo "$(_colored_state FAILED) ($_rmsg)"
       fi

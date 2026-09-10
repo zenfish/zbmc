@@ -39,7 +39,7 @@ IPMI_PW=test
 ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi webui}"
 ZBMC_L2_REQUIRED="${TEST_L2_REQUIRED:-1}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
-zbmc_ready(){ echo "ready (fixture)"; }
+zbmc_ready(){ echo "${TEST_BUILD_MESSAGE:-ready (fixture)}"; }
 zbmc_running(){
   if [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] || [ "${TEST_FLEET_ORDER:-0}" = 1 ]; then echo "$$"; fi
 }
@@ -104,6 +104,8 @@ expect "$down" "Last run  : READY after 10m 12s; UP for 9m 48s; STOPPED — oper
 expect "$down" "Auth      : root/test"
 private=$(ZBMC_AUTH_HINT="root / private credential" "$fixture/tools/zbmc" fake status)
 expect "$private" "Auth      : root / private credential"
+unprefixed=$(TEST_BUILD_MESSAGE="cold artifacts installed" "$fixture/tools/zbmc" fake status)
+expect "$unprefixed" "Build     : READY cold artifacts installed"
 [[ "$private" != *root/test* ]] || { echo "private credential exposed" >&2; exit 1; }
 [[ "$down" != *"had reached READY"* ]] || { printf 'redundant highest stage:\n%s\n' "$down" >&2; exit 1; }
 
