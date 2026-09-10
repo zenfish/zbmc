@@ -17,9 +17,10 @@ PROJ="$(cd "$(dirname "$0")" && pwd)"
 ZIPMI="${ZIPMI:-$(cd "$PROJ/../../.." && pwd)/zipmi}"
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
 LOG="${ZBMC_CONSOLE_LOG:-$WD/svc.log}"
+TAP="${TAP:-ztap-hpe}"
 
 # scope to THIS box (hostname=megarac-hpe in its hostfwd) — bare '-M ast2600-evb' kills every ast2600 zoo box.
-kill_qemu(){ $SUDO pkill -f 'hostname=megarac-hpe' 2>/dev/null; pkill -f "tail -f $WD/cin" 2>/dev/null; sleep 2; }
+kill_qemu(){ $SUDO pkill -f "ifname=$TAP" 2>/dev/null; pkill -f "tail -f $WD/cin" 2>/dev/null; sleep 2; }
 keep_qemu=0
 cleanup(){ [ "$keep_qemu" = 1 ] || kill_qemu; }
 trap cleanup EXIT
@@ -67,7 +68,7 @@ for t in $(seq 1 "$TRIES"); do
     fi
   done
   if [ "$ok" = 1 ]; then
-    qp=$(pgrep -f "hostfwd=udp:$IP:$IPMI_PORT-:623" | head -1)
+    qp=$(pgrep -f "ast2600-evb.*ifname=$TAP" | head -1)
     if [ -n "$qp" ] && ps -p "$qp" >/dev/null 2>&1; then
       keep_qemu=1
       echo "[green] HEALTHY on attempt $t — qemu $qp" >&2
