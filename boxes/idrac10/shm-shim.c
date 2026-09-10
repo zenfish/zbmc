@@ -67,6 +67,7 @@ static int   nsem = 0;  /* fake semid counter */
 static FILE *log_fp = NULL;
 static volatile unsigned long _libsess_base = 0;  /* cached by dumper; read by crash_handler */
 static void crash_handler(int sig, siginfo_t *si, void *uc);  /* fwd decl */
+static void ensure_ipmi_payload_handler(void);
 static volatile int mu_lock = 0;
 uint8_t CmdGetDeviceID(const uint8_t *request, uint8_t *response_len,
                        uint8_t response_data[15]);
@@ -265,6 +266,9 @@ static void *usertable_dumper(void *arg) {
         unsigned long base = lib_base("libsess.so.9");
         if (!base) { (void)misses; continue; }  /* keep polling: libsess may load late / in a forked worker; never give up so EVERY libsess process gets injected */
         _libsess_base = base;   /* cache for the crash handler */
+        /* Internal calls bypass ELF interposition, so initialize the ordinary
+         * IPMI payload worker here once libsess is present. */
+        ensure_ipmi_payload_handler();
 
         /* NOTE: do NOT patch UserInfoGetMaxUserNumber->16. That activates the real
          * UserInfoInit + user-config loader, which then actively manages the
@@ -1196,15 +1200,22 @@ static pthread_once_t payload_init_once = PTHREAD_ONCE_INIT;
 static void init_ipmi_payload_handler(void) {
     typedef int (*init_fn)(void);
     init_fn init = (init_fn)dlsym(RTLD_NEXT, "PayloadMgrInit");
-    if (init)
-        init();
+    int rc = init ? init() : -1;
+    if (log_fp) {
+        fprintf(log_fp, "[shim2] PayloadMgrInit -> %d\n", rc);
+        fflush(log_fp);
+    }
+}
+
+static void ensure_ipmi_payload_handler(void) {
+    pthread_once(&payload_init_once, init_ipmi_payload_handler);
 }
 
 INDIRECT_CALL_TARGET int PayloadMgrProcessPayloadData(void *message, int *result) {
     typedef int (*process_fn)(void *, int *);
     static process_fn real_fn;
 
-    pthread_once(&payload_init_once, init_ipmi_payload_handler);
+    ensure_ipmi_payload_handler();
     if (!real_fn)
         real_fn = (process_fn)dlsym(RTLD_NEXT, "PayloadMgrProcessPayloadData");
     return real_fn ? real_fn(message, result) : -1;
