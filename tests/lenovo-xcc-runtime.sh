@@ -12,8 +12,8 @@ python3 -m py_compile "$box/build-shell-kernel.py"
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
-grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui ipmi"' "$box/zbmc.box"
-grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh redfish"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui ipmi redfish"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_STABILITY_SECONDS=60' "$box/zbmc.box"
 grep -Fxq 'ZBMC_READY_DEADLINE=3600' "$box/zbmc.box"
 grep -Fq 'XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND\|XCC_WARM_RESTORE_RUNNING' "$box/zbmc.box"
@@ -59,6 +59,13 @@ if zbmc_ipmi_health >/dev/null; then
   echo 'failed command incorrectly passed IPMI readiness' >&2
   exit 1
 fi
+
+(
+  curl() { printf '{"UserName":"USERID","Enabled":true}'; }
+  zbmc_redfish_health | grep -Fq 'AUTH OK (protected Redfish account read)'
+  curl() { printf '{"UserName":"someone-else","Enabled":true}'; }
+  ! zbmc_redfish_health >/dev/null
+)
 
 python3 "$repo/tests/lenovo-xcc-boot-config.py"
 

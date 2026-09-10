@@ -19,8 +19,8 @@ ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_WARM_STATUS=verified
 ZBMC_WARM_FILES="ckpt/state.gz ckpt/emmc.qcow2"
-ZBMC_REQUIRED_SERVICES="webui ipmi"
-ZBMC_DISABLED_SERVICES="ssh redfish"
+ZBMC_REQUIRED_SERVICES="webui ipmi redfish"
+ZBMC_DISABLED_SERVICES="ssh"
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=3600
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
@@ -127,5 +127,18 @@ zbmc_ipmi_health() {
       echo 'AUTH OK (IPMI 2.0, cipher 17)'; return 0;
     }
   echo 'authenticated controller read failed (booting or provisioning required)'
+  return 1
+}
+
+zbmc_redfish_health() {
+  local result
+  result=$(curl -sk --connect-timeout 3 --max-time 30 -u "$IPMI_USER:$IPMI_PW" \
+    "https://$ZBMC_IP:$WEB_PORT/redfish/v1/AccountService/Accounts/1" 2>/dev/null) &&
+    python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("UserName") == sys.argv[1]' \
+      "$IPMI_USER" <<<"$result" 2>/dev/null && {
+        echo 'AUTH OK (protected Redfish account read)'
+        return 0
+      }
+  echo 'authenticated Redfish account read failed'
   return 1
 }
