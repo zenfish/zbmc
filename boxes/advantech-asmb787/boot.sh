@@ -17,12 +17,14 @@ _HERE="$(cd "$(dirname "$0")" && pwd)"; _REPO="$(cd "$_HERE/../.." && pwd)"
 WD="${WD:-$_REPO/work/$(basename "$_HERE")}"   # artifacts + console log + fifo (build.sh writes here)
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 IP="${IP:-127.0.0.1}"
+TAP="${TAP:-ztap-asmb}"
+MAC="${MAC:-52:54:00:fa:00:50}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; IPMI_PORT="${IPMI_PORT:-623}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 
 # mtdparts numbering MUST match /etc/dupfstab: mtdblock1=/conf, mtdblock3=/usr/local/www, mtdblock4=/dre.
 MTDPARTS='mtdparts=1e620000.spi:832k@0(uboot),1984k@0xd0000(conf),1984k@0x2d0000(bkupconf),6144k@0x2810000(www),-@0x2e10000(dre)'
-APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_size=131072 ramdisk_blocksize=4096 $MTDPARTS maxcpus=1 rootwait"
+APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_size=131072 ramdisk_blocksize=4096 $MTDPARTS maxcpus=1 rootwait zbmc_asmb787_ip=$IP"
 
 # fresh pristine flash copy each boot so /conf starts clean -> IPMIMain auto-provisions default user.
 cp -f "$WD/mtdflash.bin" "$WD/mtdflash-run.bin"
@@ -31,7 +33,8 @@ QEMU=("$QEMU_BIN" -M ast2600-evb -m 1024 -nographic
   -qmp "unix:$WD/asmb787-qmp.sock,server,nowait"
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs"
   -drive "file=$WD/mtdflash-run.bin,format=raw,if=mtd"
-  -net nic -net "user,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=udp:$IP:$IPMI_PORT-:623,hostname=asmb787bmc"
+  -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no"
+  -net "nic,netdev=bmcnet,macaddr=$MAC"
   -append "$APPEND")
 
 if [ "${BG:-}" = 1 ]; then
