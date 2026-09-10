@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=523efc93e5c9df5d271752e873351675da312bf71264499362c66c60a5dded9e body-sha256=58a8f5f1f69c8faf21bf82eb458b9dcebc8cd44d1725fab01585a4608dc3be90 -->
+<!-- html2md:auto source=README.html source-sha256=a3b7074591e28173c54df4766761bb73dceb01a82ffdf79b3bd52d82c78c546c body-sha256=e95a29af465b55a93e04a93edc0f75fd7757df016822362bcf49d21b2b32c2c0 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -22,23 +22,23 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 `zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records exact-build acceptance measured on the four-core Debby host; it is a reproducibility baseline, not a promise that every vendor service is complete.
 
-| `zbmc` name | Accepted function | Exact-build result / measured cold start |
-|----|----|----|
-| **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m32s |
-| **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m21s |
-| **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 9m38s |
-| **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | pass - 7m37s |
-| **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s total; fourth cold-boot attempt succeeded after three `IPMIMain` crash rerolls |
-| **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI does not answer and Redfish is disabled | partial - Web-UI pass in 9m40s; 15m cold readiness deadline |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI receives requests without replying and SSH resets before key exchange | partial - Web-UI READY in 46m06s including a 60s stable hold; 60m cold readiness deadline |
-| **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
-| **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
-| **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
+| `zbmc` name | QEMU network | ICMP | Guest-MAC ARP | Host owns guest IP? | Validated via zBMC | Management proxy? | Accepted function | Exact-build result / measured cold start |
+|----|----|----|----|----|----|----|----|----|
+| **openbmc** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:fa:00:10` | No | PASS | None | SSH, IPMI, Redfish, Web-UI | native network PASS; services still recovering |
+| **nvidia-obmc** | TAP / direct L2 | PASS 3/3 | PASS `3c:6d:66:14:c8:7a` | No | PASS | None | SSH, IPMI, Redfish, Web-UI | native network PASS; services still recovering |
+| **advantech-asmb787** | TAP configured | FAIL 0/3 | FAIL | No | FAIL | None | retained serial login; external network was blocked by NC-SI | **temporarily broken after clean rebuild**; historical console-only pass was 9m38s |
+| **idrac10** | TAP / direct L2 | PASS | PASS `52:54:00:fa:00:31` | No | PASS | None on management NIC | SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | native network PASS; full cold-service validation in progress |
+| **megarac-hpe** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | native network not yet working |
+| **ieit** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell | native network not yet working |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:fa:42:02` | No | PASS | None | vendor Web-UI; IPMI does not answer and Redfish is disabled | native network PASS; Web-UI still starting |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:12:34:60` | No | PASS | None on management NIC | authenticated IPMI and serial console; Redfish, SSH, and Web-UI recovery remains | last native-network validation PASS; canonical instance currently down |
+| **supermicro-x14** | TAP / direct L2 | UNSTABLE | PASS `52:54:00:fa:00:21` | No | REVALIDATING | None | SSH, IPMI, Redfish, Web-UI | FTGMAC link lockup reproduced; recovery validation in progress |
+| **supermicro-x10** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | SSH, IPMI, Redfish, Web-UI | native receive/bootstrap path not yet working |
+| **idrac9** | TAP / direct L2 | PENDING | PENDING | No | PENDING | None | SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | early USB-NIC bring-up validation in progress |
 
 These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
-Supermicro X10 uses the same loopback-alias allocation and standard service ports as the rest of the zoo. QEMU user networking forwards those ports to its private guest address.
+All eleven descriptors now select **TAP / direct L2** for the advertised management address. Green cells above require live guest-MAC ARP, ICMP, absence of host address ownership, zBMC validation, and no management `hostfwd`; configuration alone does not count. The migration is not complete while any row is FAIL, PENDING, UNSTABLE, or REVALIDATING.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md). The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
