@@ -162,6 +162,26 @@ mkdir -p /run/dbus
 # leaving no system D-Bus -> fullfw gets ~100 "Connection refused" -> segfaults ->
 # RMCP never comes up. It's INTERMITTENT, so retry until D-Bus is genuinely up
 # (socket present AND the launcher process still alive), cleaning any stale socket.
+# The vendor system.conf includes hundreds of unrelated service policies.  On a
+# loaded zoo host dbus-broker can exceed its fixed launcher handshake deadline
+# parsing them and abort with launcher_add_listener ETIMEDOUT before cfgmgrd
+# starts.  This guest runs only the root-owned services below, so give its
+# private bus the minimal policy those services actually need.
+cat > /tmp/zbmc-system.conf <<'DBUSCONF'
+<busconfig>
+  <type>system</type>
+  <user>root</user>
+  <auth>EXTERNAL</auth>
+  <listen>unix:path=/run/dbus/system_bus_socket</listen>
+  <policy context="default">
+    <allow user="*"/>
+    <allow own="*"/>
+    <allow send_destination="*"/>
+    <allow receive_sender="*"/>
+  </policy>
+</busconfig>
+DBUSCONF
+
 SACPID=0
 for attempt in $(seq 1 8); do
     rm -f /run/dbus/system_bus_socket 2>/dev/null
@@ -178,6 +198,7 @@ for attempt in $(seq 1 8); do
       exec /usr/bin/systemd-socket-activate \
           --listen=/run/dbus/system_bus_socket \
           -- /usr/bin/dbus-broker-launch --scope system \
+          --config-file /tmp/zbmc-system.conf \
           > /tmp/dbus.log 2>&1 ) &
     SACPID=$!
     ok=0
