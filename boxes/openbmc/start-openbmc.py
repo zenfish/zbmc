@@ -43,10 +43,9 @@ else: raise SystemExit("serial socket timeout")
 child = pexpect.spawn("socat", ["-,raw,echo=0", f"UNIX-CONNECT:{sock}"], encoding="utf-8", timeout=30)
 child.logfile = open(log, "a")
 try:
-    child.expect([r"login:", r"/#", r"# ", r"root@.*:~#", pexpect.TIMEOUT], timeout=360)
-    if "login:" in child.after:
-        child.sendline(username); child.expect([r"Password:", r"password:"]); child.sendline(password)
-        child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
+    child.expect(r"login:", timeout=360)
+    child.sendline(username); child.expect([r"Password:", r"password:"])
+    child.sendline(password); child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
     for line in [
         "ip link set eth0 up",
         "ip addr flush dev eth0",
