@@ -2,15 +2,15 @@
 # build.sh — regenerate the QEMU boot artifacts for the virtual ASMB-787 BMC from the firmware.
 #
 # WHAT : takes firmware/encrypted_ASMB-787_20220912.ima_enc and produces, in the work dir:
-#          kernel.Image  dtb-a1.dtb  rootfs.sqfs  mtdflash.bin
+#          kernel.Image  kernel-direct.uImage  dtb-a1.dtb  rootfs.sqfs  mtdflash.bin
 #        These are what box/boot.sh (and zbmc.box) run. Kept OUT of git — regenerate here.
 # WHY  : the firmware is the single source of truth; artifacts are ~104MB and fully derivable.
 # HOW  : unpack-ami carves the FMH modules -> dumpimage pulls kernel+dtb from the FIT ->
 #        the root squashfs is unsquashed, patched for qemu (qemu-patch-rootfs.sh), repacked ->
 #        mtdflash = the raw 64MB NOR image (firmware truncated to the FMC chip size).
 # RUN  : ./box/build.sh [WORKDIR]   (default WORKDIR = ~/phd/tmp/asmb787 or ./work)
-# NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage (u-boot-tools), jefferson (pipx),
-#        python3, dtc (optional). tools/unpack-ami must be on PATH or alongside.
+# NEEDS: unsquashfs, mksquashfs (squashfs-tools), dumpimage/mkimage (u-boot-tools), fdtput,
+#        jefferson (pipx), python3. tools/unpack-ami must be on PATH or alongside.
 # zbmc:turnkey   <- this box builds + runs from a fresh clone (firmware ships in the repo)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -23,6 +23,8 @@ UNPACK="$ROOT/tools/unpack-ami"
 [ -f "$FW" ] || { echo "firmware not found and fetch failed: $FW" >&2; exit 1; }
 command -v unsquashfs >/dev/null || { echo "need squashfs-tools (unsquashfs/mksquashfs)"; exit 1; }
 command -v dumpimage  >/dev/null || { echo "need u-boot-tools (dumpimage)"; exit 1; }
+command -v mkimage    >/dev/null || { echo "need u-boot-tools (mkimage)"; exit 1; }
+command -v fdtput     >/dev/null || { echo "need device-tree-compiler (fdtput)"; exit 1; }
 mkdir -p "$WD"; echo "[*] work dir: $WD"
 
 # --- 1. unpack the firmware (carves FMH modules: squashfs root/www, jffs2 conf, FIT osimage) ------
@@ -36,6 +38,23 @@ FIT="$(ls "$UNP"/fw-fit/*.itb 2>/dev/null | while read -r f; do dumpimage -l "$f
 echo "[*] kernel FIT: $(basename "$FIT")"
 dumpimage -T flat_dt -p 0 -o "$WD/kernel.Image" "$FIT" >/dev/null   # image 0 = Linux kernel
 dumpimage -T flat_dt -p 1 -o "$WD/dtb-a1.dtb"   "$FIT" >/dev/null   # image 1 = ast2600evb_a1 dtb
+
+# The vendor DT enables NC-SI MAC2 at 0x1e670000, while QEMU connects the first
+# declared netdev to MAC0 at 0x1e660000. Use MAC0's existing PHY description so
+# the guest owns the TAP directly; HPE's sibling AST2600 image uses this path.
+fdtput -t s "$WD/dtb-a1.dtb" /ahb/ftgmac@1e660000 status okay
+fdtput -t s "$WD/dtb-a1.dtb" /ahb/ftgmac@1e670000 status disabled
+fdtput -t s "$WD/dtb-a1.dtb" /ahb/mdio@1e650000 status okay
+fdtput -t s "$WD/dtb-a1.dtb" /ahb/mdio@1e650010 status disabled
+
+# This pinned vendor kernel forces NC-SI even when the DT property is absent.
+# Derive an uncompressed uImage whose only payload change makes ncsi_start_dev()
+# return success; the FTGMAC open path has already initialized RX/TX and carrier.
+python3 "$HERE/patch-kernel-direct.py" "$WD/kernel.Image" "$WD/kernel-direct.Image"
+env SOURCE_DATE_EPOCH=1662920392 mkimage -A arm -O linux -T kernel -C none \
+    -a 0x80008000 -e 0x80008000 -n 'ASMB787 direct-PHY kernel' \
+    -d "$WD/kernel-direct.Image" "$WD/kernel-direct.uImage" >/dev/null
+rm -f "$WD/kernel-direct.Image"
 
 # --- 3. root filesystem: unsquash -> qemu patch -> repack ------------------------------------------
 # pick the largest squashfs blob = the root fs (www is the smaller one)
@@ -56,7 +75,7 @@ cp -f "$FW" "$WD/mtdflash.bin"
 { command -v gtruncate >/dev/null && gtruncate -s 67108864 "$WD/mtdflash.bin"; } || truncate -s 67108864 "$WD/mtdflash.bin"
 
 echo "[*] done. artifacts in $WD:"
-for f in kernel.Image dtb-a1.dtb rootfs.sqfs mtdflash.bin; do
+for f in kernel.Image kernel-direct.uImage dtb-a1.dtb rootfs.sqfs mtdflash.bin; do
   printf '    %-14s %s bytes\n' "$f" "$(stat -f '%z' "$WD/$f" 2>/dev/null || stat -c '%s' "$WD/$f")"
 done
 echo
