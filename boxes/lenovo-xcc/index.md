@@ -1,10 +1,24 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=1fcd247948f0a62510e999bb4f9c14406196bc250094264a95952cb24e5f094a body-sha256=689bed3b428709fbd7f8f98b55b9e087dcb538f2bea85487680c11a6f1b9bc43 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=b190a37303d5af048d4d54f5cd6af84f8f12ce441f85960a1289cbae35625015 body-sha256=c29895abef7f965a6b24bdda6bf3444c8ad06d4d952bf4be4b8a8b9a5b7b2f90 -->
 
 zbmc / preserved firmware
 
 # Lenovo XClarity Controller
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
+
+## Verified remote IPMI — warm restore, 2026-09-10
+
+A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. Cold boot still fails to restore usable native account services; use the explicit warm path.
+
+    sudo zbmc lenovo-xcc start --warm --no-web
+    sudo zbmc lenovo-xcc ipmi mc info
+    sudo zbmc lenovo-xcc ipmi chassis status
+
+Debby deployment: 10.250.0.45, standard UDP/623; private zbmc.conf supplies ZBMC_LENOVO_DIR and ZBMC_LENOVO_PASSWORD. USERID uses a changed password, not the factory password. Checkpoint files are private and are not distributed by build.sh. The preserved original and validation VMs remain paused on separate addresses/ports.
+
+Restore requires the matched ckpt/state.gz and ckpt/emmc.qcow2, recorded boot artifacts, and exact QEMU SHA-256 0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69. ckpt/manifest.json records hashes. Native authentication and account/channel permissions remain enforced. Snapshot restore discards changes made after capture; provisioned settings are stored in the captured state.
+
+Observed warm HTTPS root returns 200, but web-login correctness is not part of this IPMI acceptance. The cold-only observations below are historical, not current remote-IPMI readiness claims.
 
 Verified
 
@@ -48,5 +62,19 @@ Lenovo's DHCP hook receives QEMU's lease but its `avctifconfig` control path doe
 ## Diagnostic console
 
 Lenovo’s normal `lcw_login` requires a response signed by a vendor debug key that is not present in the firmware. The derived kernel changes only the built-in initramfs: before normal `switch_root`, it bind-mounts an emulator-only getty launcher over the serial login script. The original kernel, eMMC, root filesystem, and appended DTBs remain unchanged. Access is limited to the host Unix socket exposed by `zbmc console`.
+
+## Authenticated remote IPMI
+
+Verified on 2026-09-09 with both standard ipmitool and zipmi: repeated controller information and chassis status reads succeed using cipher suite 17. Account role and IPMI channel privilege are separate: the native Administrator role did not grant channel access until standard local `ipmitool user priv 2 4 1` set channel 1, user 2 to ADMINISTRATOR.
+
+Provision through supported management interfaces: change the mandatory factory password, enable IPMI for USERID and globally with native users/portcontrol, then verify the channel privilege. Preserve the provisioned disk: normal runtime writes use a temporary overlay. Factory image builds do not contain this account change. A saved provisioned disk is under managed cold-boot verification. The launcher uses fdtget/fdtput from device-tree-compiler to derive a separate kernel-runtime.zImage: only appended device-tree boot arguments change, adding the native 1800-second Gunicorn startup timeout. This firmware ignores the external QEMU -append value.
+
+    # In private, mode-0600 zbmc.conf:
+    ZBMC_LENOVO_PASSWORD='your-provisioned-password'
+
+    ./tools/zbmc lenovo-xcc ipmi mc info
+    ./tools/zbmc lenovo-xcc ipmi chassis status
+
+The command and readiness paths use the same password-authenticated ipmitool call, with the password passed through its environment. IPMI readiness requires a successful controller read. SSH and Redfish are outside the readiness contract; successful IPMI does not establish Web login health.
 
 Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.

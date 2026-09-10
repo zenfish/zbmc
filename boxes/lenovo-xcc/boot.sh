@@ -56,7 +56,8 @@ nohup "$QEMU_BIN" \
 qp=$!
 if [ -n "${ZBMC_WARM:-}" ]; then
   if ! python3 "$HERE/restore.py" "$QMP" "$WD/ckpt/state.gz" >>"$LAUNCH_LOG" 2>&1; then
-    kill "$qp"
+    # This child never became a usable runtime; abort only its private snapshot.
+    kill -KILL "$qp" 2>/dev/null || true
     wait "$qp" || true
     exit 1
   fi
