@@ -41,7 +41,7 @@ expect {
 }
 send "wget -q --timeout=15 http://10.0.3.2:8091/boot-fullfw-guest.sh -O /tmp/fw.sh && sh /tmp/fw.sh 2>&1\r"
 expect {
-    -timeout 600
+    -timeout 1800
     "IPMI_READY" { puts "\[exp] IPMI_READY (env ready)" }
     timeout      { puts "\[exp] TIMEOUT waiting IPMI_READY"; exit 1 }
     eof          { puts "\[exp] EOF before IPMI_READY"; exit 1 }
