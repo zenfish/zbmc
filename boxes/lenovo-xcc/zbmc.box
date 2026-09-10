@@ -16,6 +16,8 @@ ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da6
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_WARM_STATUS=verified
+ZBMC_WARM_FILES="ckpt/state.gz ckpt/emmc.qcow2"
 ZBMC_REQUIRED_SERVICES="webui ipmi"
 ZBMC_DISABLED_SERVICES="ssh redfish"
 ZBMC_L2_REQUIRED=0
@@ -54,7 +56,7 @@ zbmc_boot() {
   local qp= n=0
   _zbmc_lo_alias "$ZBMC_IP"
   : >"$LOG"
-  ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+  ZBMC_WARM="${ZBMC_WARM:-}" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
     IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
     HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" \
     QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
@@ -74,7 +76,7 @@ zbmc_ready() {
   for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc lenovo-xcc build"; return 1; }
   done
-  echo "ready (cold boot; XCC Web-UI and provisioned remote IPMI)"
+  echo "cold artifacts installed; remote IPMI verified with start --warm checkpoint"
 }
 
 zbmc_web() {
@@ -87,6 +89,7 @@ zbmc_web() {
 # markers are emitted only after the web startup and guest IPv4 paths complete.
 zbmc_webui_health() {
   local log="${ZBMC_CONSOLE_LOG:-$CONSOLE_LOG}" code
+  if ! grep -aq -- '^XCC_WARM_RESTORE_RUNNING$' "$LOG" 2>/dev/null; then
   grep -aq -- '-> Web Available' "$log" 2>/dev/null || {
     echo 'firmware has not announced Web Available'
     return 1
@@ -95,6 +98,7 @@ zbmc_webui_health() {
     echo 'guest IPv4 is not configured'
     return 1
   }
+  fi
   code=$(curl -sk --connect-timeout 1 --max-time 3 -o /dev/null -w '%{http_code}' \
     "https://$ZBMC_IP:$WEB_PORT/" 2>/dev/null)
   case "$code" in 2??|3??) return 0;; *) echo "HTTPS root returned ${code:-nothing}"; return 1;; esac
@@ -107,7 +111,7 @@ zbmc_console() {
   exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
 }
 
-ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'
+ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND\|XCC_WARM_RESTORE_RUNNING'
 
 # Use the same authenticated command for interactive calls and readiness.
 zbmc_ipmi() {

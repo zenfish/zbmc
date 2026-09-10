@@ -16,14 +16,14 @@ grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui ipmi"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh redfish"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_STABILITY_SECONDS=60' "$box/zbmc.box"
 grep -Fxq 'ZBMC_READY_DEADLINE=3600' "$box/zbmc.box"
-grep -Fxq "ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'" "$box/zbmc.box"
+grep -Fq 'XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND\|XCC_WARM_RESTORE_RUNNING' "$box/zbmc.box"
 grep -Fq 'kernel-shell.zImage' "$box/build.sh"
 grep -Fq '1984706eedb75b76f0ceccac4f57f46c2b2f0c2b47b1bde256d2c0f609ea8c13' "$box/build.sh"
 grep -Fq 'XCC_DIAG_SHELL_BOUND' "$box/build-shell-kernel.py"
 grep -Fq 'mount --bind /xcc-diag-getty /rootfs/etc/scripts/rfs.getty' "$box/build-shell-kernel.py"
 
 grep -Fq -- 'xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin' "$box/boot.sh"
-grep -Fq -- '-kernel "$WD/kernel-runtime.zImage"' "$box/boot.sh"
+grep -Fq -- '-kernel "$kernel"' "$box/boot.sh"
 grep -Fq -- '-global emmc.gp0-partition-size=3565158400' "$box/boot.sh"
 grep -Fq -- 'if=sd,index=2,snapshot=on' "$box/boot.sh"
 grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
@@ -71,4 +71,17 @@ python3 "$repo/tests/lenovo-xcc-boot-config.py"
   printf '%s\n' 'XCC_DIAG_NETWORK_READY' >>"$log"
   zbmc_webui_health
   [ -e "$called" ]
+)
+
+python3 "$repo/tests/lenovo-xcc-restore.py"
+(
+  log=$(mktemp)
+  trap 'rm -f "$log"' EXIT
+  LOG="$log"
+  ZBMC_CONSOLE_LOG=/nonexistent/cold-console
+  printf '%s\n' XCC_WARM_RESTORE_RUNNING >"$LOG"
+  curl() { printf 200; }
+  zbmc_webui_health
+  curl() { printf 503; }
+  ! zbmc_webui_health >/dev/null
 )
