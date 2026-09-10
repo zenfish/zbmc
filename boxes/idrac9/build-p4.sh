@@ -14,6 +14,13 @@ STAGE=$(mktemp -d "$ART/repack.XXXXXXXX")
 ROOT="$STAGE/root"; mkdir "$ROOT"
 (cd "$ROOT" && xz -dc "$BOOT/initramfs.p4.xz" | cpio -idmu --quiet)
 PUB="$(ssh-keygen -y -f "$IMG/vmkey")"
+HOSTKEY="$IMG/ssh_host_ed25519_key"
+if [ ! -s "$HOSTKEY" ]; then
+  ssh-keygen -q -t ed25519 -N '' -C 'zbmc-idrac9-host' -f "$HOSTKEY"
+fi
+ssh-keygen -y -f "$HOSTKEY" > "$HOSTKEY.pub"
+install -m 600 "$HOSTKEY" "$ROOT/ssh_host_ed25519_key"
+install -m 644 "$HOSTKEY.pub" "$ROOT/ssh_host_ed25519_key.pub"
 CVIP="${CVIP:-10.250.0.30}"; CVPREFIX="${CVPREFIX:-8}"
 CVMASK="${CVMASK:-255.0.0.0}"; CVGW="${CVGW:-10.0.0.1}"
 sed -e "s|__PUBKEY__|$PUB|" -e "s|10\.0\.2\.15/24|$CVIP/$CVPREFIX|g" \
