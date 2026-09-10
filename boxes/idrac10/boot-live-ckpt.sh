@@ -8,6 +8,7 @@ QMP="$PWD/qmp.sock"
 OVL="$PWD/runtime-overlay.qcow2"
 STATE="$W/state.gz"
 FROZEN="$W/overlay-frozen.qcow2"
+NETWORK="$W/network-mode"
 mkdir -p "$W"
 
 [ -S "$QMP" ] || { echo "no live QMP socket at $QMP; cold-start iDRAC10 first" >&2; exit 1; }
@@ -84,4 +85,6 @@ finally:
 PY
 
 echo "SNAPSHOT SAVED $STATE"
-ls -lh "$STATE" "$FROZEN"
+printf 'tap %s %s %s\n' "${ZBMC_TAP:?}" "${ZBMC_MAC:?}" "${ZBMC_IP:?}" >"$NETWORK.tmp"
+mv "$NETWORK.tmp" "$NETWORK"
+ls -lh "$STATE" "$FROZEN" "$NETWORK"

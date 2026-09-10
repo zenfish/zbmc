@@ -1,10 +1,10 @@
-<!-- html2md:auto source=boxes/idrac10/WARM-START.html source-sha256=a313e460281b0b2604acb1edf237d8286ca37f2128718e998910c4455ad8c5fb body-sha256=d6ebf5c3af323effba89c1c729dae442c7f31573bf9b90430c79a31f4c9bb80e -->
+<!-- html2md:auto source=boxes/idrac10/WARM-START.html source-sha256=11eaaad99d670e7adc4c9684b7d183288061bfc13531e40aa42870ab361fe1af body-sha256=91154471106356f807ba80a4d904a239814c06dc09d251060e2673f955f09b63 -->
 
 zbmc / Dell NPCM845
 
 # iDRAC10 warm start
 
-The standard build downloads a matched warm bundle from git.trouble.org. Restore SSH, authenticated RMCP+ IPMI, Redfish, and the serial console in about 33 seconds on the measured Debby runs, or replace the bundle with a checkpoint from your own READY cold guest.
+The management GMAC now owns the advertised address directly through TAP. Create a topology-matched checkpoint from a READY cold guest to enable warm restore.
 
 ## Install or replace the checkpoint
 
@@ -13,7 +13,7 @@ The standard build downloads a matched warm bundle from git.trouble.org. Restore
     sudo ./tools/zbmc idrac10 snapshot
     sudo ./tools/zbmc idrac10 down
 
-`./build.sh idrac10` installs the published checkpoint automatically. Use the commands above only to replace it. `snapshot` refuses to run until IPMI answers and atomically replaces the matched pair. Stop the source immediately afterward because checkpoint creation hot-unplugs its non-migratable USB NIC.
+`./build.sh idrac10` installs cold artifacts only. `snapshot` refuses to run until IPMI answers and writes a TAP topology marker with the matched pair. Stop the source immediately afterward because checkpoint creation hot-unplugs its non-migratable USB NIC.
 
 ## Restore and verify
 
@@ -21,18 +21,19 @@ The standard build downloads a matched warm bundle from git.trouble.org. Restore
     ./tools/zbmc idrac10 status -v
     ./tools/zbmc idrac10 ipmi mc info
 
-Ordinary `start` remains a cold boot. `--warm` is explicit and fails if either checkpoint artifact is absent.
+Ordinary `start` remains a cold boot. `--warm` is explicit and fails unless the state, overlay, and TAP topology marker are present and matched.
 
 ## Checkpoint artifacts
 
     work/idrac10/ckpt/state.gz
     work/idrac10/ckpt/overlay-frozen.qcow2
+    work/idrac10/ckpt/network-mode
 
-The RAM stream and qcow2 overlay are a matched pair published under `https://git.trouble.org/zbmc/idrac10/warm-20260831/` with pinned SHA-256 values in `build.sh`. QEMU migration is version and topology specific; after changing the pinned QEMU, kernel, DTB, disk image, or launch topology, create and publish a newly verified pair.
+The RAM stream, qcow2 overlay, and network marker are one matched set. The former published checkpoint contains SLiRP migration state and is deliberately rejected. QEMU migration is version and topology specific; after changing QEMU, kernel, DTB, disk image, TAP name, MAC, address, or launch topology, create a newly verified set.
 
-## Why warm uses one NIC
+## Management versus bootstrap networking
 
-Cold boot uses QEMU `usb-net` for TCP services, but QEMU 11 reports that device as non-migratable. Snapshot creation removes it before migration. Warm restore keeps the two slirp backend instances required by the migration stream and forwards SSH, HTTPS, and UDP 623 through the migrated NPCM GMAC at `10.0.2.15`.
+The NPCM GMAC is TAP-backed and owns the advertised address; SSH, HTTPS, and UDP 623 use it directly without host forwarding. A separate QEMU `usb-net` remains on isolated SLiRP `10.0.3.0/24` only to fetch bootstrap payloads from the host. It does not advertise or proxy the management address. Snapshot creation removes the non-migratable USB device while retaining the internal backend required by the migration stream.
 
 ## Recovery
 

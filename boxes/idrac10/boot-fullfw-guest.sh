@@ -37,7 +37,7 @@ echo "=== FAKE JOURNAL SOCKET ==="
 # dbus-broker-launch calls sd_journal_stream_fd() which needs /run/systemd/journal/stdout.
 # Without systemd-journald, it crashes (ENOENT). fake-journal creates that socket,
 # accepts+discards connections, letting dbus-broker-launch open its log successfully.
-HOST_URL="http://10.0.2.2:8091"
+HOST_URL="http://10.0.3.2:8091"
 mkdir -p /run/systemd/journal
 wget -q --timeout=15 "${HOST_URL}/fake-journal" -O /tmp/fake-journal
 chmod +x /tmp/fake-journal
@@ -53,16 +53,15 @@ mount --bind /tmp/machine-id /etc/machine-id
 echo "machine-id: $(cat /etc/machine-id)"
 
 echo "=== NETWORK TEST ==="
-# Verify QEMU slirp gateway reachable — if this fails, hostfwd won't work
-ping -c 2 -W 2 10.0.2.2 && echo "PING_GATEWAY: OK" || echo "PING_GATEWAY: FAIL (packets won't reach fullfw from host)"
+# Verify the isolated USB bootstrap gateway used for payload downloads.
+ping -c 2 -W 2 10.0.3.2 && echo "PING_BOOTSTRAP: OK" || echo "PING_BOOTSTRAP: FAIL (payload fetch network unavailable)"
 ip addr show eth0 2>/dev/null | grep 'inet ' || echo "eth0: no IPv4"
 ip route 2>/dev/null | head -3
 
 echo "=== UDP INBOUND REACHABILITY TEST ==="
 # Bind UDP 623, wait 8s for test packet from host, echo back.
-# Host sends "HELLO" to 127.0.0.1:7623 when it sees UDP_ECHO_READY in the log.
-# UDP_ECHO_OK → QEMU hostfwd delivers UDP to guest → network path proven.
-# UDP_ECHO_TIMEOUT → hostfwd broken → root cause of fullfw non-response.
+# Host sends the test datagram to the TAP-owned management address when it sees UDP_ECHO_READY.
+# UDP_ECHO_OK proves direct host-to-guest UDP delivery before fullfw starts.
 wget -q --timeout=15 "${HOST_URL}/udp-echo" -O /tmp/udp-echo
 chmod +x /tmp/udp-echo
 /tmp/udp-echo  # blocks up to 8s; prints UDP_ECHO_READY then result
@@ -396,7 +395,7 @@ fi
 # resolves via NSS libnss_avct to the restricted rcdmShell; and sshd's privsep child reads
 # authorized_keys as non-root. So: materialize the tmpfs ssh dir + host keys, put the key
 # world-readable, bind an nsswitch with `files` before `avct` (root shell -> /bin/sh), start sshd.
-# restore-idrac10.sh adds the tcp:22 hostfwd. Reach it: ssh root@drac10 (/admin1-> prompt = real sh).
+# SSH listens directly on the TAP-backed management address.
 # Subshell with `set +e` so a failure here can never abort the fullfw bring-up (script runs set -e).
 ( set +e
   mkdir -p /mnt/persistent_data/data0/etc/ssh /run/sshd
