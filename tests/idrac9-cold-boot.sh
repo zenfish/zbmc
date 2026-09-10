@@ -33,19 +33,26 @@ auto=$(bash -c '_zbmc_resolve_ip(){ echo 127.0.0.1; }; . "$1"; PROJ_DIR="$2"; ZB
 explicit=$(bash -c '_zbmc_resolve_ip(){ echo 127.0.0.1; }; . "$1"; PROJ_DIR="$2"; zbmc_web --ui-only' bash "$box" "$fixture")
 [ "$auto" = --ui-only ] && [ "$explicit" = --ui-only ]
 
-sqlite3 "$fixture/meta.db" <<'SQL'
-CREATE TABLE GroupMetaTable (FQDD TEXT, GroupName TEXT, NoOfGroupInstances INT);
-CREATE TABLE AttributeMetaTable (FQDD TEXT, GroupName TEXT, AttributeName TEXT, DefaultValue TEXT, MaxLength INT, IsSuppressed INT);
-INSERT INTO GroupMetaTable VALUES ('iDRAC.Embedded.1','CurrentIPv4',1);
-INSERT INTO AttributeMetaTable VALUES
-  ('iDRAC.Embedded.1','CurrentIPv4','Address','0.0.0.0',15,0),
-  ('iDRAC.Embedded.1','CurrentIPv4','Netmask','0.0.0.0',15,0),
-  ('iDRAC.Embedded.1','CurrentIPv4','Gateway','0.0.0.0',15,0);
-SQL
+python3 - "$fixture/meta.db" <<'PY'
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute("CREATE TABLE GroupMetaTable (FQDD TEXT, GroupName TEXT, NoOfGroupInstances INT)")
+con.execute("CREATE TABLE AttributeMetaTable (FQDD TEXT, GroupName TEXT, AttributeName TEXT, DefaultValue TEXT, MaxLength INT, IsSuppressed INT)")
+con.execute("INSERT INTO GroupMetaTable VALUES ('iDRAC.Embedded.1','CurrentIPv4',1)")
+con.executemany("INSERT INTO AttributeMetaTable VALUES (?,?,?,?,?,0)", [
+    ('iDRAC.Embedded.1','CurrentIPv4','Address','0.0.0.0',15),
+    ('iDRAC.Embedded.1','CurrentIPv4','Netmask','0.0.0.0',15),
+    ('iDRAC.Embedded.1','CurrentIPv4','Gateway','0.0.0.0',15)])
+con.commit()
+PY
 CVIP=10.250.0.30 CVMASK=255.0.0.0 CVGW=10.0.0.1 \
   python3 "$repo/boxes/idrac9/scripts/build-cfgdb-defaults.py" \
   "$fixture/meta.db" "$fixture/defaults.db" evb CurrentIPv4 >/dev/null
-[ "$(sqlite3 "$fixture/defaults.db" "SELECT group_concat(AttributeValue, ',') FROM (SELECT AttributeValue FROM CfgValueTable ORDER BY AttributeName)")" = \
-  '10.250.0.30,10.0.0.1,255.0.0.0' ]
+python3 - "$fixture/defaults.db" <<'PY'
+import sqlite3, sys
+values = [row[0] for row in sqlite3.connect(sys.argv[1]).execute(
+    "SELECT AttributeValue FROM CfgValueTable ORDER BY AttributeName")]
+assert values == ['10.250.0.30', '10.0.0.1', '255.0.0.0'], values
+PY
 
 echo "idrac9 cold-boot contract: PASS"
