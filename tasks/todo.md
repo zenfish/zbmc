@@ -36,3 +36,16 @@ Debby run `20260902T071810Z-f43e4719-cfe5-49fe-b034-69bed9d53719` survived the f
 The live Debby run in `work/ilo5-debby-attempt-139/renode.log` proved the tracked `gxp_dev.py` fix is on-path and changes behavior in the previously blocked svcsILO startup region. Before the fix, repeated control-register reads after event-service init returned `0x0`; with the fix, the same run shows persisted read-backs like `off=0xb0 -> 0x808`, `off=0xc4 -> 0x704`, and `off=0xa0 -> 0x101` before the guest clears them.
 
 That run also reaches `SVCSILO_MAIN`, crosses `phase=after-event-service-init`, and continues to later `ILOMAIN_COMMAND` handling. This verifies the narrowest correct change in the device model: preserve non-mailbox register writes so later firmware reads can observe guest-programmed state.
+
+# Migrate iDRAC10 management networking to TAP
+
+- [x] Put `10.250.0.31` on the guest GMAC via `ztap-idrac10` with stable MAC `52:54:00:fa:00:31`.
+- [x] Remove the host management alias and management `hostfwd`; retain isolated USB SLiRP only for bootstrap payloads.
+- [x] Validate cold ARP, ICMP, SSH, authenticated IPMI, and protected Redfish through zBMC.
+- [x] Create a TAP-native checkpoint and validate the warm restore through zBMC.
+
+## Review
+
+Cold run `20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce` reached READY for ICMP, SSH, authenticated IPMI `mc info`, and protected Redfish. Its ARP entry maps `10.250.0.31` to `52:54:00:fa:00:31`; the host has no `.31` address; and the QEMU management NIC is TAP-backed with no management `hostfwd`.
+
+Warm run `20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6` restored the marker `tap ztap-idrac10 52:54:00:fa:00:31 10.250.0.31` and reached the same four-service READY contract in 2m47s. Exact topology and probe output is preserved in each run's `probes/tap-validation.txt` or `probes/tap-warm-validation.txt`.

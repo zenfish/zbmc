@@ -1,1 +1,2 @@
 2026-09-04 | ilo5-run-ownership | worked around root-owned attempt artifacts manually | reclaim ownership at the end of self-contained runs so reruns clone cleanly | fixes the lifecycle bug once instead of adding per-attempt exceptions
+2026-09-10 | zbmc-native-networking | accepted proxy networking as sufficient for an advertised BMC IP | make the guest own its management IP on TAP and validate it through zBMC | port forwarding hides broken L2/ICMP behavior and violates the device model
