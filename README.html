@@ -102,7 +102,12 @@ promise that every vendor service is complete.</p>
 <thead>
 <tr>
 <th><code>zbmc</code> name</th>
-<th>Network</th>
+<th>QEMU network</th>
+<th>ICMP</th>
+<th>Guest-MAC ARP</th>
+<th>Host owns guest IP?</th>
+<th>Validated via zBMC</th>
+<th>Management proxy?</th>
 <th>Accepted function</th>
 <th>Exact-build result / measured cold start</th>
 </tr>
@@ -110,77 +115,75 @@ promise that every vendor service is complete.</p>
 <tbody>
 <tr>
 <td><strong>openbmc</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PASS 3/3</td><td>PASS <code>52:54:00:fa:00:10</code></td><td>No</td><td>PASS</td><td>None</td>
 <td>SSH, IPMI, Redfish, Web-UI</td>
-<td>pass - 4m32s</td>
+<td>native network PASS; services still recovering</td>
 </tr>
 <tr>
 <td><strong>nvidia-obmc</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PASS 3/3</td><td>PASS <code>3c:6d:66:14:c8:7a</code></td><td>No</td><td>PASS</td><td>None</td>
 <td>SSH, IPMI, Redfish, Web-UI</td>
-<td>pass - 5m21s</td>
+<td>native network PASS; services still recovering</td>
 </tr>
 <tr>
 <td><strong>advantech-asmb787</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP configured</td><td>FAIL 0/3</td><td>FAIL</td><td>No</td><td>FAIL</td><td>None</td>
 <td>retained serial login; external network is blocked by the unmodeled
 NC-SI path</td>
-<td>pass - 9m38s</td>
+<td><strong>temporarily broken after clean rebuild</strong>; historical console-only pass was 9m38s</td>
 </tr>
 <tr>
 <td><strong>idrac10</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PASS</td><td>PASS <code>52:54:00:fa:00:31</code></td><td>No</td><td>PASS</td><td>None on management NIC</td>
 <td>SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td>
-<td>pass - 7m37s</td>
+<td>native network PASS; full cold-service validation in progress</td>
 </tr>
 <tr>
 <td><strong>megarac-hpe</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>FAIL 0/3</td><td>FAIL</td><td>No</td><td>FAIL</td><td>None</td>
 <td>retained IPMI; Redfish/Web-UI unavailable; vendor SSH
 absent</td>
-<td>pass - 8m07s total; fourth cold-boot attempt succeeded after three
-<code>IPMIMain</code> crash rerolls</td>
+<td>native network not yet working</td>
 </tr>
 <tr>
 <td><strong>ieit</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>FAIL 0/3</td><td>FAIL</td><td>No</td><td>FAIL</td><td>None</td>
 <td>IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport
 is not a Unix shell</td>
-<td>pass - 1m55s</td>
+<td>native network not yet working</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PASS 3/3</td><td>PASS <code>52:54:00:fa:42:02</code></td><td>No</td><td>PASS</td><td>None</td>
 <td>vendor Web-UI; IPMI does not answer and
 Redfish is disabled</td>
-<td>partial - Web-UI pass in 9m40s; 15m cold readiness deadline</td>
+<td>native network PASS; Web-UI still starting</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PASS 3/3</td><td>PASS <code>52:54:00:12:34:60</code></td><td>No</td><td>PASS</td><td>None on management NIC</td>
 <td>authenticated IPMI and serial console; HTTPS root responds, but authenticated
 Redfish, SSH, and a Web-UI login/dashboard are not accepted</td>
-<td>partial - warm IPMI READY in 1m34s; full-service recovery in progress</td>
+<td>last native-network validation PASS; canonical instance currently down</td>
 </tr>
 <tr>
 <td><strong>supermicro-x14</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>UNSTABLE</td><td>PASS <code>52:54:00:fa:00:21</code></td><td>No</td><td>REVALIDATING</td><td>None</td>
 <td>SSH, IPMI, Redfish, Web-UI</td>
-<td>pass - 3m31s</td>
+<td>FTGMAC link lockup reproduced; recovery validation in progress</td>
 </tr>
 <tr>
 <td><strong>supermicro-x10</strong></td>
-<td>USER/FORWARDED</td>
-<td>forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s
-stable hold</td>
-<td>pass - 2m38s</td>
+<td>TAP / direct L2</td><td>FAIL 0/3</td><td>FAIL</td><td>No</td><td>FAIL</td><td>None</td>
+<td>SSH, IPMI, Redfish, Web-UI</td>
+<td>native receive/bootstrap path not yet working</td>
 </tr>
 <tr>
 <td><strong>idrac9</strong></td>
-<td>USER/FORWARDED</td>
+<td>TAP / direct L2</td><td>PENDING</td><td>PENDING</td><td>No</td><td>PENDING</td><td>None</td>
 <td>SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4
 boot</td>
-<td>pass - 10m31s</td>
+<td>early USB-NIC bring-up validation in progress</td>
 </tr>
 </tbody>
 </table>
@@ -194,13 +197,11 @@ downloaded as a hash-pinned matched bundle from
 <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
 runbook</a>.</p>
-<p>All eleven registered boxes currently use the same
-<strong>USER/FORWARDED</strong> strategy: the advertised address is a Debby
-loopback alias and QEMU user networking forwards selected TCP and UDP ports to
-the guest's private address. The guest does not own the advertised address.
-Consequently, ICMP to that address tests Debby rather than the BMC and is
-reported as <strong>UNAVAILABLE</strong>. A box reports ICMP READY only after it
-moves to <strong>TAP/DIRECT-L2</strong> and the guest owns the address.</p>
+<p>All eleven descriptors now select <strong>TAP / direct L2</strong> for the
+advertised management address. Green cells above require live guest-MAC ARP,
+ICMP, absence of host address ownership, zBMC validation, and no management
+<code>hostfwd</code>; configuration alone does not count. The migration is not
+complete while any row is FAIL, PENDING, UNSTABLE, or REVALIDATING.</p>
 <p>Full per-box boot method, network trick, and gotchas: <a
 href="docs/zoo-lessons.html">docs/zoo-lessons.md</a>. The project-wide
 retrospective is <a href="docs/why-bmc-virtualization-is-hard.html">Why
