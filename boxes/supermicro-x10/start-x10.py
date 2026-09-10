@@ -6,7 +6,7 @@ console to fix networking, patch SSH, and bypass the OEM license gate:
 
   1. NETWORKING — firmware zeroes its MAC (no FRU/EEPROM in a flat image) and
      fails to bond eth0→bond0, so DHCP never leases. Sets a valid MAC, assigns
-     the qemu user-net static IP, adds the default route. Re-applies after
+     the advertised direct-L2 IP, adds the default route. Re-applies after
      udhcpc gives up (race fix).
 
   2. SSH — bind-mounts a wrapper over /SMASH/msh (dropbear's hardcoded login
@@ -46,14 +46,13 @@ TRACE_FILE = os.path.join(PACKET_DIR, f"{RUN_ID}-qemu-trace.bin")
 DEBUG_FILE = os.path.join(PACKET_DIR, f"{RUN_ID}-qemu-debug.log")
 RUN_MANIFEST = os.path.join(PACKET_DIR, f"{RUN_ID}-manifest.json")
 HOSTIP   = os.environ.get("X10_HOSTIP", os.environ.get("ZBMC_IP", "10.0.8.10"))
-HOSTPORT = os.environ.get("X10_HOSTPORT", "623")
-SSH_HPORT = os.environ.get("X10_SSH_PORT", "22")
-WEB_HPORT = os.environ.get("X10_WEB_PORT", "443")
-GUEST_IP = os.environ.get("X10_GUEST_IP", "10.0.2.15")
-NETMASK = os.environ.get("X10_NETMASK", "255.255.255.0")
-GATEWAY = os.environ.get("X10_GATEWAY", "10.0.2.2")
-IFACE = os.environ.get("X10_IFACE", "eth0")
-SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.2.2")
+TAP = os.environ.get("X10_TAP", "ztap-x10")
+AUX_TAP = os.environ.get("X10_AUX_TAP", "ztap-x10-aux")
+GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP)
+NETMASK = os.environ.get("X10_NETMASK", "255.0.0.0")
+GATEWAY = os.environ.get("X10_GATEWAY", "10.0.0.1")
+IFACE = os.environ.get("X10_IFACE", "eth1")
+SYSLOG_HOST = os.environ.get("X10_SYSLOG_HOST", "10.0.0.24")
 import shutil as _sh
 QEMU = os.environ.get("X10_QEMU") or os.environ.get("ZBMC_QEMU") or _sh.which("qemu-system-arm")
 if not QEMU:
@@ -96,8 +95,12 @@ if QEMU_PLUGIN:
 if FTGMAC_GUARD:
     qemu_cmd += ["-global", f"ftgmac100.guard={FTGMAC_GUARD}"]
 qemu_cmd += [
-    "-net", "nic",
-    "-net", f"user,hostfwd=udp:{HOSTIP}:{HOSTPORT}-:623,hostfwd=tcp:{HOSTIP}:{SSH_HPORT}-:22,hostfwd=tcp:{HOSTIP}:{WEB_HPORT}-:443,hostname=qemu",
+    "-netdev", f"tap,id=bmcnet,ifname={TAP},script=no,downscript=no",
+    "-net", "nic,netdev=bmcnet",
+    "-netdev", f"tap,id=bmcaux,ifname={AUX_TAP},script=no,downscript=no",
+    "-net", "nic,netdev=bmcaux",
+    "-object", f"filter-dump,id=netcap,netdev=bmcnet,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-primary.pcap')}",
+    "-object", f"filter-dump,id=auxcap,netdev=bmcaux,file={os.path.join(PACKET_DIR, RUN_ID + '-qemu-aux.pcap')}",
 ]
 qemu_proc = subprocess.Popen(qemu_cmd)
 with open(RUN_MANIFEST, "w", encoding="utf-8") as manifest:
