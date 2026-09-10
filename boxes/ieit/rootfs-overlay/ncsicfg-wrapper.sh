@@ -1,6 +1,6 @@
 #!/bin/sh
 
-MAC=52:54:00:12:34:56
+MAC=52:54:00:fa:00:41
 
 ifconfig eth0 down 2>/dev/null || true
 ifconfig eth1 down 2>/dev/null || true
