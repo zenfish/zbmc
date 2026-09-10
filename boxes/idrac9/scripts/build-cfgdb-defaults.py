@@ -86,6 +86,18 @@ for fqdd, grp, attr, dflt, maxlen, supp in meta.execute(
         rows.append((fqdd, grp, idx, attr, "" if dflt is None else dflt, maxlen or 0))
 
 out.executemany("INSERT OR IGNORE INTO CfgValueTable VALUES (?,?,?,?,?,?)", rows)
+ipmi_key = os.environ.get("IPMIKEY", "915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964")
+for group, index, values in (
+    ("Users", 2, {"UserName": "root", "Enable": "1", "IpmiLanPrivilege": "4",
+                  "Privilege": "511", "SolEnable": "1", "IPMIKey": ipmi_key}),
+    ("SecureDefaultPassword", 1, {"DefaultUserCreated": "1"}),
+    ("IPMIUserInfo", 2, {"UserChannelAccess": "1414141414141414",
+                         "StdPayload": "1010101010101010"}),
+):
+    for attribute, value in values.items():
+        out.execute("UPDATE CfgValueTable SET AttributeValue=? "
+                    "WHERE GroupName=? AND GroupIndex=? AND AttributeName=?",
+                    (value, group, index, attribute))
 out.commit()
 print(f"platform={platform}  attrs->{len(rows)} rows  ({skipped} suppressed)")
 for f, g, i, a, v in out.execute("SELECT FQDD,GroupName,GroupIndex,AttributeName,AttributeValue "
