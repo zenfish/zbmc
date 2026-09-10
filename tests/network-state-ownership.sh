@@ -3,6 +3,11 @@ set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 grep -Fq 'type bridge_slave flood off mcast_flood off bcast_flood on' "$repo/tools/zbmc-net"
+grep -Fq 'flower arp_tip "$guest_ip" action pass' "$repo/tools/zbmc-net"
+grep -Fq 'flower dst_ip "$guest_ip" action pass' "$repo/tools/zbmc-net"
+grep -Fq 'flower dst_mac "$guest_mac" action pass' "$repo/tools/zbmc-net"
+grep -Fq 'matchall action drop' "$repo/tools/zbmc-net"
+grep -Fq 'add-tap "$tap" "$owner" "$ZBMC_IP" "$ZBMC_MAC"' "$repo/tools/zbmc"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/bin"
