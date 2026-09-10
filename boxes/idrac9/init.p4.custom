@@ -36,16 +36,18 @@ export PATH=/usr/bin:/usr/sbin:/bin:/sbin
 echo "prep: begin" > /dev/console
 # Claim the management address before any expensive filesystem, key-generation, or Dell-daemon
 # preparation.  Base L2 reachability must not depend on the vendor service stack completing.
-NIC=""
-for i in /sys/class/net/eth* /sys/class/net/usb* /sys/class/net/en*; do
-  [ -e "$i" ] || continue
-  drv=$(basename "$(readlink "$i/device/driver" 2>/dev/null)" 2>/dev/null)
-  case "$drv" in cdc_ether|usbnet|cdc_ncm|cdc_subset|cdc_eem) NIC=$(basename "$i"); break;; esac
+NIC=usb-nic-nvgpu
+n=0
+while [ ! -e "/sys/class/net/$NIC" ] && [ "$n" -lt 60 ]; do
+  sleep 1
+  n=$((n+1))
 done
-[ -z "$NIC" ] && NIC=eth2
-ip link set "$NIC" up 2>/dev/null
-ip addr add 10.0.2.15/24 dev "$NIC" 2>/dev/null
-ip route add default via 10.0.2.2 2>/dev/null
+echo "early-net: selected NIC=$NIC wait=${n}s present=$([ -e /sys/class/net/$NIC ] && echo yes || echo no)" > /dev/console
+if [ -e "/sys/class/net/$NIC" ]; then
+  ip link set "$NIC" up 2>/dev/null
+  ip addr add 10.0.2.15/24 dev "$NIC" 2>/dev/null
+  ip route add default via 10.0.2.2 2>/dev/null
+fi
 echo "early-net: NIC=$NIC carrier=$(cat /sys/class/net/$NIC/carrier 2>/dev/null) ip=$(ip -o -4 addr show $NIC 2>/dev/null|awk '{print $4}')" > /dev/console
 mkdir -p /mnt/persistent_data/data0/var/lib /mnt/persistent_data/data0/home/root/.ssh \
   /mnt/persistent_data/data0/cv /mnt/persistent_data/data0/BMC_Data /run/sshd /run/authkeys \
