@@ -10,6 +10,10 @@ spec = importlib.util.spec_from_file_location("configure_tap", repo / "tools/zbm
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+assert module.at_shell_prompt(b"###+ NCSI WorkAround +###") is False
+assert module.at_shell_prompt(b"/conf # ") is True
+assert module.at_shell_prompt(b"sh-5.1# ") is True
+
 with tempfile.TemporaryDirectory() as directory:
     path = pathlib.Path(directory) / "serial.sock"
     server = socket.socket(socket.AF_UNIX)
