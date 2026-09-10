@@ -7,6 +7,9 @@ flash = os.environ["OPENBMC_FLASH"]
 ip = os.environ.get("ZBMC_IP", "10.0.7.10")
 tap = os.environ.get("OPENBMC_TAP", "ztap-openbmc")
 mac = os.environ.get("ZBMC_MAC", "52:54:00:fa:00:10")
+machine = os.environ.get("OPENBMC_MACHINE", "ast2600-evb")
+username = os.environ.get("OPENBMC_USER", "root")
+password = os.environ.get("OPENBMC_PASSWORD", "0penBmc")
 qemu = os.environ.get("OPENBMC_QEMU", "/home/zen/opt/qemu-11/bin/qemu-system-arm")
 sock = os.path.join(wd, "serial.sock")
 qmp = os.path.join(wd, "qmp.sock")
@@ -18,7 +21,7 @@ for p in (sock, qmp):
     except FileNotFoundError: pass
 os.makedirs(wd, exist_ok=True)
 
-cmd = ["sudo", "-n", qemu, "-M", "ast2600-evb", "-smp", "2", "-m", "1G",
+cmd = ["sudo", "-n", qemu, "-M", machine, "-smp", "2", "-m", "1G",
        "-display", "none", "-monitor", "none",
        "-qmp", f"unix:{qmp},server=on,wait=off", "-d", "guest_errors,unimp,cpu_reset",
        "-D", debug, "-trace", "enable=ftgmac100_*", "-trace", f"file={trace}",
@@ -26,6 +29,8 @@ cmd = ["sudo", "-n", qemu, "-M", "ast2600-evb", "-smp", "2", "-m", "1G",
        "-chardev", f"socket,id=ser0,path={sock},server=on,wait=off", "-serial", "chardev:ser0",
        "-netdev", f"tap,id=bmcnet,ifname={tap},script=no,downscript=no",
        "-net", f"nic,netdev=bmcnet,macaddr={mac}"]
+if os.environ.get("OPENBMC_SECOND_SERIAL") == "1":
+    cmd += ["-serial", "null"]
 q = subprocess.Popen(cmd, stdout=open(log, "w"), stderr=subprocess.STDOUT)
 with open(os.path.join(wd, "qemu-command.txt"), "w") as f: f.write(" ".join(cmd) + "\n")
 with open(os.path.join(wd, "launcher.pid"), "w") as f: f.write(str(os.getpid()) + "\n")
@@ -40,7 +45,7 @@ child.logfile = open(log, "a")
 try:
     child.expect([r"login:", r"/#", r"# ", r"root@.*:~#", pexpect.TIMEOUT], timeout=360)
     if "login:" in child.after:
-        child.sendline("root"); child.expect([r"Password:", r"password:"]); child.sendline("0penBmc")
+        child.sendline(username); child.expect([r"Password:", r"password:"]); child.sendline(password)
         child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
     for line in [
         "ip link set eth0 up",
