@@ -208,10 +208,10 @@ if "SSH_LISTENING" not in child.before:
 import base64
 with open(BYPASS_SO, "rb") as f:
     b64 = base64.b64encode(f.read()).decode()
-child.sendline(": > /tmp/lb64"); child.expect(r"/ #", timeout=5)
+child.sendline(": > /tmp/lb64"); child.expect(r"/ #", timeout=30)
 for i in range(0, len(b64), 512):
     chunk = b64[i:i+512]
-    child.sendline(f"printf '%s' '{chunk}' >> /tmp/lb64"); child.expect(r"/ #", timeout=5)
+    child.sendline(f"printf '%s' '{chunk}' >> /tmp/lb64"); child.expect(r"/ #", timeout=30)
 for cmd in [
     "base64 -d < /tmp/lb64 > /tmp/license_bypass.so && rm /tmp/lb64",
     "chmod 644 /tmp/license_bypass.so",

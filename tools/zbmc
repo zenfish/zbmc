@@ -124,7 +124,7 @@ _zbmc_network_prepare(){
       _zbmc_network_cleanup
       return 1
     }
-    "$_SELF/zbmc-net" add-tap "$tap" "$owner" || {
+    "$_SELF/zbmc-net" add-tap "$tap" "$owner" "$ZBMC_IP" "$ZBMC_MAC" || {
       _zbmc_network_cleanup
       return 1
     }

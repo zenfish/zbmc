@@ -80,8 +80,23 @@ setup_bridge() {
   trap - ERR INT TERM
 }
 
+configure_tap_filter() {
+  local tap=${1:?tap name required} guest_ip=${2:?guest IPv4 required} guest_mac=${3:?guest MAC required} tc
+  tc=$(command -v tc) || { echo "zbmc-net: tc from iproute2 is required" >&2; return 1; }
+  "$tc" qdisc replace dev "$tap" clsact
+  "$tc" filter replace dev "$tap" egress protocol arp pref 10 \
+    flower arp_tip "$guest_ip" action pass
+  "$tc" filter replace dev "$tap" egress protocol ip pref 20 \
+    flower dst_ip "$guest_ip" action pass
+  "$tc" filter replace dev "$tap" egress protocol all pref 30 \
+    flower dst_mac "$guest_mac" action pass
+  "$tc" filter replace dev "$tap" egress protocol all pref 100 \
+    matchall action drop
+}
+
 add_tap() {
   local tap=${1:?tap name required} owner=${2:-${SUDO_USER:-$(id -un)}}
+  local guest_ip=${3:?guest IPv4 required} guest_mac=${4:?guest MAC required}
   setup_bridge
   if ip link show "$tap" >/dev/null 2>&1; then
     grep -Fxq "$tap" "$STATE.taps" || { echo "zbmc-net: refusing unmanaged interface $tap" >&2; return 1; }
@@ -90,7 +105,13 @@ add_tap() {
     printf '%s\n' "$tap" >>"$STATE.taps"
   fi
   ip link set "$tap" master "$BR"
+  # Slow emulated BMC NICs can take seconds to consume one receive descriptor.
+  # Do not copy the physical LAN's unrelated multicast flood into their TAP
+  # queues; keep broadcast flooding enabled so guest-owned IPv4 ARP remains
+  # native end to end.
+  ip link set "$tap" type bridge_slave flood off mcast_flood off bcast_flood on
   ip link set "$tap" up
+  configure_tap_filter "$tap" "$guest_ip" "$guest_mac"
 }
 
 delete_tap() {
@@ -122,9 +143,9 @@ teardown() {
 cmd=${1:-status}; shift || true
 case "$cmd" in
   setup)    need_root setup; lock_network; setup_bridge ;;
-  add-tap)  tap=${1:?tap name required}; owner=${2:-${USER}}; need_root add-tap "$tap" "$owner"; lock_network; add_tap "$tap" "$owner" ;;
+  add-tap)  tap=${1:?tap name required}; owner=${2:-${USER}}; guest_ip=${3:?guest IPv4 required}; guest_mac=${4:?guest MAC required}; need_root add-tap "$tap" "$owner" "$guest_ip" "$guest_mac"; lock_network; add_tap "$tap" "$owner" "$guest_ip" "$guest_mac" ;;
   del-tap)  tap=${1:?tap name required}; need_root del-tap "$tap"; lock_network; delete_tap "$tap" ;;
   teardown) need_root teardown; lock_network; teardown ;;
   status)   ip -br link show "$BR" 2>/dev/null || true; ip -br addr show "$BR" 2>/dev/null || true; ip link show master "$BR" 2>/dev/null || true ;;
-  *) echo "usage: zbmc-net {setup|add-tap TAP [OWNER]|del-tap TAP|status|teardown}" >&2; exit 2 ;;
+  *) echo "usage: zbmc-net {setup|add-tap TAP OWNER GUEST_IP GUEST_MAC|del-tap TAP|status|teardown}" >&2; exit 2 ;;
 esac
