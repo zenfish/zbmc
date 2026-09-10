@@ -68,6 +68,11 @@ zbmc_boot() {
 }
 zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
 
+zbmc_post_launch() {
+  nohup python3 "$ROOT/tools/zbmc-configure-serial-ip.py" "$SOCK" "$ZBMC_IP" \
+    8 10.0.0.1 eth2 1800 >"$ZBMC_DIR/tap-config.log" 2>&1 &
+}
+
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
   local file

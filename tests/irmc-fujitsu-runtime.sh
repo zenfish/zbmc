@@ -22,7 +22,8 @@ grep -Fq 'source_flash_sha256=89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86
 grep -Fq 'tap,id=net2,ifname=$TAP2,script=no,downscript=no' "$box/boot.sh"
 grep -Fq 'zbmc_ip=$IP zbmc_gateway=10.0.0.1' "$box/boot.sh"
 grep -Fq 'ZBMC_TAP_NETWORK_READY $zbmc_ip' "$box/build.sh"
-grep -Fq 'zn:2345789:respawn:/usr/local/bin/zbmc-network' "$box/build.sh"
+grep -Fq 'busybox ip addr add "$zbmc_ip/8" dev eth2' "$box/build.sh"
+grep -Fq '8 10.0.0.1 eth2 1800' "$box/zbmc.box"
 python3 - "$box/build.sh" <<'PY'
 import ast
 import pathlib
