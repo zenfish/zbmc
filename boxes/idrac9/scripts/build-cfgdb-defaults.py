@@ -40,7 +40,9 @@ except sqlite3.OperationalError:
     pass  # no platform table → base defaults only
 
 # network/IPMI overrides so fullfw's RMCP listener gets a real IP + IPMI-over-LAN enabled
-_IP, _MASK, _GW = "10.0.2.15", "255.255.255.0", "10.0.2.2"
+_IP = os.environ.get("CVIP", "10.0.2.15")
+_MASK = os.environ.get("CVMASK", "255.255.255.0")
+_GW = os.environ.get("CVGW", "10.0.2.2")
 NET_OVERRIDE = {}
 # fullfw/libtcpi reads CurrentIPv4 (read-only, derived). osinterface derives it from the STATIC
 # IPv4/IPv4Static config at startup -> set the static groups so the derivation yields our IP.

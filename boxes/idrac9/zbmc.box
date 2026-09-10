@@ -1,7 +1,7 @@
 # zbmc.box — virtual-BMC descriptor for "idrac9", sourced by the repository's `tools/zbmc` dispatcher.
 # To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
 ZBMC_NAME=idrac9
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
 ZBMC_DESC="Dell iDRAC9 (NPCM750) - cold boot; SSH/IPMI accepted; Web-UI observed; Redfish not configured"
 ZBMC_WARM_STATUS=broken
 ZBMC_WARM_REASON="restored usb-net is network-dead"
@@ -38,6 +38,9 @@ ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=npcm750-evb
+ZBMC_TAP=ztap-idrac9
+ZBMC_MAC=52:54:00:fa:00:30
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
 export ZBMC_QEMU
 
 # boot QEMU detached; echo the pid. (zbmc sets PIDF/LOG and handles the pidfile + web waiter.)
@@ -47,25 +50,21 @@ zbmc_boot() {
   [ -f boot/initramfs.p4.xz ] || { echo "no boot/initramfs.p4.xz — run: zbmc idrac9 build" >&2; return 1; }
   local dtb=boot/p4.dtb; [ -f "$dtb" ] || dtb=boot/p2uni.dtb
   : > "$LOG"
-  # Bind the selected loopback IP and standard ports directly; use root for privileged host forwards.
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   $SUDO rm -f "$QMP_SOCK"
-  _zbmc_lo_alias "$ZBMC_IP"
-  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
-    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   $SUDO nohup "$ZBMC_QEMU" -M npcm750-evb -m 1G -display none \
     -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -kernel boot/uImage.patched -dtb "$dtb" -initrd boot/initramfs.p4.xz \
     -drive id=rootsd,if=none,file=img/sd256.img,format=raw,snapshot=on \
     -device sd-card,drive=rootsd,bus=sd-bus \
-    -netdev user,id=n1,hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443 \
-    -device usb-net,netdev=n1,bus=usb-bus.0 \
+    -netdev "tap,id=n1,ifname=$ZBMC_TAP,script=no,downscript=no" \
+    -device "usb-net,netdev=n1,bus=usb-bus.0,mac=$ZBMC_MAC" \
     -serial "file:$CONSOLE_LOG" >/dev/null 2>&1 &
-  # qemu is a root child of sudo; find its real pid by the hostfwd signature (not $!)
-  local n=0 qp=; while [ $n -lt 30 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
+  local n=0 qp=; while [ $n -lt 30 ]; do qp=$(pgrep -f "npcm750-evb.*ifname=$ZBMC_TAP" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
-zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
+zbmc_running() { pgrep -f "npcm750-evb.*ifname=$ZBMC_TAP" | head -1; }
+zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" CVIP="$ZBMC_IP" CVMASK=255.0.0.0 CVGW=10.0.0.1 IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
 # snapshot: cold-boot P6 + Redfish bring-up, then freeze to img/ckpt/redfish-200-ready-net.gz (patched
 # qemu, migratable usb-net). Pays the ~15min bring-up ONCE; afterwards `zbmc idrac9 start` restores it.
 zbmc_ready() {
