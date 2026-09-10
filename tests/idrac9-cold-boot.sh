@@ -23,6 +23,9 @@ grep -Fq 'case "$drv" in cdc_ether|usbnet|cdc_ncm|cdc_subset|cdc_eem)' "$repo/bo
 ! grep -Fq 'ssh-keygen -A' "$repo/boxes/idrac9/init.p4.custom"
 grep -Fq 'HOSTKEY="$IMG/ssh_host_ed25519_key"' "$repo/boxes/idrac9/build-p4.sh"
 grep -Fq 'install -m 600 "$HOSTKEY" "$ROOT/ssh_host_ed25519_key"' "$repo/boxes/idrac9/build-p4.sh"
+grep -Fq 'NET_OVERRIDE[("iDRAC.Embedded.1", "IPMILan", "Enable")] = "1"' "$repo/boxes/idrac9/scripts/build-cfgdb-defaults.py"
+grep -Fq 'USER=root exec systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' "$repo/boxes/idrac9/init.p4.custom"
+! grep -Fq 'exec strace -f -e trace=openat' "$repo/boxes/idrac9/init.p4.custom"
 early_net_line=$(grep -n 'early-net: NIC=' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 tmpfiles_line=$(grep -n '^systemd-tmpfiles --create' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 sshd_line=$(grep -n '/usr/sbin/sshd -f' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
@@ -53,21 +56,28 @@ import sqlite3, sys
 con = sqlite3.connect(sys.argv[1])
 con.execute("CREATE TABLE GroupMetaTable (FQDD TEXT, GroupName TEXT, NoOfGroupInstances INT)")
 con.execute("CREATE TABLE AttributeMetaTable (FQDD TEXT, GroupName TEXT, AttributeName TEXT, DefaultValue TEXT, MaxLength INT, IsSuppressed INT)")
-con.execute("INSERT INTO GroupMetaTable VALUES ('iDRAC.Embedded.1','CurrentIPv4',1)")
+con.executemany("INSERT INTO GroupMetaTable VALUES (?,?,?)", [
+    ('iDRAC.Embedded.1','CurrentIPv4',1),
+    ('iDRAC.Embedded.1','IPMILan',1)])
 con.executemany("INSERT INTO AttributeMetaTable VALUES (?,?,?,?,?,0)", [
     ('iDRAC.Embedded.1','CurrentIPv4','Address','0.0.0.0',15),
     ('iDRAC.Embedded.1','CurrentIPv4','Netmask','0.0.0.0',15),
-    ('iDRAC.Embedded.1','CurrentIPv4','Gateway','0.0.0.0',15)])
+    ('iDRAC.Embedded.1','CurrentIPv4','Gateway','0.0.0.0',15),
+    ('iDRAC.Embedded.1','IPMILan','Enable','0',1)])
 con.commit()
 PY
 CVIP=10.250.0.30 CVMASK=255.0.0.0 CVGW=10.0.0.1 \
   python3 "$repo/boxes/idrac9/scripts/build-cfgdb-defaults.py" \
-  "$fixture/meta.db" "$fixture/defaults.db" evb CurrentIPv4 >/dev/null
+  "$fixture/meta.db" "$fixture/defaults.db" evb CurrentIPv4,IPMILan >/dev/null
 python3 - "$fixture/defaults.db" <<'PY'
 import sqlite3, sys
-values = [row[0] for row in sqlite3.connect(sys.argv[1]).execute(
-    "SELECT AttributeValue FROM CfgValueTable ORDER BY AttributeName")]
-assert values == ['10.250.0.30', '10.0.0.1', '255.0.0.0'], values
+values = {(group, attribute): value for group, attribute, value in
+          sqlite3.connect(sys.argv[1]).execute(
+              "SELECT GroupName,AttributeName,AttributeValue FROM CfgValueTable")}
+assert values[('CurrentIPv4', 'Address')] == '10.250.0.30', values
+assert values[('CurrentIPv4', 'Gateway')] == '10.0.0.1', values
+assert values[('CurrentIPv4', 'Netmask')] == '255.0.0.0', values
+assert values[('IPMILan', 'Enable')] == '1', values
 PY
 
 echo "idrac9 cold-boot contract: PASS"
