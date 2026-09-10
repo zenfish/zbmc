@@ -15,9 +15,10 @@
     <section class="mt-10 border border-emerald-500/40 bg-emerald-950/30 p-6">
       <h2 class="text-2xl font-bold">Verified remote IPMI — warm restore, 2026-09-10</h2>
       <p class="mt-3">A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. Cold boot still fails to restore usable native account services; use the explicit warm path.</p>
-      <pre class="mt-4 overflow-auto">sudo zbmc lenovo-xcc start --warm --no-web
-sudo zbmc lenovo-xcc ipmi mc info
-sudo zbmc lenovo-xcc ipmi chassis status</pre>
+      <pre class="mt-4 overflow-auto">cd ~/src/oob/zbmc
+sudo ./tools/zbmc lenovo-xcc start --warm --no-web
+sudo ./tools/zbmc lenovo-xcc ipmi mc info
+sudo ./tools/zbmc lenovo-xcc ipmi chassis status</pre>
       <p class="mt-3">Debby deployment: 10.250.0.45, standard UDP/623; private zbmc.conf supplies ZBMC_LENOVO_DIR and ZBMC_LENOVO_PASSWORD. USERID uses a changed password, not the factory password. Checkpoint files are private and are not distributed by build.sh. The preserved original and validation VMs remain paused on separate addresses/ports.</p>
       <p class="mt-3">Restore requires the matched ckpt/state.gz and ckpt/emmc.qcow2, recorded boot artifacts, and exact QEMU SHA-256 0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69. ckpt/manifest.json records hashes. Native authentication and account/channel permissions remain enforced. Snapshot restore discards changes made after capture; provisioned settings are stored in the captured state.</p>
       <p class="mt-3">Observed warm HTTPS root returns 200, but web-login correctness is not part of this IPMI acceptance. The cold-only observations below are historical, not current remote-IPMI readiness claims.</p>

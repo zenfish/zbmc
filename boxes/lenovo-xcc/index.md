@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=b190a37303d5af048d4d54f5cd6af84f8f12ce441f85960a1289cbae35625015 body-sha256=c29895abef7f965a6b24bdda6bf3444c8ad06d4d952bf4be4b8a8b9a5b7b2f90 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=51a7aa526757cc53d1f1f0fdd8b98395d27bf7e410011e39d76d0248117e68e6 body-sha256=161b1267c889a73bc7891455147df16d04979125cd0c0bf226ca640ed8bfcdda -->
 
 zbmc / preserved firmware
 
@@ -10,9 +10,10 @@ A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental
 
 A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. Cold boot still fails to restore usable native account services; use the explicit warm path.
 
-    sudo zbmc lenovo-xcc start --warm --no-web
-    sudo zbmc lenovo-xcc ipmi mc info
-    sudo zbmc lenovo-xcc ipmi chassis status
+    cd ~/src/oob/zbmc
+    sudo ./tools/zbmc lenovo-xcc start --warm --no-web
+    sudo ./tools/zbmc lenovo-xcc ipmi mc info
+    sudo ./tools/zbmc lenovo-xcc ipmi chassis status
 
 Debby deployment: 10.250.0.45, standard UDP/623; private zbmc.conf supplies ZBMC_LENOVO_DIR and ZBMC_LENOVO_PASSWORD. USERID uses a changed password, not the factory password. Checkpoint files are private and are not distributed by build.sh. The preserved original and validation VMs remain paused on separate addresses/ports.
 
