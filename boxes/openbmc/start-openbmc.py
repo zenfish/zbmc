@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Launch vanilla OpenBMC on the direct zbmc bridge and configure its IP."""
-import json, os, pexpect, signal, subprocess, sys, time
+import json, os, pexpect, re, signal, subprocess, sys, time
 
 wd = os.environ["WD"]
 flash = os.environ["OPENBMC_FLASH"]
@@ -38,8 +38,9 @@ def boot_with_static_ip(child, address, mac):
         "ip route replace default via 10.0.0.1 dev eth0; "
         "ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED"
     )
+    child.expect(rf"inet {re.escape(address)}/8", timeout=30)
     child.expect(r"[~/] # ", timeout=30)
-    child.sendline("exec /init")
+    child.send("exec /init\r")
 
 
 for p in (sock, qmp):
