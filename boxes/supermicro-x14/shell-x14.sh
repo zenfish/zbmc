@@ -17,6 +17,7 @@
 #         ipmitool -I lanplus -H 10.0.8.14 -U ADMIN -P ADMIN mc info
 #
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "${WD:-$(dirname "$0")}"
 IP="${ZBMC_IP:-10.0.8.14}"
 TAP="${TAP:-ztap-x14}"
@@ -26,12 +27,20 @@ BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"
 sudo -n pkill -9 -f "ifname=$TAP" 2>/dev/null || true; sleep 2
 sudo -n rm -f serial.sock qmp.sock
 QEMU="${QEMU:-$(command -v qemu-system-arm)}"
+tmp=$(mktemp -d)
+trap 'rm -r "$tmp"' EXIT
+xz -dc initramfs-patched.bin | (cd "$tmp" && cpio -idm --quiet)
+python3 "$SCRIPT_DIR/patch-init-network.py" "$tmp/init" "$IP" 10.0.0.1
+(cd "$tmp" && find . -print0 | sort -z | cpio --null -o -H newc --quiet | xz -C crc32) >initramfs-tap.bin.part
+mv initramfs-tap.bin.part initramfs-tap.bin
+rm -r "$tmp"
+trap - EXIT
 exec sudo "$QEMU" \
   -m 1024 -M ast2600-evb -display none -no-reboot \
   -chardev "socket,id=serial0,path=serial.sock,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
   -serial chardev:serial0 \
   -qmp unix:qmp.sock,server,nowait \
-  -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
+  -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-tap.bin \
   -drive file=x14-ce0-64m.img,format=raw,if=mtd,snapshot=on \
   -drive file=emmc.img,format=raw,if=sd,index=2,snapshot=on \
   -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no" \
