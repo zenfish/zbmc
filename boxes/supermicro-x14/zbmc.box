@@ -15,9 +15,10 @@
 #
 # Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP.
 ZBMC_NAME=supermicro-x14
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
 ZBMC_DESC="Supermicro X14 OpenBMC/AST2600 - cold boot; SSH, IPMI, Redfish, and Web-UI accepted"
-ZBMC_WARM_STATUS=verified
+ZBMC_WARM_STATUS=broken
+ZBMC_WARM_REASON="existing checkpoint embeds QEMU user networking; create a TAP-native checkpoint"
 ZBMC_WARM_FILES="svc-snap-full-working.gz"
 
 # Scripts + snapshots live in the X14 scratch workdir (restore/snapshot/shell scripts cd there).
@@ -30,6 +31,9 @@ ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_TAP=ztap-x14
+ZBMC_MAC=52:54:00:fa:00:21
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 
 # Real IP + /etc/hosts name (X14 = 10.0.8.14 in the 10.0.8.x scheme). Ports bound directly by qemu.
@@ -62,22 +66,24 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
 # `start --warm` restores the matched snapshot. Default/fallback starts the cold scripted service stack.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$ZBMC_DIR" || return 1
-  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  _zbmc_lo_alias "$ZBMC_IP"
-  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
-    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   if [ -n "${ZBMC_WARM:-}" ] && [ -f "$ZBMC_DIR/$SNAP" ]; then
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1   # backgrounds qemu, network live ~10s
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" TAP="$ZBMC_TAP" MAC="$ZBMC_MAC" bash "$PROJ_DIR/restore-svc-x14.sh" "$SNAP" >>"$LOG" 2>&1
   else
     [ -z "${ZBMC_WARM:-}" ] || echo "snapshot $SNAP missing - cold boot (scripted services)" >&2
     : > "$LOG"
-    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" X14_BOOT_TOKEN=qemu-x14-svc nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &
+    ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" QEMU="$ZBMC_QEMU" TAP="$ZBMC_TAP" MAC="$ZBMC_MAC" X14_BOOT_TOKEN=qemu-x14-svc nohup bash "$PROJ_DIR/shell-x14.sh" >>"$LOG" 2>&1 &
   fi
   # wait for the qemu whose hostfwd matches this box's IPMI port to appear, print its pid
   local n=0 qp=; while [ $n -lt 60 ]; do
-    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    qp=$(pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1); [ -n "$qp" ] && break
     sleep 0.3; n=$((n+1)); done
   echo "$qp"
+}
+zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
+
+zbmc_post_launch() {
+  nohup python3 "$(cd "$PROJ_DIR/../.." && pwd)/tools/zbmc-configure-serial-ip.py" \
+    "$SOCK" "$ZBMC_IP" 8 10.0.0.1 eth0 >"$ZBMC_DIR/tap-config.log" 2>&1 &
 }
 
 zbmc_build() { echo "x14 boot artifacts are packaged; see REPRODUCE.md. Cold boot: zbmc supermicro-x14 start; snapshot opt-in: start --warm"; }

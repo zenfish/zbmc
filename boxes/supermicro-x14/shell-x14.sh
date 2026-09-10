@@ -19,10 +19,11 @@
 set -euo pipefail
 cd "${WD:-$(dirname "$0")}"
 IP="${ZBMC_IP:-10.0.8.14}"
+TAP="${TAP:-ztap-x14}"
+MAC="${MAC:-52:54:00:fa:00:21}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-console-uart.log}"
 BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"
-ip addr show dev lo | grep -qw "$IP" || sudo ip addr add "$IP/32" dev lo
-sudo -n pkill -9 -f "hostname=x14bmc" 2>/dev/null || true; sleep 2
+sudo -n pkill -9 -f "ifname=$TAP" 2>/dev/null || true; sleep 2
 sudo -n rm -f serial.sock qmp.sock
 QEMU="${QEMU:-$(command -v qemu-system-arm)}"
 exec sudo "$QEMU" \
@@ -33,5 +34,6 @@ exec sudo "$QEMU" \
   -kernel kernel.bin -dtb x14-noncsi.dtb -initrd initramfs-patched.bin \
   -drive file=x14-ce0-64m.img,format=raw,if=mtd,snapshot=on \
   -drive file=emmc.img,format=raw,if=sd,index=2,snapshot=on \
-  -net nic -net user,hostfwd=tcp:$IP:${SSH_PORT:-22}-:22,hostfwd=tcp:$IP:${WEB_PORT:-443}-:443,hostfwd=udp:$IP:623-:623,hostname=x14bmc \
+  -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no" \
+  -net "nic,netdev=bmcnet,macaddr=$MAC" \
   -append "console=ttyS4,115200n8 root=/dev/ram rw maxcpus=1 initcall_blacklist=ast2600_spitee_init,optee_driver_init qemu-x14-ramroot $BOOT_TOKEN loglevel=4"
