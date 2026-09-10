@@ -30,7 +30,7 @@ def boot_with_static_ip(child, address, mac):
     child.expect("ast# ", timeout=30)
     child.sendline("run bootcmd")
     child.expect("Starting kernel", timeout=90)
-    child.expect(r"/ # ", timeout=300)
+    child.expect(r"[~/] # ", timeout=300)
     child.sendline(
         "ip link set eth0 up; "
         "ip addr flush dev eth0 scope global; "
