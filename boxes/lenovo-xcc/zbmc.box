@@ -82,6 +82,24 @@ zbmc_web() {
     "https://$ZBMC_IP:$WEB_PORT/"
 }
 
+# Probing QEMU's backlog-1 host forward throughout this 45-minute boot can
+# leave timed-out connections queued and hide a healthy nginx.  The firmware
+# markers are emitted only after the web startup and guest IPv4 paths complete.
+zbmc_webui_health() {
+  local log="${ZBMC_CONSOLE_LOG:-$CONSOLE_LOG}" code
+  grep -aq -- '-> Web Available' "$log" 2>/dev/null || {
+    echo 'firmware has not announced Web Available'
+    return 1
+  }
+  grep -aq -- 'XCC_DIAG_NETWORK_READY' "$log" 2>/dev/null || {
+    echo 'guest IPv4 is not configured'
+    return 1
+  }
+  code=$(curl -sk --connect-timeout 1 --max-time 3 -o /dev/null -w '%{http_code}' \
+    "https://$ZBMC_IP:$WEB_PORT/" 2>/dev/null)
+  case "$code" in 2??|3??) return 0;; *) echo "HTTPS root returned ${code:-nothing}"; return 1;; esac
+}
+
 zbmc_console() {
   command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   echo "Lenovo XCC console -> $SOCK (Ctrl-] to detach)"

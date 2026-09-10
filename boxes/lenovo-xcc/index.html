@@ -33,6 +33,7 @@
     <section class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
       <h2 class="text-2xl font-bold">What the runtime changes</h2>
       <p class="mt-4 leading-7 text-stone-300">The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces <code class="text-amber-300">vpdoctor</code> with a sleeping process because the physical watchdog/platform contract is unavailable. The AST2600 watchdog remains modeled, but QEMU ignores its reset action: under slower TCG execution it expires before XCC finishes starting services. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.</p>
+      <p class="mt-4 leading-7 text-stone-300">Lenovo's DHCP hook receives QEMU's lease but its <code class="text-amber-300">avctifconfig</code> control path does not install the accepted address in Linux. The emulator-only getty hook waits for Lenovo's own DHCP completion marker, then installs QEMU user networking's fixed <code class="text-amber-300">10.0.2.15/24</code> address and <code class="text-amber-300">10.0.2.2</code> default route. Health probing waits for both this network marker and the vendor's Web-Available marker.</p>
     </section>
 
     <section class="mt-12 grid gap-8 md:grid-cols-2">

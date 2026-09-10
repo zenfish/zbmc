@@ -23,6 +23,10 @@ LZOP_MAGIC = b"\x89LZO\x00\r\n\x1a\n"
 SHELL_HOOK = """            cat > /xcc-diag-getty <<'ZBMC_EOF'
 #!/bin/sh
 while [ ! -e /etc/this-platform ]; do sleep 1; done
+(while [ ! -s /tmp/eth1_dhcpinfo ]; do sleep 1; done
+ip addr replace 10.0.2.15/24 dev eth1 &&
+ip route replace default via 10.0.2.2 dev eth1 &&
+echo XCC_DIAG_NETWORK_READY > /dev/console) &
 exec /sbin/getty -n -l /bin/bash 115200 ttyS4
 ZBMC_EOF
             chmod 755 /xcc-diag-getty
