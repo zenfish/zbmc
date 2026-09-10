@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Assign the guest-owned direct-L2 address through XCC's serial root shell."""
+"""Assign a guest-owned address through an already-authorized serial shell."""
 import socket
 import sys
 import time
 
 
-def configure(sock_path, address, prefix, gateway, timeout=900):
+def configure(sock_path, address, prefix, gateway, interface, timeout=900):
     deadline = time.monotonic() + timeout
     with socket.socket(socket.AF_UNIX) as sock:
         while True:
@@ -19,11 +19,11 @@ def configure(sock_path, address, prefix, gateway, timeout=900):
         sock.settimeout(2)
         sock.sendall(b"\n")
         command = (
-            "ip addr flush dev eth1 scope global; "
-            f"ip addr add {address}/{prefix} dev eth1; "
-            "ip link set eth1 up; "
-            f"ip route replace default via {gateway} dev eth1; "
-            "ip -4 -o addr show dev eth1; echo XCC_TAP_NETWORK_READY\n"
+            f"ip addr flush dev {interface} scope global; "
+            f"ip addr add {address}/{prefix} dev {interface}; "
+            f"ip link set {interface} up; "
+            f"ip route replace default via {gateway} dev {interface}; "
+            f"ip -4 -o addr show dev {interface}; echo ZBMC_TAP_NETWORK_READY\n"
         ).encode()
         sent = False
         pending = b""
@@ -42,11 +42,13 @@ def configure(sock_path, address, prefix, gateway, timeout=900):
             if not sent and pending.rstrip().endswith(b"#"):
                 sock.sendall(command)
                 sent = True
-            if sent and any(line.strip() == b"XCC_TAP_NETWORK_READY" for line in pending.splitlines()):
+            if sent and any(line.strip() == b"ZBMC_TAP_NETWORK_READY" for line in pending.splitlines()):
                 return
             pending = pending[-65536:]
         raise TimeoutError("guest network configuration did not complete")
 
 
 if __name__ == "__main__":
-    configure(*sys.argv[1:])
+    if len(sys.argv) not in (6, 7):
+        raise SystemExit(f"usage: {sys.argv[0]} SOCKET ADDRESS PREFIX GATEWAY INTERFACE [TIMEOUT]")
+    configure(*sys.argv[1:6], timeout=float(sys.argv[6]) if len(sys.argv) == 7 else 900)

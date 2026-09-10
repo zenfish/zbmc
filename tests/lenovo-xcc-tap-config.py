@@ -6,7 +6,7 @@ import tempfile
 import threading
 
 repo = pathlib.Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("configure_tap", repo / "boxes/lenovo-xcc/configure-tap.py")
+spec = importlib.util.spec_from_file_location("configure_tap", repo / "tools/zbmc-configure-serial-ip.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
@@ -24,11 +24,11 @@ with tempfile.TemporaryDirectory() as directory:
             command = conn.recv(4096)
             assert b"ip addr add 10.250.0.45/8 dev eth1" in command
             assert b"default via 10.0.0.1 dev eth1" in command
-            conn.sendall(command + b"\r\nXCC_TAP_NETWORK_READY\r\nbash-5.2# ")
+            conn.sendall(command + b"\r\nZBMC_TAP_NETWORK_READY\r\nbash-5.2# ")
 
     thread = threading.Thread(target=guest)
     thread.start()
-    module.configure(path, "10.250.0.45", "8", "10.0.0.1", timeout=5)
+    module.configure(path, "10.250.0.45", "8", "10.0.0.1", "eth1", timeout=5)
     thread.join()
     server.close()
 
