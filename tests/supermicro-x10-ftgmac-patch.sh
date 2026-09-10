@@ -10,16 +10,13 @@ grep -q 'qemu/runtime/qemu-system-arm' "$box"
 grep -q 'ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6' "$box"
 addressing=$(bash -c '
   _zbmc_resolve_ip(){ echo 10.0.8.10; }
-  _zbmc_lo_alias(){ :; }
   . "$1"
-  printf "%s|%s|%s|%s" "$SSH_PORT" "$WEB_PORT" "$ZBMC_NETWORK_MODE" "$ZBMC_CAPTURE_INTERFACES"
+  printf "%s|%s|%s|%s|%s" "$SSH_PORT" "$WEB_PORT" "$ZBMC_NETWORK_MODE" "$ZBMC_TAPS" "$ZBMC_MAC"
 ' bash "$box")
-[ "$addressing" = '22|443|user|' ]
-grep -Fq "_zbmc_lo_alias \"\$ZBMC_IP\"" "$box"
-grep -Fq "hostfwd=udp:\$ZBMC_IP:\$ZBMC_HOSTPORT-:623" "$box"
-grep -Fq 'GUEST_IP = os.environ.get("X10_GUEST_IP", "10.0.2.15")' "$driver"
-! grep -Fq 'X10_NET_MODE' "$box"
-! grep -Fq 'NET_MODE' "$driver"
+[ "$addressing" = '22|443|tap|ztap-x10 ztap-x10-aux|4a:0a:ab:7c:96:2f' ]
+grep -Fq 'GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP)' "$driver"
+grep -Fq 'IFACE = os.environ.get("X10_IFACE", "eth1")' "$driver"
+grep -Fq 'tap,id=bmcnet,ifname={TAP},script=no,downscript=no' "$driver"
 grep -Fq 'os.environ.get("ZBMC_X10_GDB") == "1"' "$driver"
 grep -Fq '"chmod", "660"' "$driver"
 ! grep -Fq '"chmod", "777"' "$driver"
