@@ -731,7 +731,8 @@ case "$VERB" in
       fi
       rm -f "$PIDF"
       echo "$ZBMC_NAME stopped (qemu $p exited)"
-    else echo "$ZBMC_NAME not running"; fi ;;
+    else echo "$ZBMC_NAME not running"; fi
+    declare -F zbmc_post_stop >/dev/null && zbmc_post_stop ;;
   restart)
     _restart_args=()
     while [ $# -gt 0 ]; do

@@ -3,7 +3,7 @@
 # Remote IPMI requires native account/service provisioning and channel-1 access.
 # Store the changed password in private zbmc.conf as ZBMC_LENOVO_PASSWORD.
 ZBMC_NAME=lenovo-xcc
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
 ZBMC_DESC="Lenovo XClarity Controller / AST2600 - vendor Web-UI"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,6 +41,10 @@ IPMI_OPTS="-C 17 -I lanplus"
 WEB_PORT=443
 HTTP_PORT=80
 ZBMC_HTTP_PROBE_TIMEOUT=15
+ZBMC_TAP=ztap-xcc
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
+ZBMC_GUEST_PREFIX="${ZBMC_GUEST_PREFIX:-8}"
+ZBMC_GUEST_GATEWAY="${ZBMC_GUEST_GATEWAY:-10.0.0.1}"
 
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/launcher.log"
@@ -53,21 +57,29 @@ export ZBMC_MEMDUMP_REGIONS ZBMC_MEMDUMP_GDB_SCRIPT
 
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
-  local qp= n=0
-  _zbmc_lo_alias "$ZBMC_IP"
+  local qp=
+  "$ROOT/tools/zbmc-net" add-tap "$ZBMC_TAP" || return 1
+  ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
   : >"$LOG"
   ZBMC_WARM="${ZBMC_WARM:-}" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
     IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
-    HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" \
-    QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null || return 1
-  while [ "$n" -lt 60 ]; do
-    qp=$(pgrep -f "hostname=lenovo-xcc.*hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1)
-    [ -n "$qp" ] && break
-    sleep 0.25
-    n=$((n + 1))
-  done
+    HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" TAP="$ZBMC_TAP" \
+    QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >"$ZBMC_DIR/boot.pid" || {
+      "$ROOT/tools/zbmc-net" del-tap "$ZBMC_TAP" >/dev/null 2>&1 || true
+      return 1
+    }
+  qp=$(cat "$ZBMC_DIR/boot.pid")
   [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
   printf '%s\n' "$qp"
+}
+
+zbmc_post_launch() {
+  nohup python3 "$PROJ_DIR/configure-tap.py" "$SOCK" "$ZBMC_IP" \
+    "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY" >"$ZBMC_DIR/tap-config.log" 2>&1 &
+}
+
+zbmc_post_stop() {
+  "$ROOT/tools/zbmc-net" del-tap "$ZBMC_TAP" >/dev/null 2>&1 || true
 }
 
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
