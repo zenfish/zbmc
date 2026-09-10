@@ -57,3 +57,18 @@ if zbmc_ipmi_health >/dev/null; then
 fi
 
 python3 "$repo/tests/lenovo-xcc-boot-config.py"
+
+(
+  log=$(mktemp); called=$(mktemp); rm -f "$called"
+  trap 'rm -f "$log" "$called"' EXIT
+  ZBMC_CONSOLE_LOG="$log"
+  curl() { : >"$called"; printf 200; }
+  ! zbmc_webui_health >/dev/null
+  [ ! -e "$called" ]
+  printf '%s\n' '-> Web Available' >"$log"
+  ! zbmc_webui_health >/dev/null
+  [ ! -e "$called" ]
+  printf '%s\n' 'XCC_DIAG_NETWORK_READY' >>"$log"
+  zbmc_webui_health
+  [ -e "$called" ]
+)
