@@ -6,6 +6,7 @@ out=$($repo/tools/zbmc list)
 
 grep -Eq '^NAME +RESERVED IP +NETWORK +WARM$' <<<"$out"
 grep -Eq '^idrac10 +[^ ]+ +TAP/DIRECT-L2 +(READY|MISSING)$' <<<"$out"
+grep -Eq '^lenovo-xcc +[^ ]+ +TAP/DIRECT-L2 +BROKEN$' <<<"$out"
 grep -Eq '^megarac-hpe +[^ ]+ +TAP/DIRECT-L2 +BROKEN$' <<<"$out"
 grep -Eq '^supermicro-x14 +[^ ]+ +TAP/DIRECT-L2 +BROKEN$' <<<"$out"
 grep -Eq '^idrac9 +[^ ]+ +TAP/DIRECT-L2 +BROKEN$' <<<"$out"
@@ -28,6 +29,13 @@ if $repo/tools/zbmc megarac-hpe start --warm --run-as-me >"${TMPDIR:-/tmp}/zbmc-
   exit 1
 fi
 grep -Fq 'warm restore is broken: saved ASPEED SRAM is 0x17000; current model requires 0x18000' "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
+rm -f "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
+
+if $repo/tools/zbmc lenovo-xcc start --warm --run-as-me >"${TMPDIR:-/tmp}/zbmc-warm-test.$$" 2>&1; then
+  echo 'lenovo-xcc unexpectedly accepted --warm' >&2
+  exit 1
+fi
+grep -Fq 'warm restore is broken: existing checkpoint embeds the pre-TAP SLiRP topology; create a TAP-native checkpoint' "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
 rm -f "${TMPDIR:-/tmp}/zbmc-warm-test.$$"
 
 echo 'warm capabilities: PASS'
