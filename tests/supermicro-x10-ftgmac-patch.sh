@@ -6,8 +6,8 @@ box="$(dirname "$0")/../boxes/supermicro-x10/zbmc.box"
 driver="$(dirname "$0")/../boxes/supermicro-x10/start-x10.py"
 
 test -f "$patch"
-grep -q 'qemu/runtime/qemu-system-arm' "$box"
-grep -q 'ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6' "$box"
+grep -q 'ZBMC_QEMU=/home/zen/opt/qemu-11/bin/qemu-system-arm' "$box"
+grep -q 'ZBMC_QEMU_SHA256=d70c04a3dfe5515ab0979247dc1d6f76cb2c809b4f9d6370397be9f7a0d118cc' "$box"
 addressing=$(bash -c '
   _zbmc_resolve_ip(){ echo 10.0.8.10; }
   . "$1"
