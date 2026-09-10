@@ -197,6 +197,16 @@ sed -i 's|^sysadmin:[^:]*:|sysadmin::|' /conf/shadow 2>/dev/null || true
 CONFSEED
 chmod 0755 "$R/etc/rcS.d/S07conf-seed.sh"
 
+cat > "$R/etc/rc3.d/S99zbmc-network" <<'NETWORK'
+#!/bin/sh
+killall udhcpc 2>/dev/null || true
+ip link set eth0 up
+ip addr flush dev eth0 scope global
+ip addr add 10.250.0.40/8 dev eth0
+ip route replace default via 10.0.0.1 dev eth0
+NETWORK
+chmod 0755 "$R/etc/rc3.d/S99zbmc-network"
+
 echo "[qemu-patch] ipmistack conf-seed+symlink injected; IPMI.conf keeps qemu-backed LAN/UDS/KCS1-3/DCMI"
 echo "[qemu-patch] serial/sol/bt/smm/smbus/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable, UDS listens, authed Redfish works"
 echo "[qemu-patch] smash shim -> /bin/sh (console login as admin/superuser works)"
