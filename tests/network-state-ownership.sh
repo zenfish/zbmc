@@ -14,7 +14,11 @@ cat >"$tmp/bin/ip" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$IP_LOG"
 EOF
-chmod +x "$tmp/bin/id" "$tmp/bin/ip"
+cat >"$tmp/bin/flock" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$tmp/bin/id" "$tmp/bin/ip" "$tmp/bin/flock"
 
 cat >"$tmp/net.state" <<'EOF'
 UPLINK=eth0

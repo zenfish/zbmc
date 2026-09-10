@@ -109,6 +109,41 @@ _zbmc_lo_alias(){
 }
 export -f _zbmc_lo_alias
 
+_zbmc_network_prepare(){
+  [ "${ZBMC_NETWORK_MODE:-user}" = tap ] || return 0
+  local tap owner taps="${ZBMC_TAPS:-${ZBMC_TAP:-}}"
+  [ -n "$taps" ] || { echo "$ZBMC_NAME: TAP mode requires ZBMC_TAP or ZBMC_TAPS" >&2; return 1; }
+  [[ "${ZBMC_MAC:-}" =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]] || {
+    echo "$ZBMC_NAME: TAP mode requires a valid stable ZBMC_MAC" >&2
+    return 1
+  }
+  owner=${SUDO_USER:-${USER:-$(id -un)}}
+  for tap in $taps; do
+    [[ "$tap" =~ ^[a-zA-Z0-9_.-]+$ ]] && [ "${#tap}" -le 15 ] || {
+      echo "$ZBMC_NAME: invalid TAP name '$tap'" >&2
+      _zbmc_network_cleanup
+      return 1
+    }
+    "$_SELF/zbmc-net" add-tap "$tap" "$owner" || {
+      _zbmc_network_cleanup
+      return 1
+    }
+  done
+  if [ "$(id -u)" = 0 ]; then ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
+  else sudo -n ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
+  fi
+  ZBMC_CAPTURE_INTERFACES="${ZBMC_CAPTURE_INTERFACES:-br-zbmc $taps}"
+  export ZBMC_CAPTURE_INTERFACES
+}
+
+_zbmc_network_cleanup(){
+  [ "${ZBMC_NETWORK_MODE:-user}" = tap ] || return 0
+  local tap
+  for tap in ${ZBMC_TAPS:-${ZBMC_TAP:-}}; do
+    "$_SELF/zbmc-net" del-tap "$tap" >/dev/null 2>&1 || true
+  done
+}
+
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
@@ -656,9 +691,12 @@ case "$VERB" in
         fi
         _zr_event BUILD ready "$_rmsg"
       fi
-    # zbmc_boot self-elevates (sudo), sets the loopback alias + /etc/hosts, and binds service ports
-    # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
+    _zbmc_network_prepare || {
+      _zr_archive_logs; _zr_snapshot failure; _zr_event NETWORK failed 'host TAP preparation failed'; _zr_result failed NETWORK 'host TAP preparation failed'
+      echo "$ZBMC_NAME: network preparation failed; evidence: $ZBMC_RUN_DIR" >&2; exit 1
+    }
     qp=$(zbmc_boot) || {
+      _zbmc_network_cleanup
       _zr_archive_logs; _zr_snapshot failure; _zr_event LAUNCH failed 'box launcher returned failure'; _zr_result failed LAUNCH 'box launcher returned failure'
       echo "$ZBMC_NAME: boot failed; evidence: $ZBMC_RUN_DIR" >&2; exit 1
     }
@@ -666,6 +704,7 @@ case "$VERB" in
     if [ -z "$qp" ] || ! ps -p "$qp" >/dev/null 2>&1; then
       echo "$ZBMC_NAME: boot failed — QEMU did not stay running; check $LOG" >&2
       rm -f "$PIDF"
+      _zbmc_network_cleanup
       _zr_archive_logs; _zr_snapshot failure; _zr_event QEMU failed 'QEMU did not stay running'; _zr_result failed QEMU 'QEMU did not stay running'
       exit 1
     fi
@@ -732,7 +771,8 @@ case "$VERB" in
       rm -f "$PIDF"
       echo "$ZBMC_NAME stopped (qemu $p exited)"
     else echo "$ZBMC_NAME not running"; fi
-    declare -F zbmc_post_stop >/dev/null && zbmc_post_stop ;;
+    declare -F zbmc_post_stop >/dev/null && zbmc_post_stop
+    _zbmc_network_cleanup ;;
   restart)
     _restart_args=()
     while [ $# -gt 0 ]; do
