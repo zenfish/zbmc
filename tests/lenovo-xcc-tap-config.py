@@ -20,7 +20,11 @@ with tempfile.TemporaryDirectory() as directory:
         conn, _ = server.accept()
         with conn:
             conn.recv(1024)
+            conn.sendall(b"###+ NCSI WorkAround +###\r\n")
             conn.sendall(b"bash-5.2# ")
+            challenge = conn.recv(4096)
+            assert challenge == b"echo ZBMC_TAP_SHELL_READY\n"
+            conn.sendall(challenge + b"\r\nZBMC_TAP_SHELL_READY\r\nbash-5.2# ")
             command = conn.recv(4096)
             assert b"ip addr add 10.250.0.45/8 dev eth1" in command
             assert b"default via 10.0.0.1 dev eth1" in command
