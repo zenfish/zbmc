@@ -23,13 +23,23 @@ def boot_with_static_ip(child, address, mac):
     child.send(" ")
     child.expect("ast# ", timeout=30)
     child.sendline(
-        f"setenv bootargs ${{bootargs}} ip={address}::10.0.0.1:255.0.0.0::eth0:off"
+        f"setenv bootargs ${{bootargs}} rdinit=/bin/sh ip={address}::10.0.0.1:255.0.0.0::eth0:off"
     )
     child.expect("ast# ", timeout=30)
     child.sendline(f"setenv ethaddr {mac}")
     child.expect("ast# ", timeout=30)
     child.sendline("run bootcmd")
     child.expect("Starting kernel", timeout=90)
+    child.expect(r"/ # ", timeout=300)
+    child.sendline(
+        "ip link set eth0 up; "
+        "ip addr flush dev eth0 scope global; "
+        f"ip addr add {address}/8 dev eth0; "
+        "ip route replace default via 10.0.0.1 dev eth0; "
+        "ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED"
+    )
+    child.expect("ZBMC_NETWORK_CONFIGURED", timeout=30)
+    child.sendline("exec /init")
 
 
 for p in (sock, qmp):

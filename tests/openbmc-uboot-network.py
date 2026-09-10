@@ -32,8 +32,10 @@ console = Console()
 namespace["boot_with_static_ip"](console, "10.250.0.10", "52:54:00:fa:00:10")
 sent = [call[1] for call in console.calls if call[0] == "sendline"]
 assert sent == [
-    "setenv bootargs ${bootargs} ip=10.250.0.10::10.0.0.1:255.0.0.0::eth0:off",
+    "setenv bootargs ${bootargs} rdinit=/bin/sh ip=10.250.0.10::10.0.0.1:255.0.0.0::eth0:off",
     "setenv ethaddr 52:54:00:fa:00:10",
     "run bootcmd",
+    "ip link set eth0 up; ip addr flush dev eth0 scope global; ip addr add 10.250.0.10/8 dev eth0; ip route replace default via 10.0.0.1 dev eth0; ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED",
+    "exec /init",
 ]
 print("OpenBMC U-Boot native address configuration: PASS")
