@@ -135,7 +135,7 @@ else:
 
 # Connect pexpect to the serial socket via socat for bootstrap
 child = pexpect.spawn("socat", ["-,raw,echo=0", f"UNIX-CONNECT:{SOCK}"],
-                      encoding="utf-8", timeout=240)
+                      encoding="utf-8", timeout=int(os.environ.get("X10_CONSOLE_TIMEOUT", "900")))
 
 child.expect("Please press Enter to activate this console.")
 child.sendline("")

@@ -18,6 +18,7 @@ grep -Fq 'GUEST_IP = os.environ.get("X10_GUEST_IP", HOSTIP)' "$driver"
 grep -Fq 'IFACE = os.environ.get("X10_IFACE", "eth1")' "$driver"
 grep -Fq 'tap,id=bmcnet,ifname={TAP},script=no,downscript=no' "$driver"
 grep -Fq 'os.environ.get("ZBMC_X10_GDB") == "1"' "$driver"
+grep -Fq 'os.environ.get("X10_CONSOLE_TIMEOUT", "900")' "$driver"
 grep -Fq '"chmod", "660"' "$driver"
 ! grep -Fq '"chmod", "777"' "$driver"
 test "$(grep -c '^diff --git ' "$patch")" -eq 1
