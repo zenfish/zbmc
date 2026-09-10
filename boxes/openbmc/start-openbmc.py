@@ -6,6 +6,7 @@ wd = os.environ["WD"]
 flash = os.environ["OPENBMC_FLASH"]
 ip = os.environ.get("ZBMC_IP", "10.0.7.10")
 tap = os.environ.get("OPENBMC_TAP", "ztap-openbmc")
+mac = os.environ.get("ZBMC_MAC", "52:54:00:fa:00:10")
 qemu = os.environ.get("OPENBMC_QEMU", "/home/zen/opt/qemu-11/bin/qemu-system-arm")
 sock = os.path.join(wd, "serial.sock")
 qmp = os.path.join(wd, "qmp.sock")
@@ -24,7 +25,7 @@ cmd = ["sudo", "-n", qemu, "-M", "ast2600-evb", "-smp", "2", "-m", "1G",
        "-drive", f"file={flash},format=raw,if=mtd,snapshot=on",
        "-chardev", f"socket,id=ser0,path={sock},server=on,wait=off", "-serial", "chardev:ser0",
        "-netdev", f"tap,id=bmcnet,ifname={tap},script=no,downscript=no",
-       "-net", "nic,netdev=bmcnet"]
+       "-net", f"nic,netdev=bmcnet,macaddr={mac}"]
 q = subprocess.Popen(cmd, stdout=open(log, "w"), stderr=subprocess.STDOUT)
 with open(os.path.join(wd, "qemu-command.txt"), "w") as f: f.write(" ".join(cmd) + "\n")
 with open(os.path.join(wd, "launcher.pid"), "w") as f: f.write(str(os.getpid()) + "\n")
@@ -37,7 +38,7 @@ else: raise SystemExit("serial socket timeout")
 child = pexpect.spawn("socat", ["-", "raw,echo=0", f"UNIX-CONNECT:{sock}"], encoding="utf-8", timeout=30)
 child.logfile = open(log, "a")
 try:
-    child.expect([r"login:", r"/#", r"# ", r"root@.*:~#", pexpect.TIMEOUT], timeout=180)
+    child.expect([r"login:", r"/#", r"# ", r"root@.*:~#", pexpect.TIMEOUT], timeout=360)
     if "login:" in child.after:
         child.sendline("root"); child.expect([r"Password:", r"password:"]); child.sendline("0penBmc")
         child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)

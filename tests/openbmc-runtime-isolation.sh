@@ -25,6 +25,10 @@ check_box(){
 check_box openbmc ast2600-evb
 check_box nvidia-obmc gb200nvl-bmc
 grep -Fq '_openbmc_retry_net_ipmi()' "$repo/boxes/openbmc/zbmc.box"
+grep -Fxq 'ZBMC_NETWORK_MODE=tap' "$repo/boxes/openbmc/zbmc.box"
+grep -Fxq 'ZBMC_TAP=ztap-openbmc' "$repo/boxes/openbmc/zbmc.box"
+grep -Fxq 'ZBMC_MAC=52:54:00:fa:00:10' "$repo/boxes/openbmc/zbmc.box"
+grep -Fq 'tap,id=bmcnet,ifname={tap},script=no,downscript=no' "$repo/boxes/openbmc/start-openbmc.py"
 grep -Fq 'zbmc_post_launch()' "$repo/boxes/openbmc/zbmc.box"
 grep -Fq 'systemctl start phosphor-ipmi-net@eth0.socket' "$repo/boxes/openbmc/zbmc.box"
 grep -Fq 'zbmc_post_launch "$p"' "$repo/tools/zbmc"
