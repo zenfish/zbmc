@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=8
+SHELL_INITRAMFS_VERSION=9
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -47,7 +47,32 @@ import sys
 path = pathlib.Path(sys.argv[1])
 text = path.read_text()
 marker = "busybox mount --move /proc /newroot/proc\n"
-addition = """if busybox grep -qw irmc_diag_shell /proc/cmdline; then
+addition = """zbmc_ip=''
+zbmc_gateway=''
+for arg in $(busybox cat /proc/cmdline); do
+  case "$arg" in
+    zbmc_ip=*) zbmc_ip=${arg#zbmc_ip=} ;;
+    zbmc_gateway=*) zbmc_gateway=${arg#zbmc_gateway=} ;;
+  esac
+done
+if [ -n "$zbmc_ip" ]; then
+  busybox ip link set eth0 up
+  busybox ip addr add "$zbmc_ip/8" dev eth0 2>/dev/null || true
+  [ -z "$zbmc_gateway" ] || busybox ip route replace default via "$zbmc_gateway" dev eth0
+  busybox cat > /newroot/usr/local/bin/zbmc-network <<EOF
+#!/bin/sh
+while :; do
+  ip link set eth0 up 2>/dev/null
+  ip addr show dev eth0 | grep -q ' $zbmc_ip/' || ip addr add '$zbmc_ip/8' dev eth0
+  [ -z '$zbmc_gateway' ] || ip route replace default via '$zbmc_gateway' dev eth0
+  sleep 5
+done
+EOF
+  busybox chmod 0755 /newroot/usr/local/bin/zbmc-network
+  busybox echo 'zn:2345789:respawn:/usr/local/bin/zbmc-network' >> /newroot/etc/inittab
+  busybox echo "ZBMC_TAP_NETWORK_READY $zbmc_ip"
+fi
+if busybox grep -qw irmc_diag_shell /proc/cmdline; then
   busybox echo '#!/bin/sh' > /diag-shell
   busybox echo 'exec /bin/sh -i' >> /diag-shell
   busybox chmod 0755 /diag-shell
