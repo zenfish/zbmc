@@ -16,6 +16,22 @@ qmp = os.path.join(wd, "qmp.sock")
 log = os.path.join(wd, "console.log")
 trace = os.path.join(wd, "qemu-trace.bin")
 debug = os.path.join(wd, "qemu-debug.log")
+
+
+def boot_with_static_ip(child, address, mac):
+    child.expect("Hit any key to stop autoboot:", timeout=90)
+    child.send(" ")
+    child.expect("ast# ", timeout=30)
+    child.sendline(
+        f"setenv bootargs ${{bootargs}} ip={address}::10.0.0.1:255.0.0.0::eth0:off"
+    )
+    child.expect("ast# ", timeout=30)
+    child.sendline(f"setenv ethaddr {mac}")
+    child.expect("ast# ", timeout=30)
+    child.sendline("run bootcmd")
+    child.expect("Starting kernel", timeout=90)
+
+
 for p in (sock, qmp):
     try: os.unlink(p)
     except FileNotFoundError: pass
@@ -43,18 +59,7 @@ else: raise SystemExit("serial socket timeout")
 child = pexpect.spawn("socat", ["-,raw,echo=0", f"UNIX-CONNECT:{sock}"], encoding="utf-8", timeout=30)
 child.logfile = open(log, "a")
 try:
-    child.expect(r"login:", timeout=360)
-    child.sendline(username); child.expect([r"Password:", r"password:"])
-    child.sendline(password); child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
-    for line in [
-        "ip link set eth0 up",
-        "ip addr flush dev eth0",
-        f"ip addr add {ip}/8 dev eth0",
-        "ip route replace default via 10.0.0.1",
-        "ip addr show dev eth0",
-    ]:
-        child.sendline(line); child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=20)
-    child.sendline("echo ZBMC_NETWORK_CONFIGURED"); child.expect("ZBMC_NETWORK_CONFIGURED", timeout=10)
+    boot_with_static_ip(child, ip, mac)
 finally:
     child.close(force=True)
 q.wait()
