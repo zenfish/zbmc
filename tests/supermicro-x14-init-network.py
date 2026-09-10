@@ -26,4 +26,14 @@ with tempfile.TemporaryDirectory() as directory:
         "{ ip link set eth0 down; sleep 1; ip link set eth0 up; }; sleep 2\n"
     )
 
+with tempfile.TemporaryDirectory() as directory:
+    init = pathlib.Path(directory) / "init"
+    init.write_text("10.0.2.15/24 10.0.2.2\n")
+    try:
+        module.patch(init, "10.250.0.21", "10.0.0.1")
+    except ValueError as error:
+        assert "keepalive" in str(error)
+    else:
+        raise AssertionError("missing X14 keepalive was accepted")
+
 print("Supermicro X14 native initramfs network patch: PASS")
