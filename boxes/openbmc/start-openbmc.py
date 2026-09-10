@@ -38,7 +38,7 @@ def boot_with_static_ip(child, address, mac):
         "ip route replace default via 10.0.0.1 dev eth0; "
         "ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED"
     )
-    child.expect("ZBMC_NETWORK_CONFIGURED", timeout=30)
+    child.expect(r"[~/] # ", timeout=30)
     child.sendline("exec /init")
 
 
