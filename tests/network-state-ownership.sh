@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+grep -Fq 'type bridge_slave flood off mcast_flood off bcast_flood on' "$repo/tools/zbmc-net"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/bin"
