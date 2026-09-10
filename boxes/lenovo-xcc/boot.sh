@@ -35,6 +35,7 @@ else
 fi
 
 rm -f "$SOCK" "$QMP"
+: >"$LAUNCH_LOG"
 nohup "$QEMU_BIN" \
   -M "ast2600-evb,xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin" -m 1G \
   -kernel "$kernel" -dtb "$WD/xcc.dtb" \
@@ -51,7 +52,7 @@ nohup "$QEMU_BIN" \
   -display none -monitor none \
   -qmp "unix:$QMP,server=on,wait=off" \
   -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
-  -serial chardev:serial0 -watchdog-action none -no-reboot "${incoming[@]}" >"$LAUNCH_LOG" 2>&1 &
+  -serial chardev:serial0 -watchdog-action none -no-reboot "${incoming[@]}" >>"$LAUNCH_LOG" 2>&1 &
 qp=$!
 if [ -n "${ZBMC_WARM:-}" ]; then
   if ! python3 "$HERE/restore.py" "$QMP" "$WD/ckpt/state.gz" >>"$LAUNCH_LOG" 2>&1; then
