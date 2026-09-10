@@ -118,7 +118,7 @@ zbmc_boot() {
   local qp=$!
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
   ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1
-    $SUDO expect boot-idrac10.exp "$SOCK" "$ZBMC_IP" "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY"
+    $SUDO expect boot-idrac10.exp "$SOCK" "$ZBMC_IP" "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY" "$ZBMC_MAC"
   ) >>"$LOG" 2>&1 &
   # UDP-echo prime: boot-fullfw-guest.sh prints UDP_ECHO_READY then waits for a test packet on :623 to
   # verify the UDP RX path (via the shm-shim) before starting fullfw. Send it, else fw.sh -> UDP_ECHO_TIMEOUT.
