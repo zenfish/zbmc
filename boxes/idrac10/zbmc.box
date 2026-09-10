@@ -27,6 +27,7 @@ IPMI_T=25   # aarch64 emulation is slow; <25 intermittently times out the RAKP h
 SSH_PORT=22
 IPMI_PORT=623
 WEB_PORT=443
+ZBMC_SSH_PROBE_TIMEOUT=30
 
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
