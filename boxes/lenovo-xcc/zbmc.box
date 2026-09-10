@@ -13,12 +13,12 @@ ZBMC_IP=$(_zbmc_resolve_ip lenovo-xcc 43 10.0.6.69)
 ZBMC_HOST=lenovo-xcc
 
 ZBMC_QEMU="$ROOT/qemu/runtime/qemu-system-arm-lenovo-xcc"
-ZBMC_QEMU_SHA256=05de4c762687e826445b418c365e8da6dff051e6a2fe244ed0bbc161fa2e7e9f
+ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
-ZBMC_REQUIRED_SERVICES="webui"
-ZBMC_DISABLED_SERVICES="ssh ipmi redfish"
+ZBMC_REQUIRED_SERVICES="webui ipmi"
+ZBMC_DISABLED_SERVICES="ssh redfish"
 ZBMC_L2_REQUIRED=0
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=3600
@@ -28,13 +28,13 @@ ZBMC_EXPECTED_BOOTSTRAP=510
 ZBMC_EXPECTED_READY=2700
 
 SSH_USER=USERID
-SSH_PW=PASSW0RD
+SSH_PW="${ZBMC_LENOVO_PASSWORD:-PASSW0RD}"
 SSH_PORT=22
 IPMI_USER=USERID
-IPMI_PW=PASSW0RD
+IPMI_PW="$SSH_PW"
 IPMI_KEY=00
 IPMI_PORT=623
-IPMI_T=15
+IPMI_T=30
 IPMI_OPTS="-C 17 -I lanplus"
 WEB_PORT=443
 HTTP_PORT=80
@@ -89,3 +89,20 @@ zbmc_console() {
 }
 
 ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'
+
+# Use the same authenticated command for interactive calls and readiness.
+zbmc_ipmi() {
+  timeout -s KILL 90 env IPMI_PASSWORD="$IPMI_PW" \
+    ipmitool -I lanplus -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" \
+    -E -C 17 -N "$IPMI_T" -R 1 "$@"
+}
+
+zbmc_ipmi_health() {
+  local result
+  result=$(zbmc_ipmi mc info 2>&1) &&
+    grep -q 'Manufacturer ID' <<<"$result" && {
+      echo 'AUTH OK (IPMI 2.0, cipher 17)'; return 0;
+    }
+  echo 'authenticated controller read failed (booting or provisioning required)'
+  return 1
+}
