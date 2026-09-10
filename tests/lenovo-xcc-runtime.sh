@@ -12,6 +12,7 @@ python3 -m py_compile "$box/build-shell-kernel.py"
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
+grep -Fxq 'ZBMC_NETWORK_MODE=tap' "$box/zbmc.box"
 grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui ipmi redfish"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_STABILITY_SECONDS=60' "$box/zbmc.box"
@@ -30,9 +31,9 @@ grep -Fq -- 'xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin' "$box/boot.sh"
 grep -Fq -- '-kernel "$kernel"' "$box/boot.sh"
 grep -Fq -- '-global emmc.gp0-partition-size=3565158400' "$box/boot.sh"
 grep -Fq -- 'if=sd,index=2,snapshot=on' "$box/boot.sh"
-grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
-grep -Fq 'hostfwd=tcp:$IP:$HTTP_PORT-:80' "$box/boot.sh"
-grep -Fq 'hostfwd=udp:$IP:$IPMI_PORT-:623' "$box/boot.sh"
+grep -Fq 'tap,id=net0,ifname=$TAP,script=no,downscript=no' "$box/boot.sh"
+grep -Fq '"$ROOT/tools/zbmc-net" add-tap "$ZBMC_TAP"' "$box/zbmc.box"
+grep -Fq 'python3 "$PROJ_DIR/configure-tap.py" "$SOCK" "$ZBMC_IP"' "$box/zbmc.box"
 grep -Fq -- '-watchdog-action none' "$box/boot.sh"
 grep -Eq '^lenovo-xcc[[:space:]]+10\.0\.6\.69$' "$repo/zhosts.txt"
 grep -Fq 'lenovo-xcc-fpga-emmc-gp0.patch' "$repo/qemu/recipes/qemu-11-lenovo-xcc.sh"
@@ -68,6 +69,7 @@ fi
 )
 
 python3 "$repo/tests/lenovo-xcc-boot-config.py"
+python3 "$repo/tests/lenovo-xcc-tap-config.py"
 
 (
   log=$(mktemp); called=$(mktemp); rm -f "$called"
