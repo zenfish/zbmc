@@ -7,8 +7,10 @@ set -euo pipefail
 BR=${ZBMC_BRIDGE:-br-zbmc}
 UPLINK=${ZBMC_UPLINK:-$(ip route show default | awk 'NR == 1 {print $5}')}
 STATE=${ZBMC_NET_STATE:-/run/zbmc-net.state}
+LOCK=${ZBMC_NET_LOCK:-$STATE.lock}
 
 need_root() { [ "$(id -u)" = 0 ] || exec sudo -n "$0" "$@"; }
+lock_network() { exec 9>"$LOCK"; flock 9; }
 
 # Docker loads br_netfilter and sets the iptables FORWARD policy to DROP. That
 # makes bridged LAN -> tap frames traverse FORWARD and get dropped, so a guest
@@ -119,10 +121,10 @@ teardown() {
 
 cmd=${1:-status}; shift || true
 case "$cmd" in
-  setup)    need_root setup; setup_bridge ;;
-  add-tap)  tap=${1:?tap name required}; owner=${2:-${USER}}; need_root add-tap "$tap" "$owner"; add_tap "$tap" "$owner" ;;
-  del-tap)  tap=${1:?tap name required}; need_root del-tap "$tap"; delete_tap "$tap" ;;
-  teardown) need_root teardown; teardown ;;
+  setup)    need_root setup; lock_network; setup_bridge ;;
+  add-tap)  tap=${1:?tap name required}; owner=${2:-${USER}}; need_root add-tap "$tap" "$owner"; lock_network; add_tap "$tap" "$owner" ;;
+  del-tap)  tap=${1:?tap name required}; need_root del-tap "$tap"; lock_network; delete_tap "$tap" ;;
+  teardown) need_root teardown; lock_network; teardown ;;
   status)   ip -br link show "$BR" 2>/dev/null || true; ip -br addr show "$BR" 2>/dev/null || true; ip link show master "$BR" 2>/dev/null || true ;;
   *) echo "usage: zbmc-net {setup|add-tap TAP [OWNER]|del-tap TAP|status|teardown}" >&2; exit 2 ;;
 esac
