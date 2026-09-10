@@ -40,7 +40,7 @@ for _ in range(120):
     time.sleep(.5)
 else: raise SystemExit("serial socket timeout")
 
-child = pexpect.spawn("socat", ["-", "raw,echo=0", f"UNIX-CONNECT:{sock}"], encoding="utf-8", timeout=30)
+child = pexpect.spawn("socat", ["-,raw,echo=0", f"UNIX-CONNECT:{sock}"], encoding="utf-8", timeout=30)
 child.logfile = open(log, "a")
 try:
     child.expect([r"login:", r"/#", r"# ", r"root@.*:~#", pexpect.TIMEOUT], timeout=360)
