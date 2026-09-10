@@ -4,25 +4,31 @@
 # down the dbus-broker -131 blocker. Reuses the patched kernel + p4.dtb already in boot/.
 # Substitutes the VM pubkey (img/vmkey.pub) into the __PUBKEY__ placeholder.
 # RUN: ./build-p4.sh   then   ./run-p4.sh
-set -euo pipefail; cd "$(dirname "$0")"
-[ -d img/initrd ] || { echo "FATAL: img/initrd (base initramfs) missing — run build.sh first"; exit 1; }
-PUB="$(cat img/vmkey.pub)"
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ART="${WD:-$(cd "$HERE/../.." && pwd)/work/idrac9}"
+BOOT="$ART/boot"; IMG="$ART/img"
+[ -s "$BOOT/initramfs.p4.xz" ] || { echo "FATAL: missing $BOOT/initramfs.p4.xz — run build.sh first"; exit 1; }
+[ -s "$IMG/vmkey" ] || { echo "FATAL: missing $IMG/vmkey — run build.sh first"; exit 1; }
+STAGE=$(mktemp -d "$ART/repack.XXXXXXXX")
+ROOT="$STAGE/root"; mkdir "$ROOT"
+(cd "$ROOT" && xz -dc "$BOOT/initramfs.p4.xz" | cpio -idmu --quiet)
+PUB="$(ssh-keygen -y -f "$IMG/vmkey")"
 CVIP="${CVIP:-10.250.0.30}"; CVMASK="${CVMASK:-255.0.0.0}"; CVGW="${CVGW:-10.0.0.1}"
-rm -rf img/initrd4 && cp -a img/initrd img/initrd4
 sed -e "s|__PUBKEY__|$PUB|" -e "s|10\.0\.2\.15|$CVIP|g" \
     -e "s|255\.255\.255\.0|$CVMASK|g" -e "s|10\.0\.2\.2|$CVGW|g" \
-    init.p4.custom > img/initrd4/init
-chmod +x img/initrd4/init
+    "$HERE/init.p4.custom" > "$ROOT/init"
+chmod +x "$ROOT/init"
 # ship synthesized cfgdb factory-default values into the initramfs (prep injects them); build
 # them if missing. The real factory values live in flash we don't have — these come from the
 # CfgAttributeMetadata defaults (scripts/build-cfgdb-defaults.py).
-CVDB=img/cfgdb-defaults.db
-META="${META:-}"
-[ -f "$META" ] || { echo "FATAL: set META to the extracted iDRAC9 CfgAttributeMetadata.db" >&2; exit 1; }
+CVDB="$ROOT/cfgdb-defaults.db"
+META="${META:-$ROOT/cfgmeta.db}"
+[ -f "$META" ] || { echo "FATAL: installed initramfs has no cfgmeta.db" >&2; exit 1; }
 # curated subset (network/IPMI/Users/Info groups) — full 10638-attr load stalls cfgmgr
 CVGROUPS="CurrentIPv4,CurrentIPv6,IPv4,IPv4Static,IPv6,IPv6Static,NIC,NICStatic,CurrentNIC,NICVLAN,IPMILANConfig,IPMILan,IPMIIPConfig,IPMISOL,IPMISerial,SNMPTrapIPv4,Users,Info,IPBlocking,SecureDefaultPassword,IPMIUserInfo"
 CVIP="$CVIP" CVMASK="$CVMASK" CVGW="$CVGW" \
-  python3 scripts/build-cfgdb-defaults.py "$META" "$CVDB" evb "$CVGROUPS" >/dev/null
+  python3 "$HERE/scripts/build-cfgdb-defaults.py" "$META" "$CVDB" evb "$CVGROUPS" >/dev/null
 # provision IPMI user Users.2 = root, enabled, LAN-Administrator(4), all-priv(0x1FF), with the
 # factory fleet IPMIKey -> RAKP authenticates. racadm can't set the password (needs the CIAM
 # credential backend), so inject the full record straight into the store. (Users made writable
@@ -48,12 +54,11 @@ sqlite3 "$CVDB" "
   -- IPMIKey (the RAKP HMAC key) is untouched. (RE: rakp_root_inclusion_predicate.txt)
   UPDATE CfgValueTable SET AttributeValue='1414141414141414' WHERE GroupName='IPMIUserInfo' AND GroupIndex=2 AND AttributeName='UserChannelAccess';
   UPDATE CfgValueTable SET AttributeValue='1010101010101010' WHERE GroupName='IPMIUserInfo' AND GroupIndex=2 AND AttributeName='StdPayload';"
-cp -f "$CVDB" img/initrd4/cfgdb-defaults.db
 # patched metadata: CurrentIPv4 made writable + default = our IP (read-only is why the injected
 # CurrentIPv4 value got reset to 0.0.0.0). Regenerated here so the IP is one knob (CVIP). init
 # bind-mounts it over the squashfs original so cfgmgr loads CurrentIPv4 writable=CVIP.
-cp -f "$META" img/cfgmeta.db
-sqlite3 img/cfgmeta.db "UPDATE AttributeMetaTable SET IsReadonly=0 WHERE GroupName IN ('CurrentIPv4','Users');
+[ "$META" = "$ROOT/cfgmeta.db" ] || cp -f "$META" "$ROOT/cfgmeta.db"
+sqlite3 "$ROOT/cfgmeta.db" "UPDATE AttributeMetaTable SET IsReadonly=0 WHERE GroupName IN ('CurrentIPv4','Users');
   -- Users.UserName is DBLocation=3 (credential-vault/CV store) on stock fw, but the CV path is
   -- broken in emulation (tmpfiles symlinks /var/lib/cfgdb/CV -> /mnt/cv/cfgdb dm-crypt mount we
   -- lack; CopyPasswordToCV moves only secret-class attrs, never UserName). Move it to
@@ -73,12 +78,12 @@ sqlite3 img/cfgmeta.db "UPDATE AttributeMetaTable SET IsReadonly=0 WHERE GroupNa
   UPDATE AttributeMetaTable SET DefaultValue='$CVMASK' WHERE GroupName='CurrentIPv4' AND AttributeName='Netmask';
   UPDATE AttributeMetaTable SET DefaultValue='$CVGW'   WHERE GroupName='CurrentIPv4' AND AttributeName='Gateway';
   UPDATE AttributeMetaTable SET DefaultValue='1'       WHERE GroupName='CurrentIPv4' AND AttributeName='Enable';"
-cp -f img/cfgmeta.db img/initrd4/cfgmeta.db
 # (No libtcpi patch: the UDPCreateInstance "NIC bail" at 0x376c is a RED HERRING — the NIC index is
 # provably 0 (LANChannelInit passes 0), so cmp 1,0; bls never fires. The actual cause of fullfw
 # not servicing udp/623 was the SOCKET FAMILY: UDPCreateInstance does an unconditional
 # setsockopt(IPV6_RECVPKTINFO) that returns -1 on an AF_INET socket -> RMCPCreateSocketInstance
 # fail -> fullfw exits. Fix is in init.p4: socket-activate fullfw on [::]:623 (IPv6 dual-stack),
 # matching stock fullfw.socket's BindIPv6Only=both. bindv6only=0 still catches the v4 hostfwd.)
-(cd img/initrd4 && find . | cpio -o -H newc 2>/dev/null | xz --check=crc32 -c) > boot/initramfs.p4.xz
-echo "built boot/initramfs.p4.xz ($(wc -c < boot/initramfs.p4.xz) bytes)"
+(cd "$ROOT" && find . | cpio -o -H newc 2>/dev/null | xz --check=crc32 -c) > "$BOOT/initramfs.p4.xz.part"
+mv "$BOOT/initramfs.p4.xz.part" "$BOOT/initramfs.p4.xz"
+echo "built $BOOT/initramfs.p4.xz ($(wc -c < "$BOOT/initramfs.p4.xz") bytes); staging preserved at $STAGE"
