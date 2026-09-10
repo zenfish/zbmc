@@ -126,6 +126,7 @@ _zbmc_warm_state(){
   echo READY
 }
 boxwarm_of(){ ( set -u; . "$1" 2>/dev/null; _zbmc_warm_state ); }
+boxnetwork_of(){ ( set -u; . "$1" 2>/dev/null; case "${ZBMC_NETWORK_MODE:-}" in user) echo USER/FORWARDED;; tap) echo TAP/DIRECT-L2;; *) echo UNDECLARED;; esac ); }
 find_box(){
   local want="$1" f name ip
   for f in "${REGISTRY[@]}"; do
@@ -323,9 +324,9 @@ _need_root(){ # verbs that bind privileged ports or control qemu need root
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — box names plus reserved IPs (no status).
 if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
-  printf "%-20s %-15s %s\n" "NAME" "RESERVED IP" "WARM"
+  printf "%-20s %-15s %-16s %s\n" "NAME" "RESERVED IP" "NETWORK" "WARM"
   for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
-    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %-15s %s\n" "$n" "$(boxip_of "$f")" "$(boxwarm_of "$f")"
+    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %-15s %-16s %s\n" "$n" "$(boxip_of "$f")" "$(boxnetwork_of "$f")" "$(boxwarm_of "$f")"
   done
   exit 0
 fi
@@ -951,8 +952,8 @@ PY
       fi
       printf "%-9s : %s%s%s\n" "Auth" "$CP" "${ZBMC_AUTH_HINT:-$IPMI_USER/$IPMI_PW}" "$CZ"
       if [ "$_running" = 0 ]; then break; fi
-      if [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then
-        _l2st=na; _l2nt=
+      if [ "${ZBMC_NETWORK_MODE:-user}" = user ]; then
+        _l2st=unavailable; _l2nt="QEMU user networking cannot carry guest ICMP"
       elif ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
         _l2st=ok; _l2nt="$ZBMC_IP answers ICMP"
       else
@@ -1018,7 +1019,7 @@ PY
       _classify(){
         local raw="$1" service="$2"
         if _disabled "$service"; then _state=N/A; _why=disabled
-        elif [ "$service" = l2 ] && [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then _state=N/A; _why="not configured"
+        elif [ "$service" = l2 ] && [ "$raw" = unavailable ]; then _state=UNAVAILABLE; _why="guest address is not directly reachable"
         elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
         elif [ "$service" = console ]; then
           if [ "$raw" = ok ]; then _state=AVAILABLE; _why="operator access"
@@ -1056,7 +1057,7 @@ PY
       }
       _count(){
         local state="$1" why="$2" name="$3"
-        if [ "$state" = N/A ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
+        if [ "$state" = N/A ] || [ "$state" = UNAVAILABLE ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
         if [ "$state" = AVAILABLE ]; then
           [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' console '* ]] || return
           _expected_n=$((_expected_n+1)); _ready_n=$((_ready_n+1)); _add_name _ready_names "$name"
@@ -1103,7 +1104,13 @@ PY
         if [ "$_ncsi_expected" = 1 ]; then
           _row NC-SI "$_ncsistate" "$_ncsiwhy" "$_ncsids" "$_ncsint"
         fi
-        printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$ZBMC_NAME" "$CZ"
+        case "${ZBMC_NETWORK_MODE:-user}" in
+          user) _network="USER/FORWARDED (QEMU user networking; advertised IP is a host alias)"; _net_owner="host alias for $ZBMC_NAME" ;;
+          tap) _network="TAP/DIRECT-L2 (guest owns advertised IP)"; _net_owner="guest address for $ZBMC_NAME" ;;
+          *) _network="UNKNOWN"; _net_owner="network mode undeclared for $ZBMC_NAME" ;;
+        esac
+        printf "%-9s : %s\n" "Network" "$_network"
+        printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$_net_owner" "$CZ"
         if [ -n "${ZBMC_REMEDIATION:-}" ]; then
           printf "%-9s : %s (%s)\n" "Remediation" "$(_colored_state CONFIGURED)" "$ZBMC_REMEDIATION"
         else

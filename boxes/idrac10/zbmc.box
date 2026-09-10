@@ -2,6 +2,7 @@
 # Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP
 # and standard service ports directly.
 ZBMC_NAME=idrac10
+ZBMC_NETWORK_MODE=user
 ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; no vendor Web-UI"
 # Portable (clone-and-run): scripts ship in this box dir; fetched boot/img/payload artifacts and the
 # generated operator key live in work/idrac10. Build deps:

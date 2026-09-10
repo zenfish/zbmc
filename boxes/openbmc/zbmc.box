@@ -18,6 +18,7 @@
 # (10.0.7.10, OpenBMC class 10.0.7.*) + standard ports 22/443/623 directly. See BUILD-INFO.md +
 # memory reference_evb_ast2600_vanilla_openbmc.
 ZBMC_NAME=openbmc
+ZBMC_NETWORK_MODE=user
 ZBMC_DESC="Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live"
 # Portable (clone-and-run): the .static.mtd firmware ships via firmware/download-fw.sh
 # and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.

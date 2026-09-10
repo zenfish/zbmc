@@ -37,7 +37,7 @@ CONSOLE_LOG="$LOG"
 IPMI_USER=root
 IPMI_PW=test
 ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi webui}"
-ZBMC_L2_REQUIRED="${TEST_L2_REQUIRED:-1}"
+ZBMC_NETWORK_MODE="${TEST_NETWORK_MODE:-tap}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
 zbmc_ready(){ echo "${TEST_BUILD_MESSAGE:-ready (fixture)}"; }
 zbmc_running(){
@@ -215,12 +215,18 @@ verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
 expect "$verbose" $'Evidence  : '"$TEST_ROOT/runs/run-1"$'\nConsole log : '"$TEST_ROOT/runs/run-1/console.log (live)"$'\nFollow      : tail -f '"$TEST_ROOT/runs/run-1/console.log"
 expect "$verbose" "ICMP      : READY (127.0.0.1 answers ICMP)"
+expect "$verbose" "Network   : TAP/DIRECT-L2 (guest owns advertised IP)"
 expect "$verbose" "SSH       : READY (zbmc 127.0.0.1 ssh)"
 expect "$verbose" "IPMI      : STARTING"
 [[ "$(grep '^IPMI' <<<"$verbose")" != *"("* ]] || { printf 'starting row included probe failure detail:\n%s\n' "$verbose" >&2; exit 1; }
 expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
+
+forwarded=$(TEST_NETWORK_MODE=user "$fixture/tools/zbmc" fake status --verbose)
+expect "$forwarded" "ICMP      : UNAVAILABLE (guest address is not directly reachable; QEMU user networking cannot carry guest ICMP)"
+expect "$forwarded" "Network   : USER/FORWARDED (QEMU user networking; advertised IP is a host alias)"
+expect "$forwarded" "Health    : 2/3 READY [SSH, Web-UI]; 1 STARTING [IPMI]"
 
 # A root-started run can leave current-run unreadable to the ordinary operator;
 # status must still discover the group-readable runs/latest evidence link.
@@ -318,11 +324,11 @@ runlib_default=$(TEST_ROOT="$TEST_ROOT" bash -c '
 [ "$runlib_default" = "ssh ipmi redfish|0" ] || { echo "unexpected default runlib services: $runlib_default" >&2; exit 1; }
 
 printf '%s\n' '{"command":"zbmc fake start --no-web"}' > "$TEST_ROOT/runs/run-1/manifest.json"
-console_required=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
+console_required=$(TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
 expect "$console_required" "Health    : READY [1/1 - Console]"
-console_required_v=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
-expect "$console_required_v" "ICMP      : N/A (not configured)"
-console_failed=$(TEST_CONSOLE_DOWN=1 TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+console_required_v=$(TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+expect "$console_required_v" "ICMP      : UNAVAILABLE (guest address is not directly reachable; QEMU user networking cannot carry guest ICMP)"
+console_failed=$(TEST_CONSOLE_DOWN=1 TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
 expect "$console_failed" "Console   : FAILED (expected; no serial prompt)"
 expect "$console_failed" "Health    : DEGRADED [0/1 - Console failed]"
 
