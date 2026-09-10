@@ -61,6 +61,18 @@ sudo ./tools/zbmc lenovo-xcc start
       <p class="mt-4 leading-7 text-stone-300">Lenovo’s normal <code class="text-cyan-300">lcw_login</code> requires a response signed by a vendor debug key that is not present in the firmware. The derived kernel changes only the built-in initramfs: before normal <code class="text-cyan-300">switch_root</code>, it bind-mounts an emulator-only getty launcher over the serial login script. The original kernel, eMMC, root filesystem, and appended DTBs remain unchanged. Access is limited to the host Unix socket exposed by <code class="text-cyan-300">zbmc console</code>.</p>
     </section>
 
+    <section class="mt-12 border-l-4 border-emerald-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Authenticated remote IPMI</h2>
+      <p class="mt-4 leading-7 text-stone-300">Verified on 2026-09-09 with both standard ipmitool and zipmi: repeated controller information and chassis status reads succeed using cipher suite 17. Account role and IPMI channel privilege are separate: the native Administrator role did not grant channel access until standard local <code>ipmitool user priv 2 4 1</code> set channel 1, user 2 to ADMINISTRATOR.</p>
+      <p class="mt-4 leading-7 text-stone-300">Provision through supported management interfaces: change the mandatory factory password, enable IPMI for USERID and globally with native users/portcontrol, then verify the channel privilege. Preserve the provisioned disk: normal runtime writes use a temporary overlay. Factory image builds do not contain this account change. A saved provisioned disk is under managed cold-boot verification. The launcher uses fdtget/fdtput from device-tree-compiler to derive a separate kernel-runtime.zImage: only appended device-tree boot arguments change, adding the native 1800-second Gunicorn startup timeout. This firmware ignores the external QEMU -append value.</p>
+      <pre class="mt-4 overflow-x-auto bg-black p-5 text-sm text-emerald-300"><code># In private, mode-0600 zbmc.conf:
+ZBMC_LENOVO_PASSWORD='your-provisioned-password'
+
+./tools/zbmc lenovo-xcc ipmi mc info
+./tools/zbmc lenovo-xcc ipmi chassis status</code></pre>
+      <p class="mt-4 leading-7 text-stone-300">The command and readiness paths use the same password-authenticated ipmitool call, with the password passed through its environment. IPMI readiness requires a successful controller read. SSH and Redfish are outside the readiness contract; successful IPMI does not establish Web login health.</p>
+    </section>
+
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
   </main>
 </body>

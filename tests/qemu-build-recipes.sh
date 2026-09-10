@@ -17,6 +17,7 @@ done
 
 lenovo_plan="$($tool --plan qemu-11-lenovo-xcc)"
 grep -Fq "$repo/qemu/patches/lenovo-xcc-fpga-emmc-gp0.patch" <<<"$lenovo_plan"
+grep -Fq "$repo/qemu/patches/lenovo-xcc-timer-frequency.patch" <<<"$lenovo_plan"
 grep -Fq 'Machines    : ast2600-evb' <<<"$lenovo_plan"
 grep -Fq 'Boxes       : lenovo-xcc' <<<"$lenovo_plan"
 

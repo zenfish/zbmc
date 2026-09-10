@@ -1,0 +1,15 @@
+Subject: [PATCH] hw/arm/aspeed: match AST2600 CNTFRQ to the emulated counter
+
+The ARM generic timer uses integer nanosecond periods and caps its counter
+at 1 GHz. Advertising 1.125 GHz makes Linux time advance at 8/9 speed.
+Use the exactly representable 1 GHz rate for the Lenovo runtime build.
+This requires a cold boot; do not apply to a running guest or old snapshot.
+
+diff --git a/hw/arm/aspeed_ast2600.c b/hw/arm/aspeed_ast2600.c
+--- a/hw/arm/aspeed_ast2600.c
++++ b/hw/arm/aspeed_ast2600.c
+@@ -399,2 +399,3 @@
+-        object_property_set_int(OBJECT(&a->cpu[i]), "cntfrq", 1125000000,
++        /* Match the generic timer's maximum effective rate (1 ns/tick). */
++        object_property_set_int(OBJECT(&a->cpu[i]), "cntfrq", 1000000000,
+                                 &error_abort);

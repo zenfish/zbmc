@@ -10,13 +10,13 @@ bash -n "$box/zbmc.box"
 python3 -m py_compile "$box/build-shell-kernel.py"
 
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
-grep -Fxq 'ZBMC_QEMU_SHA256=05de4c762687e826445b418c365e8da6dff051e6a2fe244ed0bbc161fa2e7e9f' "$box/zbmc.box"
+grep -Fxq 'ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
-grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui"' "$box/zbmc.box"
-grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh ipmi redfish"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui ipmi"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_DISABLED_SERVICES="ssh redfish"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_STABILITY_SECONDS=60' "$box/zbmc.box"
 grep -Fxq 'ZBMC_READY_DEADLINE=3600' "$box/zbmc.box"
-grep -Fxq "ZBMC_READY_GREP='XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND'" "$box/zbmc.box"
+grep -Fq 'XCC_RUNTIME_VPDOCTOR_BYPASS_BOUND\|XCC_WARM_RESTORE_RUNNING' "$box/zbmc.box"
 grep -Fq 'kernel-shell.zImage' "$box/build.sh"
 grep -Fq '4278396198eca68fb9e74d74d1f1339c2ba81dcbceec9a43a0d85eaf5d96eb0d' "$box/build.sh"
 grep -Fq 'bd3335a465c8dc3d75e582135c433762b6ce1b0e6c32c7118f3a3cbe4eb1a0bc' "$box/build.sh"
@@ -27,7 +27,7 @@ grep -Fq 'while [ ! -s /tmp/eth1_dhcpinfo ]; do sleep 1; done' "$box/build-shell
 grep -Fq $'ip addr replace 10.0.2.15/24 dev eth1 &&\nip route replace default via 10.0.2.2 dev eth1 &&\necho XCC_DIAG_NETWORK_READY' "$box/build-shell-kernel.py"
 
 grep -Fq -- 'xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin' "$box/boot.sh"
-grep -Fq -- '-kernel "$WD/kernel-shell.zImage"' "$box/boot.sh"
+grep -Fq -- '-kernel "$kernel"' "$box/boot.sh"
 grep -Fq -- '-global emmc.gp0-partition-size=3565158400' "$box/boot.sh"
 grep -Fq -- 'if=sd,index=2,snapshot=on' "$box/boot.sh"
 grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
@@ -37,9 +37,32 @@ grep -Fq -- '-watchdog-action none' "$box/boot.sh"
 grep -Eq '^lenovo-xcc[[:space:]]+10\.0\.6\.69$' "$repo/zhosts.txt"
 grep -Fq 'lenovo-xcc-fpga-emmc-gp0.patch' "$repo/qemu/recipes/qemu-11-lenovo-xcc.sh"
 
+# Readiness must require a successful authenticated read, not just matching text.
+tmp=$(mktemp -d)
+trap 'rm -f "$tmp/ipmitool"; rmdir "$tmp"' EXIT
+cat > "$tmp/ipmitool" <<'STUB'
+#!/usr/bin/env bash
+[ "$IPMI_PASSWORD" = 'test-only-password' ] || exit 91
+case " $* " in *' -E -C 17 -N 30 -R 1 mc info '*) ;; *) exit 92;; esac
+case " $* " in *test-only-password*) exit 93;; esac
+echo 'Manufacturer ID : 2'
+exit "${TEST_IPMI_EXIT:-0}"
+STUB
+chmod +x "$tmp/ipmitool"
+PATH="$tmp:$PATH"
+_zbmc_resolve_ip() { echo 127.0.0.1; }
+ZBMC_LENOVO_PASSWORD=test-only-password
+. "$box/zbmc.box"
+zbmc_ipmi_health >/dev/null
+export TEST_IPMI_EXIT=1
+if zbmc_ipmi_health >/dev/null; then
+  echo 'failed command incorrectly passed IPMI readiness' >&2
+  exit 1
+fi
+
+python3 "$repo/tests/lenovo-xcc-boot-config.py"
+
 (
-  _zbmc_resolve_ip() { echo 127.0.0.1; }
-  source "$box/zbmc.box"
   log=$(mktemp); called=$(mktemp); rm -f "$called"
   trap 'rm -f "$log" "$called"' EXIT
   ZBMC_CONSOLE_LOG="$log"
@@ -52,4 +75,17 @@ grep -Fq 'lenovo-xcc-fpga-emmc-gp0.patch' "$repo/qemu/recipes/qemu-11-lenovo-xcc
   printf '%s\n' 'XCC_DIAG_NETWORK_READY' >>"$log"
   zbmc_webui_health
   [ -e "$called" ]
+)
+
+python3 "$repo/tests/lenovo-xcc-restore.py"
+(
+  log=$(mktemp)
+  trap 'rm -f "$log"' EXIT
+  LOG="$log"
+  ZBMC_CONSOLE_LOG=/nonexistent/cold-console
+  printf '%s\n' XCC_WARM_RESTORE_RUNNING >"$LOG"
+  curl() { printf 200; }
+  zbmc_webui_health
+  curl() { printf 503; }
+  ! zbmc_webui_health >/dev/null
 )
