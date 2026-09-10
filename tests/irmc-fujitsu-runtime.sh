@@ -20,7 +20,22 @@ grep -Fxq "ZBMC_READY_GREP='INIT: Entering runlevel: 3'" "$box/zbmc.box"
 grep -Fq 'source_flash_sha256=89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86ba96d6016ce2ed' "$box/build.sh"
 
 grep -Fq 'tap,id=net2,ifname=$TAP2,script=no,downscript=no' "$box/boot.sh"
-grep -Fq 'zbmc-configure-serial-ip.py' "$box/zbmc.box"
+grep -Fq 'zbmc_ip=$IP zbmc_gateway=10.0.0.1' "$box/boot.sh"
+grep -Fq 'ZBMC_TAP_NETWORK_READY $zbmc_ip' "$box/build.sh"
+grep -Fq 'zn:2345789:respawn:/usr/local/bin/zbmc-network' "$box/build.sh"
+python3 - "$box/build.sh" <<'PY'
+import ast
+import pathlib
+import re
+import subprocess
+import sys
+
+text = pathlib.Path(sys.argv[1]).read_text()
+match = re.search(r'addition = (""".*?""")', text, re.DOTALL)
+assert match, "missing derived initramfs addition"
+addition = ast.literal_eval(match.group(1))
+subprocess.run(["bash", "-n"], input=addition, text=True, check=True)
+PY
 grep -Fq 'irmc_no_redfish' "$box/boot.sh"
 grep -Fq 'initramfs-shell.cpio.gz' "$box/boot.sh"
 grep -Fq 'irmc_diag_shell' "$box/boot.sh"
