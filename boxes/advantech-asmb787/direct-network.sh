@@ -1,6 +1,6 @@
 #!/bin/sh
-# Emulator-only: skip this firmware's incompatible NC-SI state machine and use
-# the already-started FTGMAC data path directly.
+# Emulator-only: assign the requested address to the DT-selected direct-PHY
+# FTGMAC interface before the vendor networking script runs.
 set -eu
 
 [ "${1:-}" = start ] || exit 0
@@ -13,10 +13,10 @@ grep -q '5.4.11-ami' "$proc_root/version" || {
     exit 1
 }
 
-# ncsi_start_dev(): mov r0,#0; bx lr. The pinned kernel's FTGMAC open path has
-# already enabled RX/TX, NAPI, the queue, and carrier before this call.
-devmem 0x8098128c 32 0xe3a00000
-devmem 0x80981290 32 0xe12fff1e
+# The factory firewall explicitly drops IPv4 echo requests. Remove only that
+# rule from the active filter and its persisted copy so later restores agree.
+iptables -D INPUT -p icmp -m icmp --icmp-type 8 -j DROP
+sed -i '/^-A INPUT -p icmp -m icmp --icmp-type 8 -j DROP$/d' "$conf_root/iptables.conf"
 
 printf '%s\n' \
     'auto lo' \
@@ -26,4 +26,4 @@ printf '%s\n' \
     'iface eth0 inet static' \
     "    address $ip" \
     '    netmask 255.0.0.0' > "$conf_root/interfaces"
-echo "zbmc: Advantech direct FTGMAC address $ip/8"
+echo "zbmc: Advantech direct-PHY FTGMAC address $ip/8"

@@ -31,7 +31,7 @@ cp -f "$WD/mtdflash.bin" "$WD/mtdflash-run.bin"
 rm -f "$WD/asmb787-qmp.sock"
 QEMU=("$QEMU_BIN" -M ast2600-evb -m 1024 -nographic
   -qmp "unix:$WD/asmb787-qmp.sock,server,nowait"
-  -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs"
+  -kernel "$WD/kernel-direct.uImage" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs"
   -drive "file=$WD/mtdflash-run.bin,format=raw,if=mtd"
   -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no"
   -net "nic,netdev=bmcnet,macaddr=$MAC"

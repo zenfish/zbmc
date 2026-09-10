@@ -38,10 +38,10 @@ sed -i.bak -E \
  "$IC"
 rm -f "$IC.bak"
 
-# --- FIX 3: bypass this kernel's incompatible NC-SI state machine -------------------------------
+# --- FIX 3: configure the DT-selected direct-PHY interface before vendor networking ------------
 install -m 0755 "$HERE/direct-network.sh" "$R/etc/init.d/zbmc-direct-network"
 ln -sfn ../init.d/zbmc-direct-network "$R/etc/rcS.d/S41zbmc-direct-network"
 
 echo "[qemu-patch] ipmistack conf-seed+/conf/BMC symlink injected; IPMI.conf: kept LAN/UDS/KCS,"
 echo "[qemu-patch] disabled smm/sol/serial/smbus/bt/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable"
-echo "[qemu-patch] installed pinned 5.4.11-ami direct-FTGMAC startup before networking"
+echo "[qemu-patch] installed direct-PHY FTGMAC startup before networking"
