@@ -18,7 +18,7 @@
 # (10.0.7.10, OpenBMC class 10.0.7.*) + standard ports 22/443/623 directly. See BUILD-INFO.md +
 # memory reference_evb_ast2600_vanilla_openbmc.
 ZBMC_NAME=openbmc
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
 ZBMC_DESC="Vanilla upstream OpenBMC (Phosphor/AST2600) — clean baseline, NO OEM (Mfr 0); ipmi-LAN + Redfish + ssh all live"
 # Portable (clone-and-run): the .static.mtd firmware ships via firmware/download-fw.sh
 # and boots with snapshot=on (writes to a throwaway overlay), so no work-dir copy needed.
@@ -40,16 +40,18 @@ WEB_PORT=443
 IPMI_PORT=623
 
 PIDF="$ZBMC_DIR/zbmc-openbmc.pid"
-LOG="$ZBMC_DIR/console.log"
+LOG="$ZBMC_DIR/launcher.log"
 SOCK="$ZBMC_DIR/serial.sock"
 QMP_SOCK="$ZBMC_DIR/qmp.sock"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console-uart.log}"
+ZBMC_TAP=ztap-openbmc
+ZBMC_MAC=52:54:00:fa:00:10
 ZBMC_QEMU="$_XREPO/qemu/runtime/qemu-system-arm"
 ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a6
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
-ZBMC_CAPTURE_INTERFACES="br-zbmc"
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=360
@@ -88,25 +90,20 @@ zbmc_post_launch() { # qemu-pid
 }
 
 zbmc_boot() {
-  cd "$FIRMWARE_DIR" || return 1
-  local MTD=evb-ast2600.static.mtd
+  local MTD="$FIRMWARE_DIR/evb-ast2600.static.mtd"
   [ -e "$MTD" ] || { echo "missing $MTD — build not present" >&2; return 1; }
-  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  _zbmc_lo_alias "$ZBMC_IP"
   mkdir -p "$ZBMC_DIR"
-  : > "$LOG"; $SUDO rm -f "$SOCK" "$QMP_SOCK" 2>/dev/null
-  $SUDO nohup "$ZBMC_QEMU" -M ast2600-evb -smp 2 -m 1G -display none -monitor none \
-    -qmp "unix:$QMP_SOCK,server=on,wait=off" \
-    -drive file="$MTD",format=raw,if=mtd,snapshot=on \
-    -net nic -net user,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-:443,hostfwd=udp:$ZBMC_IP:623-:623",hostname=openbmc \
-    -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
-    -serial chardev:serial0 -serial null >"$LOG" 2>&1 &
+  WD="$ZBMC_DIR" OPENBMC_FLASH="$MTD" OPENBMC_TAP="$ZBMC_TAP" \
+    OPENBMC_QEMU="$ZBMC_QEMU" ZBMC_IP="$ZBMC_IP" ZBMC_MAC="$ZBMC_MAC" \
+    nohup python3 "$PROJ_DIR/start-openbmc.py" >"$LOG" 2>&1 &
+  printf '%s\n' "$!" >"$ZBMC_DIR/launcher.pid"
   local qp= n=0; while [ $n -lt 60 ]; do
-    qp=$(pgrep -f "ast2600-evb.*hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    qp=$(pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1); [ -n "$qp" ] && break
     sleep 0.5; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"
   echo "$qp"
 }
+zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
 zbmc_build() { echo "evb image is bitbake-built (MACHINE=evb-ast2600, obmc-phosphor-image) on dell. See BUILD-INFO.md; rebuild = ~6h. Local image: $FIRMWARE_DIR/evb-ast2600.static.mtd"; }
 zbmc_ready() {
   [ -f "$FIRMWARE_DIR/evb-ast2600.static.mtd" ] && { echo "ready (firmware present)"; return 0; }
