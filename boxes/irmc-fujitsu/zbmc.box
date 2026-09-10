@@ -4,7 +4,7 @@
 # AST2600 model. FTS_RedfishService is disabled because its helper.ko fwinfo2
 # read reproducibly NULL-dereferences with the single-FMC QEMU topology.
 ZBMC_NAME=irmc-fujitsu
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
 ZBMC_DESC="Fujitsu iRMC S6 / AST2600 - vendor Web-UI; IPMI under investigation"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +18,10 @@ ZBMC_QEMU_SHA256=a066ffd52f50bc4555ea9af003e44e02aec3b3d260a37da8ab0b3d8c596790a
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
+ZBMC_TAP=ztap-irmc2
+ZBMC_TAPS="ztap-irmc0 ztap-irmc1 $ZBMC_TAP"
+ZBMC_MAC=52:54:00:fa:42:02
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAPS"
 ZBMC_REQUIRED_SERVICES="webui"
 ZBMC_DISABLED_SERVICES="redfish"
 ZBMC_STABILITY_SECONDS=15
@@ -47,23 +51,26 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
 
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
-  local SUDO= qp= n=0
-  [ "$(id -u)" = 0 ] || SUDO=sudo
-  _zbmc_lo_alias "$ZBMC_IP"
-  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null ||
-    echo "$ZBMC_IP $ZBMC_HOST" | $SUDO tee -a /etc/hosts >/dev/null
+  local qp= n=0
   : >"$LOG"
   ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
     IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" \
-    SOCK="$SOCK" QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
+    SOCK="$SOCK" QMP="$QMP_SOCK" LOG="$LOG" \
+    TAP0=ztap-irmc0 TAP1=ztap-irmc1 TAP2="$ZBMC_TAP" bash "$PROJ_DIR/boot.sh" >/dev/null
   while [ "$n" -lt 60 ]; do
-    qp=$(pgrep -f "hostname=irmc-fujitsu.*hostfwd=udp:$ZBMC_IP:$IPMI_PORT-:623" | head -1)
+    qp=$(pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1)
     [ -n "$qp" ] && break
     sleep 0.25
     n=$((n + 1))
   done
   [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
   printf '%s\n' "$qp"
+}
+zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
+
+zbmc_post_launch() {
+  nohup python3 "$ROOT/tools/zbmc-configure-serial-ip.py" "$SOCK" "$ZBMC_IP" \
+    8 10.0.0.1 eth0 >"$ZBMC_DIR/tap-config.log" 2>&1 &
 }
 
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }

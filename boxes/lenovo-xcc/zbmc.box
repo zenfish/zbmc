@@ -70,8 +70,8 @@ zbmc_boot() {
 }
 
 zbmc_post_launch() {
-  nohup python3 "$PROJ_DIR/configure-tap.py" "$SOCK" "$ZBMC_IP" \
-    "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY" >"$ZBMC_DIR/tap-config.log" 2>&1 &
+  nohup python3 "$ROOT/tools/zbmc-configure-serial-ip.py" "$SOCK" "$ZBMC_IP" \
+    "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY" eth1 >"$ZBMC_DIR/tap-config.log" 2>&1 &
 }
 
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
