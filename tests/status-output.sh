@@ -102,6 +102,9 @@ down=$("$fixture/tools/zbmc" fake status)
 [ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild\nAuth' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
 expect "$down" "Last run  : READY after 10m 12s; UP for 9m 48s; STOPPED — operator requested shutdown"
 expect "$down" "Auth      : root/test"
+private=$(ZBMC_AUTH_HINT="root / private credential" "$fixture/tools/zbmc" fake status)
+expect "$private" "Auth      : root / private credential"
+[[ "$private" != *root/test* ]] || { echo "private credential exposed" >&2; exit 1; }
 [[ "$down" != *"had reached READY"* ]] || { printf 'redundant highest stage:\n%s\n' "$down" >&2; exit 1; }
 
 cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'

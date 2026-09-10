@@ -1,14 +1,13 @@
 # Lenovo XClarity Controller preserved Newyork-pass1 runtime.
 #
-# HTTPS and the emulator-only serial root shell are verified. The guest opens
-# UDP/623 but does not answer RMCP+, and SSH resets before key exchange; neither
-# network protocol is part of the readiness contract.
+# Remote IPMI requires native account/service provisioning and channel-1 access.
+# Store the changed password in private zbmc.conf as ZBMC_LENOVO_PASSWORD.
 ZBMC_NAME=lenovo-xcc
 ZBMC_DESC="Lenovo XClarity Controller / AST2600 - vendor Web-UI"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
-ZBMC_DIR="${ZBMC_DIR:-$ROOT/work/lenovo-xcc}"
+ZBMC_DIR="${ZBMC_DIR:-${ZBMC_LENOVO_DIR:-$ROOT/work/lenovo-xcc}}"
 ZBMC_IP=$(_zbmc_resolve_ip lenovo-xcc 43 10.0.6.69)
 ZBMC_HOST=lenovo-xcc
 
@@ -32,6 +31,7 @@ SSH_PW="${ZBMC_LENOVO_PASSWORD:-PASSW0RD}"
 SSH_PORT=22
 IPMI_USER=USERID
 IPMI_PW="$SSH_PW"
+[ -z "${ZBMC_LENOVO_PASSWORD:-}" ] || ZBMC_AUTH_HINT="USERID / password from private zbmc.conf"
 IPMI_KEY=00
 IPMI_PORT=623
 IPMI_T=30
@@ -74,7 +74,7 @@ zbmc_ready() {
   for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc lenovo-xcc build"; return 1; }
   done
-  echo "ready (cold boot; XCC Web-UI + emulator-only serial root shell, IPMI/SSH disabled)"
+  echo "ready (cold boot; XCC Web-UI and provisioned remote IPMI)"
 }
 
 zbmc_web() {

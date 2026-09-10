@@ -19,11 +19,14 @@ for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.
   [ -f "$WD/$file" ] || { echo "missing $WD/$file - run: zbmc lenovo-xcc build" >&2; exit 1; }
 done
 
+python3 "$HERE/configure-boot.py" "$WD/kernel-shell.zImage" "$WD/kernel-runtime.zImage.part"
+mv "$WD/kernel-runtime.zImage.part" "$WD/kernel-runtime.zImage"
+
 rm -f "$SOCK" "$QMP"
 nohup "$QEMU_BIN" \
   -M "ast2600-evb,xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin" -m 1G \
-  -kernel "$WD/kernel-shell.zImage" -dtb "$WD/xcc.dtb" \
-  -append 'console=ttyS4,115200 earlyprintk clk_ignore_unused loglevel=8 GUNICORN_CMD_ARGS=--timeout=1800' \
+  -kernel "$WD/kernel-runtime.zImage" -dtb "$WD/xcc.dtb" \
+  -append 'console=ttyS4,115200 earlyprintk clk_ignore_unused loglevel=8' \
   -drive "file=$WD/emmc.qcow2,format=qcow2,if=sd,index=2,snapshot=on" \
   -global emmc.boot-partition-size=4194304 \
   -global emmc.gp0-partition-size=3565158400 \

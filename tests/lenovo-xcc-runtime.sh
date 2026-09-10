@@ -23,7 +23,7 @@ grep -Fq 'XCC_DIAG_SHELL_BOUND' "$box/build-shell-kernel.py"
 grep -Fq 'mount --bind /xcc-diag-getty /rootfs/etc/scripts/rfs.getty' "$box/build-shell-kernel.py"
 
 grep -Fq -- 'xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin' "$box/boot.sh"
-grep -Fq -- '-kernel "$WD/kernel-shell.zImage"' "$box/boot.sh"
+grep -Fq -- '-kernel "$WD/kernel-runtime.zImage"' "$box/boot.sh"
 grep -Fq -- '-global emmc.gp0-partition-size=3565158400' "$box/boot.sh"
 grep -Fq -- 'if=sd,index=2,snapshot=on' "$box/boot.sh"
 grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
@@ -55,3 +55,5 @@ if zbmc_ipmi_health >/dev/null; then
   echo 'failed command incorrectly passed IPMI readiness' >&2
   exit 1
 fi
+
+python3 "$repo/tests/lenovo-xcc-boot-config.py"
