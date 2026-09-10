@@ -5,14 +5,14 @@
 #         with static JSON for Redfish endpoints (/redfish/v1/ served from /tmp/rf_root.json).
 # WHEN:   Called by host expect script after filesystems are mounted + network is configured.
 # HOW:    1. Wait for kernel CSPRNG initialization via a blocking /dev/random read
-#         2. Download + run setup-apache.sh from host (http://10.0.2.2:8091/)
+#         2. Download + run setup-apache.sh over the isolated USB network (http://10.0.3.2:8091/)
 #         3. Write static Redfish JSON files to /tmp/
 #         4. Start Apache HTTPS on port 443
 #         5. Poll for port up, report APACHE_READY or APACHE_FAILED
 # OUTPUT: Final line is "APACHE_READY" (success) or "APACHE_FAILED" (timeout/crash)
 #         Apache error log at /tmp/apache-err.log
 
-HOST_URL="${HOST_URL:-http://10.0.2.2:8091}"
+HOST_URL="${HOST_URL:-http://10.0.3.2:8091}"
 
 echo "=== WAITING FOR CSPRNG (crng init done) ==="
 head -c 1 /dev/random > /dev/null

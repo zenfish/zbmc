@@ -2,7 +2,9 @@
 # Sourced by the repository's `tools/zbmc` dispatcher. QEMU runs as root and binds the selected IP
 # and standard service ports directly.
 ZBMC_NAME=idrac10
-ZBMC_NETWORK_MODE=user
+ZBMC_NETWORK_MODE=tap
+ZBMC_TAP=ztap-idrac10
+ZBMC_MAC=52:54:00:fa:00:31
 ZBMC_DESC="Dell iDRAC10 (NPCM845) - partial: SSH, hybrid IPMI, static Redfish; no vendor Web-UI"
 # Portable (clone-and-run): scripts ship in this box dir; fetched boot/img/payload artifacts and the
 # generated operator key live in work/idrac10. Build deps:
@@ -38,11 +40,13 @@ ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=npcm845-evb
 ZBMC_WARM_STATUS=verified
-ZBMC_WARM_FILES="ckpt/state.gz ckpt/overlay-frozen.qcow2"
+ZBMC_WARM_FILES="ckpt/state.gz ckpt/overlay-frozen.qcow2 ckpt/network-mode"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish"
+ZBMC_GUEST_PREFIX="${ZBMC_GUEST_PREFIX:-8}"
+ZBMC_GUEST_GATEWAY="${ZBMC_GUEST_GATEWAY:-10.0.0.1}"
 
-# boot: build the shm-shim, serve guest binaries over http, launch qemu AS ROOT with hostfwd on the
-# real IP:623, then drive the guest bring-up (mount/net/fullfw -> IPMI_READY) via boot-idrac10.exp.
+# boot: the management GMAC owns the advertised address on TAP.  The USB NIC remains on an isolated
+# user network only so the initramfs can fetch bootstrap payloads from 10.0.3.2.
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"; cd "$PROJ_DIR" || return 1
   for f in "$ZBMC_DIR/boot/Image.boot-patched" "$ZBMC_DIR/boot/qemu-gmac.dtb" "$ZBMC_DIR/img/sd.img" "$ZBMC_DIR/payload/cfgdb-defaults.sql" "$ZBMC_DIR/ssh/operator" "$ZBMC_DIR/ssh/operator.pub" shm-shim.c boot-fullfw-guest.sh boot-apache-guest.sh setup-apache.sh prebind-v2 boot-idrac10.exp qemu-usb-net-overlay.dts fake-journal udp-echo; do
@@ -53,7 +57,6 @@ zbmc_boot() {
     return 1
   }
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
-  _zbmc_lo_alias "$ZBMC_IP"
   grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
     echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
   if [ -n "${ZBMC_WARM:-}" ]; then
@@ -65,14 +68,16 @@ zbmc_boot() {
     cp boot-apache-guest.sh setup-apache.sh "$SERVE/"
     pkill -f "http.server 8091" 2>/dev/null || true
     python3 -m http.server 8091 --directory "$SERVE" >"$WORK/httpd.log" 2>&1 &
+    rm -f "$WORK/ckpt/rqemu.pid"
     : > "$LOG"
     ( set +x
       ZIPMI="$ZIPMI" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" \
-        bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP" "$SSH_PORT" "$WEB_PORT"
+        ZBMC_IP="$ZBMC_IP" ZBMC_TAP="$ZBMC_TAP" ZBMC_MAC="$ZBMC_MAC" \
+        bash "$PROJ_DIR/restore-idrac10.sh"
       grep -q 'RESTORE OK' "$LOG" && echo "IDRAC10_UP" ) >>"$LOG" 2>&1 &
-    local n=0 qp=; while [ $n -lt 40 ]; do
-      qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT-" | head -1)
-      [ -n "$qp" ] && break
+    local n=0 qp=; while [ $n -lt 120 ]; do
+      qp=$(cat "$WORK/ckpt/rqemu.pid" 2>/dev/null || true)
+      [ -n "$qp" ] && ps -p "$qp" >/dev/null 2>&1 && break
       sleep 0.3; n=$((n+1))
     done
     echo "$qp"
@@ -105,18 +110,20 @@ zbmc_boot() {
   $SUDO nohup "$ZBMC_QEMU" -M npcm845-evb -m 1G \
     -kernel "$ZBMC_DIR/boot/Image.boot-patched" -dtb "$WORK/qemu-usb-net.dtb" \
     -drive "id=rootsd,if=none,file=$WORK/runtime-overlay.qcow2,format=qcow2" -device sd-card,drive=rootsd,bus=sd-bus \
-    -display none -nic user,model=npcm-gmac,"hostfwd=udp:$ZBMC_IP:623-10.0.2.15:623" \
-    -netdev user,id=tcpnet,net=10.0.3.0/24,host=10.0.3.2,dhcpstart=10.0.3.15,"hostfwd=tcp:$ZBMC_IP:$SSH_PORT-10.0.3.15:22,hostfwd=tcp:$ZBMC_IP:$WEB_PORT-10.0.3.15:443,hostfwd=tcp:$ZBMC_IP:5200-10.0.3.15:5200,hostfwd=tcp:$ZBMC_IP:5201-10.0.3.15:5201" \
+    -display none -nic "tap,model=npcm-gmac,mac=$ZBMC_MAC,ifname=$ZBMC_TAP,script=no,downscript=no" \
+    -netdev user,id=tcpnet,net=10.0.3.0/24,host=10.0.3.2,dhcpstart=10.0.3.15 \
     -device usb-net,netdev=tcpnet,bus=usb-bus.0,port=1,id=tcpnic \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
     -serial chardev:serial0 -qmp "unix:$QMP,server=on,wait=off" >"$WORK/qemu.log" 2>&1 &
+  local qp=$!
   # drive the bring-up in the background (needs root: the serial sock is root-owned)
-  ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1; $SUDO expect boot-idrac10.exp "$SOCK" ) >>"$LOG" 2>&1 &
+  ( until [ -S "$SOCK" ]; do sleep 0.5; done; sleep 1
+    $SUDO expect boot-idrac10.exp "$SOCK" "$ZBMC_IP" "$ZBMC_GUEST_PREFIX" "$ZBMC_GUEST_GATEWAY"
+  ) >>"$LOG" 2>&1 &
   # UDP-echo prime: boot-fullfw-guest.sh prints UDP_ECHO_READY then waits for a test packet on :623 to
   # verify the UDP RX path (via the shm-shim) before starting fullfw. Send it, else fw.sh -> UDP_ECHO_TIMEOUT.
   ( until grep -q UDP_ECHO_READY "$LOG" 2>/dev/null; do sleep 0.5; done
     python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'HELLO_UDP_TEST',('$ZBMC_IP',623))" 2>/dev/null || true ) >/dev/null 2>&1 &
-  local n=0 qp=; while [ $n -lt 40 ]; do qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-" | head -1); [ -n "$qp" ] && break; sleep 0.3; n=$((n+1)); done
   echo "$qp"
 }
 zbmc_build() { echo "idrac10 build is phase-script driven — see run-p*.sh; boot/Image.boot-patched + img/sd.img are prebuilt"; }
@@ -124,7 +131,7 @@ zbmc_ready() {
   local d="$ZBMC_DIR"
   if [ -f "$d/boot/Image.boot-patched" ] && [ -f "$d/boot/qemu-gmac.dtb" ] && [ -f "$d/img/sd.img" ] && [ -f "$d/payload/cfgdb-defaults.sql" ]; then
     if [ -f "$d/ssh/operator" ] && [ -f "$d/payload/cfgdb-defaults.sql" ]; then
-      [ -f "$d/ckpt/state.gz" ] && { echo "ready (cold boot; use start --warm for snapshot)"; return 0; }
+      [ -f "$d/ckpt/network-mode" ] && { echo "ready (cold boot; use start --warm for TAP snapshot)"; return 0; }
       echo "ready (cold boot only)"; return 0
     fi
   fi
@@ -133,10 +140,11 @@ zbmc_ready() {
 # snapshot: freeze the currently running READY cold guest to $WORK/ckpt.
 zbmc_snapshot() {
   zbmc_ipmi_health >/dev/null || { echo "idrac10: refusing to snapshot before IPMI is ready" >&2; return 1; }
-  WD="$ZBMC_DIR" bash "$PROJ_DIR/boot-live-ckpt.sh"
+  WD="$ZBMC_DIR" ZBMC_IP="$ZBMC_IP" ZBMC_TAP="$ZBMC_TAP" ZBMC_MAC="$ZBMC_MAC" \
+    bash "$PROJ_DIR/boot-live-ckpt.sh"
 }
 # restore: bring the warm snapshot up on the real IP:623 (what `start` does automatically when a snap exists).
-zbmc_restore()  { ZIPMI="$ZIPMI" WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" bash "$PROJ_DIR/restore-idrac10.sh" "$IPMI_PORT" "$ZBMC_IP" "$SSH_PORT" "$WEB_PORT"; }
+zbmc_restore()  { ZIPMI="$ZIPMI" WD="$ZBMC_DIR" IDRAC10_QEMU="$ZBMC_QEMU" ZBMC_IP="$ZBMC_IP" ZBMC_TAP="$ZBMC_TAP" ZBMC_MAC="$ZBMC_MAC" bash "$PROJ_DIR/restore-idrac10.sh"; }
 # Serial console works on BOTH warm-restore and cold boot (the old "vmstate gap" was a wrong socket path:
 # the 16550 SerialMM migrates fully via vmstate_serial_mm). A warm restore binds the console at
 # $WORK/ckpt/rserial.sock (restore-idrac10.sh); a cold boot uses $SOCK. Pick whichever is newest = the
@@ -162,7 +170,7 @@ zbmc_ipmi_health() {
   echo "${out:-no answer (warming/down)}"; return 1
 }
 zbmc_web() {
-  zbmc_ssh "wget -q --timeout=15 http://10.0.2.2:8091/boot-apache-guest.sh -O /tmp/boot-apache.sh && sh /tmp/boot-apache.sh"
+  zbmc_ssh "wget -q --timeout=15 http://10.0.3.2:8091/boot-apache-guest.sh -O /tmp/boot-apache.sh && sh /tmp/boot-apache.sh"
 }
 # readiness marker in the console log (zbmc status greps IDRAC10_UP / IPMI_READY)
 ZBMC_READY_GREP='IDRAC10_UP'

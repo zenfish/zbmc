@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# zbmc:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). Fetches matched cold and warm artifacts.
+# zbmc:turnkey   <- Dell iDRAC10 (NPCM845/aarch64). Fetches cold artifacts.
 #
 # Bundle (mirror only — https://git.trouble.org/zbmc/idrac10/): patched kernel, gmac DTB, 256MB
-# base SD image, warm checkpoint, and matching lab SSH key. The cfgdb defaults are generated from
+# base SD image and matching lab SSH key. The cfgdb defaults are generated from
 # metadata inside that image.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -17,8 +17,6 @@ BUNDLE=(
 "boot:Image.boot-patched:Image.boot-patched:f97fb270ed8043a6466b1a73e69abc67521cb626913c2624853bb56badcc9dc5"
 "boot:qemu-gmac.dtb:qemu-gmac.dtb:da13910425999dc3e0ba4315ed1cf60b7f084f8baa787b647dfba9d718cd5fdc"
 "img:sd.img:sd.img:d41d48602c603d48bb9fcc92f5802bce789e917fd9c049beb03d8fa3f7587efd"
-"ckpt:state.gz:warm-20260831/state.gz:00aaf1b1d150d1fb410b6f5755c2950d5b0fbd07e1fba656e9f468d115256d2d"
-"ckpt:overlay-frozen.qcow2:warm-20260831/overlay-frozen.qcow2:76b8da12ee5416b57d27dd3ac51081108ea4ba89264ccb853d53c1d107ffc426"
 "ssh:operator:warm-20260831/operator:1598137b6fa1a5f0fcf07120fda34c47d9756eeca53689cb2680cb300522fbf2"
 "ssh:operator.pub:warm-20260831/operator.pub:d192936295b0ae04c6a030c7c0efbba3653f2592829e2b5deb998b76ea0f3766"
 )
@@ -47,4 +45,4 @@ fdtoverlay -i "$WD/boot/qemu-gmac.dtb" -o "$WD/qemu-usb-net.dtb" "$WD/qemu-usb-n
 
 echo "[*] bundle ready in $WD"
 echo "cold:  sudo ./tools/zbmc idrac10 start"
-echo "warm:  sudo ./tools/zbmc idrac10 start --warm"
+echo "warm:  create a TAP-native checkpoint with: sudo ./tools/zbmc idrac10 snapshot"
