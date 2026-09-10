@@ -18,6 +18,8 @@ grep -Fq -- '-watchdog-action none' "$box"
 grep -Fq 'E=/newroot/run/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.custom"
 ! grep -q 'E=/newroot/etc/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.custom"
 grep -Fq 'early-net: NIC=$NIC' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'NIC=usb-nic-nvgpu' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'while [ ! -e "/sys/class/net/$NIC" ] && [ "$n" -lt 60 ]' "$repo/boxes/idrac9/init.p4.custom"
 early_net_line=$(grep -n 'early-net: NIC=' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 tmpfiles_line=$(grep -n '^systemd-tmpfiles --create' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 sshd_line=$(grep -n '/usr/sbin/sshd -f' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
