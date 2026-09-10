@@ -31,7 +31,7 @@ tmp=$(mktemp -d)
 trap 'rm -r "$tmp"' EXIT
 xz -dc initramfs-patched.bin | (cd "$tmp" && cpio -idm --quiet)
 python3 "$SCRIPT_DIR/patch-init-network.py" "$tmp/init" "$IP" 10.0.0.1
-(cd "$tmp" && find . -print0 | sort -z | cpio --null -o -H newc --quiet | xz -C crc32) >initramfs-tap.bin.part
+(cd "$tmp" && find . | sort | cpio -o -H newc -R 0:0 --quiet | xz -C crc32) >initramfs-tap.bin.part
 mv initramfs-tap.bin.part initramfs-tap.bin
 rm -r "$tmp"
 trap - EXIT
