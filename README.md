@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=3bfbba8a9e6f800f066f0a81f1caa867d33d90c5b167023d6e2f70fae770adc6 body-sha256=0215e44f0f1c8ee7c41304d0742e021cdc1a917636ef3e6a7b3a08844a0ee6a7 -->
+<!-- html2md:auto source=README.html source-sha256=c8ce8274ef8b02f0c1ee98f4e94e4d7457db099023bc248d3980e06f512296db body-sha256=3dca173979a6eacec54436464ef8b9b984cd51941b825afac13265ae1bcf8510 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -20,23 +20,23 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 ## The denizens/animals
 
-`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table is the current validation matrix from the four-core Debby host. Each name links to that animal's box material.
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table is the current validation matrix from the four-core Debby host, last updated 2026-09-10. Each name links to that animal's box material.
 
 | `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
 |----|----|----|----|----|----|----|----|----|----|
-| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | PASS | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm FAIL | Network services are being revalidated after the TAP migration. |
-| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | PASS | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm FAIL | Network services are being revalidated after the TAP migration. |
-| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | FAIL | FAIL | FAIL | FAIL | FAIL | PASS | Cold PASS; Warm FAIL | The vendor kernel still forces an NC-SI network path that QEMU cannot satisfy. |
-| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | PASS | PASS | PASS | PASS | FAIL | PASS | Cold PASS; Warm PASS | The image exposes Redfish but no vendor Web-UI. |
-| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | PASS | FAIL | PASS | FLAKY | FLAKY | PASS | Cold PASS; Warm FAIL | Redfish and Web-UI passed the readiness hold, then became intermittent; the saved warm image is incompatible with current QEMU. |
-| **[ieit](boxes/ieit/)** | TAP / direct L2 | PASS | FAIL | PASS | PASS | PASS | PASS | Cold PASS; Warm FAIL | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | PASS | FAIL | FAIL | FAIL | PENDING | PASS | Cold PASS; Warm FAIL | The Web-UI starts slowly; SSH, IPMI, and Redfish do not answer. |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | PASS | FAIL | PASS | FAIL | FAIL | PASS | Cold PASS; Warm PASS | IPMI and console work; SSH, Redfish, and Web-UI are not recovered. |
-| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | PENDING | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm PASS | The network interface can stop passing traffic; the recovery is being revalidated. |
-| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | PASS | PASS | PASS | PASS | PASS | PASS | Cold PASS; Warm FAIL | None observed in the completed TAP validation run. |
-| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | PASS | FLAKY | FAIL | FAIL | PASS | PASS | Cold PASS; Warm FAIL | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
+| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | SSH, IPMI, Redfish, and Web-UI passed before TAP; no TAP service pass was captured on 2026-09-10. |
+| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | SSH, IPMI, Redfish, and Web-UI passed before TAP; no TAP service pass was captured on 2026-09-10. |
+| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
+| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
+| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ⚠️ FLAKY | ✅ | Cold ✅; Warm ❌ | Redfish and Web-UI passed the readiness hold, then became intermittent; the saved warm image is incompatible with current QEMU. |
+| **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The Web-UI passed before TAP; the latest TAP run on 2026-09-10 was captured only while it was still starting. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores. |
+| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | All four network services passed before TAP; the latest TAP run on 2026-09-10 timed out after 15 minutes with only ICMP and console working. |
+| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
+| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ⚠️ FLAKY | ❌ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
 
-Legend: PASS currently passes, FAIL currently fails or is unsupported, PENDING is being validated, and FLAKY passed but is not stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+Legend: ✅ passed in the current TAP topology, ❌ did not pass the latest current-topology validation or is unsupported, and ⚠️ FLAKY passed but did not remain stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
 All eleven descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
 
