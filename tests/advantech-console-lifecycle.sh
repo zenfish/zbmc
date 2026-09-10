@@ -19,6 +19,8 @@ grep -Fxq 'ZBMC_REQUIRED_SERVICES=console' "$repo/boxes/advantech-asmb787/zbmc.b
 grep -Fxq 'ZBMC_NETWORK_MODE=tap' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fxq 'ZBMC_TAP=ztap-asmb' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fxq 'ZBMC_MAC=52:54:00:fa:00:50' "$repo/boxes/advantech-asmb787/zbmc.box"
+grep -Fq 'TEMPORARILY BROKEN after clean rebuild' "$repo/boxes/advantech-asmb787/zbmc.box"
+grep -Fq 'Temporarily broken: regenerated guest has no serial/ARP/ICMP' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fxq 'ZBMC_DEFAULT_NO_WEB=1' "$repo/boxes/advantech-asmb787/zbmc.box"
 ! grep -q 'NC-SI responder' "$repo/boxes/advantech-asmb787/zbmc.box"
 grep -Fq "[ -p \"\$SOCK\" ] && printf '\\n' > \"\$SOCK\"" "$repo/boxes/advantech-asmb787/zbmc.box"

@@ -8,10 +8,11 @@
 #       platform). Unpacked from encrypted_ASMB-787_20220912.ima_enc ("encrypted" is a misnomer — it
 #       is plain XZ-SquashFS; see tools/unpack-ami).
 #
-# ACCEPTANCE (2026-08-27): retained serial login only, measured at 9m38s on the reference host.
-# Full MegaRAC userland starts, but the 5.4.11-ami guest rejects QEMU's internal NC-SI response, so
-# external SSH, IPMI, Redfish, and Web-UI are not reachable. QEMU consumes NC-SI before the netdev;
-# an external responder cannot repair this path. Use the console.
+# HISTORICAL (2026-08-27): retained serial login worked, measured at 9m38s on the reference host;
+# external networking remained blocked by the 5.4.11-ami NC-SI mismatch.
+# TEMPORARILY BROKEN (2026-09-10): a clean rebuild produces no serial boot output under either TAP
+# or a bounded user-network A/B run, and emits no ARP/ICMP. Re-localize the regenerated artifact/
+# runtime regression before accepting the NC-SI bypass or any management service.
 #
 # ACCESS:
 #   Console : zbmc asmb787 console            (serial ttyS4; login sysadmin / superuser -> uid 0 root)
@@ -21,7 +22,8 @@ ZBMC_NAME=advantech-asmb787
 ZBMC_NETWORK_MODE=tap
 ZBMC_TAP=ztap-asmb
 ZBMC_MAC=52:54:00:fa:00:50
-ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - direct-L2 TAP with emulator-only NC-SI bypass"
+ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - TEMPORARILY BROKEN after clean rebuild"
+ZBMC_REMEDIATION="Temporarily broken: regenerated guest has no serial/ARP/ICMP; historical console-only run preserved"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
@@ -30,7 +32,7 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR"
 # Address comes from zbmc.conf and is owned by the guest FTGMAC.
 ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
-ZBMC_HINT='zbmc advantech-asmb787 console   (login sysadmin/superuser; external networking not accepted)'
+ZBMC_HINT='temporarily broken after clean rebuild; historical console-only evidence remains preserved'
 IPMI_USER=admin
 IPMI_PW=superuser
 IPMI_KEY=00
