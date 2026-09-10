@@ -52,7 +52,7 @@ zbmc_boot() {
   : > "$LOG"
   local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   $SUDO rm -f "$QMP_SOCK"
-  $SUDO nohup "$ZBMC_QEMU" -M npcm750-evb -m 1G -display none \
+  $SUDO nohup "$ZBMC_QEMU" -M npcm750-evb -m 1G -display none -watchdog-action none \
     -qmp "unix:$QMP_SOCK,server=on,wait=off" \
     -kernel boot/uImage.patched -dtb "$dtb" -initrd boot/initramfs.p4.xz \
     -drive id=rootsd,if=none,file=img/sd256.img,format=raw,snapshot=on \
