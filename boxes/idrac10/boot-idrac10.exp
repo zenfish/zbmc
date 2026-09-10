@@ -14,7 +14,7 @@ match_max 2000000
 set timeout 60
 spawn socat - UNIX-CONNECT:$sock
 set shell_ready 0
-for {set i 0} {$i < 30 && !$shell_ready} {incr i} {
+for {set i 0} {$i < 180 && !$shell_ready} {incr i} {
     send "\r"
     expect {
         -timeout 2
