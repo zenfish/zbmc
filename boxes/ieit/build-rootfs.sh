@@ -94,7 +94,7 @@ for link in \
 done
 grep -q 'zbmc-runtime.sh' "$VERIFY/etc/init.d/mountall.sh"
 test -f "$VERIFY/zbmc-seed/conf/BMC1/wolfpass/IPMI.conf"
-grep -q '^auto eth0$' "$VERIFY/zbmc-seed/conf/interfaces"
+grep -q '^auto eth1$' "$VERIFY/zbmc-seed/conf/interfaces"
 test -f "$VERIFY/usr/local/www/index.html"
 test -f "$VERIFY/usr/local/www/source.min.js"
 test -f "$VERIFY/usr/local/www/styles.min.css"

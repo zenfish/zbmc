@@ -24,6 +24,8 @@ grep -Fxq 'IPMI_OPTS="-C 17 -I lanplus"' "$box/zbmc.box"
 grep -Fq -- '-C 17 -I lanplus -t "$IPMI_T"' "$box/zbmc.box"
 grep -Fq 'grep -q "${ZBMC_READY_GREP}" "${_zr_console_log:-/dev/null}"' \
     "$repo/tools/zbmc-runlib"
+grep -Fq '{ [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }' \
+    "$repo/tools/zbmc-runlib"
 
 grep -Fq 'SOURCE_SHA256=b7915aa4be2661d47d78cca6265dc11d8d06c23cc199e0ff80a2adc3ccd7c7d1' "$box/build.sh"
 grep -Fq 'CONF_OFFSET=$((0x0b0000))' "$box/build.sh"
@@ -32,10 +34,10 @@ grep -Fq 'KERNEL_OFFSET=$((0x3500040))' "$box/build.sh"
 grep -Fq 'WEB_OFFSET=$((0x37c0000))' "$box/build.sh"
 grep -Fq -- "--exclude './Java'" "$box/build-rootfs.sh"
 grep -Fq 'mount_tmpfs /conf' "$box/rootfs-overlay/zbmc-runtime.sh"
-grep -Fq 'auto eth0' "$box/rootfs-overlay/interfaces"
+grep -Fq 'auto eth1' "$box/rootfs-overlay/interfaces"
 grep -Fq 'address 10.250.0.41' "$box/rootfs-overlay/interfaces"
-grep -Fq 'ifconfig eth0 hw ether "$MAC"' "$box/rootfs-overlay/ncsicfg-wrapper.sh"
-grep -Fq 'ifconfig eth0 hw ether "$MAC"' "$box/rootfs-overlay/phycfg-wrapper.sh"
+grep -Fq 'ifconfig eth1 hw ether "$MAC"' "$box/rootfs-overlay/ncsicfg-wrapper.sh"
+grep -Fq 'ifconfig eth1 hw ether "$MAC"' "$box/rootfs-overlay/phycfg-wrapper.sh"
 grep -Fq 'board EEPROM and host complex are not modeled' \
     "$box/rootfs-overlay/commerDiagnoseServer-wrapper.sh"
 grep -Fq 'commerDiagnoseServer.vendor.sh' "$box/build-rootfs.sh"
