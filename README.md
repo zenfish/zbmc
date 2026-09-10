@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=a3b7074591e28173c54df4766761bb73dceb01a82ffdf79b3bd52d82c78c546c body-sha256=e95a29af465b55a93e04a93edc0f75fd7757df016822362bcf49d21b2b32c2c0 -->
+<!-- html2md:auto source=README.html source-sha256=01f6078bc6f167c452401d3dd0ae3e112b62659c3a9819d0b058e45f9ef04195 body-sha256=25e43581b9be5a025e1c7292df1ce95912bb4c6ce043977cc6319a45577bf54b -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -20,25 +20,25 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 ## The denizens/animals
 
-`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records exact-build acceptance measured on the four-core Debby host; it is a reproducibility baseline, not a promise that every vendor service is complete.
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table is the current validation matrix from the four-core Debby host. Each name links to that animal's box material.
 
-| `zbmc` name | QEMU network | ICMP | Guest-MAC ARP | Host owns guest IP? | Validated via zBMC | Management proxy? | Accepted function | Exact-build result / measured cold start |
-|----|----|----|----|----|----|----|----|----|
-| **openbmc** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:fa:00:10` | No | PASS | None | SSH, IPMI, Redfish, Web-UI | native network PASS; services still recovering |
-| **nvidia-obmc** | TAP / direct L2 | PASS 3/3 | PASS `3c:6d:66:14:c8:7a` | No | PASS | None | SSH, IPMI, Redfish, Web-UI | native network PASS; services still recovering |
-| **advantech-asmb787** | TAP configured | FAIL 0/3 | FAIL | No | FAIL | None | retained serial login; external network was blocked by NC-SI | **temporarily broken after clean rebuild**; historical console-only pass was 9m38s |
-| **idrac10** | TAP / direct L2 | PASS | PASS `52:54:00:fa:00:31` | No | PASS | None on management NIC | SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | native network PASS; full cold-service validation in progress |
-| **megarac-hpe** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | native network not yet working |
-| **ieit** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell | native network not yet working |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:fa:42:02` | No | PASS | None | vendor Web-UI; IPMI does not answer and Redfish is disabled | native network PASS; Web-UI still starting |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | PASS 3/3 | PASS `52:54:00:12:34:60` | No | PASS | None on management NIC | authenticated IPMI and serial console; Redfish, SSH, and Web-UI recovery remains | last native-network validation PASS; canonical instance currently down |
-| **supermicro-x14** | TAP / direct L2 | UNSTABLE | PASS `52:54:00:fa:00:21` | No | REVALIDATING | None | SSH, IPMI, Redfish, Web-UI | FTGMAC link lockup reproduced; recovery validation in progress |
-| **supermicro-x10** | TAP / direct L2 | FAIL 0/3 | FAIL | No | FAIL | None | SSH, IPMI, Redfish, Web-UI | native receive/bootstrap path not yet working |
-| **idrac9** | TAP / direct L2 | PENDING | PENDING | No | PENDING | None | SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | early USB-NIC bring-up validation in progress |
+| `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
+|----|----|----|----|----|----|----|----|----|----|
+| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ❌ | Network services are being revalidated after the TAP migration. |
+| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ❌ | Network services are being revalidated after the TAP migration. |
+| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ❌; Warm ❌ | **Temporarily broken:** a clean rebuild does not reach ready state. |
+| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
+| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest does not receive direct-TAP traffic; its saved warm image is incompatible with current QEMU. |
+| **[ieit](boxes/ieit/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest is not answering on its direct-TAP address. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ⏳ | ✅ | Cold ✅; Warm ❌ | The Web-UI starts slowly; SSH, IPMI, and Redfish do not answer. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | Cold ✅; Warm ✅ | IPMI and console work; SSH, Redfish, and Web-UI are not recovered. |
+| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ✅ | The network interface can stop passing traffic; the recovery is being revalidated. |
+| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest does not receive direct-TAP traffic. |
+| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ✅ | ⏳ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | IPMI is still starting; warm restore leaves the network unusable. |
 
-These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+Legend: ✅ currently passes, ❌ currently fails or is unsupported, and ⏳ is being validated. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
-All eleven descriptors now select **TAP / direct L2** for the advertised management address. Green cells above require live guest-MAC ARP, ICMP, absence of host address ownership, zBMC validation, and no management `hostfwd`; configuration alone does not count. The migration is not complete while any row is FAIL, PENDING, UNSTABLE, or REVALIDATING.
+All eleven descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md). The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
