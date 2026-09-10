@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=3b6b3c6c372eee74d284d60a7a630655279b4cefb908f58931f17bb180c06c94 body-sha256=ab0748805f7cef806e7c7c82a210c3f5ca994a4ea1c0f46ed93e5ceab13adc05 -->
+<!-- zmd2html:auto source-sha256=17864b19c2fcc98ab8a732cec8f4066bd285239ea8d1664f9ddbfc129afb4430 body-sha256=c839760442aa02b8ba182737e63835c0c93471ae38c9094ac079da5129b891c0 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -120,6 +120,36 @@ before the guest clears them.</p>
 <code>ILOMAIN_COMMAND</code> handling. This verifies the narrowest
 correct change in the device model: preserve non-mailbox register writes
 so later firmware reads can observe guest-programmed state.</p>
+<h1 id="migrate-idrac10-management-networking-to-tap">Migrate iDRAC10
+management networking to TAP</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Put
+<code>10.250.0.31</code> on the guest GMAC via <code>ztap-idrac10</code>
+with stable MAC <code>52:54:00:fa:00:31</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Remove the host
+management alias and management <code>hostfwd</code>; retain isolated
+USB SLiRP only for bootstrap payloads.</label></li>
+<li><label><input type="checkbox" checked="" />Validate cold ARP, ICMP,
+SSH, authenticated IPMI, and protected Redfish through
+zBMC.</label></li>
+<li><label><input type="checkbox" checked="" />Create a TAP-native
+checkpoint and validate the warm restore through zBMC.</label></li>
+</ul>
+<h2 id="review-3">Review</h2>
+<p>Cold run
+<code>20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce</code>
+reached READY for ICMP, SSH, authenticated IPMI <code>mc info</code>,
+and protected Redfish. Its ARP entry maps <code>10.250.0.31</code> to
+<code>52:54:00:fa:00:31</code>; the host has no <code>.31</code>
+address; and the QEMU management NIC is TAP-backed with no management
+<code>hostfwd</code>.</p>
+<p>Warm run
+<code>20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6</code>
+restored the marker
+<code>tap ztap-idrac10 52:54:00:fa:00:31 10.250.0.31</code> and reached
+the same four-service READY contract in 2m47s. Exact topology and probe
+output is preserved in each run's <code>probes/tap-validation.txt</code>
+or <code>probes/tap-warm-validation.txt</code>.</p>
 </div>
 </body>
 </html>

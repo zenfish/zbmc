@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=8b2e3c9af0a921d68296486b0178b133e1ef30546f271fdfcd98a8226f35c3b6 body-sha256=88b4b22a24f8870120e38e4c34244fc2f171f08e57b9aae59a09494e92b7676f -->
+<!-- zmd2html:auto source-sha256=d3cb00953f4d760fcddde4ff140557006f9df28928d00ee6116af5fe1e1ec6ce body-sha256=716bda38a73c5a69eaeb7a490166744eb086cda2b48f069f427d92fa8706762c -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>lessons</title>
@@ -47,7 +47,11 @@
 <p>2026-09-04 | ilo5-run-ownership | worked around root-owned attempt
 artifacts manually | reclaim ownership at the end of self-contained runs
 so reruns clone cleanly | fixes the lifecycle bug once instead of adding
-per-attempt exceptions</p>
+per-attempt exceptions 2026-09-10 | zbmc-native-networking | accepted
+proxy networking as sufficient for an advertised BMC IP | make the guest
+own its management IP on TAP and validate it through zBMC | port
+forwarding hides broken L2/ICMP behavior and violates the device
+model</p>
 </div>
 </body>
 </html>
