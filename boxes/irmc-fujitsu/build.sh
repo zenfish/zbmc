@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=10
+SHELL_INITRAMFS_VERSION=11
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -56,9 +56,8 @@ for arg in $(busybox cat /proc/cmdline); do
   esac
 done
 if [ -n "$zbmc_ip" ]; then
-  busybox ip link set eth2 up
-  busybox ip addr add "$zbmc_ip/8" dev eth2 2>/dev/null || true
-  [ -z "$zbmc_gateway" ] || busybox ip route replace default via "$zbmc_gateway" dev eth2
+  busybox ifconfig eth2 "$zbmc_ip" netmask 255.0.0.0 up
+  [ -z "$zbmc_gateway" ] || busybox route add default gw "$zbmc_gateway" dev eth2
   busybox echo "ZBMC_TAP_NETWORK_READY $zbmc_ip"
 fi
 if busybox grep -qw irmc_diag_shell /proc/cmdline; then
