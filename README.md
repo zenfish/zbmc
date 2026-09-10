@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=01f6078bc6f167c452401d3dd0ae3e112b62659c3a9819d0b058e45f9ef04195 body-sha256=25e43581b9be5a025e1c7292df1ce95912bb4c6ce043977cc6319a45577bf54b -->
+<!-- html2md:auto source=README.html source-sha256=3bfbba8a9e6f800f066f0a81f1caa867d33d90c5b167023d6e2f70fae770adc6 body-sha256=0215e44f0f1c8ee7c41304d0742e021cdc1a917636ef3e6a7b3a08844a0ee6a7 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -24,19 +24,19 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 | `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
 |----|----|----|----|----|----|----|----|----|----|
-| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ❌ | Network services are being revalidated after the TAP migration. |
-| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ❌ | Network services are being revalidated after the TAP migration. |
-| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ❌; Warm ❌ | **Temporarily broken:** a clean rebuild does not reach ready state. |
-| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
-| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest does not receive direct-TAP traffic; its saved warm image is incompatible with current QEMU. |
-| **[ieit](boxes/ieit/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest is not answering on its direct-TAP address. |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ⏳ | ✅ | Cold ✅; Warm ❌ | The Web-UI starts slowly; SSH, IPMI, and Redfish do not answer. |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | Cold ✅; Warm ✅ | IPMI and console work; SSH, Redfish, and Web-UI are not recovered. |
-| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ✅ | Cold ✅; Warm ✅ | The network interface can stop passing traffic; the recovery is being revalidated. |
-| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The guest does not receive direct-TAP traffic. |
-| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ✅ | ⏳ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | IPMI is still starting; warm restore leaves the network unusable. |
+| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | PASS | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm FAIL | Network services are being revalidated after the TAP migration. |
+| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | PASS | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm FAIL | Network services are being revalidated after the TAP migration. |
+| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | FAIL | FAIL | FAIL | FAIL | FAIL | PASS | Cold PASS; Warm FAIL | The vendor kernel still forces an NC-SI network path that QEMU cannot satisfy. |
+| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | PASS | PASS | PASS | PASS | FAIL | PASS | Cold PASS; Warm PASS | The image exposes Redfish but no vendor Web-UI. |
+| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | PASS | FAIL | PASS | FLAKY | FLAKY | PASS | Cold PASS; Warm FAIL | Redfish and Web-UI passed the readiness hold, then became intermittent; the saved warm image is incompatible with current QEMU. |
+| **[ieit](boxes/ieit/)** | TAP / direct L2 | PASS | FAIL | PASS | PASS | PASS | PASS | Cold PASS; Warm FAIL | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | PASS | FAIL | FAIL | FAIL | PENDING | PASS | Cold PASS; Warm FAIL | The Web-UI starts slowly; SSH, IPMI, and Redfish do not answer. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | PASS | FAIL | PASS | FAIL | FAIL | PASS | Cold PASS; Warm PASS | IPMI and console work; SSH, Redfish, and Web-UI are not recovered. |
+| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | PENDING | PENDING | PENDING | PENDING | PENDING | PASS | Cold PASS; Warm PASS | The network interface can stop passing traffic; the recovery is being revalidated. |
+| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | PASS | PASS | PASS | PASS | PASS | PASS | Cold PASS; Warm FAIL | None observed in the completed TAP validation run. |
+| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | PASS | FLAKY | FAIL | FAIL | PASS | PASS | Cold PASS; Warm FAIL | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
 
-Legend: ✅ currently passes, ❌ currently fails or is unsupported, and ⏳ is being validated. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+Legend: PASS currently passes, FAIL currently fails or is unsupported, PENDING is being validated, and FLAKY passed but is not stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
 All eleven descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
 
