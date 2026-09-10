@@ -64,7 +64,7 @@ zbmc_boot() {
   echo "$qp"
 }
 zbmc_running() { pgrep -f "npcm750-evb.*ifname=$ZBMC_TAP" | head -1; }
-zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" CVIP="$ZBMC_IP" CVMASK=255.0.0.0 CVGW=10.0.0.1 IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
+zbmc_build() { cd "$PROJ_DIR" && WD="$ZBMC_DIR" CVIP="$ZBMC_IP" CVPREFIX=8 CVMASK=255.0.0.0 CVGW=10.0.0.1 IPMIKEY=915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964 ./build-p4.sh; }
 # snapshot: cold-boot P6 + Redfish bring-up, then freeze to img/ckpt/redfish-200-ready-net.gz (patched
 # qemu, migratable usb-net). Pays the ~15min bring-up ONCE; afterwards `zbmc idrac9 start` restores it.
 zbmc_ready() {
