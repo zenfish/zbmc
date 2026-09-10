@@ -10,6 +10,7 @@ set sock [lindex $argv 0]
 set guest_ip [lindex $argv 1]
 set guest_prefix [lindex $argv 2]
 set guest_gateway [lindex $argv 3]
+set guest_mac [lindex $argv 4]
 match_max 2000000
 set timeout 60
 spawn socat - UNIX-CONNECT:$sock
@@ -28,7 +29,7 @@ puts "\[exp] shell ready"
 send "mount -t proc proc /proc; mount -t sysfs sysfs /sys; mount -t devtmpfs devtmpfs /dev; mkdir -p /dev/pts; mount -t devpts devpts /dev/pts; mount -t tmpfs tmpfs /tmp; mount -t tmpfs tmpfs /run; mount -t tmpfs tmpfs /var/volatile; mount -t tmpfs tmpfs /mnt; printf '__ZBMC_%s__\\n' FS_READY\r"
 expect -timeout 30 "__ZBMC_FS_READY__"
 puts "\[exp] fs mounted"
-send "ip link set eth0 up; ip addr flush dev eth0; ip addr add $guest_ip/$guest_prefix dev eth0; ip route replace default via $guest_gateway dev eth0; printf '__ZBMC_%s__\\n' NET_UP\r"
+send "ip link set eth0 down; ip link set eth0 address $guest_mac; ip link set eth0 up; ip addr flush dev eth0; ip addr add $guest_ip/$guest_prefix dev eth0; ip route replace default via $guest_gateway dev eth0; printf '__ZBMC_%s__\\n' NET_UP\r"
 expect -timeout 210 "__ZBMC_NET_UP__"
 puts "\[exp] NET_UP"
 send "TCP_NIC=usb0; for i in {1..30}; do test -e /sys/class/net/\$TCP_NIC && break; sleep 1; done; if test -e /sys/class/net/\$TCP_NIC && ip link set \"\$TCP_NIC\" up && ip addr add 10.0.3.15/24 dev \"\$TCP_NIC\"; then ip route replace 10.0.3.0/24 dev \"\$TCP_NIC\" src 10.0.3.15 table 100; ip route replace default via 10.0.3.2 dev \"\$TCP_NIC\" table 100; ip rule add from 10.0.3.15/32 table 100 priority 32765 2>/dev/null || true; printf '__ZBMC_TCP_NET_%s__=%s\\n' UP \"\$TCP_NIC\"; else printf '__ZBMC_TCP_NET_%s__\\n' MISSING; fi\r"
