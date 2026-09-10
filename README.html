@@ -102,6 +102,7 @@ promise that every vendor service is complete.</p>
 <thead>
 <tr>
 <th><code>zbmc</code> name</th>
+<th>Network</th>
 <th>Accepted function</th>
 <th>Exact-build result / measured cold start</th>
 </tr>
@@ -109,64 +110,75 @@ promise that every vendor service is complete.</p>
 <tbody>
 <tr>
 <td><strong>openbmc</strong></td>
-<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>USER/FORWARDED</td>
+<td>SSH, IPMI, Redfish, Web-UI</td>
 <td>pass - 4m32s</td>
 </tr>
 <tr>
 <td><strong>nvidia-obmc</strong></td>
-<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>USER/FORWARDED</td>
+<td>SSH, IPMI, Redfish, Web-UI</td>
 <td>pass - 5m21s</td>
 </tr>
 <tr>
 <td><strong>advantech-asmb787</strong></td>
+<td>USER/FORWARDED</td>
 <td>retained serial login; external network is blocked by the unmodeled
 NC-SI path</td>
 <td>pass - 9m38s</td>
 </tr>
 <tr>
 <td><strong>idrac10</strong></td>
-<td>ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td>
+<td>USER/FORWARDED</td>
+<td>SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI</td>
 <td>pass - 7m37s</td>
 </tr>
 <tr>
 <td><strong>megarac-hpe</strong></td>
-<td>ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH
+<td>USER/FORWARDED</td>
+<td>retained IPMI; Redfish/Web-UI unavailable; vendor SSH
 absent</td>
 <td>pass - 8m07s total; fourth cold-boot attempt succeeded after three
 <code>IPMIMain</code> crash rerolls</td>
 </tr>
 <tr>
 <td><strong>ieit</strong></td>
+<td>USER/FORWARDED</td>
 <td>IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport
-is not a Unix shell; user networking, so no ICMP</td>
+is not a Unix shell</td>
 <td>pass - 1m55s</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
-<td>vendor Web-UI; user networking, so no ICMP; IPMI does not answer and
+<td>USER/FORWARDED</td>
+<td>vendor Web-UI; IPMI does not answer and
 Redfish is disabled</td>
 <td>partial - Web-UI pass in 9m40s; 15m cold readiness deadline</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
-<td>vendor Web-UI; user networking, so no ICMP; IPMI receives requests
-without replying and SSH resets before key exchange</td>
-<td>partial - Web-UI READY in 46m06s including a 60s stable hold; 60m cold readiness deadline</td>
+<td>USER/FORWARDED</td>
+<td>authenticated IPMI and serial console; HTTPS root responds, but authenticated
+Redfish, SSH, and a Web-UI login/dashboard are not accepted</td>
+<td>partial - warm IPMI READY in 1m34s; full-service recovery in progress</td>
 </tr>
 <tr>
 <td><strong>supermicro-x14</strong></td>
-<td>ICMP, SSH, IPMI, Redfish, Web-UI</td>
+<td>USER/FORWARDED</td>
+<td>SSH, IPMI, Redfish, Web-UI</td>
 <td>pass - 3m31s</td>
 </tr>
 <tr>
 <td><strong>supermicro-x10</strong></td>
+<td>USER/FORWARDED</td>
 <td>forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s
 stable hold</td>
 <td>pass - 2m38s</td>
 </tr>
 <tr>
 <td><strong>idrac9</strong></td>
-<td>ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4
+<td>USER/FORWARDED</td>
+<td>SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4
 boot</td>
 <td>pass - 10m31s</td>
 </tr>
@@ -182,9 +194,13 @@ downloaded as a hash-pinned matched bundle from
 <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
 runbook</a>.</p>
-<p>Supermicro X10 uses the same loopback-alias allocation and standard
-service ports as the rest of the zoo. QEMU user networking forwards
-those ports to its private guest address.</p>
+<p>All eleven registered boxes currently use the same
+<strong>USER/FORWARDED</strong> strategy: the advertised address is a Debby
+loopback alias and QEMU user networking forwards selected TCP and UDP ports to
+the guest's private address. The guest does not own the advertised address.
+Consequently, ICMP to that address tests Debby rather than the BMC and is
+reported as <strong>UNAVAILABLE</strong>. A box reports ICMP READY only after it
+moves to <strong>TAP/DIRECT-L2</strong> and the guest owns the address.</p>
 <p>Full per-box boot method, network trick, and gotchas: <a
 href="docs/zoo-lessons.html">docs/zoo-lessons.md</a>. The project-wide
 retrospective is <a href="docs/why-bmc-virtualization-is-hard.html">Why
@@ -254,9 +270,10 @@ networking and writable work mounts for QEMU; Docker is packaging, not a
 security boundary. It does not use privileged mode or the host PID
 namespace.</p>
 <h2 id="network-configuration">Network configuration</h2>
-<p>By default, each box binds to a Linux loopback alias in the
+<p>By default, each USER/FORWARDED box binds to a Linux loopback alias in the
 <strong>10.0.{6,7,8,9}.x</strong> range, broken out by vendor
-family:</p>
+family. These are host aliases for forwarded TCP/UDP services, not guest
+interfaces, and they do not provide guest ICMP:</p>
 <table>
 <thead>
 <tr>

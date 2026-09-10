@@ -12,9 +12,9 @@ addressing=$(bash -c '
   _zbmc_resolve_ip(){ echo 10.0.8.10; }
   _zbmc_lo_alias(){ :; }
   . "$1"
-  printf "%s|%s|%s|%s" "$SSH_PORT" "$WEB_PORT" "$ZBMC_L2_REQUIRED" "$ZBMC_CAPTURE_INTERFACES"
+  printf "%s|%s|%s|%s" "$SSH_PORT" "$WEB_PORT" "$ZBMC_NETWORK_MODE" "$ZBMC_CAPTURE_INTERFACES"
 ' bash "$box")
-[ "$addressing" = '22|443|0|' ]
+[ "$addressing" = '22|443|user|' ]
 grep -Fq "_zbmc_lo_alias \"\$ZBMC_IP\"" "$box"
 grep -Fq "hostfwd=udp:\$ZBMC_IP:\$ZBMC_HOSTPORT-:623" "$box"
 grep -Fq 'GUEST_IP = os.environ.get("X10_GUEST_IP", "10.0.2.15")' "$driver"

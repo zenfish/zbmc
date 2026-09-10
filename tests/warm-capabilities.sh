@@ -4,12 +4,16 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 out=$($repo/tools/zbmc list)
 
-grep -Eq '^NAME +RESERVED IP +WARM$' <<<"$out"
-grep -Eq '^idrac10 +[^ ]+ +(READY|MISSING)$' <<<"$out"
-grep -Eq '^megarac-hpe +[^ ]+ +BROKEN$' <<<"$out"
-grep -Eq '^supermicro-x14 +[^ ]+ +(READY|MISSING)$' <<<"$out"
-grep -Eq '^idrac9 +[^ ]+ +BROKEN$' <<<"$out"
-grep -Eq '^openbmc +[^ ]+ +UNAVAILABLE$' <<<"$out"
+grep -Eq '^NAME +RESERVED IP +NETWORK +WARM$' <<<"$out"
+grep -Eq '^idrac10 +[^ ]+ +USER/FORWARDED +(READY|MISSING)$' <<<"$out"
+grep -Eq '^megarac-hpe +[^ ]+ +USER/FORWARDED +BROKEN$' <<<"$out"
+grep -Eq '^supermicro-x14 +[^ ]+ +USER/FORWARDED +(READY|MISSING)$' <<<"$out"
+grep -Eq '^idrac9 +[^ ]+ +USER/FORWARDED +BROKEN$' <<<"$out"
+grep -Eq '^openbmc +[^ ]+ +USER/FORWARDED +UNAVAILABLE$' <<<"$out"
+
+for box in "$repo"/boxes/*/zbmc.box; do
+  grep -Eq '^ZBMC_NETWORK_MODE=(user|tap)$' "$box" || { echo "network mode missing: $box" >&2; exit 1; }
+done
 grep -Fq 'warm-20260831/state.gz' "$repo/boxes/idrac10/build.sh"
 grep -Fq '00aaf1b1d150d1fb410b6f5755c2950d5b0fbd07e1fba656e9f468d115256d2d' "$repo/boxes/idrac10/build.sh"
 

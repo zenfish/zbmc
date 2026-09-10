@@ -568,7 +568,7 @@ _zr_wait_ready(){
         _zr_guest=1
       fi
     fi
-    if [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+    if [ "${ZBMC_NETWORK_MODE:-user}" = tap ] && [ "$_zr_l2" = 0 ] && ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
       _zr_l2=1
       case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=ICMP;; esac
       _zr_event ICMP ready "$ZBMC_IP answers ICMP; $(_zr_expected ICMP)"
@@ -651,7 +651,7 @@ _zr_wait_ready(){
     fi
 
     local _zr_all=1
-    [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && _zr_all=0
+    [ "${ZBMC_NETWORK_MODE:-user}" = tap ] && [ "$_zr_l2" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_all=0
     [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_all=0
@@ -684,7 +684,7 @@ _zr_wait_ready(){
 
     if [ "$_zr_elapsed_s" -ge "$_zr_deadline" ]; then
       local _zr_missing=
-      [ "${ZBMC_L2_REQUIRED:-1}" != 0 ] && [ "$_zr_l2" = 0 ] && _zr_missing="$_zr_missing icmp"
+      [ "${ZBMC_NETWORK_MODE:-user}" = tap ] && [ "$_zr_l2" = 0 ] && _zr_missing="$_zr_missing icmp"
       [[ "$_zr_required" == *' ssh '* ]] && [ "$_zr_ssh" = 0 ] && _zr_missing="$_zr_missing ssh"
       [[ "$_zr_required" == *' ipmi '* ]] && [ "$_zr_ipmi" = 0 ] && _zr_missing="$_zr_missing ipmi"
       [[ "$_zr_required" == *' redfish '* ]] && [ "$_zr_redfish" = 0 ] && _zr_missing="$_zr_missing redfish"

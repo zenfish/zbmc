@@ -6,6 +6,7 @@
 # not evidence of vendor SSH/SMASH authentication. Never expose this guest outside an isolated lab.
 # See docs/why-bmc-virtualization-is-hard.html for the evidence boundary and historical results.
 ZBMC_NAME=megarac-hpe
+ZBMC_NETWORK_MODE=user
 ZBMC_DESC="HPE XD670 MegaRAC/AST2600 - IPMI, Redfish, and Web-UI login; vendor SSH absent"
 ZBMC_WARM_STATUS=broken
 ZBMC_WARM_REASON="saved ASPEED SRAM is 0x17000; current model requires 0x18000"

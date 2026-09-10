@@ -1,6 +1,7 @@
 # zbmc.box — virtual-BMC descriptor for "idrac9", sourced by the repository's `tools/zbmc` dispatcher.
 # To add another virtual BMC: drop a zbmc.box like this in its dir and register the path in `zbmc`.
 ZBMC_NAME=idrac9
+ZBMC_NETWORK_MODE=user
 ZBMC_DESC="Dell iDRAC9 (NPCM750) - cold boot; SSH/IPMI accepted; Web-UI observed; Redfish not configured"
 ZBMC_WARM_STATUS=broken
 ZBMC_WARM_REASON="restored usb-net is network-dead"

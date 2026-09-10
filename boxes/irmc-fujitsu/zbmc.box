@@ -4,6 +4,7 @@
 # AST2600 model. FTS_RedfishService is disabled because its helper.ko fwinfo2
 # read reproducibly NULL-dereferences with the single-FMC QEMU topology.
 ZBMC_NAME=irmc-fujitsu
+ZBMC_NETWORK_MODE=user
 ZBMC_DESC="Fujitsu iRMC S6 / AST2600 - vendor Web-UI; IPMI under investigation"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +20,6 @@ ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_REQUIRED_SERVICES="webui"
 ZBMC_DISABLED_SERVICES="redfish"
-ZBMC_L2_REQUIRED=0
 ZBMC_STABILITY_SECONDS=15
 ZBMC_READY_DEADLINE=900
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
