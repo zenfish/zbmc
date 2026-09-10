@@ -28,5 +28,6 @@ grep -Fq 'X14_BOOT_TOKEN=qemu-x14-svc' "$box"
 grep -Fq 'BOOT_TOKEN="${X14_BOOT_TOKEN:-qemu-x14-shell}"' "$repo/boxes/supermicro-x14/shell-x14.sh"
 grep -Fq 'qemu-x14-ramroot $BOOT_TOKEN loglevel=4' "$repo/boxes/supermicro-x14/shell-x14.sh"
 grep -Fq 'tap,id=bmcnet,ifname=$TAP,script=no,downscript=no' "$repo/boxes/supermicro-x14/shell-x14.sh"
+grep -Fq 'cpio -o -H newc -R 0:0 --quiet' "$repo/boxes/supermicro-x14/shell-x14.sh"
 
 echo "supermicro-x14 health probes and cold service boot: PASS"
