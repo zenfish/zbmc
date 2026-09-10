@@ -17,9 +17,12 @@ grep -Fq -- '-watchdog-action none' "$box"
 ! grep -q '_zbmc_lo_alias' "$box"
 grep -Fq 'E=/newroot/run/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.custom"
 ! grep -q 'E=/newroot/etc/systemd/system.conf.d' "$repo/boxes/idrac9/init.p4.custom"
-grep -Fq 'early-net: NIC=$NIC' "$repo/boxes/idrac9/init.p4.custom"
-grep -Fq 'NIC=usb-nic-nvgpu' "$repo/boxes/idrac9/init.p4.custom"
-grep -Fq 'while [ ! -e "/sys/class/net/$NIC" ] && [ "$n" -lt 60 ]' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'early-net: NIC=${NIC:-none}' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'modprobe cdc_ether' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'case "$drv" in cdc_ether|usbnet|cdc_ncm|cdc_subset|cdc_eem)' "$repo/boxes/idrac9/init.p4.custom"
+! grep -Fq 'ssh-keygen -A' "$repo/boxes/idrac9/init.p4.custom"
+grep -Fq 'HOSTKEY="$IMG/ssh_host_ed25519_key"' "$repo/boxes/idrac9/build-p4.sh"
+grep -Fq 'install -m 600 "$HOSTKEY" "$ROOT/ssh_host_ed25519_key"' "$repo/boxes/idrac9/build-p4.sh"
 early_net_line=$(grep -n 'early-net: NIC=' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 tmpfiles_line=$(grep -n '^systemd-tmpfiles --create' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
 sshd_line=$(grep -n '/usr/sbin/sshd -f' "$repo/boxes/idrac9/init.p4.custom" | cut -d: -f1)
