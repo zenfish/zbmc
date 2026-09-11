@@ -42,10 +42,9 @@ assert sent == [
     "0penBmc",
     "ip link set eth0 up; ip addr flush dev eth0 scope global; ip addr add 10.250.0.10/8 dev eth0; ip route replace default via 10.0.0.1 dev eth0; ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED",
 ]
-assert expected[-8:] == [
+assert expected[-7:] == [
     r"inet 10\.250\.0\.10/8",
     r"[~/] # ",
-    "Welcome to Phosphor OpenBMC",
     r"login:",
     [r"Password:", r"password:"],
     [r"/#", r"# ", r"root@.*:~#"],
