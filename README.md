@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=b8dd06b8e23abfdf04df1bebf808bc6c22552feb43f8de764ae22983fc4c54be body-sha256=e61d69c3811a3df390eef9b19b315667e4ec3096b5cde2c576593cbc3aa0558d -->
+<!-- html2md:auto source=README.html source-sha256=4e19bbde37f12acc380174245106555e230a9dd900718275f6bab57b85ac5676 body-sha256=342679c01379a0f9168d83ba35cf059530bd10949d1c4d9ddc42685b34b156a7 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -30,7 +30,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The Web-UI passed before TAP; the latest TAP run on 2026-09-10 was captured only while it was still starting. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap. |
 | **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores. |
 | **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
 | **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
