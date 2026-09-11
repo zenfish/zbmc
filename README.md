@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=f4e04c39075a90ccd377133034a74f57c1ab00791c747f80238dd7779b9c0fb1 body-sha256=dd3731e342e806553375e29fca42bc7b4ce8d741f789b4435fdae36cf6fe3fc2 -->
+<!-- html2md:auto source=README.html source-sha256=6b4db71b0f3650995e14e69fec5cfed772b40498ce8f686be4cfd57a727bf2c2 body-sha256=1a69c9eb3c35df7373f6ca080abdcd872fc456f98eb3ca83ed08adf2633823a7 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -24,7 +24,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 | `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
 |----|----|----|----|----|----|----|----|----|----|
-| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | SSH, IPMI, Redfish, and Web-UI passed before TAP; no TAP service pass was captured on 2026-09-10. |
+| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc openbmc status -v`; no warm checkpoint is published. |
 | **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | SSH, IPMI, Redfish, and Web-UI passed before TAP; no TAP service pass was captured on 2026-09-10. |
 | **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
