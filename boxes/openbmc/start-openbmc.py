@@ -19,6 +19,13 @@ debug = os.path.join(wd, "qemu-debug.log")
 
 
 def boot_with_static_ip(child, address, mac):
+    network_command = (
+        "ip link set eth0 up; "
+        "ip addr flush dev eth0 scope global; "
+        f"ip addr add {address}/8 dev eth0; "
+        "ip route replace default via 10.0.0.1 dev eth0; "
+        "ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED"
+    )
     child.expect("Hit any key to stop autoboot:", timeout=90)
     child.send(" ")
     child.expect("ast# ", timeout=30)
@@ -31,17 +38,19 @@ def boot_with_static_ip(child, address, mac):
     child.sendline("run bootcmd")
     child.expect("Starting kernel", timeout=90)
     child.expect(r"[~/] # ", timeout=300)
-    child.sendline(
-        "ip link set eth0 up; "
-        "ip addr flush dev eth0 scope global; "
-        f"ip addr add {address}/8 dev eth0; "
-        "ip route replace default via 10.0.0.1 dev eth0; "
-        "ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED"
-    )
+    child.sendline(network_command)
     child.expect(rf"inet {re.escape(address)}/8", timeout=30)
     child.expect(r"[~/] # ", timeout=30)
     child.sendline("exec /init")
     child.expect("Welcome to Phosphor OpenBMC", timeout=120)
+    child.expect(r"login:", timeout=360)
+    child.sendline(username)
+    child.expect([r"Password:", r"password:"], timeout=30)
+    child.sendline(password)
+    child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
+    child.sendline(network_command)
+    child.expect(rf"inet {re.escape(address)}/8", timeout=30)
+    child.expect([r"/#", r"# ", r"root@.*:~#"], timeout=30)
 
 
 for p in (sock, qmp):
