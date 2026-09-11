@@ -37,7 +37,11 @@ assert sent == [
     "setenv ethaddr 52:54:00:fa:00:10",
     "run bootcmd",
     "ip link set eth0 up; ip addr flush dev eth0 scope global; ip addr add 10.250.0.10/8 dev eth0; ip route replace default via 10.0.0.1 dev eth0; ip -4 -o addr show dev eth0; echo ZBMC_NETWORK_CONFIGURED",
+    "exec /init",
 ]
-assert ("send", "exec /init\r") in console.calls
-assert expected[-2:] == [r"inet 10\.250\.0\.10/8", r"[~/] # "]
+assert expected[-3:] == [
+    r"inet 10\.250\.0\.10/8",
+    r"[~/] # ",
+    "Welcome to Phosphor OpenBMC",
+]
 print("OpenBMC U-Boot native address configuration: PASS")
