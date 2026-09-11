@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=6b4db71b0f3650995e14e69fec5cfed772b40498ce8f686be4cfd57a727bf2c2 body-sha256=1a69c9eb3c35df7373f6ca080abdcd872fc456f98eb3ca83ed08adf2633823a7 -->
+<!-- html2md:auto source=README.html source-sha256=603c55c93deb2a8abe7f2c08314787e3b32afffa66a68f52920729da1922863b body-sha256=1033cc062a42b005afaa65744c508e4cd0fb90730aa612a78338d6ef70ff68ce -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -25,7 +25,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
 |----|----|----|----|----|----|----|----|----|----|
 | **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc openbmc status -v`; no warm checkpoint is published. |
-| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | SSH, IPMI, Redfish, and Web-UI passed before TAP; no TAP service pass was captured on 2026-09-10. |
+| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc nvidia-obmc status -v`; no warm checkpoint is published. |
 | **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ⚠️ FLAKY | ✅ | Cold ✅; Warm ❌ | Redfish and Web-UI passed the readiness hold, then became intermittent; the saved warm image is incompatible with current QEMU. |
