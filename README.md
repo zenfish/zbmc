@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=a0785e03df942e7925b5ecf91b8bc5c003692a7c5c0228b5a22a728907fe75ef body-sha256=2e354e8dbe1cefcd4080f3f6682d0d2dac2d7d153f4c83c69521a4f95ebe7002 -->
+<!-- html2md:auto source=README.html source-sha256=b8dd06b8e23abfdf04df1bebf808bc6c22552feb43f8de764ae22983fc4c54be body-sha256=e61d69c3811a3df390eef9b19b315667e4ec3096b5cde2c576593cbc3aa0558d -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -28,7 +28,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc nvidia-obmc status -v`; no warm checkpoint is published. |
 | **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
-| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ⚠️ FLAKY | ✅ | Cold ✅; Warm ❌ | Redfish and Web-UI passed the readiness hold, then became intermittent; the saved warm image is incompatible with current QEMU. |
+| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The Web-UI passed before TAP; the latest TAP run on 2026-09-10 was captured only while it was still starting. |
 | **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores. |
