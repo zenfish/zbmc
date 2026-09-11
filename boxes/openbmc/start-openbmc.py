@@ -42,7 +42,6 @@ def boot_with_static_ip(child, address, mac):
     child.expect(rf"inet {re.escape(address)}/8", timeout=30)
     child.expect(r"[~/] # ", timeout=30)
     child.sendline("exec /init")
-    child.expect("Welcome to Phosphor OpenBMC", timeout=120)
     child.expect(r"login:", timeout=360)
     child.sendline(username)
     child.expect([r"Password:", r"password:"], timeout=30)
