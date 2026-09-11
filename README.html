@@ -156,8 +156,8 @@ animal's box material.</p>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x14/">supermicro-x14</a></strong></td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td>
-<td>Cold ✅; Warm ❌</td><td>All four network services passed before TAP; the latest TAP run on 2026-09-10 timed out after 15 minutes with only ICMP and console working.</td>
+<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via <code>zbmc supermicro-x14 status -v</code>; no warm checkpoint is published.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x10/">supermicro-x10</a></strong></td>

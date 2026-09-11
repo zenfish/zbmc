@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=603c55c93deb2a8abe7f2c08314787e3b32afffa66a68f52920729da1922863b body-sha256=1033cc062a42b005afaa65744c508e4cd0fb90730aa612a78338d6ef70ff68ce -->
+<!-- html2md:auto source=README.html source-sha256=a0785e03df942e7925b5ecf91b8bc5c003692a7c5c0228b5a22a728907fe75ef body-sha256=2e354e8dbe1cefcd4080f3f6682d0d2dac2d7d153f4c83c69521a4f95ebe7002 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -32,7 +32,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | The Web-UI passed before TAP; the latest TAP run on 2026-09-10 was captured only while it was still starting. |
 | **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores. |
-| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | All four network services passed before TAP; the latest TAP run on 2026-09-10 timed out after 15 minutes with only ICMP and console working. |
+| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
 | **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
 | **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ⚠️ FLAKY | ❌ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
 
