@@ -1,0 +1,104 @@
+# zbmc.box — virtual-BMC descriptor for "supermicro-x12" (Supermicro X12SPI BMC = ATEN AST2600, FW 01.07.20).
+#
+# WHAT: virtual Supermicro X12SPI BMC (5201MS, AST2600) running the real ATEN userland.
+#       jffs2-on-NOR ATEN layout: root = mtdblock1 (rofs squashfs), /web = mtdblock3,
+#       /nv = mtdblock4 (jffs2, guest formats on first boot). No eMMC.
+# WHY:  X12 is the ATEN gen between X11 and the ROT20 X13 — same fleet-shared at-rest
+#       AES password key in libipmi.so. Completes the ATEN AST2600 sweep.
+# BOOT: direct-kernel (vendor kernel carved from the NOR FIT, dtb patched for FMC),
+#       root=/dev/mtdblock1, no initramfs (SMCI runtime LSM requires the first exec to
+#       happen in the full rootfs). Cold only (~2 min).
+#
+# ACCESS (Supermicro ATEN factory default — password auth):
+#   IPMI    : zipmi -H 10.0.8.12 -U ADMIN -P ADMIN <cmd>
+#   Web     : curl -sk https://10.0.8.12/page/login.www
+#   SSH     : sshpass -p ADMIN ssh ADMIN@10.0.8.12
+#   Console : zbmc supermicro-x12 console
+ZBMC_NAME=supermicro-x12
+ZBMC_DESC="Supermicro X12SPI BMC (ATEN AST2600, FW 01.07.20) — ATEN stack, jffs2-on-NOR; ADMIN:ADMIN; real IPMI+web"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/supermicro-x12}"
+FLASH="$_XREPO/firmware/smc-x12-01.07.20.bin"
+
+ZBMC_IP=10.0.8.12
+ZBMC_HOST=x12bmc
+
+IPMI_USER=ADMIN
+IPMI_PW=ADMIN
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=8
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-supermicro-x12.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FLASH" ] || bash "$_XREPO/firmware/download-fw.sh" supermicro-x12
+  [ -f "$FLASH" ] || { echo "firmware missing: $FLASH" >&2; return 1; }
+  # X12 is jffs2-on-NOR: root is the rofs squashfs on mtdblock1 (the NOR already carries
+  # the fixed-partitions map). We carve kernel+dtb from the FIT @0x1d00000 and leave the
+  # vendor partition layout intact (no rofs injection).
+  python3 "$_XREPO/tools/aten-carve.py" "$FLASH" "$ZBMC_DIR" \
+    --fit-off 0x1d00000
+  echo "built: $ZBMC_DIR (kernel.bin fdt-patched.dtb)"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/kernel.bin" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  WD="$ZBMC_DIR" FLASH="$FLASH" EMMC="" ZBMC_IP="$ZBMC_IP" \
+    CONSOLE_SOCK="$SOCK" LOG="$LOG" ROOT_MTD=1 \
+    nohup bash "$_XREPO/tools/aten-boot.sh" >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-8}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN)"; return 0
+  else
+    echo "no answer (first boot formats /nv, ~2 min)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/page/login.www" 2>/dev/null | grep -qi "login\|Supermicro"; then
+    echo "x12 web: UP  (curl -sk https://$ZBMC_HOST/page/login.www)"
+  else
+    echo "x12 web: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

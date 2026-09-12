@@ -1,0 +1,104 @@
+# zbmc.box — virtual-BMC descriptor for "bluefield-bmc" (NVIDIA BlueField-3 DPU BMC = OpenBMC / AST2600 Moonraker, BF-26.04-8).
+#
+# WHAT: `zbmc bluefield-bmc <verb>` drives a virtual NVIDIA BlueField-3 DPU BMC running the
+#       real BF3 OpenBMC kernel + userland. Full phosphor + NVIDIA D-Bus mesh, bmcweb, and
+#       phosphor-net-ipmid serving real RMCP+. Boots direct-kernel (carved FIT + dtb +
+#       initramfs) on ast2600-evb, mt25qu01g flash.
+# WHY:  the DPU-management-plane target. Live-confirmed against this firmware: OBMC-0004
+#       (RAKP1 active-session relabel) and OBMC-0005 (setup-state local command access)
+#       both PASS here. Ships an iptables whitelist firewall; netipmid accepts cipher 17
+#       ONLY (RAKP-HMAC-SHA256). root:0penBmc is the shipped (expired, forced-change) cred.
+# BOOT: direct-kernel (kernel.bin + fdt-boot.dtb + initramfs.cpio, SPL/OP-TEE bypass via
+#       initcall_blacklist=ast2600_spitee_init). eth0 = on-SoC ftgmac100.2 = -nic slot 2,
+#       so two dummy user NICs occupy slots 0/1. Cold boot.
+#
+# ACCESS (NVIDIA OpenBMC shipped cred — password auth, cipher 17 only):
+#   IPMI    : zipmi -H 10.0.7.30 -U root -P 0penBmc -C 17 <cmd>   (cipher 17 ONLY)
+#   Redfish : curl -sk -u root:0penBmc https://10.0.7.30/redfish/v1/
+#   SSH     : sshpass -p 0penBmc ssh root@10.0.7.30
+#   Console : zbmc bluefield-bmc console
+ZBMC_NAME=bluefield-bmc
+ZBMC_DESC="NVIDIA BlueField-3 DPU BMC (OpenBMC Moonraker/AST2600, BF-26.04-8) — cipher-17-only IPMI; root:0penBmc (expired); OBMC-0004/0005 live"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/bluefield-bmc}"
+
+# OpenBMC class = 10.0.7.x. 30 = BlueField host id.
+ZBMC_IP=10.0.7.30
+ZBMC_HOST=bf3bmc
+
+IPMI_USER=root
+IPMI_PW=0penBmc
+IPMI_KEY=00
+IPMI_OPTS="-C 17"
+IPMI_T=10
+SSH_USER=root
+SSH_PW=0penBmc
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-bluefield-bmc.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() { bash "$PROJ_DIR/build.sh"; }
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/kernel.bin" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  : > "$LOG"
+  # eth0 = ftgmac100.2 = -nic slot index 2; two dummy user NICs occupy 0/1. The real NIC is
+  # the third -nic (slirp user-net with the hostfwd on the box IP).
+  sudo -n nohup qemu-system-arm -name bf3-bmc \
+    -M ast2600-evb,fmc-model=mt25qu01g -m 1024 -display none \
+    -kernel "$ZBMC_DIR/kernel.bin" -dtb "$ZBMC_DIR/fdt-boot.dtb" -initrd "$ZBMC_DIR/initramfs.cpio" \
+    -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 irqchip.gicv2_force_probe=1 nosmp initcall_blacklist=ast2600_spitee_init loglevel=8" \
+    -nic user -nic user \
+    -nic "user,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:22-:22,hostname=qemu" \
+    -serial "unix:$SOCK,server,nowait" -no-reboot >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" ${IPMI_OPTS} -t "${IPMI_T:-10}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+ cipher 17; root:0penBmc)"; return 0
+  else
+    echo "no answer (netipmid starts late; ~2-3 min under TCG)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP/redfish/v1/" 2>/dev/null | grep -q ServiceRoot; then
+    echo "bf3 Redfish: UP  (curl -sk -u root:0penBmc https://$ZBMC_HOST/redfish/v1/)"
+  else
+    echo "bf3 Redfish: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

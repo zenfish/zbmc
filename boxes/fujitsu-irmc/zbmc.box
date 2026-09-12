@@ -1,0 +1,110 @@
+# zbmc.box — virtual-BMC descriptor for "fujitsu-irmc" (Fujitsu iRMC S6 BMC = AMI MegaRAC SP-X / AST2600, FW 02.63S).
+#
+# WHAT: `zbmc fujitsu-irmc <verb>` drives a virtual Fujitsu iRMC S6 BMC (PRIMERGY RX2540 M7)
+#       running the real AMI MegaRAC SP-X stack (IPMIMain + the FTS_* OEM daemons +
+#       FTS_WebServer serving the Angular login). The MegaRAC analogue of the ATEN
+#       Supermicro boxes — full-system AST2600 emulation runs the SoC-bound daemons that
+#       SIGSEGV under qemu-user. Headline: IPMIMain runs to completion and FTS_WebServer
+#       binds :443 with a freshly-minted TLS cert.
+# WHY:  the Fujitsu target. iRMC S4/S5/S6 is AMI MegaRAC-SP + Fujitsu ServerView/FTS_*
+#       overlays (same upstream as ASRock Rack / Tyan). sysadmin:superuser OS account,
+#       the cross-vendor AMI shared TLS keys, and the documented default admin:admin.
+# BOOT: direct-kernel (zImage carved from the NOR FMH osimage, dtb patched: single FMC
+#       chip + fixed-partitions + 128MB video pool + reserved-memory carveouts), switch_root
+#       initramfs that neuters FTS_RedfishService (fwinfo2 NULL-deref panic) and mounts the
+#       root squashfs from an SD image. IPMIMain addresses eth0 with the factory-static
+#       192.168.2.100, so hostfwd targets that guest IP. Cold boot (~2-3 min).
+#
+# ACCESS (iRMC factory default — password auth):
+#   IPMI    : zipmi -H 10.0.6.70 -U admin -P admin <cmd>
+#   Web     : curl -sk https://10.0.6.70/   (FTS_WebServer Angular SPA)
+#   SSH     : sshpass -p admin ssh admin@10.0.6.70   (or sysadmin:superuser OS account)
+#   Console : zbmc fujitsu-irmc console
+ZBMC_NAME=fujitsu-irmc
+ZBMC_DESC="Fujitsu iRMC S6 BMC (AMI MegaRAC SP-X / AST2600, FW 02.63S) — MegaRAC + FTS_* OEM; admin:admin / sysadmin:superuser; real IPMI+web"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/fujitsu-irmc}"
+
+# Fujitsu/MegaRAC = 10.0.6.x (shared with megarac-hpe). 70 = iRMC host id.
+ZBMC_IP=10.0.6.70
+ZBMC_HOST=irmcbmc
+# IPMIMain addresses eth0 with this factory-static IP (not DHCP); hostfwd targets it.
+GUEST_IP=192.168.2.100
+
+IPMI_USER=admin
+IPMI_PW=admin
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=10
+SSH_USER=admin
+SSH_PW=admin
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-fujitsu-irmc.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() { bash "$PROJ_DIR/build.sh"; }
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/kernel.bin" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  : > "$LOG"
+  sudo -n nohup qemu-system-arm -M ast2600-evb,fmc-model=w25q512jv -m 1024 -display none \
+    -kernel "$ZBMC_DIR/kernel.bin" -dtb "$ZBMC_DIR/system-patched.dtb" \
+    -initrd "$ZBMC_DIR/initramfs.cpio.gz" \
+    -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 imagebooted=1 nosmp irqchip.gicv2_force_probe=1 loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 irmc_no_redfish" \
+    -drive file="$ZBMC_DIR/flash64.img",format=raw,if=mtd,snapshot=on \
+    -drive file="$ZBMC_DIR/rootfs-sd.img",format=raw,if=sd,snapshot=on \
+    -nic user \
+    -nic user \
+    -nic "user,net=192.168.2.0/24,host=192.168.2.2,hostfwd=udp:$ZBMC_IP:623-$GUEST_IP:623,hostfwd=tcp:$ZBMC_IP:443-$GUEST_IP:443,hostfwd=tcp:$ZBMC_IP:80-$GUEST_IP:80,hostfwd=tcp:$ZBMC_IP:22-$GUEST_IP:22" \
+    -serial "unix:$SOCK,server,nowait" -no-reboot >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-10}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+; admin:admin)"; return 0
+  else
+    echo "no answer (booting; ~2-3 min under TCG)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/" 2>/dev/null | grep -qi "iRMC\|FTS\|html"; then
+    echo "irmc web: UP  (curl -sk https://$ZBMC_HOST/)"
+  else
+    echo "irmc web: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

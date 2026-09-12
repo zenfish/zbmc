@@ -1,0 +1,106 @@
+# zbmc.box — virtual-BMC descriptor for "supermicro-h13s" (Supermicro H13SSF E401MS BMC = ATEN AST2600, FW 01.09.16, ROT20).
+#
+# WHAT: virtual Supermicro H13SSF (E401MS, ROT20) BMC running the real ATEN userland.
+#       eMMC-root ROT20 ATEN layout (same class as X13): FMC disabled in the vendor dtb
+#       (it roots kernel+nv from eMMC) -> we enable it and inject a single "rofs" squashfs
+#       partition @0x630000; the guest formats /nv (p5) /nv1 (p6) /nv2 (p7) from a blank
+#       GPT eMMC on first boot. Root is direct from the NOR squashfs (no initramfs; SMCI
+#       runtime LSM).
+# WHY:  H13SSF is the storage/flash-optimized H13 variant with ROT20. The fleet-shared
+#       at-rest AES key is confirmed here, and this is the only gen that seals key_iv.key
+#       to OP-TEE.
+# BOOT: direct-kernel (vendor kernel carved from the NOR FIT @0x130000, dtb patched for
+#       FMC + rofs @0x630000), root=/dev/mtdblock0, GPT eMMC for /nv. Cold (~2 min).
+#
+# ACCESS (Supermicro ATEN factory default — password auth):
+#   IPMI    : zipmi -H 10.0.8.18 -U ADMIN -P ADMIN <cmd>
+#   Web     : curl -sk https://10.0.8.18/page/login.www
+#   SSH     : sshpass -p ADMIN ssh ADMIN@10.0.8.18
+#   Console : zbmc supermicro-h13s console
+ZBMC_NAME=supermicro-h13s
+ZBMC_DESC="Supermicro H13SSF E401MS BMC (ATEN AST2600, FW 01.09.16, ROT20) — ATEN stack, eMMC-root; ADMIN:ADMIN; real IPMI+web"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/supermicro-h13s}"
+FLASH="$_XREPO/firmware/smc-h13s-01.09.16.bin"
+
+ZBMC_IP=10.0.8.18
+ZBMC_HOST=h13sbmc
+
+IPMI_USER=ADMIN
+IPMI_PW=ADMIN
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=8
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-supermicro-h13s.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FLASH" ] || bash "$_XREPO/firmware/download-fw.sh" supermicro-h13s
+  [ -f "$FLASH" ] || { echo "firmware missing: $FLASH" >&2; return 1; }
+  # H13S is eMMC-root ROT20 (root on the injected rofs @0x630000), guest formats /nv p5/6/7.
+  python3 "$_XREPO/tools/aten-carve.py" "$FLASH" "$ZBMC_DIR" \
+    --fit-off 0x130000 --rofs-off 0x630000 --rofs-len 0x2900000
+  python3 "$_XREPO/tools/aten-emmc.py" "$ZBMC_DIR/emmc.img" 256 5:nv:60 6:nv1:60 7:nv2:60
+  echo "built: $ZBMC_DIR (kernel.bin fdt-patched.dtb emmc.img)"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/kernel.bin" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  WD="$ZBMC_DIR" FLASH="$FLASH" EMMC="$ZBMC_DIR/emmc.img" ZBMC_IP="$ZBMC_IP" \
+    CONSOLE_SOCK="$SOCK" LOG="$LOG" ROOT_MTD=0 \
+    nohup bash "$_XREPO/tools/aten-boot.sh" >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-8}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN)"; return 0
+  else
+    echo "no answer (first boot formats /nv, ~2 min)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/page/login.www" 2>/dev/null | grep -qi "login\|Supermicro"; then
+    echo "h13s web: UP  (curl -sk https://$ZBMC_HOST/page/login.www)"
+  else
+    echo "h13s web: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

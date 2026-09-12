@@ -126,12 +126,35 @@ Use `zbmc` unless you're debugging the boot itself.
 
 ## 6. The other boxes
 
-`boxes/<name>/` holds the recipe + findings for every BMC in the zoo (Dell iDRAC9/10, Supermicro X14,
-NVIDIA GB200, HPE Cray, vanilla OpenBMC). These are **reference recipes** — their firmware is too large
-for GitHub (fetch it with `./firmware/download-fw.sh`) and their scripts are written against the author's
-build tree, so they're not one-command runnable from a clone yet. Read them alongside
-[docs/zoo-lessons.md](docs/zoo-lessons.md), which explains each box's SoC, boot method, network trick, and
-gotchas. `advantech-asmb787` is the fully worked, runnable example to learn the pattern from.
+`boxes/<name>/` holds the recipe + findings for every BMC in the zoo (Dell iDRAC9/10, Supermicro
+X10/X11/X12/X13/X14/H13, NVIDIA GB200 / BlueField-3, HPE Cray, Fujitsu iRMC, H3C HDM, Opengear,
+Lenovo XCC, vanilla OpenBMC). Each ships a `zbmc.box` descriptor the `zbmc` tool drives. Fetch the
+firmware with `./firmware/download-fw.sh <box>` (see [docs/firmware-sources.md](docs/firmware-sources.md)),
+then `./build.sh <box>` and `zbmc <box> start`. Read the box recipes alongside
+[docs/zoo-lessons.md](docs/zoo-lessons.md), which explains each box's SoC, boot method, network trick,
+and gotchas. `advantech-asmb787` is the fully worked, runnable example to learn the pattern from.
+
+**Current box roster** (`zbmc list`):
+
+| Box | Vendor / stack | Access |
+|---|---|---|
+| advantech-asmb787 | AMI MegaRAC SP-X 4.0 / AST2600 | console-only |
+| openbmc | vanilla upstream OpenBMC / AST2600 | ssh, IPMI-LAN, Redfish |
+| nvidia-obmc | NVIDIA GB200 OpenBMC / AST2600 | ssh, IPMI (cipher-17), Redfish |
+| megarac-hpe | HPE Cray XD670 MegaRAC SP-X / AST2600 | IPMI, Redfish |
+| idrac9 / idrac10 | Dell iDRAC (NPCM750 / NPCM845) | ssh, IPMI (factory key), Redfish |
+| supermicro-x10 | SMC X10 ATEN / AST2400 | IPMI (cipher 0-14), web |
+| supermicro-x12 | SMC X12SPI ATEN / AST2600 | IPMI, web, ssh |
+| supermicro-x13 | SMC X13 2401MS ATEN / AST2600 ROT20 | IPMI, web, ssh |
+| supermicro-x13d | SMC X13DAi C301MS ATEN / AST2600 ROT2HW2 | IPMI, web, ssh |
+| supermicro-x14 | SMC X14 OpenBMC / AST2600-ROT | IPMI, Redfish, ssh |
+| supermicro-h13f | SMC H13 F401MS ATEN / AST2600 | IPMI, web, ssh |
+| supermicro-h13s | SMC H13SSF E401MS ATEN / AST2600 ROT20 | IPMI, web, ssh |
+| h3c-hdm | H3C HDM3 OpenBMC+lighttpd / AST2600 | IPMI, Redfish, ssh |
+| fujitsu-irmc | Fujitsu iRMC S6 MegaRAC SP-X / AST2600 | IPMI, web |
+| bluefield-bmc | NVIDIA BF3 OpenBMC Moonraker / AST2600 | IPMI (cipher-17), Redfish |
+| opengear-om2200 | Opengear OM2200 / x86-64 | web (no IPMI) |
+| lenovo-xcc2 | Lenovo XCC2 Vertiv Stingray-Z51 / AST2600 | experimental |
 
 ---
 

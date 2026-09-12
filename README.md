@@ -17,9 +17,10 @@ skill so others can reproduce it on their own images.
 
 ## The animals
 
-`zbmc list` shows these; run any with `zbmc <name> start`. **Six are turnkey from a clone**; the rest are
-reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmware/download-fw.sh`
-(**vendor download first, git.trouble.org mirror as fallback**, all SHA-256-verified).
+`zbmc list` shows these; run any with `zbmc <name> start`. **Sixteen are turnkey from a clone**; the
+rest are reference recipes. Firmware isn't committed — `build.sh` fetches it via
+`firmware/download-fw.sh` (**vendor download first, git.trouble.org mirror as fallback**, all
+SHA-256-verified).
 
 | `zbmc` name | Description | Turnkey? · boot |
 |-------------|-------------|:----------------:|
@@ -28,7 +29,18 @@ reference recipes. Firmware isn't committed — `build.sh` fetches it via `firmw
 | **advantech-asmb787** | Advantech ASMB-787 BMC (AMI MegaRAC SP-X 4.0 / AST2600, armv7l) — CONSOLE-green (sysadmin/superuser); ext net WIP | ✅ turnkey (console) · ~2 min |
 | **idrac10** | Dell iDRAC10 (NPCM845/aarch64) — warm-snapshot restore; ssh + IPMI (zipmi -K factory key) | ✅ turnkey (snap) · ~20 s |
 | **megarac-hpe** | HPE XD670 BMC (AMI MegaRAC SP-X / AST2600, armv7l) — warm-snapshot restore; IPMI 2.0 RMCP+ + authed Redfish (admin/superuser) | ✅ turnkey (snap) · ~20 s |
-| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN); ssh resets over slirp | ✅ turnkey (snap) · ~20 s |
+| **supermicro-x14** | Supermicro X14 BMC (Phosphor OpenBMC/AST2600-ROT) — warm-snapshot restore; Redfish + IPMI cipher-17 (ADMIN:ADMIN) | ✅ turnkey (snap) · ~20 s |
+| **supermicro-x10** | Supermicro X10 BMC (AST2400, FW 3.93) — weak-cipher oracle (IPMI suites 0-14); ADMIN:ADMIN | ✅ turnkey (net) · ~1 min |
+| **supermicro-x12** | Supermicro X12SPI BMC (ATEN/AST2600, FW 01.07.20) — jffs2-on-NOR; ADMIN:ADMIN | ✅ turnkey (net) · ~2 min |
+| **supermicro-x13** | Supermicro X13 2401MS BMC (ATEN/AST2600 ROT20, FW 01.07.01) — eMMC-root; ADMIN:ADMIN | ✅ turnkey (net) · ~2 min |
+| **supermicro-x13d** | Supermicro X13DAi C301MS BMC (ATEN/AST2600 ROT2HW2, FW 01.08.08) — eMMC-root; ADMIN:ADMIN | ✅ turnkey (net) · ~2 min |
+| **supermicro-h13f** | Supermicro H13 F401MS BMC (ATEN/AST2600, FW 01.06.05) — jffs2-on-NOR; ADMIN:ADMIN | ✅ turnkey (net) · ~2 min |
+| **supermicro-h13s** | Supermicro H13SSF E401MS BMC (ATEN/AST2600 ROT20, FW 01.09.16) — eMMC-root; ADMIN:ADMIN | ✅ turnkey (net) · ~2 min |
+| **h3c-hdm** | H3C HDM3 BMC (OpenBMC phosphor + lighttpd / AST2600, FW 2.06.02) — admin:Password@_ | ✅ turnkey (net) · ~3 min |
+| **fujitsu-irmc** | Fujitsu iRMC S6 BMC (AMI MegaRAC SP-X / AST2600, FW 02.63S) — admin:admin / sysadmin:superuser | ✅ turnkey (net) · ~3 min |
+| **bluefield-bmc** | NVIDIA BlueField-3 DPU BMC (OpenBMC Moonraker/AST2600, BF-26.04-8) — cipher-17-only IPMI; root:0penBmc | ✅ turnkey (net) · ~3 min |
+| **opengear-om2200** | Opengear OM2200 (x86-64, FW 25.11.7) — console manager, nginx+Lua; root:default; no IPMI | ✅ turnkey (net) · ~2 min |
+| **lenovo-xcc2** | Lenovo XCC2 BMC (Vertiv Stingray-Z51 / AST2600, FW 1.10) — kernel boots, vendor /init hw-bound (experimental) | ✅ turnkey (console) · ~2 min |
 | **idrac9** | Dell iDRAC9 (NPCM750) — Phase-4 mesh + RAKP + Redfish | recipe · — |
 
 **Boot times** are approximate on an unloaded host — a busy machine (or a dozen stray qemus) is much slower. Two classes: **cold** boxes build/boot the firmware fresh (~2 min to services); **warm-snapshot** boxes (idrac10, supermicro-x14) resume a captured RAM state (~15–30 s).
@@ -64,11 +76,14 @@ boot/restore/snapshot recipes + findings docs.
 
 ```
 build.sh      build every ready box's boot artifacts into work/<box>/  (./build.sh --list to preview)
-tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), zbmc (the dispatcher)
+tools/        unpack-ami (MegaRAC), unpack-idrac (Dell DUP/FIT), aten-carve/aten-emmc/aten-boot
+              (Supermicro ATEN FIT/dtb patch + eMMC), zbmc (the dispatcher)
 boxes/<name>/ per-box zbmc.box + boot/build/restore/snapshot scripts + findings docs
-docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box)
+docs/         from-firmware-to-bare-metal.md (advantech-asmb787 deep-dive) · zoo-lessons.md (cross-box) ·
+              firmware-sources.md (vendor landing pages + hashes)
 skill/        megarac-virtualize/ + virtualize-bmc/ — agent skills reproducing this on new firmware
-firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback)
+firmware/     download-fw.sh — fetches all firmware (vendor first, git.trouble.org mirror fallback) ·
+              manifest.txt + checksum-manifest.sh — SHA-256 reference list for mirror hosting
 ```
 
 ## What you'll learn from the docs

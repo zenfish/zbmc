@@ -11,5 +11,7 @@ cin*
 firmware/*
 !firmware/download-fw.sh
 !firmware/.gitkeep
+!firmware/manifest.txt
+!firmware/checksum-manifest.sh
 __pycache__/
 *.pyc

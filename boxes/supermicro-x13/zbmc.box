@@ -1,0 +1,110 @@
+# zbmc.box — virtual-BMC descriptor for "supermicro-x13" (Supermicro X13 2401MS BMC = ATEN AST2600, FW 01.07.01).
+#
+# WHAT: `zbmc supermicro-x13 <verb>` drives a virtual Supermicro X13 BMC (2401MS, ROT20,
+#       AST2600) running the REAL ATEN userland (busybox SysV init + lighttpd/CGI web +
+#       the hardware-bound ATEN IPMI stack serving RMCP+ on udp/623). This is the
+#       "vendor kernel, direct boot" SPL/OP-TEE bypass recipe (see docs/zoo-lessons.md).
+# WHY:  the newest ATEN generation. Unlike X14 (genuine Phosphor OpenBMC), X13 is still
+#       the ATEN libipmi.so/libweb.so/lighttpd stack + ROT20 root-of-trust, with the
+#       fleet-shared at-rest AES password key + SMCRAKP constant intact.
+# BOOT: direct-kernel (-kernel carved from the NOR FIT @0x130000, dtb patched to enable
+#       FMC + inject the rofs squashfs @0x630000, OP-TEE disabled), root=/dev/mtdblock0,
+#       blank GPT eMMC for /nv (guest mkfs.ext4 on first boot). Cold only (~2 min; first
+#       boot formats /nv + mints the TLS cert).
+#
+# ACCESS (Supermicro ATEN factory default — password auth):
+#   IPMI    : zipmi -H 10.0.8.13 -U ADMIN -P ADMIN <cmd>     (RMCP+)
+#   Web     : curl -sk https://10.0.8.13/page/login.www       (Supermicro BMC Login)
+#   SSH     : sshpass -p ADMIN ssh ADMIN@10.0.8.13
+#   Console : zbmc supermicro-x13 console  (busybox askfirst root shell on ttyS4)
+#
+# Sourced by the `zbmc` dispatcher. qemu runs under sudo and binds the lo0-alias IP
+# 10.0.8.13 on the standard ports directly (zoo root-direct model).
+ZBMC_NAME=supermicro-x13
+ZBMC_DESC="Supermicro X13 2401MS BMC (ATEN AST2600, FW 01.07.01, ROT20) — ATEN stack (not OpenBMC); ADMIN:ADMIN; real IPMI+web"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/supermicro-x13}"
+FLASH="$_XREPO/firmware/smc-x13-01.07.01.bin"
+
+ZBMC_IP=10.0.8.13
+ZBMC_HOST=x13bmc
+
+IPMI_USER=ADMIN
+IPMI_PW=ADMIN
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=8
+SSH_USER=ADMIN
+SSH_PW=ADMIN
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-supermicro-x13.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+# build: carve the ATEN kernel FIT from the NOR, patch the dtb, build the blank GPT eMMC.
+# Turnkey given the firmware image (fetched by firmware/download-fw.sh supermicro-x13).
+zbmc_build() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FLASH" ] || bash "$_XREPO/firmware/download-fw.sh" supermicro-x13
+  [ -f "$FLASH" ] || { echo "firmware missing: $FLASH" >&2; return 1; }
+  python3 "$_XREPO/tools/aten-carve.py" "$FLASH" "$ZBMC_DIR" \
+    --fit-off 0x130000 --rofs-off 0x630000 --rofs-len 0x2900000
+  python3 "$_XREPO/tools/aten-emmc.py" "$ZBMC_DIR/emmc.img" 256 5:nv:100 6:nv1:100
+  echo "built: $ZBMC_DIR (kernel.bin fdt-patched.dtb emmc.img)"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/kernel.bin" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  WD="$ZBMC_DIR" FLASH="$FLASH" EMMC="$ZBMC_DIR/emmc.img" ZBMC_IP="$ZBMC_IP" \
+    CONSOLE_SOCK="$SOCK" LOG="$LOG" ROOT_MTD=0 \
+    nohup bash "$_XREPO/tools/aten-boot.sh" >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-8}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+; ADMIN:ADMIN)"; return 0
+  else
+    echo "no answer (first boot formats /nv + mints cert, ~2 min)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/page/login.www" 2>/dev/null | grep -qi "login\|Supermicro"; then
+    echo "x13 web: UP  (curl -sk https://$ZBMC_HOST/page/login.www)"
+  else
+    echo "x13 web: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

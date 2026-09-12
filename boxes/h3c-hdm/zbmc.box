@@ -1,0 +1,110 @@
+# zbmc.box — virtual-BMC descriptor for "h3c-hdm" (H3C HDM3 BMC = OpenBMC phosphor / AST2600, FW 2.06.02).
+#
+# WHAT: `zbmc h3c-hdm <verb>` drives a virtual H3C HDM3 BMC (G5/G6 server line, AST2600)
+#       running the real H3C OpenBMC-phosphor userland (ipmid/netipmid + phosphor-ipmi-* +
+#       lighttpd Redfish — NO bmcweb; a large H3C OEM binary suite). Built from the
+#       SIGNHEAD container sections re-assembled into a 64 MiB AST2600 SPI flash image.
+# WHY:  the only H3C target in the zoo, and a distinct OpenBMC lineage (phosphor + lighttpd
+#       instead of bmcweb). HDM is AMI-MegaRAC-derived on the G3/G5 HDM line but HDM3 moved
+#       to OpenBMC. Default HDM creds admin/Password@_; carries the AMI cross-vendor
+#       secrets (shared TLS keys, pwdEncKey=megarac, sysadmin:superuser).
+# BOOT: full-flash (if=mtd) on ast2600-evb, mt25qu01g flash model. The vendor SPL+u-boot+
+#       OP-TEE chain is in the image; the AST2600 SPL runs (NSec boot, non-blocking) and the
+#       OP-TEE handoff stalls — so the box boots the carved kernel FIT directly instead
+#       (see boxes/h3c-hdm/build.sh). Cold boot.
+#
+# ACCESS (H3C HDM factory default — password auth):
+#   IPMI    : zipmi -H 10.0.5.13 -U admin -P 'Password@_' <cmd>   (also sysadmin:superuser)
+#   Redfish : curl -sk -u 'admin:Password@_' https://10.0.5.13/redfish/v1/
+#   SSH     : sshpass -p 'Password@_' ssh admin@10.0.5.13
+#   Console : zbmc h3c-hdm console
+ZBMC_NAME=h3c-hdm
+ZBMC_DESC="H3C HDM3 BMC (OpenBMC phosphor + lighttpd / AST2600, FW 2.06.02) — H3C OEM, AMI-lineage; admin:Password@_; real IPMI+Redfish"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/h3c-hdm}"
+# The re-assembled 64 MiB flash image (built from the SIGNHEAD sections). Produced by the
+# box's build.sh from firmware/h3c-hdm3-2.06.02/sections (fetched by firmware/download-fw.sh).
+FLASH_IMG="$ZBMC_DIR/hdm3-flash.img"
+
+# H3C = 10.0.5.x (own vendor block). 13 = host id.
+ZBMC_IP=10.0.5.13
+ZBMC_HOST=h3chdm
+
+IPMI_USER=admin
+IPMI_PW='Password@_'
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=8
+SSH_USER=admin
+SSH_PW='Password@_'
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-h3c-hdm.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() {
+  bash "$PROJ_DIR/build.sh"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FLASH_IMG" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  : > "$LOG"
+  # Full-flash boot (vendor SPL+u-boot+OP-TEE in-image); the carved-FIT direct boot is the
+  # proven path — see build.sh, which also stages kernel.bin/fdt for the direct boot below.
+  sudo -n nohup qemu-system-arm -M ast2600-evb,fmc-model=mt25qu01g -m 1024 -display none \
+    -kernel "$ZBMC_DIR/kernel.bin" -dtb "$ZBMC_DIR/fdt-patched.dtb" \
+    -initrd "$ZBMC_DIR/ramdisk.cpio" \
+    -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 root=/dev/ram0 rw initcall_blacklist=ast2600_spitee_init irqchip.gicv2_force_probe=1 nosmp loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 systemd.mask=xyz.openbmc_project.State.BMC.service" \
+    -drive file="$FLASH_IMG",format=raw,if=mtd,snapshot=on \
+    -nic "user,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:80-:80,hostfwd=tcp:$ZBMC_IP:22-:22,hostname=qemu" \
+    -serial "unix:$SOCK,server,nowait" -no-reboot >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-8}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() {
+  local r; r=$(zbmc_ipmi mc info)
+  if echo "$r" | grep -q "IPMI Version"; then
+    echo "AUTH OK (zipmi RMCP+; admin:Password@_)"; return 0
+  else
+    echo "no answer (booting; ~2-3 min under TCG)"; return 1
+  fi
+}
+
+zbmc_web() {
+  if curl -sk --max-time 8 -u "$IPMI_USER:$IPMI_PW" "https://$ZBMC_IP/redfish/v1/" 2>/dev/null | grep -q ServiceRoot; then
+    echo "h3c-hdm Redfish: UP  (curl -sk -u 'admin:Password@_' https://$ZBMC_HOST/redfish/v1/)"
+  else
+    echo "h3c-hdm Redfish: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

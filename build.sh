@@ -2,8 +2,8 @@
 # build.sh — build the QEMU boot artifacts for every box that can be built.
 #
 # A box is buildable when it has a recipe (boxes/<box>/build.sh) AND its firmware is present
-# (the Advantech image ships in this repo; the big Dell/Supermicro images are fetched by
-# firmware/download-fw.sh into firmware/<box>/). Each box builds into work/<box>/.
+# (the Advantech image ships in this repo; the rest are fetched by firmware/download-fw.sh into
+# firmware/). Each box builds into work/<box>/.
 #
 # USAGE:  ./build.sh              # build everything that can be built
 #         ./build.sh advantech-asmb787   # just one box

@@ -1,0 +1,92 @@
+# zbmc.box — virtual-BMC descriptor for "opengear-om2200" (Opengear OM2200 Operations Manager / x86-64, FW 25.11.7).
+#
+# WHAT: `zbmc opengear-om2200 <verb>` drives a virtual Opengear OM2200 Operations Manager.
+#       x86-64 native: GRUB+RAUC A/B bundle, kernel = bzImage 6.6.84 with SquashFS built in
+#       (no initrd member), rootfs = rootfs.squashfs attached as a virtio block device. Root
+#       is read-only; reaches systemd -> nginx(:443)/httpd on first boot.
+# WHY:  the Opengear console-manager target — the only x86-64 box in the zoo (every other
+#       box is ARM/aarch64). Distinct stack (opengear-ngcs, nginx + Lua). Default root:
+#       default. Runs on qemu -M q35 (no ARM SoC emulation needed).
+# BOOT: direct-kernel (-kernel bzImage + rootfs.squashfs as virtio-blk, root=/dev/vda).
+#       qemu -M q35, 4 vCPU, 4G RAM. Cold boot.
+#
+# ACCESS (Opengear factory default — password auth):
+#   Web     : curl -sk https://10.0.4.20/   (nginx; root:default)
+#   SSH     : sshpass -p default ssh root@10.0.4.20
+#   Console : zbmc opengear-om2200 console
+ZBMC_NAME=opengear-om2200
+ZBMC_DESC="Opengear OM2200 Operations Manager (x86-64, FW 25.11.7) — console manager, nginx+Lua; root:default; the only x86 box"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/opengear-om2200}"
+FWDIR="$_XREPO/firmware/opengear-om2200-25.11.7"
+
+# Opengear = 10.0.4.x (own vendor block). 20 = host id.
+ZBMC_IP=10.0.4.20
+ZBMC_HOST=om2200
+
+IPMI_USER=root
+IPMI_PW=default
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=6
+SSH_USER=root
+SSH_PW=default
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-opengear-om2200.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FWDIR/kernel.img" ] || bash "$_XREPO/firmware/download-fw.sh" opengear-om2200
+  [ -f "$FWDIR/kernel.img" ] || { echo "firmware missing: $FWDIR (see docs/firmware-sources.md)" >&2; return 1; }
+  echo "opengear-om2200 firmware present: $FWDIR/kernel.img + rootfs.squashfs"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FWDIR/kernel.img" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  : > "$LOG"
+  sudo -n nohup qemu-system-x86_64 -M q35 -m 4096 -smp 4 -display none \
+    -kernel "$FWDIR/kernel.img" \
+    -append "console=ttyS0,115200n8 root=/dev/vda rootfstype=squashfs ro loglevel=3" \
+    -drive file="$FWDIR/rootfs.squashfs",format=raw,if=virtio \
+    -nic "user,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:80-:80,hostfwd=tcp:$ZBMC_IP:22-:22,hostname=qemu" \
+    -serial "unix:$SOCK,server,nowait" -no-reboot >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=tcp:$ZBMC_IP:443-:443" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() { echo "opengear-om2200 has no IPMI (console manager, not a BMC); use web/ssh"; return 2; }
+zbmc_ipmi_health() { echo "n/a (no IPMI)"; return 1; }
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/" 2>/dev/null | grep -qi "opengear\|login\|html"; then
+    echo "om2200 web: UP  (curl -sk https://$ZBMC_HOST/  — root:default)"
+  else
+    echo "om2200 web: down/warming — zbmc $ZBMC_NAME status -f"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

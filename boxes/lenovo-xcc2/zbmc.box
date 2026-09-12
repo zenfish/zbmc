@@ -1,0 +1,110 @@
+# zbmc.box — virtual-BMC descriptor for "lenovo-xcc2" (Lenovo XClarity Controller 2 / AST2600, FW 1.10).
+#
+# WHAT: `zbmc lenovo-xcc2 <verb>` drives a virtual Lenovo XCC2 BMC (R5X304H, AMD EGS,
+#       AST2600) running the real XCC2 kernel + rootfs. Kernel is a plain detached-signed
+#       ARM zImage (no FIT, no uImage); -kernel hands it to Linux directly, skipping the
+#       vendor SPL/u-boot signtool check. Rootfs is a single gzip SquashFS attached as an
+#       SD block device (root=/dev/mmcblk0).
+# WHY:  the Lenovo XCC target (Vertiv/Avocent "Stingray Z51" stack: nginx + LuaJIT + z51
+#       app server + gunicorn/Flask GUI + libipmi.so/libsm.so). Default creds USERID/PASSW0RD
+#       (Vertiv "Stingray Z51"). Signed but not encrypted — no key needed to unpack.
+# STATUS: EXPERIMENTAL — the kernel boots but the vendor /init is hardware-bound (no login
+#       yet; the AST2600-evb machine doesn't fully match XCC2's board). Network daemons not
+#       yet reachable. Retained as a boot-candidate recipe; see docs/firmware-sources.md.
+# BOOT: direct-kernel (-kernel zImage, qemu internal ast2600-evb dtb), rootfs padded to a
+#       256 MiB power-of-2 SD image. Cold boot.
+#
+# ACCESS (Lenovo XCC factory default — password auth; not yet reachable under emulation):
+#   Web     : curl -sk https://10.0.11.10/   (USERID:PASSW0RD — once the web tier serves)
+#   Console : zbmc lenovo-xcc2 console
+ZBMC_NAME=lenovo-xcc2
+ZBMC_DESC="Lenovo XCC2 BMC (AST2600, Vertiv Stingray-Z51, FW 1.10) — kernel boots, vendor /init hw-bound (EXPERIMENTAL); USERID:PASSW0RD"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_XREPO="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$_XREPO/work/lenovo-xcc2}"
+FWDIR="$_XREPO/firmware/lenovo-xcc2-1.10"
+
+# Lenovo = 10.0.11.x (own vendor block). 10 = host id.
+ZBMC_IP=10.0.11.10
+ZBMC_HOST=xcc2bmc
+
+IPMI_USER=USERID
+IPMI_PW=PASSW0RD
+IPMI_KEY=00
+IPMI_OPTS=""
+IPMI_T=8
+SSH_USER=USERID
+SSH_PW=PASSW0RD
+SSH_PORT=22
+IPMI_PORT=623
+WEB_PORT=443
+
+PIDF=/tmp/zbmc-lenovo-xcc2.pid
+LOG="$ZBMC_DIR/console.log"
+SOCK="$ZBMC_DIR/console.sock"
+
+zbmc_build() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$FWDIR/zImage-arm" ] || bash "$_XREPO/firmware/download-fw.sh" lenovo-xcc2
+  [ -f "$FWDIR/zImage-arm" ] || { echo "firmware missing: $FWDIR (see docs/firmware-sources.md)" >&2; return 1; }
+  # Pad the rootfs to a 256 MiB power-of-2 SD image (qemu if=sd requires power-of-2).
+  if [ ! -f "$ZBMC_DIR/xcc-rootfs.sqfs" ]; then
+    echo "[build] padding xcc-rootfs.sqfs to 256 MiB"
+    cp "$FWDIR/xcc-rootfs.sqfs" "$ZBMC_DIR/xcc-rootfs.sqfs"
+    local sz target=$((256*1024*1024))
+    sz=$(stat -f%z "$ZBMC_DIR/xcc-rootfs.sqfs" 2>/dev/null || stat -c%s "$ZBMC_DIR/xcc-rootfs.sqfs")
+    if [ "$sz" -lt "$target" ]; then
+      dd if=/dev/zero bs=1m count=$(( (target-sz)/1048576 )) >> "$ZBMC_DIR/xcc-rootfs.sqfs" 2>/dev/null
+    fi
+  fi
+  echo "built: $ZBMC_DIR (xcc-rootfs.sqfs padded to 256 MiB)"
+}
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  [ -f "$ZBMC_DIR/xcc-rootfs.sqfs" ] || zbmc_build || return 1
+  local SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  $SUDO ifconfig lo0 alias "$ZBMC_IP" up 2>/dev/null
+  grep -qE "[[:space:]]${ZBMC_HOST}([[:space:]]|\$)" /etc/hosts 2>/dev/null || \
+    echo "$ZBMC_IP $ZBMC_HOST $ZBMC_NAME" | $SUDO tee -a /etc/hosts >/dev/null
+  $SUDO rm -f "$SOCK" 2>/dev/null
+  : > "$LOG"
+  sudo -n nohup qemu-system-arm -M ast2600-evb,fmc-model=mt25ql512ab -m 1024 -display none \
+    -kernel "$FWDIR/zImage-arm" \
+    -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 root=/dev/mmcblk0 rootfstype=squashfs ro rootdelay=2 irqchip.gicv2_force_probe=1 nosmp initcall_blacklist=ast2600_spitee_init loglevel=8" \
+    -drive file="$ZBMC_DIR/xcc-rootfs.sqfs",format=raw,if=sd \
+    -nic "user,hostfwd=udp:$ZBMC_IP:623-:623,hostfwd=tcp:$ZBMC_IP:443-:443,hostfwd=tcp:$ZBMC_IP:80-:80,hostfwd=tcp:$ZBMC_IP:22-:22,hostname=qemu" \
+    -serial "unix:$SOCK,server,nowait" -no-reboot >>"$LOG" 2>&1 &
+  local n=0 qp=; while [ $n -lt 60 ]; do
+    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:623-:623" | head -1); [ -n "$qp" ] && break
+    sleep 0.3; n=$((n+1)); done
+  echo "$qp"
+}
+
+zbmc_ssh() {
+  command -v sshpass >/dev/null || { echo "need sshpass"; return 1; }
+  sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=8 -o LogLevel=ERROR "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ipmi() {
+  timeout -s KILL "$(( IPMI_T + 6 ))" \
+    env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "$IPMI_USER" -P "$IPMI_PW" -t "${IPMI_T:-8}" "$@" 2>&1
+}
+
+zbmc_ipmi_health() { echo "no IPMI yet (vendor /init hw-bound; kernel boots only)"; return 1; }
+
+zbmc_web() {
+  if curl -sk --max-time 8 "https://$ZBMC_IP/" 2>/dev/null | grep -qi "xcc\|lenovo\|login"; then
+    echo "xcc2 web: UP  (curl -sk https://$ZBMC_HOST/  — USERID:PASSW0RD)"
+  else
+    echo "xcc2 web: down (vendor /init hw-bound; kernel boots but no web yet)"
+  fi
+}
+
+zbmc_console() { command -v socat >/dev/null || { echo "need socat"; return 1; }
+  echo "console -> $SOCK  (Ctrl-] to detach)"; exec sudo socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"; }
+
+ZBMC_READY_GREP='login:'

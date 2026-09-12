@@ -22,7 +22,7 @@
 #        production/signed image -- the payload is plain XZ-SquashFS. If a carved
 #        region is truly AES (entropy ~8.0 AND no hsqs/jffs2 magic anywhere),
 #        this reports it and stops; decryption key lives in U-Boot/loader.
-# RELATED  unpack-idrac (Dell DUP/FIT format); ~/phd/bmc/AMI prior extractions.
+# RELATED  unpack-idrac (Dell DUP/FIT format).
 # =============================================================================
 set -uo pipefail
 

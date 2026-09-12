@@ -1,0 +1,45 @@
+# zbmc reference firmware manifest
+# ---------------------------------------------------------------------------
+# Every firmware file the zbmc boxes need, with its SHA-256 and byte size.
+# Use this to stage an external mirror (e.g. https://git.trouble.org/zbmc-lab/)
+# and to verify downloads. Each line:  <sha256>  <bytes>  <path relative to this repo>
+#
+# Boxes fetch these via firmware/download-fw.sh (vendor URL first, mirror fallback).
+# The mirror URL for a path is:  https://<mirror-host>/<path>   (e.g. .../firmware/smc-x13-01.07.01.bin)
+#
+# Regenerate with:  firmware/checksum-manifest.sh
+# ---------------------------------------------------------------------------
+
+# --- single-file firmware images (firmware/) ---
+3e9916fd633babe11c208c0982330f8677e4f3b05029653a56ffe4230dea1cbd  67109128  firmware/encrypted_ASMB-787_20220912.ima_enc
+4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76  66061999  firmware/XD670_BMC_v1.27_signed.bin.hpm
+752dc96fd01002934c82454e79b80af01593e18e7c6265c91fa72b4a63fafd44  226514687  firmware/iDRAC-with-Lifecycle-Controller_Firmware_92MM7_LN64_7.10.90.00_A00.BIN
+372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9  326018733  firmware/iDRAC-with-Lifecycle-Controller_Firmware_YP95X_LN64_1.30.10.50_A00.BIN
+a0a866fa6a3fdda49d9beec0a7efe6aadd234866e39bbefde2e05f45d5439495  67108864  firmware/obmc-phosphor-image-gb200nvl-obmc.static.mtd
+11b89cbb7a4b129529de26ff0b80030f1f7bdfb0e206a4a5207bd6d55a13c908  ?  firmware/evb-ast2600.static.mtd
+8af1ba767ed0363653537ee6e2fab3fabd66d838e397903cb99e9cd00caaa792  ?  firmware/x14-flash.img
+9bd3fbe8ddb8ee8e0f7d96ee37c810cef99d6c9f9566ddd13dca7ea455204214  33554432  firmware/x10-master.flash
+
+# --- Supermicro ATEN AST2600 ---
+895fcb15c2e7e198db4e9e5310b6619f4ac7aaf2ea76a2e2c3cb2e802d505788  49020928  firmware/smc-x12-01.07.20.bin
+dc78c07898003d7537b03a593a810e4a329b034a12d3df0503fc574b934e7a87  67108864  firmware/smc-x13-01.07.01.bin
+88f6eb5a52d4b8ee2ac5e934ee460426614d3ab725e440dcc00c96c9ed7790f3  65011712  firmware/smc-x13d-01.08.08.bin
+41d80d11da45b0947b3fd7cf676a944fca3e589b0b581e310d818dd35b973c76  67108864  firmware/smc-h13f-01.06.05.bin
+afcb4dad50459ba4b1c9b15a52130f9bf486726d04ae6608d0311664f3a5d5d5  67108864  firmware/smc-h13s-01.09.16.bin
+
+# --- Fujitsu iRMC S6 ---
+89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86ba96d6016ce2ed  58720256  firmware/fujitsu-irmc-s6.bin
+
+# --- Supermicro X14 bundle (fetched directly by boxes/supermicro-x14/build.sh, not download-fw.sh) ---
+953b7c4f08303427e00c571f56bbf539fef1431f597190c585c3fad37556480f  ?  firmware/x14/svc-snap-full-working.gz
+38f47d7c0d2d2b16ad4d9279d6e987d094d33e5943fb5fbf86ac3cac3b801063  ?  firmware/x14/kernel.bin
+a6fd7cbb73114c655f6414ee4ac9a971db1ea6d5fdfd6dc90525f055526e9653  ?  firmware/x14/x14-noncsi.dtb
+36ede3de2b4e77d2b98e707c359a0cdae477b89a952a76d79afd75257d169f40  ?  firmware/x14/initramfs-patched.bin
+226b8f842656cf2217092c79d473ec337874f98dfd3ca1d3c67244b66d17a17f  ?  firmware/x14/x14-ce0-64m.img
+15a340d9a78a0a0619363ae1c6c952383918a15673f3226b37eff71a800fa4c1  ?  firmware/x14/emmc.img
+
+# --- tarballs (unpack into firmware/<dir>/) ---
+47adacb10c4d50bbb52b46a343d6c4ab52c31014e85a345addbb93ec9db3f633  56052751  firmware/h3c-hdm3-2.06.02.tar.gz
+6099eff853316274c678c251101a70772af12c039103f3dca26640014af1fc54  44164759  firmware/bluefield-bmc.tar.gz
+6ec74ab71097985250782220d52b8a25d56c6872ea94c15782c4ed91af28cd92  335208172  firmware/opengear-om2200-25.11.7.tar.gz
+916204703d357c95a7d03c485970f1b08a70977ad05111b5aa65341f3d5b7cad  156741910  firmware/lenovo-xcc2-1.10.tar.gz

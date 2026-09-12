@@ -27,7 +27,7 @@
 #   MANIFEST.txt      gen, version, sha256s, rootfs paths
 # NEEDS  unzip tar unsquashfs dumpimage 7z shasum file
 #        brew: squashfs-tools u-boot-tools p7zip binwalk
-# RELATED  fileindex (find firmware files); ~/phd/bmc/dell/idrac*  prior extractions.
+# RELATED  fileindex (find firmware files).
 # =============================================================================
 set -uo pipefail
 

@@ -21,6 +21,28 @@ Companion deep-dive on a single box end-to-end: [from-firmware-to-bare-metal.md]
 | **romulus** | Custom **multi-OEM OpenBMC** (OpenPOWER+Intel+Ampere+Facebook) | ASPEED AST2500; `qemu-system-arm -M romulus-bmc` | Phosphor `.static.mtd` | **flash-mtd**; loopback 2222/2443/2623 (`do-q`) | slirp, loopback high-ports | serial | (base OpenBMC) | ssh, Redfish, IPMI | base Get-Device-ID all-zero → looks vanilla; **check `/usr/lib/ipmid-providers/` not the device-id** — ipmid dlopens all 4 vendor OEM `.so` at once |
 | **ilo5** | HPE iLO5 (**Green Hills INTEGRITY** RTOS, not Linux) | HPE **GXP** ASIC (Cortex-A9); **Renode** (not QEMU) | INTEGRITY 11.2.4 @0x41000000 | Renode `.repl` model; bl1→kernel; **gate-ledger binary patches** | n/a — no net yet | UART via modeled `gxp_sysctl@0xC0000000` | n/a (pre-app-load) | boots to healthy INTEGRITY idle | it's an **RTOS not Linux**: gates are scheduler/DDR-PHY/boot-handoff faults; **live-hook registers, don't over-theorize** |
 
+## 1b. Additional boxes
+
+These boxes cover the rest of the vendor BMC families (Supermicro ATEN AST2600 gens, H3C HDM3,
+Fujitsu iRMC, NVIDIA BlueField-3, Opengear OM2200, Lenovo XCC2), adapted to the
+zoo root-direct model (lo0 alias + qemu user-net hostfwd on the box IP). All build turnkey given
+the firmware (see [firmware-sources.md](firmware-sources.md)); the ATEN boxes share the
+`tools/aten-carve.py` (FIT/dtb patch) + `tools/aten-emmc.py` (blank GPT) helpers and the
+`tools/aten-boot.sh` generic boot.
+
+| Box | Vendor / Stack | SoC + QEMU machine | Boot method | Root | Network | Default creds | #1 gotcha |
+|---|---|---|---|---|---|---|---|
+| **supermicro-x12** | SMC X12SPI (ATEN) | AST2600; `ast2600-evb` | direct-kernel (FIT @0x1d00000) | NOR mtdblock1 (jffs2-on-NOR) | slirp; real IP 10.0.8.12 | ADMIN:ADMIN | jffs2 layout uses the *shipping* partition map — no rofs injection |
+| **supermicro-x13** | SMC X13 2401MS (ATEN, ROT20) | AST2600; `ast2600-evb` | direct-kernel (FIT @0x130000) | NOR rofs @0x630000 (mtdblock0, injected) + GPT eMMC p5/6=/nv | slirp; real IP 10.0.8.13 | ADMIN:ADMIN | eMMC ROT builds need the blank GPT eMMC (`aten-emmc.py`) |
+| **supermicro-x13d** | SMC X13DAi C301MS (ATEN, ROT2HW2) | AST2600; `ast2600-evb` | direct-kernel (FIT @0x330000) | NOR rofs @0x840000 (inserted first into the stock map → mtdblock0) + eMMC p16/17 | slirp; real IP 10.0.8.17 | ADMIN:ADMIN | stock dtb already has a partitions node → insert rofs as first entry, not a duplicate node |
+| **supermicro-h13f** | SMC H13 F401MS (ATEN) | AST2600; `ast2600-evb` | direct-kernel (FIT @0x1d00000) | NOR mtdblock1 (jffs2-on-NOR) | slirp; real IP 10.0.8.16 | ADMIN:ADMIN | AMD-SP5 board profile; same jffs2-on-NOR as X12 |
+| **supermicro-h13s** | SMC H13SSF E401MS (ATEN, ROT20) | AST2600; `ast2600-evb` | direct-kernel (FIT @0x130000) | NOR rofs @0x630000 (mtdblock0) + GPT eMMC p5/6/7=/nv | slirp; real IP 10.0.8.18 | ADMIN:ADMIN | the only ROT20 gen that OP-TEE-seals key_iv.key |
+| **h3c-hdm** | H3C HDM3 = OpenBMC phosphor + lighttpd | AST2600; `ast2600-evb,mt25qu01g` | direct-kernel (carved FIT from SIGNHEAD sections) | rootfs on the re-assembled 64 MiB flash (if=mtd) | slirp; real IP 10.0.5.13 | admin:Password@_ (+sysadmin:superuser) | H3C U-Boot force-builds bootargs from a CRC env → must boot `-kernel` to add systemd.mask/softlockup guards |
+| **fujitsu-irmc** | Fujitsu iRMC S6 = AMI MegaRAC SP-X | AST2600; `ast2600-evb,w25q512jv` | direct-kernel (FMH osimage zImage + patched dtb) | switch_root initramfs; root squashfs as 32 MiB SD image | factory-static guest IP 192.168.2.100; real IP 10.0.6.70 | admin:admin (IPMI/web); sysadmin:superuser (OS) | dtb needs 5 edits (single-chip FMC, fixed-partitions, 128MB video pool, resmem carveouts) + initramfs neuters FTS_RedfishService (fwinfo2 NULL-deref) |
+| **bluefield-bmc** | NVIDIA BF3 = OpenBMC Moonraker | AST2600; `ast2600-evb,mt25qu01g` | direct-kernel (carved FIT + dtb + RAM initramfs) | RAM/loop rootfs (avoids SPL-bypass FMC CE0 window) | eth0 = ftgmac100.2 = -nic slot 2 (two dummy user NICs); real IP 10.0.7.30 | root:0penBmc (expired, forced-change); cipher 17 only | on-flash BMC image is AES-encrypted → use the plaintext FIT + root squashfs embedded in a custom initramfs |
+| **opengear-om2200** | Opengear OM2200 (opengear-ngcs) | **x86-64**; `qemu-system-x86_64 -M q35` | direct-kernel (bzImage + rootfs.squashfs virtio-blk) | root=/dev/vda (read-only squashfs) | slirp; real IP 10.0.4.20 | root:default | the only x86 box; no IPMI (console manager) |
+| **lenovo-xcc2** | Lenovo XCC2 (Vertiv Stingray-Z51) | AST2600; `ast2600-evb,mt25ql512ab` | direct-kernel (detached-signed zImage; qemu internal dtb) | root=/dev/mmcblk0 (gzip squashfs as SD) | slirp; real IP 10.0.11.10 | USERID:PASSW0RD | **EXPERIMENTAL** — kernel boots but vendor /init is hw-bound (no login yet); signed not encrypted |
+
 ## 2. Cross-cutting lessons
 
 ### QEMU machine selection per SoC
