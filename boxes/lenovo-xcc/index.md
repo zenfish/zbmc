@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=718c9cc7244ed45d105c5d319d671865c23d7c7216fbe6593e4889bd4cce0587 body-sha256=73d8cfd1efdafca17d52aaa435b9cde74f5518af0340bd7fdf28cb750f8c5033 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=8c51386177759c409222b932ba8a5df84b3cd1957f612dfb0ef72381ced22240 body-sha256=73d8cfd1efdafca17d52aaa435b9cde74f5518af0340bd7fdf28cb750f8c5033 -->
 
 zbmc / preserved firmware
 
