@@ -37,7 +37,7 @@ tar -xzf tracer.tar.gz &amp;&amp; chmod 700 strace &amp;&amp; ./strace -V</code>
         <li>Run: <code class="break-all">20260913T075806Z-c33af0c9-0e6f-401b-95b9-83e9ecec3554</code>. Raw proof is in that run's <code>console.log</code>: <code>XCC_DIAGNOSTIC_RAM_READY</code>, the later mount-lock message, <code>RAM_EXEC_PROOF_RC=0</code>, and <code>STRACE_SMOKE_RC=0</code>.</li>
         <li>Kernel SHA-256: <code class="break-all">8448b4c473e9488f69ec3fbe7a4fbe0c88ce19370a0d00690c05d48d29ceaea6</code>. Two independent builds were byte-identical; original image size and appended tail were preserved.</li>
         <li><code>tests/lenovo-xcc-runtime.sh</code> and <code>git diff --check</code> passed. Build through <code>zbmc lenovo-xcc build</code>; the updated hash is pinned in <code>build.sh</code>.</li>
-        <li>The previous kernel and a checked, mode-0600 crash-consistent eMMC copy were retained in the previous run directory before restart. This is not a RAM checkpoint and does not preserve guest <code>/tmp</code>.</li>
+        <li>The previous kernel and a mode-0600 disk capture were retained before restart. <strong>Correction, 13 September:</strong> that capture omitted unchanged backing-disk data despite passing its qcow2 check. See the <a href="#backing-capture-correction">capture failure and recovery</a> below. It was not a complete disk backup or a RAM checkpoint.</li>
       </ul>
     </section>
 
@@ -74,7 +74,7 @@ tar -xzf tracer.tar.gz &amp;&amp; chmod 700 strace &amp;&amp; ./strace -V</code>
             <tr><td class="p-3">Mount a new executable RAM filesystem after boot.</td><td class="p-3">Kernel: <code>welded mounts are locked, refusing mount</code>; exit 32. No diagnostic mount was created.</td><td class="p-3">Move the mount creation to the existing early-boot integration point. The verified solution is above.</td></tr>
             <tr><td class="p-3">Use an interpreter-based tracer instead.</td><td class="p-3">Python and ctypes worked, but python-ptrace imports stalled and were interrupted before attachment. Source inspection found ARM register support but no ARM32 syscall-name selection in that revision.</td><td class="p-3">Register support is not complete tracer support. No SSH/SM trace was obtained from this attempt; ordinary interpreter execution was not proof of tracing.</td></tr>
             <tr><td class="p-3">Put tools directly into the signed SquashFS or embed the bundle in the fixed kernel region.</td><td class="p-3">These were rejected designs, not failed boots. Replacing the signed filesystem would invalidate its signature; the recompressed boot archive had only about 2.5 KB spare.</td><td class="p-3">Inspect integrity and capacity constraints first. A small early mount hook plus later tool loading fit the existing image.</td></tr>
-            <tr><td class="p-3">Accept QMP disk-backup completion as a retained backup.</td><td class="p-3">Completion was reported, but the target file could not be found afterwards. The disappearance was not explained.</td><td class="p-3">Verify the artifact exists and can be checked. The fallback paused the VM, copied its active overlay into a standalone image, and passed <code>qemu-img check</code>; it was only crash-consistent, not a RAM checkpoint.</td></tr>
+            <tr><td class="p-3">Accept QMP disk-backup completion or a qcow2 check as proof of a usable backup.</td><td class="p-3">The QMP target disappeared for an unexplained reason. The fallback conversion of the temporary overlay passed <code>qemu-img check</code> but omitted unchanged backing data.</td><td class="p-3">Capture the complete runtime backing graph. Verify filesystem consistency and known firmware bytes, not just container structure. The original fallback was incomplete; see the recovery correction below.</td></tr>
           </tbody>
         </table>
       </div>
@@ -156,5 +156,13 @@ ZBMC_LENOVO_PASSWORD='your-provisioned-password'
 
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
   </main>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="backing-capture-correction">
+  <h2 class="text-2xl font-semibold">13 September: disk-capture failure and recovery</h2>
+  <p class="mt-4">The previous claim that a bare conversion of QEMU's temporary disk was a complete crash-consistent backup was incorrect. The converted qcow2 passed its container check, but unchanged backing data was absent: its 157,007,872-byte root filesystem read entirely as zeros, while the changed account file retained data. A boot from that copy failed with “Resize inode not valid”.</p>
+  <p class="mt-4">Filesystem salvage alone was insufficient: it moved missing directory entries into lost+found but could not restore absent file bytes. Those experiments were confined to disposable copies; original evidence was preserved.</p>
+  <p class="mt-4">Rejoining a fresh copy to the exact original seed restored the directory structure. Standard journal recovery then passed for UD0 and GP0, followed by full read-only filesystem checks. The recovered root filesystem and detached signature compared byte-for-byte with the intact seed. The manually salvaged copy was not used.</p>
+  <p class="mt-4">The capture helper now supplies the backing node explicitly. A disposable-image check verifies that the resulting standalone image contains both an unchanged pattern from the base and a changed pattern from the overlay. Container validity alone is not content completeness.</p>
+  <p class="mt-4">Reconstructed launch image SHA-256: <code>84a54c008300dfc2c9b63071025b64a75d501e9a6a7cb1289ee3a8c59a9b6ac4</code>. Boot under test: <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>. Authentication and full-service acceptance remain unverified.</p>
+</section>
 </body>
 </html>

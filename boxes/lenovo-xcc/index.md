@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=26005689d2edb3b45fc9f39749d5febef31d30c131a04ab552abe0a7454466f8 body-sha256=cdd861b6df908f38aae245606d27ad08f48a88fded3779877586399ae932fb82 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=ffdc02f1785dffae8e91d69119d54fa7e6b91a9b83451458bf1200fef9330038 body-sha256=4f3d0ef51072d3128ce0298a65c5cc4c6d917eac6d38ab955879402905387402 -->
 
 zbmc / preserved firmware
 
@@ -42,7 +42,7 @@ To reload, temporarily serve only that diagnostics directory from the host, tran
 - Run: `20260913T075806Z-c33af0c9-0e6f-401b-95b9-83e9ecec3554`. Raw proof is in that run's `console.log`: `XCC_DIAGNOSTIC_RAM_READY`, the later mount-lock message, `RAM_EXEC_PROOF_RC=0`, and `STRACE_SMOKE_RC=0`.
 - Kernel SHA-256: `8448b4c473e9488f69ec3fbe7a4fbe0c88ce19370a0d00690c05d48d29ceaea6`. Two independent builds were byte-identical; original image size and appended tail were preserved.
 - `tests/lenovo-xcc-runtime.sh` and `git diff --check` passed. Build through `zbmc lenovo-xcc build`; the updated hash is pinned in `build.sh`.
-- The previous kernel and a checked, mode-0600 crash-consistent eMMC copy were retained in the previous run directory before restart. This is not a RAM checkpoint and does not preserve guest `/tmp`.
+- The previous kernel and a mode-0600 disk capture were retained before restart. **Correction, 13 September:** that capture omitted unchanged backing-disk data despite passing its qcow2 check. See the [capture failure and recovery](#backing-capture-correction) below. It was not a complete disk backup or a RAM checkpoint.
 
 ## Failed approaches and lessons — 2026-09-12–13
 
@@ -76,7 +76,7 @@ This is a sanitized record of the Lenovo cold-service and diagnostic-tool invest
 | Mount a new executable RAM filesystem after boot. | Kernel: `welded mounts are locked, refusing mount`; exit 32. No diagnostic mount was created. | Move the mount creation to the existing early-boot integration point. The verified solution is above. |
 | Use an interpreter-based tracer instead. | Python and ctypes worked, but python-ptrace imports stalled and were interrupted before attachment. Source inspection found ARM register support but no ARM32 syscall-name selection in that revision. | Register support is not complete tracer support. No SSH/SM trace was obtained from this attempt; ordinary interpreter execution was not proof of tracing. |
 | Put tools directly into the signed SquashFS or embed the bundle in the fixed kernel region. | These were rejected designs, not failed boots. Replacing the signed filesystem would invalidate its signature; the recompressed boot archive had only about 2.5 KB spare. | Inspect integrity and capacity constraints first. A small early mount hook plus later tool loading fit the existing image. |
-| Accept QMP disk-backup completion as a retained backup. | Completion was reported, but the target file could not be found afterwards. The disappearance was not explained. | Verify the artifact exists and can be checked. The fallback paused the VM, copied its active overlay into a standalone image, and passed `qemu-img check`; it was only crash-consistent, not a RAM checkpoint. |
+| Accept QMP disk-backup completion or a qcow2 check as proof of a usable backup. | The QMP target disappeared for an unexplained reason. The fallback conversion of the temporary overlay passed `qemu-img check` but omitted unchanged backing data. | Capture the complete runtime backing graph. Verify filesystem consistency and known firmware bytes, not just container structure. The original fallback was incomplete; see the recovery correction below. |
 
 The failed runtime experiments are retained in run `20260913T020333Z-10a78c9d-b001-44e4-a9e4-9c5f2f4ec2cb`; the successful diagnostic-mount proof is in the later run listed above. Raw operator logs and private backups are not published here. No credentials, tokens, or account-store contents are needed to reproduce the lessons.
 
