@@ -31,6 +31,7 @@ ZBMC_DIR="$TEST_ROOT"
 ZBMC_IP=$(_zbmc_resolve_ip fake 2 127.0.0.1)
 ZBMC_HOST=fake
 ZBMC_SSH_NOTE="${TEST_SSH_NOTE:-}"
+FIXTURE_SETTING_AT_LOAD="${FIXTURE_PRIVATE_SETTING:-}"
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
 CONSOLE_LOG="$LOG"
@@ -44,6 +45,9 @@ zbmc_running(){
   if [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] || [ "${TEST_FLEET_ORDER:-0}" = 1 ]; then echo "$$"; fi
 }
 zbmc_ssh(){
+  if [ "${TEST_REQUIRE_PRIVATE_CONFIG:-0}" = 1 ]; then
+    [ "$FIXTURE_SETTING_AT_LOAD" = nonexported-test-setting ] || return 1
+  fi
   [ "${TEST_SSH_DOWN:-0}" = 1 ] && { echo "no response"; return 1; }
   echo up
 }
@@ -435,5 +439,15 @@ expect "$fleet_verbose" "Observed  :"
 fleet_shorthand=$("$fixture/tools/zbmc" all -v)
 expect "$fleet_shorthand" "checking status on 2 inmates"
 expect "$fleet_shorthand" "Observed  :"
+
+printf 'FIXTURE_PRIVATE_SETTING=nonexported-test-setting\n' > "$fixture/zbmc.conf"
+private_ssh=$(TEST_REQUIRE_PRIVATE_CONFIG=1 TEST_ZBMC="$fixture/tools/zbmc" bash -c '
+  ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
+  BF="$_REPO/boxes/fake/zbmc.box"
+  ZBMC_NAME=fake
+  ZBMC_IP=127.0.0.1
+  _probe_ssh
+')
+expect "$private_ssh" 'ok|'
 
 echo "status output: PASS"

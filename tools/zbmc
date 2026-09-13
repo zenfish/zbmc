@@ -282,13 +282,13 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
   echo "fail||no answer (warming/down)"; }
 
 _probe_ssh(){
-  local cmd='.'" '$BF'"'; zbmc_ssh '\''echo up'\'''
+  local cmd='{ [ ! -f "$1/zbmc.conf" ] || . "$1/zbmc.conf"; } && . "$2" && zbmc_ssh "echo up"'
   if command -v flock >/dev/null 2>&1; then
     local lock_file; lock_file=$(_probe_lock_file ssh) || { echo "fail||probe lock unavailable"; return; }
     exec 8<>"$lock_file" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
-  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" 2>/dev/null | grep -q up; then
+  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" zbmc-ssh-probe "$_REPO" "$BF" 2>/dev/null | grep -q up; then
     echo "ok|zbmc $ZBMC_IP ssh${ZBMC_SSH_NOTE:+; $ZBMC_SSH_NOTE}|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
