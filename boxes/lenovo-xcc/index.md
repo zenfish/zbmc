@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=51a7aa526757cc53d1f1f0fdd8b98395d27bf7e410011e39d76d0248117e68e6 body-sha256=161b1267c889a73bc7891455147df16d04979125cd0c0bf226ca640ed8bfcdda -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=26005689d2edb3b45fc9f39749d5febef31d30c131a04ab552abe0a7454466f8 body-sha256=cdd861b6df908f38aae245606d27ad08f48a88fded3779877586399ae932fb82 -->
 
 zbmc / preserved firmware
 
@@ -6,9 +6,83 @@ zbmc / preserved firmware
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
 
-## Verified remote IPMI — warm restore, 2026-09-10
+## Verified executable diagnostic RAM — 2026-09-13
 
-A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. Cold boot still fails to restore usable native account services; use the explicit warm path.
+The derived boot image creates a 16 MB, root-only executable tmpfs at `/tmp/zbmc-tools`. This was verified after the vendor mount lock activated: the directory remained writable and executable, `strace 6.13 -V` returned zero, and an actual trace of `/bin/true` exited successfully.
+
+**This is diagnostic-tool acceptance, not full BMC readiness.** SSH session creation and IPMI remained unresolved in the preceding run. Do not infer their recovery from this change. The older service observations below are historical; the pre-TAP warm checkpoint is not a verified restore path for the current TAP topology.
+
+### Why it must happen during boot
+
+The running firmware mounts its ordinary writable filesystems with `noexec` and rejects new mounts once its welded-mount lock is active. A runtime attempt to mount executable tmpfs failed with exit 32. `build-shell-kernel.py` now creates the child mount after the existing `/rootfs/tmp` bind and before `switch_root` and the lock. Its options are `size=16m,mode=0700,nodev,nosuid,exec`. The parent `/tmp` remains `noexec`; the vendor rootfs and its signature verification remain unchanged.
+
+### Use in the verified guest
+
+    grep ' /tmp/zbmc-tools ' /proc/mounts
+    /tmp/zbmc-tools/strace -V
+    /tmp/zbmc-tools/strace -e trace=exit_group -o /tmp/zbmc-tools/smoke.log /bin/true
+    cat /tmp/zbmc-tools/smoke.log
+    # exit_group(0) = ?
+    # +++ exited with 0 +++
+
+The launcher uses an isolated musl loader and library directory inside the diagnostic mount. It does not replace Lenovo's system libraries. Keep traces private: unrestricted tracing of authentication processes can capture credentials or session data.
+
+### Reboot and tool loading
+
+The boot change recreates an *empty* RAM filesystem on each cold boot. Tools and traces disappear at shutdown; they are not embedded in the kernel or automatically downloaded. On Debby, retained copies are `work/lenovo-xcc-warm/diagnostics/tracer.tar.gz` and `diagnostics/strace`. The bundle contains Alpine 3.22 ARMv7 strace 6.13-r0 and its resolved dependencies, fetched using the official ARMv7 signing keys.
+
+To reload, temporarily serve only that diagnostics directory from the host, transfer both files into `/tmp/zbmc-tools`, then run the following in the guest. Stop the temporary file server after transfer.
+
+    cd /tmp/zbmc-tools
+    echo '1b829934dca644491d927128231d2439a4dc9c2aa8e35242c664d5e2c4baf6d4  tracer.tar.gz' | sha256sum -c - &&
+    tar -xzf tracer.tar.gz && chmod 700 strace && ./strace -V
+
+### Evidence and reproduction
+
+- Run: `20260913T075806Z-c33af0c9-0e6f-401b-95b9-83e9ecec3554`. Raw proof is in that run's `console.log`: `XCC_DIAGNOSTIC_RAM_READY`, the later mount-lock message, `RAM_EXEC_PROOF_RC=0`, and `STRACE_SMOKE_RC=0`.
+- Kernel SHA-256: `8448b4c473e9488f69ec3fbe7a4fbe0c88ce19370a0d00690c05d48d29ceaea6`. Two independent builds were byte-identical; original image size and appended tail were preserved.
+- `tests/lenovo-xcc-runtime.sh` and `git diff --check` passed. Build through `zbmc lenovo-xcc build`; the updated hash is pinned in `build.sh`.
+- The previous kernel and a checked, mode-0600 crash-consistent eMMC copy were retained in the previous run directory before restart. This is not a RAM checkpoint and does not preserve guest `/tmp`.
+
+## Failed approaches and lessons — 2026-09-12–13
+
+This is a sanitized record of the Lenovo cold-service and diagnostic-tool investigation, including our diagnostic mistakes. “Observed” means measured in a run; “decoded” means established from vendor code; rejected designs are not presented as executed experiments. Unresolved causes remain unresolved.
+
+| Attempt or assumption | Evidence / outcome | Lesson |
+|----|----|----|
+| Treat build readiness, root-page HTTP 200, or disabled probes as working management services. | Artifacts and a public page were available while authenticated services failed or were untested. The run also had Web-UI validation disabled. | Separate boot, transport, authentication, session creation, and useful operations. An excluded test is not a pass; label historical results explicitly. |
+| Reuse the 94-second warm-start result as a cold-start expectation. | That result came from a provisioned, pre-TAP checkpoint. The new cold boot took several minutes merely to verify and mount its rootfs. | Record cold versus warm and network topology with every timing and acceptance claim. |
+| Assume the blacklisted `ipmi_gateway` pathname explained LAN IPMI failure. | The path is a pruning-warning stub, not a demonstrated LAN daemon. Its startup banner was not functional proof. | Trace the actual service owner and account/global/channel gates. Do not replace a missing-looking binary before establishing its role. |
+| Run the SSH health probe in a fresh shell without loading private configuration. | Non-exported configuration was lost. A regression failed before and passed after fix `afb6e67`. | Readiness must use the same configuration as the operator command. |
+| Declare SSH settings without a Lenovo `zbmc_ssh` handler. | The command returned command-not-found / exit 127. Fixed by `176d5da`. | Test the public command path, not just the descriptor fields. |
+| Launch SSH without checking its prerequisite directory or stderr. | The daemon reported `Missing privilege separation directory: /var/run/sshd`. Creating it addressed that prerequisite, not the later PAM failure. | Capture stdout, stderr, and exit status. A launch attempt is not a running service. |
+| Poll guest `/proc/net/tcp` inside the SSH launcher. | The wrapper stalled during guest-side process/socket inspection. | Keep launch separate from bounded host-side protocol validation; do not put another readiness loop inside it. |
+| Change the bootstrap marker based only on the visible wrapper source. | The composed boot image already emitted the original marker. The proposed change was reverted. | Inspect the complete artifact before changing a boot gate. |
+| Remove live SSH script bind mounts to restore vendor startup. | The welded-mount policy rejected removal, exit 32. The original startup scripts were not restored. | A failed unmount changes nothing. Do not describe the intended state as the actual state. |
+| Change scheduling priorities and try a temporary SSH listener on port 2222. | Priority changes were measured; the debug listener started, but the host connection timed out. A later port-22 listener completed key exchange. The eventual PAM session failure persisted. | Do not attribute success to a priority change without a controlled comparison, or call the timeout a proven firewall failure. |
+| Interpret factory-login `sshpass` exit 5 as a wrong password. | Interactive PAM reached the mandatory password-change flow and reported a successful change. | An interactive password-change requirement is not equivalent to credential rejection. Verify a fresh login afterwards. |
+| Treat authentication success as a usable SSH session. | Fresh SSH accepted the identity but exited 254: `PAM session not opened`. A password-only retry did not resolve it. | Require session creation and a valid native command result, not authentication alone. |
+| Read “User not known” as a missing account or assume the two-session limit was exhausted. | PAM logged USERID and login success, then session-manager `Internal error!`. Decoded code converts failed AIM session-type lookup into `PAM_USER_UNKNOWN`. | The displayed error loses the underlying cause. Neither an absent account nor session exhaustion was established. |
+| Blame empty session directories, a stale PID, or a deadlock. | Decoded code accepts empty directories. Registration matched the live SM PID and queue; queue size was zero. One thread snapshot showed a receive wait. | These checks narrow the problem but do not prove a timeout or deadlock. The exact session-lookup failure remains unknown. |
+| Enable only global IPMI. | The native global setting changed from false to true and read back true, but authenticated IPMI still failed. USERID's reported AccountTypes lacked IPMI. | Global enablement, account interface access, and channel privilege are separate checks. |
+| Add IPMI through an authenticated Redfish account PATCH. | HTTP 403 `PasswordChangeRequired`, although account GET reported `PasswordChangeRequired=false`. Readback confirmed no AccountTypes change. | Account representation and authentication middleware can disagree. Preserve both observations rather than choosing the convenient one. |
+| Retry with a fresh Redfish token to eliminate stale Basic-auth state. | Session creation returned 201 and a manager read returned 200, but the same PATCH still returned 403. Test sessions were removed with 204. | Fresh login was not the fix. Read access did not establish working account modification. |
+| Submit the configured password through the normal Redfish Password PATCH. | HTTP 400 `PropertyValueFormatError`, with message argument “null”, despite a JSON string request. Length and character-class checks passed. | Do not infer that the request contained null. Reuse and minimum-change-interval policies were plausible, not proven causes; no further change was claimed. |
+| Restart the vendor security/session manager. | After a private configuration backup, the replacement SM registered and reached ready. SSH still failed at session creation. | Restart did not fix the defect. Inspect restart scripts first: this one also initializes account/certificate state. Never confuse restart with its destructive reset operation. |
+| Propose recovery before capturing the decisive syscall trace. | Logs and ARM disassembly localized the failing call, but there was no syscall trace of that failure. | Say “localized, not explained.” Establish a bounded tracing path early instead of spending repeated cycles on hypotheses. |
+| Use the firmware's `/usr/bin/strace`. | It was a dangling link into the absent optional debug filesystem. | Check the resolved executable and its loader, not just whether a pathname exists. |
+| Fetch ARM packages using an x86 container's default package state and keys. | Fetch initially lacked an index; an explicit ARM index update then failed signature validation with the wrong architecture's keys. | Use the ARM repository index and the supplied ARMv7 key directory. Signature verification remained enabled. |
+| Copy a verified tracer to `/tmp`, or consider `/run`, `/var/log`, `/dev`, and `/proc`. | Transfer and checksum succeeded, but execution from /tmp failed 126. The other writable mount locations inspected were also noexec; /var/log resolved into the noexec whitelist filesystem. | Changing directory names does not change mount flags. /proc is not ordinary file storage. |
+| Mount a new executable RAM filesystem after boot. | Kernel: `welded mounts are locked, refusing mount`; exit 32. No diagnostic mount was created. | Move the mount creation to the existing early-boot integration point. The verified solution is above. |
+| Use an interpreter-based tracer instead. | Python and ctypes worked, but python-ptrace imports stalled and were interrupted before attachment. Source inspection found ARM register support but no ARM32 syscall-name selection in that revision. | Register support is not complete tracer support. No SSH/SM trace was obtained from this attempt; ordinary interpreter execution was not proof of tracing. |
+| Put tools directly into the signed SquashFS or embed the bundle in the fixed kernel region. | These were rejected designs, not failed boots. Replacing the signed filesystem would invalidate its signature; the recompressed boot archive had only about 2.5 KB spare. | Inspect integrity and capacity constraints first. A small early mount hook plus later tool loading fit the existing image. |
+| Accept QMP disk-backup completion as a retained backup. | Completion was reported, but the target file could not be found afterwards. The disappearance was not explained. | Verify the artifact exists and can be checked. The fallback paused the VM, copied its active overlay into a standalone image, and passed `qemu-img check`; it was only crash-consistent, not a RAM checkpoint. |
+
+The failed runtime experiments are retained in run `20260913T020333Z-10a78c9d-b001-44e4-a9e4-9c5f2f4ec2cb`; the successful diagnostic-mount proof is in the later run listed above. Raw operator logs and private backups are not published here. No credentials, tokens, or account-store contents are needed to reproduce the lessons.
+
+## Historical remote IPMI — warm restore, 2026-09-10
+
+A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. These are historical results, not current TAP acceptance; the commands below document that earlier run.
 
     cd ~/src/oob/zbmc
     sudo ./tools/zbmc lenovo-xcc start --warm --no-web
