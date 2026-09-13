@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=15c9e5dec4f011767858c292b88bb6f352ff91f93cd55428449d431cc22438b0 body-sha256=570ad65cb5746d3667d603fbaf8c083e2cf5accac1ce6a50d7dd19649bc58eeb -->
+<!-- html2md:auto source=README.html source-sha256=dbc13d2399a2e2006d4f2c3d819e9430871d63dba1f209f94fbf01d4d8549f5a body-sha256=e5b2869945af98a6915ec0b677e093d0758c2d204ab1c8791e43d08d5bdd2061 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -31,7 +31,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap. |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ❌; Warm ❌ | Service marks describe the recovered TAP instance: all six passed twice on 2026-09-13. An isolated matched warm restore also passed all six, but normal `start --warm` still targets the incompatible old checkpoint. Cold readiness failed its one-hour window: only ICMP and Console passed. Recovery is verified; reproducible startup is not. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ⚠️ FLAKY | ✅ | ✅ | ✅ | Cold ❌; Warm ✅ | Managed TAP `start --warm` reached six-service READY on 2026-09-13 in 3m37s with a 67-second stability window, but IPMI failed again on a later status check (5/6). IPMI reliability remains unresolved. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window. |
 | **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
 | **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
 | **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ⚠️ FLAKY | ❌ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |

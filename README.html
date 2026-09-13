@@ -152,8 +152,8 @@ animal's box material.</p>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
-<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
-<td>Cold ❌; Warm ❌</td><td>Service marks describe the recovered TAP instance: all six passed twice on 2026-09-13. An isolated matched warm restore also passed all six, but normal <code>start --warm</code> still targets the incompatible old checkpoint. Cold readiness failed its one-hour window: only ICMP and Console passed. Recovery is verified; reproducible startup is not.</td>
+<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>⚠️ FLAKY</td><td>✅</td><td>✅</td><td>✅</td>
+<td>Cold ❌; Warm ✅</td><td>Managed TAP <code>start --warm</code> reached six-service READY on 2026-09-13 in 3m37s with a 67-second stability window, but IPMI failed again on a later status check (5/6). IPMI reliability remains unresolved. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x14/">supermicro-x14</a></strong></td>

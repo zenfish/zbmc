@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=f1086f8557eb8d8040c8093db19a269b898e08926b2f640b44db0db2268fb0c8 body-sha256=92005e03575b5f740bbb2b59a56209b8b14e6f7dc374f2ef0b4d63e9b8d49475 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=8bc91eb1a12b318865fe6c4daa51eb87cb6bcbf0da8c87a95bc8a1d0ad83c3dd body-sha256=71e019ee15fc22b1c1b1f30876c9191ca1c8d41a0b8a1e2515d2379e6eee4d7b -->
 
 zbmc / preserved firmware
 
@@ -6,7 +6,7 @@ zbmc / preserved firmware
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
 
-13 September status: the [recovered TAP instance](#13-september-native-services-recovered-on-tap) and [isolated matched warm restore](#13-september-isolated-tap-warm-recovery-verified) passed all six zBMC checks. [Cold verification failed its one-hour startup window](#13-september-cold-verification-failed). The old default warm checkpoint has not been replaced.
+13 September status: [normal managed warm startup reached six-service READY in 3m37s](#managed-warm-20260913), but subsequent IPMI checks remain intermittent. Debby's private default now selects the matched TAP runtime. [Cold verification failed its one-hour startup window](#13-september-cold-verification-failed). Full reliable recovery is not complete.
 
 ## Verified executable diagnostic RAM — 2026-09-13
 
@@ -243,3 +243,13 @@ SSH remained unreachable despite a live native daemon. The HTTP front end return
 **Recovery verified:** the original instance passed all six zBMC checks again at 15:29:37 and 15:31:14 PDT after resume. Its historical startup-watch timeout remains preserved; these are fresh live-service results, not rewritten startup history.
 
 Evidence on Debby: `work/lenovo-xcc-warm/tap-cold-sshd-test-20260913T2128` (console, exact QEMU argv, network hook, and validation results) and `work/lenovo-cold-sshd-20260913T2128` (controller log, build/test evidence, and original-instance revalidation). The captured checkpoint was protected by QEMU `snapshot=on`. Acceptance requires two six-service zBMC passes at least60seconds apart plus an executed console command; this run did not meet it.
+
+## 13 September: managed warm startup passed; IPMI remains intermittent
+
+After Debby rebooted, the preserved matched TAP checkpoint restored through normal `zbmc lenovo-xcc start --warm`. All six services passed at 84 seconds. IPMI then failed, recovered, and all required services passed a 67-second stability window; startup reached READY in 3m37s. A subsequent status passed 6/6, but the next default status at 16:42 PDT was DEGRADED 5/6 because IPMI failed again. This is not a claim of sustained IPMI reliability or successful cold startup.
+
+Guard commit `87a1628` verifies checkpoint disk, RAM, runtime kernel, board data, source network and QEMU hashes before launch, requires destination TAP, and preserves old launcher logs/PID records on rejection. Default READY now requires SSH, IPMI, Redfish, Web UI and console, with shared ICMP validation. Focused guard, Lenovo runtime and status-spacing regressions passed.
+
+Debby's private configuration now selects `work/lenovo-xcc-warm/tap-managed-20260913-i5gsSN`. Its previous configuration is preserved there as `zbmc.conf.before-managed`. Checkpoint disk/RAM and configuration are private and must not be published. Do not run build against this recovered runtime: build artifacts are not a replacement for its provisioned state.
+
+Evidence: runtime `managed-start.log` and run `runs/20260913T233717Z-e2817348-3b92-477d-85de-40d7e397cc73`. Earlier statements above about an unreplaced default checkpoint describe the preceding experiments and are superseded by this managed restore. Cold service readiness remains unresolved.
