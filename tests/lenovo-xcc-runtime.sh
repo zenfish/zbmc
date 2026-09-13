@@ -55,6 +55,7 @@ PATH="$tmp:$PATH"
 _zbmc_resolve_ip() { echo 127.0.0.1; }
 ZBMC_LENOVO_PASSWORD=test-only-password
 . "$box/zbmc.box"
+declare -F zbmc_ssh >/dev/null
 zbmc_ipmi_health >/dev/null
 export TEST_IPMI_EXIT=1
 if zbmc_ipmi_health >/dev/null; then

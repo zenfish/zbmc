@@ -107,6 +107,12 @@ zbmc_webui_health() {
   case "$code" in 2??|3??) return 0;; *) echo "HTTPS root returned ${code:-nothing}"; return 1;; esac
 }
 
+zbmc_ssh() {
+  SSHPASS="$SSH_PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="$ZBMC_DIR/ssh_known_hosts" -o ConnectTimeout=10 \
+    -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+}
+
 zbmc_console() {
   command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
   echo "Lenovo XCC console -> $SOCK (Ctrl-] to detach)"
