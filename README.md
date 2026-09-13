@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=4e19bbde37f12acc380174245106555e230a9dd900718275f6bab57b85ac5676 body-sha256=342679c01379a0f9168d83ba35cf059530bd10949d1c4d9ddc42685b34b156a7 -->
+<!-- html2md:auto source=README.html source-sha256=15c9e5dec4f011767858c292b88bb6f352ff91f93cd55428449d431cc22438b0 body-sha256=570ad65cb5746d3667d603fbaf8c083e2cf5accac1ce6a50d7dd19649bc58eeb -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -20,7 +20,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 
 ## The denizens/animals
 
-`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table is the current validation matrix from the four-core Debby host, last updated 2026-09-10. Each name links to that animal's box material.
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records validation on the four-core Debby host: fleet observations are from 2026-09-10; Lenovo was updated on 2026-09-13. This is not a fresh fleet-wide assessment. Each name links to that animal's box material.
 
 | `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
 |----|----|----|----|----|----|----|----|----|----|
@@ -31,10 +31,12 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap. |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ❌; Warm ❌ | Service marks describe the recovered TAP instance: all six passed twice on 2026-09-13. An isolated matched warm restore also passed all six, but normal `start --warm` still targets the incompatible old checkpoint. Cold readiness failed its one-hour window: only ICMP and Console passed. Recovery is verified; reproducible startup is not. |
 | **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
 | **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
 | **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ⚠️ FLAKY | ❌ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
+
+Service marks apply to the run described in Issues; they do not imply cold or warm startup reproducibility.
 
 Legend: ✅ passed in the current TAP topology, ❌ did not pass the latest current-topology validation or is unsupported, and ⚠️ FLAKY passed but did not remain stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 

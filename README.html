@@ -95,8 +95,9 @@ href="SECURITY.html">SECURITY.md</a>.</p>
 present in the current tree. <code>build.sh</code> fetches
 SHA-256-pinned vendor images and derived boot artifacts from the source
 listed in each build recipe; some are vendor downloads and some are
-project-mirror-only. The table is the current validation matrix from the
-four-core Debby host, last updated 2026-09-10. Each name links to that
+project-mirror-only. The table records validation on the
+four-core Debby host: fleet observations are from 2026-09-10; Lenovo was
+updated on 2026-09-13. This is not a fresh fleet-wide assessment. Each name links to that
 animal's box material.</p>
 <table>
 <thead>
@@ -151,8 +152,8 @@ animal's box material.</p>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td>
-<td>Cold ✅; Warm ❌</td><td>IPMI worked with the old SLiRP checkpoint; the 2026-09-10 TAP run proved only ICMP and console, and the old warm checkpoint no longer restores.</td>
+<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+<td>Cold ❌; Warm ❌</td><td>Service marks describe the recovered TAP instance: all six passed twice on 2026-09-13. An isolated matched warm restore also passed all six, but normal <code>start --warm</code> still targets the incompatible old checkpoint. Cold readiness failed its one-hour window: only ICMP and Console passed. Recovery is verified; reproducible startup is not.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x14/">supermicro-x14</a></strong></td>
@@ -171,6 +172,7 @@ animal's box material.</p>
 </tr>
 </tbody>
 </table>
+<p>Service marks apply to the run described in Issues; they do not imply cold or warm startup reproducibility.</p>
 <p>Legend: ✅ passed in the current TAP topology, ❌ did not pass the latest
 current-topology validation or is unsupported, and ⚠️ FLAKY passed but did not
 remain stable. “Cold” means a clean boot from installed build
