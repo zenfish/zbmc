@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=8c51386177759c409222b932ba8a5df84b3cd1957f612dfb0ef72381ced22240 body-sha256=73d8cfd1efdafca17d52aaa435b9cde74f5518af0340bd7fdf28cb750f8c5033 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=beaf59751515d9e91b03184de5b90daa0b9ee69297553ccd46e94ed4801a8881 body-sha256=945c28974512b93170bff31044dc00ca78bd587256cfaf0c7e28f3a3bc7ec098 -->
 
 zbmc / preserved firmware
 
@@ -6,7 +6,7 @@ zbmc / preserved firmware
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
 
-Latest live result, 13 September: [all six services pass zBMC validation on TAP](#native-services-recovery). Cold-boot reproduction and warm restore remain unverified.
+Latest result, 13 September: [all six services pass zBMC validation on TAP](#native-services-recovery), including a [matched checkpoint restored in an isolated TAP network](#tap-warm-checkpoint). Cold-boot reproduction remains unverified; the old default warm checkpoint has not been replaced.
 
 ## Verified executable diagnostic RAM — 2026-09-13
 

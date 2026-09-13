@@ -12,7 +12,7 @@
     <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
     <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
 
-    <p class="mt-6 rounded border border-emerald-500/40 bg-emerald-950/30 p-4">Latest live result, 13 September: <a class="text-emerald-300 underline" href="#native-services-recovery">all six services pass zBMC validation on TAP</a>. Cold-boot reproduction and warm restore remain unverified.</p>
+    <p class="mt-6 rounded border border-emerald-500/40 bg-emerald-950/30 p-4">Latest result, 13 September: <a class="text-emerald-300 underline" href="#native-services-recovery">all six services pass zBMC validation on TAP</a>, including a <a class="text-emerald-300 underline" href="#tap-warm-checkpoint">matched checkpoint restored in an isolated TAP network</a>. Cold-boot reproduction remains unverified; the old default warm checkpoint has not been replaced.</p>
     <section id="diagnostic-ram" class="mt-10 border border-cyan-500/40 bg-cyan-950/30 p-6">
       <h2 class="text-2xl font-bold">Verified executable diagnostic RAM — 2026-09-13</h2>
       <p class="mt-3">The derived boot image creates a 16 MB, root-only executable tmpfs at <code>/tmp/zbmc-tools</code>. This was verified after the vendor mount lock activated: the directory remained writable and executable, <code>strace 6.13 -V</code> returned zero, and an actual trace of <code>/bin/true</code> exited successfully.</p>
@@ -184,7 +184,7 @@ ZBMC_LENOVO_PASSWORD='your-provisioned-password'
     </table>
   </div>
   <p class="mt-4">Authenticated Redfish reads were already working once the recovered services settled. TAP networking needed no further change in this pass. No replacement management service or new authentication bypass was introduced in this service-recovery pass.</p>
-  <p class="mt-4"><strong>Proof:</strong> two complete zBMC <code>READY [6/6]</code> results, more than two minutes apart, plus passing regression and runtime tests. <strong>Remaining:</strong> scheduling and recovered disk state are currently live; cold/warm restart reproduction remains unverified.</p>
+  <p class="mt-4"><strong>Proof:</strong> two complete zBMC <code>READY [6/6]</code> results, more than two minutes apart, plus passing regression and runtime tests. <strong>Follow-up:</strong> the matched warm checkpoint was subsequently verified below; cold-boot reproduction and deployment as the default warm checkpoint remain outstanding.</p>
   <p class="mt-4">Verified live in run <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>: zBMC reports all six services working. SSH authenticates and executes the native Lenovo CLI's help command; IPMI performs an authenticated controller read using cipher 17; Redfish reads a protected account; Web logs in, reads the matching session identity, and logs out. ICMP and the interactive serial console also pass.</p>
   <pre class="mt-4 overflow-x-auto rounded bg-stone-950 p-4"><code>sudo tools/zbmc lenovo-xcc status -v --all-services
 Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
@@ -201,6 +201,22 @@ Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
     <li>IPMI still failed because channel1/user2 reported NO ACCESS. Standard local <code>ipmitool user priv 2 4 1</code> changed it to ADMINISTRATOR; readback and the host's authenticated controller read then passed. No authentication bypass or replacement IPMI service was used.</li>
   </ul>
   <p class="mt-4">Evidence remains in the named run: <code>full-service-validation-20260913.log</code>, <code>service-state-20260913.log</code>, <code>ssh-priority-check-20260913.log</code>, <code>web-session-check2-20260913.log</code>, and redacted <code>ipmi-cli-provision-20260913.log</code>. The serial log records channel readback and original scheduling state. Targeted SSH/Web regressions, the status suite, and Lenovo runtime tests pass. An initial status-suite run failed its process-cleanup check; its reruns passed.</p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="tap-warm-checkpoint">
+  <h2 class="text-2xl font-semibold">13 September: isolated TAP warm recovery verified</h2>
+  <p class="mt-4">The recovered VM was flushed, then paused while QEMU performed a native full-disk backup and exported matching RAM/device migration state. Successful backup completion was checked before migration. The original VM resumed afterwards. The new private checkpoint passed qcow2 and gzip integrity checks; its disk and state hashes remained unchanged through the restore test. The previous checkpoint was not overwritten.</p>
+  <p class="mt-4">A separate instance restored the checkpoint using the identical QEMU executable and captured runtime-kernel bytes. The existing warm launcher expects <code>kernel-shell.zImage</code>, so the isolated test supplied the captured <code>kernel-runtime.zImage</code> bytes under that filename. Separate runtime files, sockets, and a PID file prevented accidental checks against the original.</p>
+  <p class="mt-4">The copy used an isolated Linux network namespace containing only loopback and TAP, with no external link. Its copied guest IP and MAC therefore could not collide with the original. Only one Lenovo VM ran during validation: the original remained paused and recoverable, then resumed when testing ended. The test copy remains paused and preserved.</p>
+  <ul class="mt-4 list-disc space-y-2 pl-6">
+    <li>QEMU restore completed in <strong>7.4 seconds</strong>. This is state-load time, not full-service ready time.</li>
+    <li>The serial shell executed a fresh console-liveness command.</li>
+    <li>The first early zBMC check passed five services but failed IPMI. That failure is retained in the evidence.</li>
+    <li>A bounded retry succeeded without any post-restore account or service configuration changes. The exact cause of the transient IPMI failure and precise ready time were not established.</li>
+    <li>Subsequent full zBMC checks at <strong>13:07:51 and 13:09:10 PDT</strong> both reported <code>READY [6/6]</code>: ICMP, authenticated native SSH CLI, authenticated IPMI, protected Redfish, native Web login/session/logout, and Console.</li>
+  </ul>
+  <p class="mt-4">The experiment used the existing low-level warm launcher, followed by <code>zbmc lenovo-xcc status -v --all-services</code> inside the isolated namespace. Status correctly labeled this test process unmanaged; a managed startup-time result is not claimed. The normal <code>start --warm</code> path still points to the older pre-TAP checkpoint and remains blocked. This experiment proves the newly captured, matched checkpoint—not arbitrary checkpoint compatibility or cold-boot persistence.</p>
+  <p class="mt-4">Checkpoint: <code>work/lenovo-xcc-warm/tap-checkpoint-20260913T200242Z</code>. Test evidence: <code>work/lenovo-xcc-warm/tap-warm-test-20260913T200242Z</code>, including initial <code>validation-1.txt</code>, both <code>settled-validation-*.txt</code>, <code>console-liveness.txt</code>, and <code>accepted.json</code>. Checkpoint contents are private because memory and disk can contain credentials.</p>
+  <dl class="mt-4 space-y-2 break-all text-sm"><dt class="font-semibold">Disk SHA-256</dt><dd><code>8752a48d26bb187030af05881ec6440d3334d2e2bcd881318e605171349c8e46</code></dd><dt class="font-semibold">Compressed migration-state SHA-256</dt><dd><code>85f70b2a80c5b882a4252e53f49300f8a1b82a87d92522a56fe3111cf09c0815</code></dd></dl>
 </section>
 </body>
 </html>
