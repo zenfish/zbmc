@@ -723,14 +723,14 @@ case "$VERB" in
     # Bring up a configured HTTP service once SSH is reachable. --no-web disables only Web-UI;
     # Redfish remains independent and may use the same box hook.
     if [[ " $ZBMC_REQUIRED_SERVICES " == *' redfish '* ]] || { [ "$do_web" = 1 ] && [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; }; then
-      nohup bash -c '. "$1"
+      nohup bash -c '{ [ ! -f "$9/zbmc.conf" ] || . "$9/zbmc.conf"; } && . "$1" || exit
         ZBMC_IP="$2"; SSH_PORT="$3"; IPMI_PORT="$4"; WEB_PORT="$5"; qp="$6"
         ZBMC_DIR="$7"; ZBMC_HOST="$8"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
           if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
           sleep 8
-        done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" \
+        done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" "$_REPO" \
         </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
       echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
