@@ -73,19 +73,7 @@ fi
 python3 "$repo/tests/lenovo-xcc-boot-config.py"
 python3 "$repo/tests/lenovo-xcc-tap-config.py"
 
-(
-  log=$(mktemp); called=$(mktemp); rm -f "$called"
-  trap 'rm -f "$log" "$called"' EXIT
-  ZBMC_CONSOLE_LOG="$log"
-  curl() { : >"$called"; printf 200; }
-  ! zbmc_webui_health >/dev/null
-  [ ! -e "$called" ]
-  printf '%s\n' '-> Web Available' >"$log"
-  ! zbmc_webui_health >/dev/null
-  [ ! -e "$called" ]
-  printf '%s\n' 'XCC_DIAG_NETWORK_READY' >>"$log"
-  zbmc_webui_health
-  [ -e "$called" ]
-)
+python3 "$repo/tests/lenovo-xcc-web-health.py"
+bash "$repo/tests/lenovo-xcc-ssh-health.sh"
 
 python3 "$repo/tests/lenovo-xcc-restore.py"

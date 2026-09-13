@@ -192,7 +192,7 @@ usage(){
   echo "                    --no-wait leaves a supervised readiness watcher running"
   echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
   echo "  restart           down then blocking up"
-  echo "  status [-f] [-v]  concise health; -v explains checks; -f follows startup (default verb)"
+  echo "  status [-f] [-v] [--all-services]  health; -v explains; -f follows; --all-services probes all six services"
   echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
   echo "  evidence [RUN_ID] show the run evidence directory and its files"
   echo "  memdump [DIR]     pause once; dump guest RAM, QEMU process memory, and metadata"
@@ -281,14 +281,24 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
   [ "$pw" = 2 ] && { echo "authfail||password rejected"; return; }
   echo "fail||no answer (warming/down)"; }
 
+_zbmc_ssh_check(){
+  if declare -F zbmc_ssh_health >/dev/null; then
+    zbmc_ssh_health
+  else
+    local output
+    output=$(zbmc_ssh "echo up") && grep -q up <<<"$output"
+  fi
+}
+export -f _zbmc_ssh_check
+
 _probe_ssh(){
-  local cmd='{ [ ! -f "$1/zbmc.conf" ] || . "$1/zbmc.conf"; } && . "$2" && zbmc_ssh "echo up"'
+  local cmd='{ [ ! -f "$1/zbmc.conf" ] || . "$1/zbmc.conf"; } && . "$2" && _zbmc_ssh_check'
   if command -v flock >/dev/null 2>&1; then
     local lock_file; lock_file=$(_probe_lock_file ssh) || { echo "fail||probe lock unavailable"; return; }
     exec 8<>"$lock_file" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
-  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" zbmc-ssh-probe "$_REPO" "$BF" 2>/dev/null | grep -q up; then
+  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" zbmc-ssh-probe "$_REPO" "$BF" >/dev/null 2>&1; then
     echo "ok|zbmc $ZBMC_IP ssh${ZBMC_SSH_NOTE:+; $ZBMC_SSH_NOTE}|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
@@ -728,7 +738,7 @@ case "$VERB" in
         ZBMC_DIR="$7"; ZBMC_HOST="$8"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
-          if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
+          if _zbmc_ssh_check >/dev/null 2>&1; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
           sleep 8
         done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" "$_REPO" \
         </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
@@ -802,11 +812,12 @@ case "$VERB" in
     _dump_dir="${1:-$ZBMC_DIR/memdumps/$(date -u +%Y%m%dT%H%M%SZ)-$(_zr_guid)}"
     "$_SELF/zbmc-memdump" "$p" "${QMP_SOCK:-${QMP:-}}" "$_dump_dir" "$ZBMC_NAME" ;;
   status)
-    _follow=0; ZBMC_DETAIL=0
+    _follow=0; _all_services=0; ZBMC_DETAIL=0
     for _a in "$@"; do case "$_a" in
       -f|--follow) _follow=1;;
       -v|--verbose) ZBMC_DETAIL=1;;
       -d|--debug) ZBMC_DETAIL=2;;
+      --all-services) _all_services=1;;
     esac; done
     _colored_state(){
       case "$1" in
@@ -1006,10 +1017,11 @@ PY
       [ -w "$tmp_base" ] || tmp_base="${TMPDIR:-/tmp}"
       tmp=$(mktemp -d "${tmp_base%/}/status.XXXXXXXX" 2>/dev/null || mktemp -d "${TMPDIR:-/tmp}/zbmc-status.XXXXXXXX")
       _disabled(){
+        [ "$_all_services" = 0 ] || return 1
         [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
         [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
       }
-      _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
+      _required(){ [ "$_all_services" = 1 ] || [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
       _should_probe(){ [ "$1" = console ] || _required "$1"; }
       _probe_pids=()
       if _disabled ssh; then echo "na||disabled" > "$tmp/ssh"
@@ -1100,7 +1112,7 @@ PY
         local state="$1" why="$2" name="$3"
         if [ "$state" = N/A ] || [ "$state" = UNAVAILABLE ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
         if [ "$state" = AVAILABLE ]; then
-          [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' console '* ]] || return
+          _required console || return
           _expected_n=$((_expected_n+1)); _ready_n=$((_ready_n+1)); _add_name _ready_names "$name"
           return
         fi

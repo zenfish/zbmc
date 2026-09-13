@@ -42,6 +42,7 @@ IPMI_OPTS="-C 17 -I lanplus"
 WEB_PORT=443
 HTTP_PORT=80
 ZBMC_HTTP_PROBE_TIMEOUT=15
+ZBMC_SSH_PROBE_TIMEOUT=40
 ZBMC_TAP=ztap-xcc
 ZBMC_MAC=52:54:00:12:34:60
 ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
@@ -89,28 +90,26 @@ zbmc_web() {
     "https://$ZBMC_IP:$WEB_PORT/"
 }
 
-# Probing QEMU's backlog-1 host forward throughout this 45-minute boot can
-# leave timed-out connections queued and hide a healthy nginx.  The firmware
-# markers are emitted only after the web startup and guest IPv4 paths complete.
+# Validate the native Web session, independently of historical console markers.
 zbmc_webui_health() {
-  local log="${ZBMC_CONSOLE_LOG:-$CONSOLE_LOG}" code
-  grep -aq -- '-> Web Available' "$log" 2>/dev/null || {
-    echo 'firmware has not announced Web Available'
-    return 1
-  }
-  grep -aq -- 'XCC_DIAG_NETWORK_READY' "$log" 2>/dev/null || {
-    echo 'guest IPv4 is not configured'
-    return 1
-  }
-  code=$(curl -sk --connect-timeout 1 --max-time 3 -o /dev/null -w '%{http_code}' \
-    "https://$ZBMC_IP:$WEB_PORT/" 2>/dev/null)
-  case "$code" in 2??|3??) return 0;; *) echo "HTTPS root returned ${code:-nothing}"; return 1;; esac
+  XCC_URL="https://$ZBMC_IP:$WEB_PORT" XCC_USER="$SSH_USER" XCC_PASSWORD="$SSH_PW" \
+    python3 "$PROJ_DIR/web-health.py"
 }
 
 zbmc_ssh() {
   SSHPASS="$SSH_PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new \
     -o UserKnownHostsFile="$ZBMC_DIR/ssh_known_hosts" -o ConnectTimeout=10 \
     -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ssh_health() {
+  local result
+  result=$(zbmc_ssh help 2>&1) &&
+    grep -Eq 'help[[:space:]]+--[[:space:]]+Display command list' <<<"$result" && {
+      echo 'AUTH OK (native Lenovo CLI help)'; return 0;
+    }
+  echo 'authenticated Lenovo CLI command failed'
+  return 1
 }
 
 zbmc_console() {

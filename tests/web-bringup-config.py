@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory() as directory:
     box = root / 'zbmc.box'
     box.write_text('''test "${PRIVATE_TEST:-}" = loaded || exit 41
 zbmc_ssh() { echo up; }
+_zbmc_ssh_check() { zbmc_ssh; }
 zbmc_web() { echo WEB_STARTED; }
 sleep() { :; }
 ps() { return 0; }

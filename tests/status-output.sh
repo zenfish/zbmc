@@ -45,12 +45,16 @@ zbmc_running(){
   if [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] || [ "${TEST_FLEET_ORDER:-0}" = 1 ]; then echo "$$"; fi
 }
 zbmc_ssh(){
+  [ "${TEST_NATIVE_SSH:-0}" != 1 ] || return 77
   if [ "${TEST_REQUIRE_PRIVATE_CONFIG:-0}" = 1 ]; then
     [ "$FIXTURE_SETTING_AT_LOAD" = nonexported-test-setting ] || return 1
   fi
   [ "${TEST_SSH_DOWN:-0}" = 1 ] && { echo "no response"; return 1; }
   echo up
 }
+if [ "${TEST_NATIVE_SSH:-0}" = 1 ]; then
+  zbmc_ssh_health(){ return "${TEST_NATIVE_SSH_EXIT:-0}"; }
+fi
 zbmc_ipmi_health(){
   [ -f "$TEST_ROOT/ipmi-down" ] && { echo "no response"; return 1; }
   mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
@@ -298,6 +302,11 @@ no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/
 expect "$no_web" "Redfish   : FAILED (expected; no HTTPS response)"
 expect "$no_web" "Web-UI    : N/A (disabled)"
 expect "$no_web" "Health    : DEGRADED [3/4 - ICMP, SSH, IPMI; Redfish failed]"
+all_services=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status --verbose --all-services)
+expect "$all_services" 'Web-UI    : FAILED'
+expect "$all_services" 'Console   : AVAILABLE'
+expect "$all_services" 'Health    : DEGRADED [4/6'
+grep -Fq -- '--no-web' "$TEST_ROOT/runs/run-1/manifest.json"
 
 printf 'fake 192.0.2.1\n' > "$fixture/zhosts.txt"
 touch "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
@@ -449,5 +458,16 @@ private_ssh=$(TEST_REQUIRE_PRIVATE_CONFIG=1 TEST_ZBMC="$fixture/tools/zbmc" bash
   _probe_ssh
 ')
 expect "$private_ssh" 'ok|'
+
+for rc in 0 1; do
+  native_ssh=$(TEST_NATIVE_SSH=1 TEST_NATIVE_SSH_EXIT="$rc" TEST_ZBMC="$fixture/tools/zbmc" bash -c '
+    ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
+    BF="$_REPO/boxes/fake/zbmc.box"
+    ZBMC_NAME=fake
+    ZBMC_IP=127.0.0.1
+    _probe_ssh
+  ')
+  if [ "$rc" = 0 ]; then expect "$native_ssh" 'ok|'; else expect "$native_ssh" 'fail|'; fi
+done
 
 echo "status output: PASS"
