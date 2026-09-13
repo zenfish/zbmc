@@ -12,7 +12,7 @@
     <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
     <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
 
-    <p class="mt-6 rounded border border-emerald-500/40 bg-emerald-950/30 p-4">Latest result, 13 September: <a class="text-emerald-300 underline" href="#native-services-recovery">all six services pass zBMC validation on TAP</a>, including a <a class="text-emerald-300 underline" href="#tap-warm-checkpoint">matched checkpoint restored in an isolated TAP network</a>. Cold-boot reproduction remains unverified; the old default warm checkpoint has not been replaced.</p>
+    <p class="mt-6 rounded border border-amber-500/40 bg-amber-950/30 p-4">13 September status: the <a class="text-emerald-300 underline" href="#13-september-native-services-recovered-on-tap">recovered TAP instance</a> and <a class="text-emerald-300 underline" href="#13-september-isolated-tap-warm-recovery-verified">isolated matched warm restore</a> passed all six zBMC checks. <a class="text-amber-300 underline" href="#13-september-cold-verification-failed">Cold verification failed its one-hour startup window</a>. The old default warm checkpoint has not been replaced.</p>
     <section id="diagnostic-ram" class="mt-10 border border-cyan-500/40 bg-cyan-950/30 p-6">
       <h2 class="text-2xl font-bold">Verified executable diagnostic RAM — 2026-09-13</h2>
       <p class="mt-3">The derived boot image creates a 16 MB, root-only executable tmpfs at <code>/tmp/zbmc-tools</code>. This was verified after the vendor mount lock activated: the directory remained writable and executable, <code>strace 6.13 -V</code> returned zero, and an actual trace of <code>/bin/true</code> exited successfully.</p>
@@ -156,7 +156,6 @@ ZBMC_LENOVO_PASSWORD='your-provisioned-password'
     </section>
 
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
-  </main>
 <section class="mx-auto max-w-6xl p-8 text-stone-200" id="backing-capture-correction">
   <h2 class="text-2xl font-semibold">13 September: disk-capture failure and recovery</h2>
   <p class="mt-4">The previous claim that a bare conversion of QEMU's temporary disk was a complete crash-consistent backup was incorrect. The converted qcow2 passed its container check, but unchanged backing data was absent: its 157,007,872-byte root filesystem read entirely as zeros, while the changed account file retained data. A boot from that copy failed with “Resize inode not valid”.</p>
@@ -166,7 +165,7 @@ ZBMC_LENOVO_PASSWORD='your-provisioned-password'
   <p class="mt-4">Reconstructed launch image SHA-256: <code>84a54c008300dfc2c9b63071025b64a75d501e9a6a7cb1289ee3a8c59a9b6ac4</code>. Boot under test: <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>. Authentication and full-service acceptance remain unverified.</p>
 </section>
 <section class="mx-auto max-w-6xl p-8 text-stone-200" id="native-services-recovery">
-  <h2 class="text-2xl font-semibold">13 September: native services recovered on TAP</h2>
+  <h2 class="text-2xl font-semibold" id="13-september-native-services-recovered-on-tap">13 September: native services recovered on TAP</h2>
   <p class="mt-4">The recovery involved two kinds of fixes: restoring native services, and correcting tests that misreported working services.</p>
   <div class="mt-6 overflow-x-auto">
     <table class="w-full border-collapse text-left text-sm">
@@ -203,7 +202,7 @@ Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
   <p class="mt-4">Evidence remains in the named run: <code>full-service-validation-20260913.log</code>, <code>service-state-20260913.log</code>, <code>ssh-priority-check-20260913.log</code>, <code>web-session-check2-20260913.log</code>, and redacted <code>ipmi-cli-provision-20260913.log</code>. The serial log records channel readback and original scheduling state. Targeted SSH/Web regressions, the status suite, and Lenovo runtime tests pass. An initial status-suite run failed its process-cleanup check; its reruns passed.</p>
 </section>
 <section class="mx-auto max-w-6xl p-8 text-stone-200" id="tap-warm-checkpoint">
-  <h2 class="text-2xl font-semibold">13 September: isolated TAP warm recovery verified</h2>
+  <h2 class="text-2xl font-semibold" id="13-september-isolated-tap-warm-recovery-verified">13 September: isolated TAP warm recovery verified</h2>
   <p class="mt-4">The recovered VM was flushed, then paused while QEMU performed a native full-disk backup and exported matching RAM/device migration state. Successful backup completion was checked before migration. The original VM resumed afterwards. The new private checkpoint passed qcow2 and gzip integrity checks; its disk and state hashes remained unchanged through the restore test. The previous checkpoint was not overwritten.</p>
   <p class="mt-4">A separate instance restored the checkpoint using the identical QEMU executable and captured runtime-kernel bytes. The existing warm launcher expects <code>kernel-shell.zImage</code>, so the isolated test supplied the captured <code>kernel-runtime.zImage</code> bytes under that filename. Separate runtime files, sockets, and a PID file prevented accidental checks against the original.</p>
   <p class="mt-4">The copy used an isolated Linux network namespace containing only loopback and TAP, with no external link. Its copied guest IP and MAC therefore could not collide with the original. Only one Lenovo VM ran during validation: the original remained paused and recoverable, then resumed when testing ended. The test copy remains paused and preserved.</p>
@@ -216,7 +215,18 @@ Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
   </ul>
   <p class="mt-4">The experiment used the existing low-level warm launcher, followed by <code>zbmc lenovo-xcc status -v --all-services</code> inside the isolated namespace. Status correctly labeled this test process unmanaged; a managed startup-time result is not claimed. The normal <code>start --warm</code> path still points to the older pre-TAP checkpoint and remains blocked. This experiment proves the newly captured, matched checkpoint—not arbitrary checkpoint compatibility or cold-boot persistence.</p>
   <p class="mt-4">Checkpoint: <code>work/lenovo-xcc-warm/tap-checkpoint-20260913T200242Z</code>. Test evidence: <code>work/lenovo-xcc-warm/tap-warm-test-20260913T200242Z</code>, including initial <code>validation-1.txt</code>, both <code>settled-validation-*.txt</code>, <code>console-liveness.txt</code>, and <code>accepted.json</code>. Checkpoint contents are private because memory and disk can contain credentials.</p>
-  <dl class="mt-4 space-y-2 break-all text-sm"><dt class="font-semibold">Disk SHA-256</dt><dd><code>8752a48d26bb187030af05881ec6440d3334d2e2bcd881318e605171349c8e46</code></dd><dt class="font-semibold">Compressed migration-state SHA-256</dt><dd><code>85f70b2a80c5b882a4252e53f49300f8a1b82a87d92522a56fe3111cf09c0815</code></dd></dl>
+  <p class="mt-4 break-all text-sm"><strong>Disk SHA-256:</strong> <code>8752a48d26bb187030af05881ec6440d3334d2e2bcd881318e605171349c8e46</code></p>
+  <p class="mt-2 break-all text-sm"><strong>Compressed migration-state SHA-256:</strong> <code>85f70b2a80c5b882a4252e53f49300f8a1b82a87d92522a56fe3111cf09c0815</code></p>
 </section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="cold-verification">
+  <h2 class="text-2xl font-semibold" id="13-september-cold-verification-failed">13 September: cold verification failed</h2>
+  <p class="mt-4">A fresh QEMU process booted the preserved, provisioned disk without saved RAM or incoming migration, on an isolated guest-owned TAP network. Filesystem and rootfs mount checks passed. This tests the provisioned disk, not automatic provisioning of the factory seed.</p>
+  <p class="mt-4">The first cold attempt identified a missing native SSH prerequisite: <code>/var/run/sshd</code>. An experimental repair in the deployed working tree adds directory creation with mode0755 to both replacement SSH launch paths and propagates mkdir/chmod failures. The regression fails on the previous source and passes on the repaired source. Two independent kernel builds were byte-identical, and the Lenovo runtime tests passed. This uncommitted repair remains under validation; it is not a published accepted build or a cold-service success claim.</p>
+  <p class="mt-4"><strong>The repaired cold attempt still failed.</strong> Native SSH launch was observed by27m46s, without the previous directory error, but no authenticated management service passed during the one-hour test. The last completed zBMC observation, at59m42s, passed ICMP and Console and failed SSH, IPMI, Redfish, and Web UI. One earlier ICMP sample also failed, then recovered. The candidate was paused and preserved after the deadline; the original instance was resumed.</p>
+  <p class="mt-4">SSH remained unreachable despite a live native daemon. The HTTP front end returned HTTP 502 during a diagnostic service-root request; authenticated Web probes later timed out. Guest CPU totals showed heavy high-priority platform activity and little CPU time for SSH at nice 5. Scheduling starvation is a hypothesis, not an isolated cause. No live service-priority, account, or password changes were applied during this cold attempt.</p>
+  <p class="mt-4"><strong>Recovery verified:</strong> the original instance passed all six zBMC checks again at 15:29:37 and 15:31:14 PDT after resume. Its historical startup-watch timeout remains preserved; these are fresh live-service results, not rewritten startup history.</p>
+  <p class="mt-4 break-all">Evidence on Debby: <code>work/lenovo-xcc-warm/tap-cold-sshd-test-20260913T2128</code> (console, exact QEMU argv, network hook, and validation results) and <code>work/lenovo-cold-sshd-20260913T2128</code> (controller log, build/test evidence, and original-instance revalidation). The captured checkpoint was protected by QEMU <code>snapshot=on</code>. Acceptance requires two six-service zBMC passes at least60seconds apart plus an executed console command; this run did not meet it.</p>
+</section>
+  </main>
 </body>
 </html>
