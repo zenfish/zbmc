@@ -1,10 +1,12 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=ffdc02f1785dffae8e91d69119d54fa7e6b91a9b83451458bf1200fef9330038 body-sha256=4f3d0ef51072d3128ce0298a65c5cc4c6d917eac6d38ab955879402905387402 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=718c9cc7244ed45d105c5d319d671865c23d7c7216fbe6593e4889bd4cce0587 body-sha256=73d8cfd1efdafca17d52aaa435b9cde74f5518af0340bd7fdf28cb750f8c5033 -->
 
 zbmc / preserved firmware
 
 # Lenovo XClarity Controller
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
+
+Latest live result, 13 September: [all six services pass zBMC validation on TAP](#native-services-recovery). Cold-boot reproduction and warm restore remain unverified.
 
 ## Verified executable diagnostic RAM — 2026-09-13
 

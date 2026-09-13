@@ -12,6 +12,7 @@
     <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
     <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
 
+    <p class="mt-6 rounded border border-emerald-500/40 bg-emerald-950/30 p-4">Latest live result, 13 September: <a class="text-emerald-300 underline" href="#native-services-recovery">all six services pass zBMC validation on TAP</a>. Cold-boot reproduction and warm restore remain unverified.</p>
     <section id="diagnostic-ram" class="mt-10 border border-cyan-500/40 bg-cyan-950/30 p-6">
       <h2 class="text-2xl font-bold">Verified executable diagnostic RAM — 2026-09-13</h2>
       <p class="mt-3">The derived boot image creates a 16 MB, root-only executable tmpfs at <code>/tmp/zbmc-tools</code>. This was verified after the vendor mount lock activated: the directory remained writable and executable, <code>strace 6.13 -V</code> returned zero, and an actual trace of <code>/bin/true</code> exited successfully.</p>
@@ -163,6 +164,25 @@ ZBMC_LENOVO_PASSWORD='your-provisioned-password'
   <p class="mt-4">Rejoining a fresh copy to the exact original seed restored the directory structure. Standard journal recovery then passed for UD0 and GP0, followed by full read-only filesystem checks. The recovered root filesystem and detached signature compared byte-for-byte with the intact seed. The manually salvaged copy was not used.</p>
   <p class="mt-4">The capture helper now supplies the backing node explicitly. A disposable-image check verifies that the resulting standalone image contains both an unchanged pattern from the base and a changed pattern from the overlay. Container validity alone is not content completeness.</p>
   <p class="mt-4">Reconstructed launch image SHA-256: <code>84a54c008300dfc2c9b63071025b64a75d501e9a6a7cb1289ee3a8c59a9b6ac4</code>. Boot under test: <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>. Authentication and full-service acceptance remain unverified.</p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="native-services-recovery">
+  <h2 class="text-2xl font-semibold">13 September: native services recovered on TAP</h2>
+  <p class="mt-4">Verified live in run <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>: zBMC reports all six services working. SSH authenticates and executes the native Lenovo CLI's help command; IPMI performs an authenticated controller read using cipher 17; Redfish reads a protected account; Web logs in, reads the matching session identity, and logs out. ICMP and the interactive serial console also pass.</p>
+  <pre class="mt-4 overflow-x-auto rounded bg-stone-950 p-4"><code>sudo tools/zbmc lenovo-xcc status -v --all-services
+Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
+  <p class="mt-4">The explicit <code>--all-services</code> status option probes all six services regardless of the old run's exclusions. It does not edit the run manifest or erase its one-hour startup timeout. This live recovery is not proof of a reproducible cold boot or a tested warm checkpoint.</p>
+  <h3 class="mt-6 text-xl font-semibold">What failed, and what fixed it</h3>
+  <ul class="mt-4 list-disc space-y-3 pl-6">
+    <li>The background Web helper did not load private configuration before the box descriptor. It could use the factory password. Both subprocess paths now load the private configuration; a non-exported-setting regression covers the helper.</li>
+    <li>SSH first timed out before its banner. With guest load around 34 on two CPUs, a bounded trace showed slow but progressing process startup. After detaching the tracer and changing the existing SSH listener from nice 5 to -10, authenticated CLI commands passed. The scheduling effect was not isolated from tracing overhead. This scheduling change is live-only; cold-start reproduction remains unverified.</li>
+    <li>The generic SSH validator sent <code>echo up</code>, which the native Lenovo CLI rejects. A box-specific health hook now executes supported <code>help</code>, requiring successful exit and the expected command listing. The background helper uses the same check. Lenovo's bounded probe allows 40 seconds.</li>
+    <li>The Web marker was an old SLiRP startup prerequisite, not functional proof. Its vendor producer only waited for an nginx-ready file. The replacement follows the shipped Web client's nonce, login, session-info, and logout sequence.</li>
+    <li>The first diagnostic Web client incorrectly put a JSON content-type header on empty GET requests: login succeeded, but session-info and logout returned HTTP400. Matching the shipped client—no content-type on these GETs—produced successful identity verification and logout. Tokens and passwords are not logged.</li>
+    <li>IPMI required three independent settings: global protocol enablement, account interface permission, and channel privilege. Global enablement through authenticated Redfish succeeded. AccountTypes PATCH returned PasswordChangeRequired despite account GET reporting false.</li>
+    <li>The documented native <code>users -ai</code> command required re-entry of the existing password to add IPMI access. That operation succeeded without rotating the password. Readback showed WebUI, Redfish, ManagerConsole, and IPMI retained together.</li>
+    <li>IPMI still failed because channel1/user2 reported NO ACCESS. Standard local <code>ipmitool user priv 2 4 1</code> changed it to ADMINISTRATOR; readback and the host's authenticated controller read then passed. No authentication bypass or replacement IPMI service was used.</li>
+  </ul>
+  <p class="mt-4">Evidence remains in the named run: <code>full-service-validation-20260913.log</code>, <code>service-state-20260913.log</code>, <code>ssh-priority-check-20260913.log</code>, <code>web-session-check2-20260913.log</code>, and redacted <code>ipmi-cli-provision-20260913.log</code>. The serial log records channel readback and original scheduling state. Targeted SSH/Web regressions, the status suite, and Lenovo runtime tests pass. An initial status-suite run failed its process-cleanup check; its reruns passed.</p>
 </section>
 </body>
 </html>
