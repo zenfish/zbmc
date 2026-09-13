@@ -17,11 +17,10 @@ ZBMC_QEMU_SHA256=0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da6
 ZBMC_QEMU_MAJOR=11
 ZBMC_QEMU_VERSION=11.0.0
 ZBMC_QEMU_MACHINE=ast2600-evb
-ZBMC_WARM_STATUS=broken
-ZBMC_WARM_REASON="existing checkpoint embeds the pre-TAP SLiRP topology; create a TAP-native checkpoint"
-ZBMC_WARM_FILES="ckpt/state.gz ckpt/emmc.qcow2"
-ZBMC_REQUIRED_SERVICES="webui ipmi redfish"
-ZBMC_DISABLED_SERVICES="ssh"
+ZBMC_WARM_STATUS=verified
+ZBMC_WARM_REASON="requires a matched TAP checkpoint; pre-TAP checkpoints are unsupported"
+ZBMC_WARM_FILES="ckpt/state.gz ckpt/emmc.qcow2 ckpt/manifest.json ckpt/source-argv.json"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui console"
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=3600
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
@@ -61,12 +60,11 @@ export ZBMC_MEMDUMP_REGIONS ZBMC_MEMDUMP_GDB_SCRIPT
 zbmc_boot() {
   mkdir -p "$ZBMC_DIR"
   local qp=
-  : >"$LOG"
-  ZBMC_WARM="${ZBMC_WARM:-}" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+  qp=$(ZBMC_WARM="${ZBMC_WARM:-}" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
     IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
     HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" TAP="$ZBMC_TAP" \
-    QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >"$ZBMC_DIR/boot.pid" || return 1
-  qp=$(cat "$ZBMC_DIR/boot.pid")
+    QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh") || return 1
+  printf '%s\n' "$qp" >"$ZBMC_DIR/boot.pid"
   [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
   printf '%s\n' "$qp"
 }

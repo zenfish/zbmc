@@ -77,3 +77,4 @@ python3 "$repo/tests/lenovo-xcc-web-health.py"
 bash "$repo/tests/lenovo-xcc-ssh-health.sh"
 
 python3 "$repo/tests/lenovo-xcc-restore.py"
+python3 "$repo/tests/lenovo-xcc-warm-checkpoint.py"

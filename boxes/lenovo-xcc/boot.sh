@@ -24,9 +24,11 @@ kernel="$WD/kernel-runtime.zImage"
 disk="$WD/emmc.qcow2"
 incoming=()
 if [ -n "${ZBMC_WARM:-}" ]; then
+  [ -n "$TAP" ] || { echo "Lenovo warm checkpoint rejected: destination TAP is required" >&2; exit 1; }
   for file in state.gz emmc.qcow2; do
     [ -s "$WD/ckpt/$file" ] || { echo "missing warm checkpoint: $file" >&2; exit 1; }
   done
+  python3 "$HERE/verify-warm.py" "$WD" "$QEMU_BIN" >&2
   kernel="$WD/kernel-shell.zImage"
   disk="$WD/ckpt/emmc.qcow2"
   incoming=(-incoming defer)
