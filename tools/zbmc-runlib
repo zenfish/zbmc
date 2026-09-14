@@ -427,17 +427,28 @@ _zr_health_watch(){
     [ -z "$p4" ] || wait "$p4" 2>/dev/null || true
     [ -z "$p5" ] || wait "$p5" 2>/dev/null || true
     [ -z "$p6" ] || wait "$p6" 2>/dev/null || true
+    if [ "${ZBMC_NETWORK_MODE:-user}" = tap ]; then
+      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+        echo "ok||$ZBMC_IP answers ICMP" >"$_zr_tmp/icmp"
+      else
+        echo "fail||no ICMP reply from $ZBMC_IP" >"$_zr_tmp/icmp"
+      fi
+    fi
     if declare -F zbmc_guest_snapshot >/dev/null && mkdir "$ZBMC_RUN_DIR/guest-snapshot.lock" 2>/dev/null; then
       mkdir -p "$ZBMC_RUN_DIR/guest-snapshots"
       ( printf 'sample_epoch: %s\n' "$_zr_now"; zbmc_guest_snapshot; rmdir "$ZBMC_RUN_DIR/guest-snapshot.lock" ) \
         >"$ZBMC_RUN_DIR/guest-snapshots/$_zr_now.txt" 2>&1 &
     fi
-    python3 - "$ZBMC_RUN_DIR/health.json" "$ZBMC_RUN_DIR/health.jsonl" "$ZBMC_RUN_ID" "$ZBMC_IP" "$_zr_now" "$_zr_start" "$ZBMC_REQUIRED_SERVICES" "$_zr_tmp" <<'PY'
+    python3 - "$ZBMC_RUN_DIR/health.json" "$ZBMC_RUN_DIR/health.jsonl" "$ZBMC_RUN_ID" "$ZBMC_IP" "$_zr_now" "$_zr_start" "$ZBMC_REQUIRED_SERVICES" "$_zr_tmp" "${ZBMC_NETWORK_MODE:-user}" <<'PY'
 import json, os, sys
-snapshot, journal, run_id, ip, now, start, required, tmp = sys.argv[1:]
+snapshot, journal, run_id, ip, now, start, required, tmp, network = sys.argv[1:]
 required_names = required.split()
 checks = {}
 names = ["ssh", "ipmi", "redfish", "webui", "console"]
+if network == "tap":
+    names.insert(0, "icmp")
+    if "icmp" not in required_names:
+        required_names.insert(0, "icmp")
 if "ncsi" in required_names:
     names.append("ncsi")
 for name in names:
@@ -568,13 +579,20 @@ _zr_wait_ready(){
         _zr_guest=1
       fi
     fi
-    if [ "${ZBMC_NETWORK_MODE:-user}" = tap ] && [ "$_zr_l2" = 0 ] && \
-       { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; } && \
-       ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
-      _zr_l2=1
-      case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=ICMP;; esac
-      _zr_event ICMP ready "$ZBMC_IP answers ICMP; $(_zr_expected ICMP)"
-      _zr_timing ICMP "$_zr_elapsed_s"
+    if [ "${ZBMC_NETWORK_MODE:-user}" = tap ] && \
+       { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }; then
+      if ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
+        if [ "$_zr_l2" = 0 ]; then
+          case "$_zr_highest" in QEMU|FIRMWARE|BOOTSTRAP) _zr_highest=ICMP;; esac
+          _zr_event ICMP ready "$ZBMC_IP answers ICMP; $(_zr_expected ICMP)"
+          _zr_timing ICMP "$_zr_elapsed_s"
+        fi
+        _zr_l2=1
+      else
+        [ "$_zr_l2" = 0 ] || _zr_event ICMP degraded "no ICMP reply from $ZBMC_IP"
+        _zr_l2=0
+        _zr_stable_since=0
+      fi
     fi
 
     if [ $((_zr_now_epoch - _zr_last_probe)) -ge 5 ] && { [ "${ZBMC_PROBE_AFTER_BOOTSTRAP:-0}" != 1 ] || [ "$_zr_guest" = 1 ]; }; then
