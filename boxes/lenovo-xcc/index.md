@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=8bc91eb1a12b318865fe6c4daa51eb87cb6bcbf0da8c87a95bc8a1d0ad83c3dd body-sha256=71e019ee15fc22b1c1b1f30876c9191ca1c8d41a0b8a1e2515d2379e6eee4d7b -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=4eef3b8116b4f12ef8aa26f48d39ead1e85f4e2d92a05ebf8fa4ad8a97df042c body-sha256=582682a21fc7c5519c2443b1cee9d697df945c13dda37a6808d4378a73305ee3 -->
 
 zbmc / preserved firmware
 
@@ -7,6 +7,14 @@ zbmc / preserved firmware
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
 
 13 September status: [normal managed warm startup reached six-service READY in 3m37s](#managed-warm-20260913), but subsequent IPMI checks remain intermittent. Debby's private default now selects the matched TAP runtime. [Cold verification failed its one-hour startup window](#13-september-cold-verification-failed). Full reliable recovery is not complete.
+
+## 14 September: IPMI probe mystery resolved
+
+The intermittent IPMI failure was a zBMC probe-scheduling artifact, not persistent Lenovo credential loss. Packet evidence showed failed RMCP+ handshakes returning RAKP4 status `0x02` after the host-side client stalled between RAKP2 and RAKP3. Adjacent serialized IPMI checks passed with the same account and password, so the evidence pointed at probe contention/timing rather than firmware state.
+
+Lenovo now opts into serialized service probes with a shared probe-bundle lock. The runlib serial path executes each service probe in a subshell so flock file descriptors opened by SSH/IPMI probes are closed before Redfish/Web probes run. Without that subshell scoping, a later curl inherited stale SSH/IPMI lock FDs and manual status could report false probe-busy failures. Lenovo SSH health is also bounded through the existing `zbmc_ssh` helper under `timeout`, preserving operator SSH behavior.
+
+Final proof used one Lenovo QEMU, runtime `work/lenovo-xcc-warm/tap-power-recovery-20260914-TOKusQ`, run `20260914T175818Z-ef603b16-c8cf-455d-ae74-a5ba9f2f128e`. Managed warm startup reached `READY [6/6]` in 189 seconds with all required services stable for 92 seconds. Three manual `zbmc lenovo-xcc -v` checks passed `READY [6/6]` while the health watcher remained live. The final health history contained zero degraded, probe-busy, or authenticated-controller-read-failed samples.
 
 ## Verified executable diagnostic RAM — 2026-09-13
 

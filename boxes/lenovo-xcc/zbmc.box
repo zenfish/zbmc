@@ -21,6 +21,7 @@ ZBMC_WARM_STATUS=verified
 ZBMC_WARM_REASON="requires a matched TAP checkpoint; pre-TAP checkpoints are unsupported"
 ZBMC_WARM_FILES="ckpt/state.gz ckpt/emmc.qcow2 ckpt/manifest.json ckpt/source-argv.json"
 ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui console"
+ZBMC_SERIAL_SERVICE_PROBES=1
 ZBMC_STABILITY_SECONDS=60
 ZBMC_READY_DEADLINE=3600
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
@@ -62,6 +63,7 @@ zbmc_boot() {
   local qp=
   qp=$(ZBMC_WARM="${ZBMC_WARM:-}" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
     IP="$ZBMC_IP" SSH_PORT="$SSH_PORT" HTTP_PORT="$HTTP_PORT" \
+    GUEST_PREFIX="$ZBMC_GUEST_PREFIX" GUEST_GATEWAY="$ZBMC_GUEST_GATEWAY" \
     HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SOCK="$SOCK" TAP="$ZBMC_TAP" \
     QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh") || return 1
   printf '%s\n' "$qp" >"$ZBMC_DIR/boot.pid"
@@ -80,7 +82,7 @@ zbmc_ready() {
   for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2 build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc lenovo-xcc build"; return 1; }
   done
-  echo "cold artifacts installed; remote IPMI verified with start --warm checkpoint"
+  echo "cold artifacts installed; LAN IPMI gateway is stubbed in cold image"
 }
 
 zbmc_web() {
@@ -102,7 +104,9 @@ zbmc_ssh() {
 
 zbmc_ssh_health() {
   local result
-  result=$(zbmc_ssh help 2>&1) &&
+  export SSH_PW SSH_PORT SSH_USER ZBMC_IP ZBMC_DIR
+  export -f zbmc_ssh
+  result=$(timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-40}" bash -c 'zbmc_ssh help' 2>&1) &&
     grep -Eq 'help[[:space:]]+--[[:space:]]+Display command list' <<<"$result" && {
       echo 'AUTH OK (native Lenovo CLI help)'; return 0;
     }
