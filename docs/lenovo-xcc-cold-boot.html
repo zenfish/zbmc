@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- zmd2html:auto source-sha256=d3adae41b3daec1cba52871b5a3c94243c0dd63557b55c640d3c31c4d6b98c15 body-sha256=b86c92c5160b93cc3e2de219f792793c3a1bcc2af4a4379734cd1a7d55f98eb4 -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lenovo XClarity Controller (XCC) under emulation: cold vs warm boot</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style type="text/tailwindcss">
+  @layer components {
+    h2 { @apply text-xl font-semibold text-slate-800 mt-10 mb-3 border-b border-slate-300 pb-1; }
+    h3 { @apply text-base font-semibold text-slate-700 mt-6 mb-1; }
+    h4 { @apply text-sm font-semibold text-slate-600 mt-4 mb-1; }
+    p  { @apply my-3 leading-relaxed text-slate-700; }
+    ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+    ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+    li > ul, li > ol { @apply my-1; }
+    blockquote { @apply border-l-4 border-slate-400 bg-slate-50 pl-4 pr-3 py-2 my-3 text-slate-600 italic; }
+    table { @apply w-full text-sm border-collapse my-4 border-2 border-slate-400 shadow-sm; }
+    th { @apply bg-slate-700 text-white text-left font-semibold px-3 py-2 align-bottom border border-slate-500; }
+    td { @apply border border-slate-300 px-3 py-2 align-top text-slate-700; }
+    tbody tr:nth-child(odd)  { @apply bg-white; }
+    tbody tr:nth-child(even) { @apply bg-slate-50; }
+    code { @apply bg-slate-100 text-slate-800 rounded px-1 text-[0.85em]; }
+    pre { @apply bg-slate-900 text-slate-100 rounded-lg p-3 my-3 overflow-x-auto text-xs; }
+    pre code { @apply bg-transparent text-slate-100 p-0; }
+    a { @apply text-blue-700 underline hover:no-underline; }
+    hr { @apply my-6 border-slate-300; }
+    img { @apply max-w-full rounded; }
+    details { @apply my-2 border-b border-slate-200 pb-2; }
+    summary { @apply cursor-pointer select-none marker:text-slate-400; }
+    /* keep the disclosure caret and the section title on ONE line: the h2
+       inside <summary> must be inline (else it drops below the caret). */
+    summary h2 { @apply inline align-baseline m-0 p-0 border-0; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-5xl mx-auto px-6 md:px-8 py-10 bg-white shadow-lg my-6 rounded-lg">
+<div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
+  <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Lenovo XClarity Controller (XCC) under emulation: cold vs warm boot</h1>
+  </div>
+</div>
+
+<p><em>How the emulated Lenovo XCC (AST2600 BMC, "Newyork" platform)
+boots, why a cold boot cannot reach full service readiness, and why warm
+restore is the supported path. Companion to <a
+href="zoo-lessons.html">zoo-lessons</a>. Last updated 2026-09-16.</em></p>
+<h2 id="tldr">TL;DR</h2>
+<ul>
+<li><strong>Warm restore is the working path</strong>: full
+<strong>6/6</strong> services (ICMP, SSH, IPMI, Redfish, Web-UI,
+Console) in <strong>~2m42s</strong>, verified repeatedly.</li>
+<li><strong>Cold boot cannot reach full 6/6.</strong> It serves ICMP,
+Console, and the <em>unauthenticated</em> web/Redfish surface, but every
+<em>authenticated</em> service (SSH, IPMI, Redfish, Web-UI login) never
+comes ready.</li>
+<li><strong>Root cause</strong>: the vendor application
+<code>/bin/bmc_app</code> blocks forever on <strong>host/chassis
+hardware handshakes that do not exist when the BMC runs with no server
+attached</strong>. It is not a credential problem and not a CPU/speed
+problem.</li>
+<li><strong>Making cold work is a multi-day QEMU hardware-modeling
+project</strong>, not a config fix. It is not worth it over warm. Cold
+is kept as a Web-UI seed; warm is production.</li>
+</ul>
+<h2 id="1-what-cold-and-warm-mean-here">1. What "cold" and "warm" mean
+here</h2>
+<ul>
+<li><strong>Cold</strong> (<code>boxes/lenovo-xcc/boot.sh</code>, no
+<code>ZBMC_WARM</code>): full vendor firmware boot from the provisioned
+eMMC image (<code>-drive ... snapshot=on</code>). The vendor stack
+self-provisions during boot. Slow (tens of minutes) and gated on the
+vendor application finishing init.</li>
+<li><strong>Warm</strong> (<code>boot.sh</code> with
+<code>ZBMC_WARM</code>): QEMU live-migration restore
+(<code>-incoming</code> + gzipped <code>ckpt/state.gz</code>) of a
+<em>paused, already-good</em> guest, captured once from a running box.
+Skips vendor init entirely. <code>verify-warm.py</code> hash-checks the
+checkpoint and requires the TAP management NIC; <code>restore.py</code>
+drives <code>migrate-incoming</code>. ~2m42s to 6/6.</li>
+</ul>
+<p>This mirrors the whole zoo's biggest reliability lever (<a
+href="zoo-lessons.html">zoo-lessons</a>): <em>cold-boot-flaky →
+warm-snapshot</em>. Lenovo XCC is another instance.</p>
+<h2 id="2-capability-matrix">2. Capability matrix</h2>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Cold</th>
+<th>Warm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ICMP</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Console (serial)</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Web-UI (unauth GET)</td>
+<td>yes (HTTP 200)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Web-UI (authed login)</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>SSH</td>
+<td>no (banner timeout)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>IPMI (RMCP+)</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Redfish (authed)</td>
+<td>no (503 -&gt; hang)</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-root-cause-the-account-data-plane-never-fills-cold">3. Root
+cause: the account data plane never fills cold</h2>
+<p>All four authenticated failures collapse to one gate:</p>
+<pre><code>authed SSH / IPMI / Redfish / Web-UI login
+  -&gt; proc_sync_wait_main_processes_ready        (/etc/sysapps_script/S_COMMON.sh)
+  -&gt; proc_sync -p bmc_app -v 10 -t 120 -w       (waits for bmc_app &quot;ready&quot;)
+  -&gt; /bin/bmc_app  avocent_initializer          (never completes cold)
+  -&gt; blocks on absent host/chassis peers:
+       retimer proxy  (&quot;retimer proxy waiting for connection...&quot;)
+       twr_comm       (&quot;twr_comm_trigger is not ready&quot;)</code></pre>
+<p>The shell-level readiness gates all have timeouts and <em>proceed
+anyway</em> after ~120s, so nginx/gunicorn start and the
+<strong>unauthenticated</strong> surface serves 200. But the
+authenticated stack consults the account/security data plane
+(<code>/bin/immdb_server</code> + <code>/sbin/samgr</code>, populated by
+<code>bmc_app</code> via <code>AB_DMProc</code>). Because
+<code>bmc_app</code> never finishes, that data is never loaded, so
+authenticated requests are refused (Redfish 503; SSH times out at
+banner; IPMI cannot establish an RMCP+ session). <code>bmc_app</code>
+then crash-loops out via its
+<code>lifeguardmode=respawn::&lt;11:300&gt; reboot</code> policy.</p>
+<p>Warm works because its snapshot was taken from a guest where
+<code>bmc_app</code> had already finished and the account data was
+resident — the restore brings that completed state back without
+re-running init.</p>
+<h2 id="4-what-was-ruled-out-with-evidence">4. What was ruled out (with
+evidence)</h2>
+<ul>
+<li><strong>Credentials / PAM</strong> — byte-identical to the working
+warm guest. Authenticated paths return <strong>503 (not ready)</strong>,
+not 401 (auth failure). It is a readiness gate, not an auth
+problem.</li>
+<li><strong>CPU / slowness</strong> — tested
+<code>-smp 2 -accel tcg,thread=multi</code> (both AST2600 cores across
+idle host cores, multi-threaded TCG). Ran clean, no crash from the
+custom <code>xcc-fpga</code> machine model, and produced the
+<strong>identical 2/6</strong> outcome as single-vCPU. So the block is a
+sequence/hardware gate, not compute. The <code>-smp 2</code> knob was
+kept anyway (env-gated <code>ZBMC_SMP</code>/<code>ZBMC_ACCEL</code> in
+<code>boot.sh</code>, defaults
+<code>2</code>/<code>tcg,thread=multi</code>) because it is stable,
+warm-restore compatible, and speeds the one-time cold seed; it does
+<strong>not</strong> fix the gate.</li>
+</ul>
+<h2 id="5-what-was-tested-and-rejected-the-l1-shell-shim">5. What was
+tested and rejected: the L1 shell shim</h2>
+<p>Rather than rebuild the shell kernel blind, the cheap-shim hypothesis
+was tested <em>live</em> on a stalled cold guest over the serial root
+shell: set <code>aim_var_int_platform_id=0</code>, touched the
+ready-flags (<code>manifest_ready</code>, <code>AB_DMProc_ready</code>),
+and forced
+<code>proc_sync -p {bmc_app,sm,tm,osinet,pm,seclvd,adam} -v 10 -s</code>.</p>
+<p>Result: authenticated Redfish went <strong>503 -&gt; 000</strong>
+(fast-reject -&gt; <em>hang</em>), never 200. Opening the gate makes
+Redfish actually attempt the account lookup, which then hangs because
+the account data plane is genuinely empty. Confirmed on the live guest:
+<code>aim platform_id</code> already <code>0</code>, all ready-flags
+already present, yet <code>/bin/bmc_app</code> not running.</p>
+<p><strong>No shell/flag shim can fix cold.</strong>
+<code>bmc_app</code> must actually run to completion.</p>
+<h2 id="6-the-real-fix-l2-and-why-it-is-expensive">6. The real fix (L2),
+and why it is expensive</h2>
+<p>To let <code>bmc_app</code> finish, its two blocking peers must be
+provided. They were classified by offline analysis of the platform
+libraries (<code>libhal.so</code>, <code>libdevices.so</code>,
+<code>liblegoland_hv.so</code>, <code>pl_newyork</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Peer</th>
+<th>Interface</th>
+<th>Evidence</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>retimer proxy</td>
+<td><strong>SOCKET</strong></td>
+<td><code>retimer proxy server is started.</code> then blocks in
+<code>accept()</code>; PLDM-over-MCTP IPC (<code>pldm_srv</code>,
+<code>Mctpd</code> daemons via <code>S_MCTPD.sh</code>)</td>
+<td>cheap stub daemon — <strong>but</strong> the socket path/protocol
+lives inside <code>bmc_app</code> + <code>libpldm_proxy.so</code>, which
+must be extracted from the eMMC first</td>
+</tr>
+<tr>
+<td>twr_comm</td>
+<td><strong>REGISTER</strong></td>
+<td><code>/dev/xcc_twr</code> char device; <code>libhal.so</code>
+<code>hal_*_twr</code> use only open/ioctl/mmap (no sockets);
+<code>twr_comm_trigger</code> is a field of the host&lt;-&gt;BMC "Elx
+Shared TWR Control Register", set by the host/UEFI</td>
+<td><strong>expensive</strong> — QEMU-C register/char-device modeling;
+separate from the modeled <code>xcc-fpga</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both must complete, and both are <strong>host/chassis-presence
+handshakes</strong> that simply do not occur when a BMC is emulated with
+no server powered on — the classic "BMC without a host" wall.</p>
+<p><strong>L2 therefore requires:</strong> (a) extract
+<code>bmc_app</code> from the eMMC and recover the <code>rtcfg</code>
+socket protocol, write a stub client daemon; <strong>and</strong> (b)
+model <code>/dev/xcc_twr</code> in QEMU C to assert the host-handshake
+bits ready; <strong>plus</strong> an unknown further peer chain revealed
+only as each is satisfied. Multi-day, uncertain, and marginal over the
+working warm path.</p>
+<p><strong>Cheaper alternative to check first if L2 is ever
+funded:</strong> look for a vendor "no host present / standalone" code
+path or config that lets <code>avocent_initializer</code> skip the
+retimer/twr host handshakes, instead of emulating them. More RE, but
+avoids both the socket daemon and the QEMU-C device.</p>
+<h2 id="7-recommendation">7. Recommendation</h2>
+<ul>
+<li><strong>Ship warm for 6/6.</strong> It is the supported, verified
+path.</li>
+<li><strong>Keep cold as a Web-UI seed only.</strong> Do
+<strong>not</strong> require SSH/IPMI/Redfish/Web at cold in the service
+contract — cold cannot hit that, and requiring it reports a healthy box
+as failed.</li>
+<li><strong>Only pursue L2</strong> if unattended cold-to-6/6 becomes a
+hard requirement, and gate it behind the "standalone path" check
+above.</li>
+</ul>
+<h2 id="8-reproduce-the-warm-66">8. Reproduce the warm 6/6</h2>
+<p>Assemble a work dir with the base artifacts plus
+<code>ckpt/{state.gz,emmc.qcow2,manifest.json,source-argv.json}</code>
+(note: <code>verify-warm.py</code> maps the installed
+<code>kernel-shell.zImage</code> to the captured <em>runtime</em> kernel
+hash), then:</p>
+<pre><code>sudo env ZBMC_DIR=&quot;$WARM&quot; zbmc lenovo-xcc start --warm -v
+zbmc lenovo-xcc status --all-services      # -&gt; Health: READY [6/6]</code></pre>
+<h2 id="appendix-how-this-was-diagnosed-tooling">Appendix: how this was
+diagnosed (tooling)</h2>
+<ul>
+<li><strong>Serial root shell</strong> into a running guest: the
+diagnostic getty on ttyS4 is <code>getty -n -l /bin/bash</code> (no
+login). Send Ctrl-C first to clear a stuck <code>&gt;</code>
+continuation prompt, then commands. A file-fed injector avoids ssh -&gt;
+python -&gt; serial quoting problems.</li>
+<li><strong>Test shim logic live</strong> over serial before any kernel
+rebuild: one cold boot (~45-60 min to the stall) then iterate in
+seconds, instead of ~1 h per shell- kernel rebuild.</li>
+<li><strong>Classify hardware peers offline</strong>: the platform
+libraries under a rootfs extract give a definitive socket-vs-register
+read via <code>strings</code>/<code>nm</code>/<code>objdump</code>
+without booting.</li>
+</ul>
+</div>
+</body>
+</html>
