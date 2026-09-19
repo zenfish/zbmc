@@ -264,6 +264,63 @@ do not survive a fresh cold boot; a warm checkpoint restores its captured
 state. For repeatable experiments, replay the transfer after startup. To
 bake a file into a cold image, use that box's existing build/repack recipe
 and keep custom images separate from pinned vendor inputs.</p>
+<h2 id="extracting-bmc-filesystems">Extracting BMC filesystems</h2>
+<p><code>build.sh</code> produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has the exact read-only extraction recipe; all recipes default to <code>work/&lt;box&gt;/fs</code>:</p>
+<table>
+<thead>
+<tr>
+<th>BMC</th>
+<th>Recipe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenBMC</td>
+<td><a href="boxes/openbmc/index.md#extracting-the-filesystem">openbmc/index.md</a></td>
+</tr>
+<tr>
+<td>NVIDIA OpenBMC</td>
+<td><a href="boxes/nvidia-obmc/index.md#extracting-the-filesystem">nvidia-obmc/index.md</a></td>
+</tr>
+<tr>
+<td>Advantech ASMB-787</td>
+<td><a href="boxes/advantech-asmb787/index.md#extracting-the-filesystem">advantech-asmb787/index.md</a></td>
+</tr>
+<tr>
+<td>Dell iDRAC9</td>
+<td><a href="boxes/idrac9/index.md#extracting-the-filesystem">idrac9/index.md</a></td>
+</tr>
+<tr>
+<td>Dell iDRAC10</td>
+<td><a href="boxes/idrac10/index.md#extracting-the-filesystem">idrac10/index.md</a></td>
+</tr>
+<tr>
+<td>HPE MegaRAC</td>
+<td><a href="boxes/megarac-hpe/index.md#extracting-the-filesystem">megarac-hpe/index.md</a></td>
+</tr>
+<tr>
+<td>IEIT / Inspur</td>
+<td><a href="boxes/ieit/index.md#extracting-the-filesystem">ieit/index.md</a></td>
+</tr>
+<tr>
+<td>Fujitsu iRMC</td>
+<td><a href="boxes/irmc-fujitsu/index.md#extracting-the-filesystem">irmc-fujitsu/index.md</a></td>
+</tr>
+<tr>
+<td>Lenovo XCC</td>
+<td><a href="boxes/lenovo-xcc/index.md#extracting-the-filesystem">lenovo-xcc/index.md</a></td>
+</tr>
+<tr>
+<td>Supermicro X10</td>
+<td><a href="boxes/supermicro-x10/index.md#extracting-the-filesystem">supermicro-x10/index.md</a></td>
+</tr>
+<tr>
+<td>Supermicro X14</td>
+<td><a href="boxes/supermicro-x14/index.md#extracting-the-filesystem">supermicro-x14/index.md</a></td>
+</tr>
+</tbody>
+</table>
+<p>Extraction is read-only and separate from the boot artifact. Partitioned SD/eMMC recipes use <code>guestfish</code>; SquashFS, CramFS, and JFFS2 payloads use their matching tools. Packed NOR, kernels, signatures, and GPT metadata remain packed by design.</p>
 <h2 id="exact-qemu-builds-and-docker-package">Exact QEMU builds and
 Docker package</h2>
 <p>Every box descriptor pins a QEMU executable, version, machine, and

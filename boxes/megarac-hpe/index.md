@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=d5e2d7650e816d34ef72c7e2cebf1a820aada669542324cc474d23d04199e2c1 body-sha256=ae865012226118577da9405bec606ade86ae99ea50de2cdd1576ea956f680337 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=48307513c54f62b5ec4257e57ce7b62545370627def2ec6227ffdfc417182ff0 body-sha256=f20d1ab97ebf81cf14bf070882e5b8be9f04e68b9482f8d394e55f1e92afe46a -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -32,3 +32,12 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 - [Virtual HPE XD670 BMC](README.md)
 - [IPMI stack teardown](IPMI.md)
 - [Historical emulation status](EMULATION-STATUS.md)
+
+## Extracting the filesystem
+
+The accepted runtime root is the packed `rootfs.sqfs`. Extract it into `work/megarac-hpe/fs/rootfs`:
+
+    mkdir -p work/megarac-hpe/fs/rootfs
+    unsquashfs -d work/megarac-hpe/fs/rootfs work/megarac-hpe/rootfs.sqfs
+
+The configuration partitions remain inside `mtdflash.bin`; use `binwalk -eM -C work/megarac-hpe/fs work/megarac-hpe/mtdflash.bin` when you also need those packed regions.

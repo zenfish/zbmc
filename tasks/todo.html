@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=17864b19c2fcc98ab8a732cec8f4066bd285239ea8d1664f9ddbfc129afb4430 body-sha256=c839760442aa02b8ba182737e63835c0c93471ae38c9094ac079da5129b891c0 -->
+<!-- zmd2html:auto source-sha256=fe6bcfb1e6b7472cb8b0d3eb33dee5ec600d3a9eb6584d027751b3ccfa5792be body-sha256=0dc36b9a2cf40c28d7d84b4de742f857362a80074a5de68e36d3becf443f5c5d -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -150,6 +150,24 @@ restored the marker
 the same four-service READY contract in 2m47s. Exact topology and probe
 output is preserved in each run's <code>probes/tap-validation.txt</code>
 or <code>probes/tap-warm-validation.txt</code>.</p>
+<h1 id="filesystem-extraction-documentation">Filesystem extraction
+documentation</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Add a main README index
+for extracting each zoo BMC filesystem into
+<code>work/&lt;box&gt;/fs</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Add per-BMC extraction
+recipes, including packed-only and format caveats.</label></li>
+<li><label><input type="checkbox" checked="" />Add index pages for boxes
+that previously had no operator page.</label></li>
+</ul>
+<h2 id="review-4">Review</h2>
+<p>All eleven BMCs now have an extraction recipe. Local SquashFS probes
+passed for OpenBMC, NVIDIA OpenBMC, Supermicro X14, iDRAC9, and iDRAC10
+at the documented offsets. The recipes leave boot artifacts unchanged;
+Lenovo XCC and Fujitsu iRMC remain explicitly format-discovery cases
+where the repository does not verify a generic offline root
+extraction.</p>
 </div>
 </body>
 </html>

@@ -32,6 +32,11 @@ sudo ./tools/zbmc idrac10 start --warm</code></pre>
 <li><a class="text-blue-700 underline" href="RESUME-STATE.html">Historical state and resume notes</a></li>
 <li><a class="text-blue-700 underline" href="LIVE-ITERATE-HANDOFF.html">Historical live-iteration handoff</a></li>
 </ul>
+<h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>The root filesystem is the SquashFS payload in the built SD image. Extract it under <code>work/idrac10/fs</code>:</p>
+<pre><code>mkdir -p work/idrac10/fs
+unsquashfs -d work/idrac10/fs work/idrac10/img/sd.img</code></pre>
+<p><code>sd.img</code> remains the boot artifact; the extracted tree is a copy for inspection or a separately rebuilt image.</p>
 </main>
 </body>
 </html>

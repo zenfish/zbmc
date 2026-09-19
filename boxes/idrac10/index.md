@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=486d2a10d4b8e75a9420904d7b7d7eda4445070b713f46bbefa11558ed28fc8d body-sha256=b246d4c2aa6c487e34fd125c5bd309e0c09912bb0621a2f70f78e3ba3b4bbb1a -->
+<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=2622e1d23500bf974b02c1eae8de65704e8b9f111a6d0fe24fa2b6cd9aa3bc61 body-sha256=379aa297d0dc1a8207bb2d649521d3d90dee7a2e831b25a334898b80b21a7712 -->
 
 # zbmc iDRAC10
 
@@ -27,3 +27,12 @@ NPCM845/AArch64 research box. The supported cold boot reached ICMP, SSH, retaine
 - [Pilot OEM commands](pilot-oem-commands.md)
 - [Historical state and resume notes](RESUME-STATE.md)
 - [Historical live-iteration handoff](LIVE-ITERATE-HANDOFF.md)
+
+## Extracting the filesystem
+
+The root filesystem is the SquashFS payload in the built SD image. Extract it under `work/idrac10/fs`:
+
+    mkdir -p work/idrac10/fs
+    unsquashfs -d work/idrac10/fs work/idrac10/img/sd.img
+
+`sd.img` remains the boot artifact; the extracted tree is a copy for inspection or a separately rebuilt image.

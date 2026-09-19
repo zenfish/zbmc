@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=388cbd23da0226b673bb557a0b71b08ecb3e395f5caabe50f3fa7b2dfaab3071 body-sha256=1a32914321d73bebf50fe98530f6c2863b3d646fe9e81c7edc477a081644bfb4 -->
+<!-- html2md:auto source=README.html source-sha256=a27247d7eef80992fa12a395c0ad2bf60e6a10087480f20d01ca847214184cfe body-sha256=5c9d1aed9937c6043c940bbb0fe9cc1ca4bd1e0ad06d033102cfdbbd74cf47cc -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -92,6 +92,26 @@ The input redirection supplies bytes from the host; the quoted command runs insi
 For a Linux console with guest networking, serve a file from the host with `python3 -m http.server 8765 --bind 127.0.0.1` and fetch it from the guest using `wget http://10.0.2.2:8765/my-tool`. iRMC uses `192.168.2.2`; Advantech has no usable external network. X10 prefers paced base64 chunks over its serial console because its SSH wrapper consumes stdin for commands and larger network transfers can destabilize the old guest driver. IEIT SSH is SMASH/CLP rather than a Unix shell; Lenovo XCC has no established arbitrary-file transfer path. MegaRAC's injected SSH requires the explicit isolated-lab opt-in; its `shell` verb starts a separate no-network VM.
 
 Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a fresh cold boot; a warm checkpoint restores its captured state. For repeatable experiments, replay the transfer after startup. To bake a file into a cold image, use that box's existing build/repack recipe and keep custom images separate from pinned vendor inputs.
+
+## Extracting BMC filesystems
+
+`build.sh` produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has the exact read-only extraction recipe; all recipes default to `work/<box>/fs`:
+
+| BMC | Recipe |
+|----|----|
+| OpenBMC | [openbmc/index.md](boxes/openbmc/index.md#extracting-the-filesystem) |
+| NVIDIA OpenBMC | [nvidia-obmc/index.md](boxes/nvidia-obmc/index.md#extracting-the-filesystem) |
+| Advantech ASMB-787 | [advantech-asmb787/index.md](boxes/advantech-asmb787/index.md#extracting-the-filesystem) |
+| Dell iDRAC9 | [idrac9/index.md](boxes/idrac9/index.md#extracting-the-filesystem) |
+| Dell iDRAC10 | [idrac10/index.md](boxes/idrac10/index.md#extracting-the-filesystem) |
+| HPE MegaRAC | [megarac-hpe/index.md](boxes/megarac-hpe/index.md#extracting-the-filesystem) |
+| IEIT / Inspur | [ieit/index.md](boxes/ieit/index.md#extracting-the-filesystem) |
+| Fujitsu iRMC | [irmc-fujitsu/index.md](boxes/irmc-fujitsu/index.md#extracting-the-filesystem) |
+| Lenovo XCC | [lenovo-xcc/index.md](boxes/lenovo-xcc/index.md#extracting-the-filesystem) |
+| Supermicro X10 | [supermicro-x10/index.md](boxes/supermicro-x10/index.md#extracting-the-filesystem) |
+| Supermicro X14 | [supermicro-x14/index.md](boxes/supermicro-x14/index.md#extracting-the-filesystem) |
+
+Extraction is read-only and separate from the boot artifact. Partitioned SD/eMMC recipes use `guestfish`; SquashFS, CramFS, and JFFS2 payloads use their matching tools. Packed NOR, kernels, signatures, and GPT metadata remain packed by design.
 
 ## Exact QEMU builds and Docker package
 

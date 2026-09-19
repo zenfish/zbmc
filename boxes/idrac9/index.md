@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=cab351670fc68e519df2cb10f23c25e2b46832264028abe682c6b3c2a908561c body-sha256=666477039278a6b1f6e59f67d07d64e5e943c56abc2b79d22bb5d87597228ce9 -->
+<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=f715c3b4e32e987f29018679eb996fb7e15d54576ee601f8f84631e517421eec body-sha256=785a4ebdaae8dfa901aa376e7e28173b991e5b4882c67cc65cb5bc09bbe29882 -->
 
 **Historical investigation record.** The phase roadmap below predates zbmc 0.1.1. Current iDRAC9 cold-boots to accepted ICMP, SSH, IPMI, and vendor Web-UI in 10m31s on the reference host; Redfish remains unavailable. Use the repository README and `./tools/zbmc idrac9 status -v`.
 
@@ -102,3 +102,13 @@ racadm is a client of Dell's D-Bus + ZeroMQ object model plus the DSM-SA instrum
 ------------------------------------------------------------------------
 
 *Historical sibling work used Unicorn emulation of `generateHashes` and a separate cold-start handoff; those source-tree records are not included in this repository. Written 2026-06-22.*
+
+## Extracting the filesystem
+
+The built SD image is a padded SquashFS image. Extract it into `work/idrac9/fs` and unpack the custom initramfs separately:
+
+    mkdir -p work/idrac9/fs/rootfs work/idrac9/fs/initramfs
+    unsquashfs -d work/idrac9/fs/rootfs work/idrac9/img/sd256.img
+    xz -dc work/idrac9/boot/initramfs.p4.xz | (cd work/idrac9/fs/initramfs && cpio -idm --no-absolute-filenames)
+
+The kernel, DTB, and SD image stay packed for QEMU.

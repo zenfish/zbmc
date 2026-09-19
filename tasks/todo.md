@@ -49,3 +49,13 @@ That run also reaches `SVCSILO_MAIN`, crosses `phase=after-event-service-init`, 
 Cold run `20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce` reached READY for ICMP, SSH, authenticated IPMI `mc info`, and protected Redfish. Its ARP entry maps `10.250.0.31` to `52:54:00:fa:00:31`; the host has no `.31` address; and the QEMU management NIC is TAP-backed with no management `hostfwd`.
 
 Warm run `20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6` restored the marker `tap ztap-idrac10 52:54:00:fa:00:31 10.250.0.31` and reached the same four-service READY contract in 2m47s. Exact topology and probe output is preserved in each run's `probes/tap-validation.txt` or `probes/tap-warm-validation.txt`.
+
+# Filesystem extraction documentation
+
+- [x] Add a main README index for extracting each zoo BMC filesystem into `work/<box>/fs`.
+- [x] Add per-BMC extraction recipes, including packed-only and format caveats.
+- [x] Add index pages for boxes that previously had no operator page.
+
+## Review
+
+All eleven BMCs now have an extraction recipe. Local SquashFS probes passed for OpenBMC, NVIDIA OpenBMC, Supermicro X14, iDRAC9, and iDRAC10 at the documented offsets. The recipes leave boot artifacts unchanged; Lenovo XCC and Fujitsu iRMC remain explicitly format-discovery cases where the repository does not verify a generic offline root extraction.

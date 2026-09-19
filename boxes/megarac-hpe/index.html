@@ -39,6 +39,11 @@ CPU lacks the VFP support that a hard-float binary would require. Uploads to <co
 <li><a class="text-blue-700 underline" href="IPMI.html">IPMI stack teardown</a></li>
 <li><a class="text-blue-700 underline" href="EMULATION-STATUS.html">Historical emulation status</a></li>
 </ul>
+<h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>The accepted runtime root is the packed <code>rootfs.sqfs</code>. Extract it into <code>work/megarac-hpe/fs/rootfs</code>:</p>
+<pre><code>mkdir -p work/megarac-hpe/fs/rootfs
+unsquashfs -d work/megarac-hpe/fs/rootfs work/megarac-hpe/rootfs.sqfs</code></pre>
+<p>The configuration partitions remain inside <code>mtdflash.bin</code>; use <code>binwalk -eM -C work/megarac-hpe/fs work/megarac-hpe/mtdflash.bin</code> when you also need those packed regions.</p>
 </main>
 </body>
 </html>

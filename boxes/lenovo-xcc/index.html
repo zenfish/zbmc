@@ -241,6 +241,12 @@ Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
   <p class="mt-4">Debby's private configuration now selects <code>work/lenovo-xcc-warm/tap-managed-20260913-i5gsSN</code>. Its previous configuration is preserved there as <code>zbmc.conf.before-managed</code>. Checkpoint disk/RAM and configuration are private and must not be published. Do not run build against this recovered runtime: build artifacts are not a replacement for its provisioned state.</p>
   <p class="mt-4 break-all">Evidence: runtime <code>managed-start.log</code> and run <code>runs/20260913T233717Z-e2817348-3b92-477d-85de-40d7e397cc73</code>. Earlier statements above about an unreplaced default checkpoint describe the preceding experiments and are superseded by this managed restore. Cold service readiness remains unresolved.</p>
 </section>
-  </main>
+  <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>Lenovo stores its filesystems inside the qcow2 eMMC image. Enumerate partitions and extract each supported filesystem read-only with libguestfs:</p>
+<pre><code>mkdir -p work/lenovo-xcc/fs
+guestfish --ro -a work/lenovo-xcc/emmc.qcow2
+# at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...</code></pre>
+<p>The signed vendor layers and GPT metadata remain packed in <code>emmc.qcow2</code>; there is no verified plain <code>unsquashfs</code> recipe for the complete XCC image.</p>
+</main>
 </body>
 </html>

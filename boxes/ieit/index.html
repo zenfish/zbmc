@@ -37,6 +37,11 @@ it or create a shell. To run it automatically, you would also need an intentiona
 The serial socket is available through <code>sudo ./tools/zbmc ieit console</code>, but a usable Linux
 login there has not been established. Keep the executable and build edit locally so they can be
 reapplied; the original pinned vendor download should remain unchanged.</p>
+<h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>The build publishes a CramFS service root. Extract it under <code>work/ieit/fs</code> and preserve its metadata with <code>fakeroot</code>:</p>
+<pre><code>mkdir -p work/ieit/fs
+fakeroot -- fsck.cramfs --extract=work/ieit/fs work/ieit/service-rootfs.cramfs</code></pre>
+<p>The original configuration JFFS2 and Web UI CramFS remain packed in the source IMA.</p>
 </main>
 </body>
 </html>

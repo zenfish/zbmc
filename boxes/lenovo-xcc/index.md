@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=4eef3b8116b4f12ef8aa26f48d39ead1e85f4e2d92a05ebf8fa4ad8a97df042c body-sha256=582682a21fc7c5519c2443b1cee9d697df945c13dda37a6808d4378a73305ee3 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=664df9fc1cd6e689e47d5e9015f98f2a8e07deb3c9b85aa90b92e80a48f7c626 body-sha256=9be3dcbf8a695bcc3b68294b9cf35cfe531ea638d6c261ba92fdd35a47d1b2d9 -->
 
 zbmc / preserved firmware
 
@@ -261,3 +261,13 @@ Guard commit `87a1628` verifies checkpoint disk, RAM, runtime kernel, board data
 Debby's private configuration now selects `work/lenovo-xcc-warm/tap-managed-20260913-i5gsSN`. Its previous configuration is preserved there as `zbmc.conf.before-managed`. Checkpoint disk/RAM and configuration are private and must not be published. Do not run build against this recovered runtime: build artifacts are not a replacement for its provisioned state.
 
 Evidence: runtime `managed-start.log` and run `runs/20260913T233717Z-e2817348-3b92-477d-85de-40d7e397cc73`. Earlier statements above about an unreplaced default checkpoint describe the preceding experiments and are superseded by this managed restore. Cold service readiness remains unresolved.
+
+## Extracting the filesystem
+
+Lenovo stores its filesystems inside the qcow2 eMMC image. Enumerate partitions and extract each supported filesystem read-only with libguestfs:
+
+    mkdir -p work/lenovo-xcc/fs
+    guestfish --ro -a work/lenovo-xcc/emmc.qcow2
+    # at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...
+
+The signed vendor layers and GPT metadata remain packed in `emmc.qcow2`; there is no verified plain `unsquashfs` recipe for the complete XCC image.

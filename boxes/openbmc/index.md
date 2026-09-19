@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=1d69ca5298f328ce81a13b23dc8b8c122303dbf4a18a312a87cff9cc3c882d12 body-sha256=39746491d7ec969e18f62eba04cec04dbbe3f4c5c0ec1fa6d96c6003e6fbd942 -->
+<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=4184e7b73c142d61c9311d0480b776e45e4938e0644a58778e125f724bf4ef4b body-sha256=c84c4613af8ce172e0564203b9db177388845fe910057859598ca5e044d22a30 -->
 
 # zbmc OpenBMC
 
@@ -14,3 +14,12 @@ Vanilla AST2600 OpenBMC control image. The accepted cold run reached ICMP, SSH, 
 
 - [Build information](BUILD-INFO.md)
 - [IPMI and Redfish inventory](IPMI-REDFISH-INVENTORY.md)
+
+## Extracting the filesystem
+
+The build artifact is a complete flash image. Extract its root SquashFS at offset `0xa00000` into `work/openbmc/fs`:
+
+    mkdir -p work/openbmc/fs
+    unsquashfs -o 10485760 -d work/openbmc/fs work/openbmc/flash.mtd
+
+The U-Boot, kernel, and other flash regions remain packed in `flash.mtd`.

@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=440622c01c8d63c9d9a7c1f21ec199901b5ca5d31d25f53771e7bf46a81bbf40 body-sha256=268662522a186ac0403c47eab2cf15a05243635e7c2ff2fe18d8b636f7cd9701 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=2a227bbb965f8e6e8f5a07d60e4bb63153e6f0db950a9e15a81aa2fce6ff3b1f body-sha256=9aeeb55f88be7f9d8422d29eab5905561aa4dcec046b375be059ff65ab7567f5 -->
 
 # Fujitsu iRMC S6
 
@@ -37,3 +37,16 @@ Follow the [shared host HTTP-server recipe](../../README.md#copy-from-a-guest-sh
     aed0ce8eb706180b21e798acad707d26f2e7a9e5d8d6f5933ec3ad7f2f13ad14  initramfs.cpio.gz
     e029ad09372a37c400b30446701440f905a855042174d3222e542261acbb152c  flash64.img
     4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78  rootfs-sd.img
+
+## Extracting the filesystem
+
+The SD image format is vendor-specific. Enumerate it before extracting any partition into `work/irmc-fujitsu/fs`:
+
+    mkdir -p work/irmc-fujitsu/fs
+    guestfish --ro -a work/irmc-fujitsu/rootfs-sd.img
+    # at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...
+
+The initramfs is a separate packed CPIO archive:
+
+    mkdir -p work/irmc-fujitsu/fs/initramfs
+    gzip -dc work/irmc-fujitsu/initramfs.cpio.gz | (cd work/irmc-fujitsu/fs/initramfs && cpio -idm --no-absolute-filenames)

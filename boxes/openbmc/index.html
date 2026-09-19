@@ -20,6 +20,11 @@ sudo ./tools/zbmc openbmc start
 <li><a class="text-blue-700 underline" href="BUILD-INFO.html">Build information</a></li>
 <li><a class="text-blue-700 underline" href="IPMI-REDFISH-INVENTORY.html">IPMI and Redfish inventory</a></li>
 </ul>
+<h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>The build artifact is a complete flash image. Extract its root SquashFS at offset <code>0xa00000</code> into <code>work/openbmc/fs</code>:</p>
+<pre><code>mkdir -p work/openbmc/fs
+unsquashfs -o 10485760 -d work/openbmc/fs work/openbmc/flash.mtd</code></pre>
+<p>The U-Boot, kernel, and other flash regions remain packed in <code>flash.mtd</code>.</p>
 </main>
 </body>
 </html>

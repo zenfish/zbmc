@@ -224,5 +224,11 @@ hardware (<code>usbmap</code> restart-looped 1753×) and never reach the target;
 <p style="font-size:.8rem;color:#64748b"><em>Historical sibling work used Unicorn emulation of
 <code>generateHashes</code> and a separate cold-start handoff; those source-tree records are not included
 in this repository. Written 2026-06-22.</em></p>
+<h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
+<p>The built SD image is a padded SquashFS image. Extract it into <code>work/idrac9/fs</code> and unpack the custom initramfs separately:</p>
+<pre><code>mkdir -p work/idrac9/fs/rootfs work/idrac9/fs/initramfs
+unsquashfs -d work/idrac9/fs/rootfs work/idrac9/img/sd256.img
+xz -dc work/idrac9/boot/initramfs.p4.xz | (cd work/idrac9/fs/initramfs &amp;&amp; cpio -idm --no-absolute-filenames)</code></pre>
+<p>The kernel, DTB, and SD image stay packed for QEMU.</p>
 </body>
 </html>

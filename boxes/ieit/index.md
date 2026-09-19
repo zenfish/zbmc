@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/ieit/index.html source-sha256=1a4dab007b3902d35a488bd3a7b37ac26abb4a96f4083f4286a97b1678eebfda body-sha256=ed995b63d1f4402e87f12dd46449fc2dfd0d9961d7a2fcb5c8f24216cec88b5c -->
+<!-- html2md:auto source=boxes/ieit/index.html source-sha256=b73ab4303f4eaec8f5d5cec90b69cc06729d561b5341f8332d0683f676ff3c73 body-sha256=1ff33b1d5b222d4e93837d0b72d14bd28422182a7e9e0ddef0815f1c4d9bb8e4 -->
 
 # IEIT / Inspur
 
@@ -28,3 +28,12 @@ The builder runs under `fakeroot` to preserve firmware metadata, rebuilds CramFS
     cksum boxes/ieit/my-tool "$verify_dir/usr/local/bin/my-tool"
 
 This installs `/usr/local/bin/my-tool` in the cold image; it does not execute it or create a shell. To run it automatically, you would also need an intentional startup-hook change. The serial socket is available through `sudo ./tools/zbmc ieit console`, but a usable Linux login there has not been established. Keep the executable and build edit locally so they can be reapplied; the original pinned vendor download should remain unchanged.
+
+## Extracting the filesystem
+
+The build publishes a CramFS service root. Extract it under `work/ieit/fs` and preserve its metadata with `fakeroot`:
+
+    mkdir -p work/ieit/fs
+    fakeroot -- fsck.cramfs --extract=work/ieit/fs work/ieit/service-rootfs.cramfs
+
+The original configuration JFFS2 and Web UI CramFS remain packed in the source IMA.

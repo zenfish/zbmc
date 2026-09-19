@@ -113,3 +113,5 @@ Creds `ADMIN:ADMIN` + `root:0penBmc` were recovered from `/etc/ipmi_pass` with t
 
 ## Once built, drive it from the framework
 `sudo ./tools/zbmc supermicro-x14 start`, then use `status`, `ssh`, `ipmi <cmd>`, `web`, or `snapshot`.
+
+Filesystem extraction is documented in [index.md](index.md#extracting-the-filesystem).
