@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=75ea3567407a6a8b61c87ac2ef13c4c24c957a1edcdf469676b61b01d4fa6c36 body-sha256=2f1b129005ff742a7d6091b7e8445b19b2352cefb7b3081e7146b4b25dd7917f -->
+<!-- zmd2html:auto source-sha256=d3cb00953f4d760fcddde4ff140557006f9df28928d00ee6116af5fe1e1ec6ce body-sha256=716bda38a73c5a69eaeb7a490166744eb086cda2b48f069f427d92fa8706762c -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>lessons</title>
@@ -47,10 +47,11 @@
 <p>2026-09-04 | ilo5-run-ownership | worked around root-owned attempt
 artifacts manually | reclaim ownership at the end of self-contained runs
 so reruns clone cleanly | fixes the lifecycle bug once instead of adding
-per-attempt exceptions 2026-09-04 | ilo5-host-split | searched the local
-clone for Debby-only runtime dumps | check HOSTS.md and inspect the
-canonical Debby work tree first | runtime evidence is host-local even
-when paths look repository-relative</p>
+per-attempt exceptions 2026-09-10 | zbmc-native-networking | accepted
+proxy networking as sufficient for an advertised BMC IP | make the guest
+own its management IP on TAP and validate it through zBMC | port
+forwarding hides broken L2/ICMP behavior and violates the device
+model</p>
 </div>
 </body>
 </html>

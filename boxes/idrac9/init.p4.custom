@@ -33,6 +33,29 @@ $BB sed 's/^SELINUX=.*/SELINUX=permissive/' /newroot/etc/selinux/config > /newro
 $BB cat > /newroot/run/prep.sh <<'EOS'
 #!/bin/sh
 export PATH=/usr/bin:/usr/sbin:/bin:/sbin
+echo "prep: begin" > /dev/console
+# Claim the management address before any expensive filesystem, key-generation, or Dell-daemon
+# preparation.  Base L2 reachability must not depend on the vendor service stack completing.
+modprobe cdc_ether >/tmp/zbmc-cdc-modprobe.log 2>&1 || true
+NIC=""
+n=0
+while [ -z "$NIC" ] && [ "$n" -lt 60 ]; do
+  for i in /sys/class/net/*; do
+    [ -e "$i" ] || continue
+    drv=$(basename "$(readlink "$i/device/driver" 2>/dev/null)" 2>/dev/null)
+    case "$drv" in cdc_ether|usbnet|cdc_ncm|cdc_subset|cdc_eem) NIC=$(basename "$i"); break;; esac
+  done
+  [ -n "$NIC" ] && break
+  sleep 1
+  n=$((n+1))
+done
+echo "early-net: selected NIC=${NIC:-none} wait=${n}s" > /dev/console
+if [ -n "$NIC" ]; then
+  ip link set "$NIC" up 2>/dev/null
+  ip addr add 10.0.2.15/24 dev "$NIC" 2>/dev/null
+  ip route add default via 10.0.2.2 2>/dev/null
+fi
+echo "early-net: NIC=${NIC:-none} carrier=$(cat /sys/class/net/$NIC/carrier 2>/dev/null) ip=$(ip -o -4 addr show $NIC 2>/dev/null|awk '{print $4}')" > /dev/console
 mkdir -p /mnt/persistent_data/data0/var/lib /mnt/persistent_data/data0/home/root/.ssh \
   /mnt/persistent_data/data0/cv /mnt/persistent_data/data0/BMC_Data /run/sshd /run/authkeys \
   /var/lib/cfgdb/EMMC /var/lib/cfgdb/CV /var/lib/cfgdb/cfgdb /flash/data1/var/lib/cfgdb/SPI
@@ -43,6 +66,7 @@ chown -R cfgdb:cfgdb /var/lib/cfgdb 2>/dev/null
 # hand-created: the dbus /run/etc confs (dangling symlinks -> dbus-broker -131), dfserver's
 # /run/fm ipc dir (-> zloop assert), datamgr's /run/dm/.ipc (-> bind ENOENT), and the rest.
 systemd-tmpfiles --create >/tmp/tmpfiles.log 2>&1
+echo "prep: tmpfiles complete" > /dev/console
 # racadm reads platform license config from /flash/data0/config/lmcfg.txt (platform-detect copies
 # it on a real box). Seed the EVB/default profile so racadm's backend init doesn't choke.
 mkdir -p /flash/data0/config
@@ -66,9 +90,12 @@ for b in /flash/pd0/ipmi/evb/*.bin /etc/default/ipmi/default/*.bin; do [ -e "$b"
 cp /flash/pd0/ipmi/Logan/config_details.bin "$BMCDIR/config_details.bin" 2>/dev/null
 cp /flash/pd0/ipmi/Logan/I2CTopology.bin "$BMCDIR/I2CTopology.bin" 2>/dev/null
 chown -R fullfw:fullfw $BMCDIR 2>/dev/null; chmod -R 775 $BMCDIR 2>/dev/null
-ssh-keygen -A >/dev/null 2>&1
+echo "prep: platform files complete" > /dev/console
+install -m 600 /run/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key
+install -m 644 /run/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub
+echo "prep: staged host key installed" > /dev/console
 echo "__PUBKEY__" > /run/authkeys/root; chmod 600 /run/authkeys/root
-# start sshd (host 2222 -> guest 22 once usb-net is up in dbg.sh) for LIVE iteration on cfgdb/CV
+# Start sshd for live iteration on cfgdb/CV as soon as the direct-L2 address is present.
 SCFG=/usr/share/factory/etc/ssh/sshd_config_readonly; [ -f "$SCFG" ] || SCFG=/etc/ssh/sshd_config
 /usr/sbin/sshd -f "$SCFG" -o StrictModes=no -o UsePAM=no -o PasswordAuthentication=no \
   -o PubkeyAuthentication=yes -o AuthorizedKeysFile=/run/authkeys/%u -E /tmp/sshd.log 2>&1 | sed 's/^/  sshd: /'
@@ -106,6 +133,8 @@ $BB chmod +x /newroot/run/prep.sh
 # the synthesized cfgdb defaults ship in the initramfs root (/cfgdb-defaults.db); prep runs in
 # chroot /newroot and can't see it -> stage it into the rootfs first.
 [ -f /cfgdb-defaults.db ] && $BB cp /cfgdb-defaults.db /newroot/run/cfgdb-defaults.db
+[ -f /ssh_host_ed25519_key ] && $BB cp /ssh_host_ed25519_key /newroot/run/ssh_host_ed25519_key
+[ -f /ssh_host_ed25519_key.pub ] && $BB cp /ssh_host_ed25519_key.pub /newroot/run/ssh_host_ed25519_key.pub
 echo "## INJECT-DBG: src=$([ -f /cfgdb-defaults.db ] && $BB wc -c < /cfgdb-defaults.db || echo NO) dst=$([ -f /newroot/run/cfgdb-defaults.db ] && $BB wc -c < /newroot/run/cfgdb-defaults.db || echo NO)"
 # patched metadata (CurrentIPv4 writable + IP default) bind-mounted over the squashfs original,
 # BEFORE prep's cfgdb-setup installs metadata -> cfgmgr loads CurrentIPv4 as writable=10.0.2.15
@@ -259,12 +288,11 @@ sleep 2
     kill -9 $_old_fullfw 2>/dev/null || true
     sleep 2
   fi
-  # MEASURE (2): strace fullfw startup -> what does it OPEN to read the IPMI user table?
   # bind [::]:623 = IPv6 DUAL-STACK (NOT 0.0.0.0). fullfw's UDPCreateInstance does an unconditional
   # setsockopt(IPV6_RECVPKTINFO) that returns -1 on an AF_INET socket -> RMCPCreateSocketInstance
   # fail -> fullfw exits, never services udp/623. Stock fullfw.socket uses BindIPv6Only=both for the
-  # same reason. bindv6only=0 means this v6 socket still receives the SLIRP v4 hostfwd
-  # (udp:6623->623) as v4-mapped, so the host RAKP client reaches it. (Earlier 0.0.0.0:623 was the
+  # same reason. bindv6only=0 means this v6 socket receives direct-L2 IPv4 as v4-mapped, so the
+  # host RAKP client reaches it. (Earlier 0.0.0.0:623 was the
   # cold-boot-listen regression — fullfw listens cold with [::]:623.)
   # sensor-shm/job-event gate SAFETY + diagnostic (RE: libdelldaemon job-event framework).
   # fullfw's IPMIPreInit calls WaitForAJobEvent(job=4, event=2, 0xffffffff) = INFINITE busy-poll
@@ -277,22 +305,16 @@ sleep 2
   # The pre/post log makes the slot state visible every boot (regression canary). shmwrite calls the
   # same Dell_shm_memwrite(41,{2},16,1) API the real producer uses.
   echo "  jobevt(4,2) poke: pre=$(shmread -s41 -o16 -l1 2>/dev/null); $(echo 0x2 | shmwrite -s41 -o16 -l1 2>&1); post=$(shmread -s41 -o16 -l1 2>/dev/null)"
-  setsid sh -c 'cd /flash/data0/BMC_Data; USER=root exec strace -f -e trace=openat -o /tmp/ffu systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' </dev/null >/tmp/ff.out 2>&1 &
+  setsid sh -c 'cd /flash/data0/BMC_Data; USER=root exec systemd-socket-activate --datagram -l [::]:623 /bin/fullfw' </dev/null >/tmp/ff.out 2>&1 &
   sleep 40
-  FFPID=$(pgrep -f '/bin/fullfw' | head -1)
-  echo "  fullfw procs:$(pgrep -fc '/bin/fullfw') mainpid=$FFPID  ssa:$(pgrep -fc 'systemd-socket-activate')"
-  echo "  -- fullfw opens (user-table sources) --"
-  grep -aE 'avctpasswd|userdb|Users|datacache_Config_CfgStr|/var/lib/cfgdb|/flash/data0/cv|passwd' /tmp/ffu 2>/dev/null | grep -avE '\.so|/lib/|/usr/share/factory' | sort -u | head -15 | sed 's/^/    /'
+  FFPID=$(pgrep -x fullfw | head -1)
+  echo "  fullfw procs:$(pgrep -xc fullfw) mainpid=$FFPID  ssa:$(pgrep -fc 'systemd-socket-activate')"
   # 623 = 0x026F. Check BOTH IPv4 and IPv6 udp tables (socket-activate may bind v6).
   echo "  ★ /proc/net/udp  026F: [$(grep -iE ':026F ' /proc/net/udp 2>/dev/null|head -1)]"
   echo "  ★ /proc/net/udp6 026F: [$(grep -iE ':026F ' /proc/net/udp6 2>/dev/null|head -1)]"
   echo "  ss -uln: $(ss -uln 2>/dev/null | grep -E ':623|:62' | tr '\n' '|')"
   echo "  all v4 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp 2>/dev/null|sort -u|tr '\n' ' ')"
   echo "  all v6 udp ports(hex): $(awk 'NR>1{split($2,a,":");print a[2]}' /proc/net/udp6 2>/dev/null|sort -u|tr '\n' ' ')"
-  # what is fullfw doing live? attach strace for 10s -> bind attempts / what it loops on
-  timeout 11 strace -f -p "$FFPID" -e trace=socket,bind,connect,recvfrom,sendto,poll,nanosleep,openat -o /tmp/ffp 2>/dev/null
-  echo "  fullfw live socket/bind/connect:"; grep -E 'bind\(|socket\(|connect\(' /tmp/ffp 2>/dev/null | grep -ivE '\.so|/lib' | sort -u | head -12 | sed 's/^/    /'
-  echo "  fullfw live loop (last 10):"; tail -10 /tmp/ffp 2>/dev/null | sed 's/^/    /'
   echo "  ff.out tail:"; tail -12 /tmp/ff.out 2>/dev/null | sed 's/^/    /'
   echo "  -- journal LAN/ipv4 errors (libtcpi LANIPConfig) --"
   journalctl -b --no-pager 2>/dev/null | grep -iE 'ipv4|LANIP|tcpi|Failed to read|not expecting NIC|RMCP|VLANLinkUp' | tail -10 | sed 's/^/    /'
@@ -344,8 +366,8 @@ EOS
 $BB chmod +x /newroot/run/dbg.sh
 
 U=/newroot/run/systemd/system
-E=/newroot/etc/systemd/system.conf.d
-$BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/dbus.socket.d $E
+E=/newroot/run/systemd/system.conf.d
+$BB mkdir -p $U/mini.target.wants $U/dbus-broker.service.d $U/dbus.socket.d $E
 # Do not arm the emulated NPCM hardware watchdog. Under QEMU the guest has been
 # observed to reboot while the long-running virt debug/fullfw/Redfish bring-up is
 # still active, with the console showing:
@@ -353,8 +375,7 @@ $BB mkdir -p $U/mini.target.wants $U/system.conf.d $U/dbus-broker.service.d $U/d
 #   Set hardware watchdog to 1min 26s.
 # followed by a fresh Phase-4 init banner while QEMU stays alive. That makes
 # readiness nondeterministic and masks the actual IPMI/Redfish state.
-printf '[Manager]\nLogLevel=info\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $U/system.conf.d/zz.conf
-printf '[Manager]\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $E/zz-zbmc-watchdog.conf
+printf '[Manager]\nLogLevel=info\nRuntimeWatchdogSec=0\nRebootWatchdogSec=0\nShutdownWatchdogSec=0\n' > $E/zz-zbmc-watchdog.conf
 # The datamgr->populator chain starts populators via systemd, pulling in the eMMC-persistence
 # services (early-mount, setup-flash) which mount /flash/data0 READ-ONLY over our tmpfs -> lmcfg
 # unreadable -> racadm SWC0242. Drop-in no-op (not mask) keeps dependents' ordering satisfied

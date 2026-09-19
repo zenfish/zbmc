@@ -12,6 +12,95 @@
     <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
     <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
 
+    <p class="mt-6 rounded border border-amber-500/40 bg-amber-950/30 p-4">13 September status: <a class="text-emerald-300 underline" href="#managed-warm-20260913">normal managed warm startup reached six-service READY in 3m37s</a>, but subsequent IPMI checks remain intermittent. Debby's private default now selects the matched TAP runtime. <a class="text-amber-300 underline" href="#13-september-cold-verification-failed">Cold verification failed its one-hour startup window</a>. Full reliable recovery is not complete.</p>
+    <section id="ipmi-probe-mystery-20260914" class="mt-10 border border-emerald-500/40 bg-emerald-950/30 p-6">
+      <h2 class="text-2xl font-bold">14 September: IPMI probe mystery resolved</h2>
+      <p class="mt-4">The intermittent IPMI failure was a zBMC probe-scheduling artifact, not persistent Lenovo credential loss. Packet evidence showed failed RMCP+ handshakes returning RAKP4 status <code>0x02</code> after the host-side client stalled between RAKP2 and RAKP3. Adjacent serialized IPMI checks passed with the same account and password, so the evidence pointed at probe contention/timing rather than firmware state.</p>
+      <p class="mt-4">Lenovo now opts into serialized service probes with a shared probe-bundle lock. The runlib serial path executes each service probe in a subshell so flock file descriptors opened by SSH/IPMI probes are closed before Redfish/Web probes run. Without that subshell scoping, a later curl inherited stale SSH/IPMI lock FDs and manual status could report false probe-busy failures. Lenovo SSH health is also bounded through the existing <code>zbmc_ssh</code> helper under <code>timeout</code>, preserving operator SSH behavior.</p>
+      <p class="mt-4">Final proof used one Lenovo QEMU, runtime <code>work/lenovo-xcc-warm/tap-power-recovery-20260914-TOKusQ</code>, run <code>20260914T175818Z-ef603b16-c8cf-455d-ae74-a5ba9f2f128e</code>. Managed warm startup reached <code>READY [6/6]</code> in 189 seconds with all required services stable for 92 seconds. Three manual <code>zbmc lenovo-xcc -v</code> checks passed <code>READY [6/6]</code> while the health watcher remained live. The final health history contained zero degraded, probe-busy, or authenticated-controller-read-failed samples.</p>
+    </section>
+
+    <section id="diagnostic-ram" class="mt-10 border border-cyan-500/40 bg-cyan-950/30 p-6">
+      <h2 class="text-2xl font-bold">Verified executable diagnostic RAM — 2026-09-13</h2>
+      <p class="mt-3">The derived boot image creates a 16 MB, root-only executable tmpfs at <code>/tmp/zbmc-tools</code>. This was verified after the vendor mount lock activated: the directory remained writable and executable, <code>strace 6.13 -V</code> returned zero, and an actual trace of <code>/bin/true</code> exited successfully.</p>
+      <p class="mt-3"><strong>This is diagnostic-tool acceptance, not full BMC readiness.</strong> SSH session creation and IPMI remained unresolved in the preceding run. Do not infer their recovery from this change. The older service observations below are historical; the pre-TAP warm checkpoint is not a verified restore path for the current TAP topology.</p>
+      <h3 class="mt-6 text-xl font-semibold">Why it must happen during boot</h3>
+      <p class="mt-3">The running firmware mounts its ordinary writable filesystems with <code>noexec</code> and rejects new mounts once its welded-mount lock is active. A runtime attempt to mount executable tmpfs failed with exit 32. <code>build-shell-kernel.py</code> now creates the child mount after the existing <code>/rootfs/tmp</code> bind and before <code>switch_root</code> and the lock. Its options are <code>size=16m,mode=0700,nodev,nosuid,exec</code>. The parent <code>/tmp</code> remains <code>noexec</code>; the vendor rootfs and its signature verification remain unchanged.</p>
+      <h3 class="mt-6 text-xl font-semibold">Use in the verified guest</h3>
+      <pre class="mt-3 overflow-x-auto bg-black p-4 text-sm"><code>grep ' /tmp/zbmc-tools ' /proc/mounts
+/tmp/zbmc-tools/strace -V
+/tmp/zbmc-tools/strace -e trace=exit_group -o /tmp/zbmc-tools/smoke.log /bin/true
+cat /tmp/zbmc-tools/smoke.log
+# exit_group(0) = ?
+# +++ exited with 0 +++</code></pre>
+      <p class="mt-3">The launcher uses an isolated musl loader and library directory inside the diagnostic mount. It does not replace Lenovo's system libraries. Keep traces private: unrestricted tracing of authentication processes can capture credentials or session data.</p>
+      <h3 class="mt-6 text-xl font-semibold">Reboot and tool loading</h3>
+      <p class="mt-3">The boot change recreates an <em>empty</em> RAM filesystem on each cold boot. Tools and traces disappear at shutdown; they are not embedded in the kernel or automatically downloaded. On Debby, retained copies are <code>work/lenovo-xcc-warm/diagnostics/tracer.tar.gz</code> and <code>diagnostics/strace</code>. The bundle contains Alpine 3.22 ARMv7 strace 6.13-r0 and its resolved dependencies, fetched using the official ARMv7 signing keys.</p>
+      <p class="mt-3">To reload, temporarily serve only that diagnostics directory from the host, transfer both files into <code>/tmp/zbmc-tools</code>, then run the following in the guest. Stop the temporary file server after transfer.</p>
+      <pre class="mt-3 overflow-x-auto bg-black p-4 text-sm"><code>cd /tmp/zbmc-tools
+echo '1b829934dca644491d927128231d2439a4dc9c2aa8e35242c664d5e2c4baf6d4  tracer.tar.gz' | sha256sum -c - &amp;&amp;
+tar -xzf tracer.tar.gz &amp;&amp; chmod 700 strace &amp;&amp; ./strace -V</code></pre>
+      <h3 class="mt-6 text-xl font-semibold">Evidence and reproduction</h3>
+      <ul class="mt-3 list-disc space-y-2 pl-6">
+        <li>Run: <code class="break-all">20260913T075806Z-c33af0c9-0e6f-401b-95b9-83e9ecec3554</code>. Raw proof is in that run's <code>console.log</code>: <code>XCC_DIAGNOSTIC_RAM_READY</code>, the later mount-lock message, <code>RAM_EXEC_PROOF_RC=0</code>, and <code>STRACE_SMOKE_RC=0</code>.</li>
+        <li>Kernel SHA-256: <code class="break-all">8448b4c473e9488f69ec3fbe7a4fbe0c88ce19370a0d00690c05d48d29ceaea6</code>. Two independent builds were byte-identical; original image size and appended tail were preserved.</li>
+        <li><code>tests/lenovo-xcc-runtime.sh</code> and <code>git diff --check</code> passed. Build through <code>zbmc lenovo-xcc build</code>; the updated hash is pinned in <code>build.sh</code>.</li>
+        <li>The previous kernel and a mode-0600 disk capture were retained before restart. <strong>Correction, 13 September:</strong> that capture omitted unchanged backing-disk data despite passing its qcow2 check. See the <a href="#backing-capture-correction">capture failure and recovery</a> below. It was not a complete disk backup or a RAM checkpoint.</li>
+      </ul>
+    </section>
+
+    <section id="failed-approaches" class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Failed approaches and lessons — 2026-09-12–13</h2>
+      <p class="mt-4 leading-7 text-stone-300">This is a sanitized record of the Lenovo cold-service and diagnostic-tool investigation, including our diagnostic mistakes. “Observed” means measured in a run; “decoded” means established from vendor code; rejected designs are not presented as executed experiments. Unresolved causes remain unresolved.</p>
+      <div class="mt-6 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead><tr class="border-b border-stone-600"><th class="p-3">Attempt or assumption</th><th class="p-3">Evidence / outcome</th><th class="p-3">Lesson</th></tr></thead>
+          <tbody class="divide-y divide-stone-700">
+            <tr><td class="p-3">Treat build readiness, root-page HTTP 200, or disabled probes as working management services.</td><td class="p-3">Artifacts and a public page were available while authenticated services failed or were untested. The run also had Web-UI validation disabled.</td><td class="p-3">Separate boot, transport, authentication, session creation, and useful operations. An excluded test is not a pass; label historical results explicitly.</td></tr>
+            <tr><td class="p-3">Reuse the 94-second warm-start result as a cold-start expectation.</td><td class="p-3">That result came from a provisioned, pre-TAP checkpoint. The new cold boot took several minutes merely to verify and mount its rootfs.</td><td class="p-3">Record cold versus warm and network topology with every timing and acceptance claim.</td></tr>
+            <tr><td class="p-3">Assume the blacklisted <code>ipmi_gateway</code> pathname explained LAN IPMI failure.</td><td class="p-3">The path is a pruning-warning stub, not a demonstrated LAN daemon. Its startup banner was not functional proof.</td><td class="p-3">Trace the actual service owner and account/global/channel gates. Do not replace a missing-looking binary before establishing its role.</td></tr>
+            <tr><td class="p-3">Run the SSH health probe in a fresh shell without loading private configuration.</td><td class="p-3">Non-exported configuration was lost. A regression failed before and passed after fix <code>afb6e67</code>.</td><td class="p-3">Readiness must use the same configuration as the operator command.</td></tr>
+            <tr><td class="p-3">Declare SSH settings without a Lenovo <code>zbmc_ssh</code> handler.</td><td class="p-3">The command returned command-not-found / exit 127. Fixed by <code>176d5da</code>.</td><td class="p-3">Test the public command path, not just the descriptor fields.</td></tr>
+            <tr><td class="p-3">Launch SSH without checking its prerequisite directory or stderr.</td><td class="p-3">The daemon reported <code>Missing privilege separation directory: /var/run/sshd</code>. Creating it addressed that prerequisite, not the later PAM failure.</td><td class="p-3">Capture stdout, stderr, and exit status. A launch attempt is not a running service.</td></tr>
+            <tr><td class="p-3">Poll guest <code>/proc/net/tcp</code> inside the SSH launcher.</td><td class="p-3">The wrapper stalled during guest-side process/socket inspection.</td><td class="p-3">Keep launch separate from bounded host-side protocol validation; do not put another readiness loop inside it.</td></tr>
+            <tr><td class="p-3">Change the bootstrap marker based only on the visible wrapper source.</td><td class="p-3">The composed boot image already emitted the original marker. The proposed change was reverted.</td><td class="p-3">Inspect the complete artifact before changing a boot gate.</td></tr>
+            <tr><td class="p-3">Remove live SSH script bind mounts to restore vendor startup.</td><td class="p-3">The welded-mount policy rejected removal, exit 32. The original startup scripts were not restored.</td><td class="p-3">A failed unmount changes nothing. Do not describe the intended state as the actual state.</td></tr>
+            <tr><td class="p-3">Change scheduling priorities and try a temporary SSH listener on port 2222.</td><td class="p-3">Priority changes were measured; the debug listener started, but the host connection timed out. A later port-22 listener completed key exchange. The eventual PAM session failure persisted.</td><td class="p-3">Do not attribute success to a priority change without a controlled comparison, or call the timeout a proven firewall failure.</td></tr>
+            <tr><td class="p-3">Interpret factory-login <code>sshpass</code> exit 5 as a wrong password.</td><td class="p-3">Interactive PAM reached the mandatory password-change flow and reported a successful change.</td><td class="p-3">An interactive password-change requirement is not equivalent to credential rejection. Verify a fresh login afterwards.</td></tr>
+            <tr><td class="p-3">Treat authentication success as a usable SSH session.</td><td class="p-3">Fresh SSH accepted the identity but exited 254: <code>PAM session not opened</code>. A password-only retry did not resolve it.</td><td class="p-3">Require session creation and a valid native command result, not authentication alone.</td></tr>
+            <tr><td class="p-3">Read “User not known” as a missing account or assume the two-session limit was exhausted.</td><td class="p-3">PAM logged USERID and login success, then session-manager <code>Internal error!</code>. Decoded code converts failed AIM session-type lookup into <code>PAM_USER_UNKNOWN</code>.</td><td class="p-3">The displayed error loses the underlying cause. Neither an absent account nor session exhaustion was established.</td></tr>
+            <tr><td class="p-3">Blame empty session directories, a stale PID, or a deadlock.</td><td class="p-3">Decoded code accepts empty directories. Registration matched the live SM PID and queue; queue size was zero. One thread snapshot showed a receive wait.</td><td class="p-3">These checks narrow the problem but do not prove a timeout or deadlock. The exact session-lookup failure remains unknown.</td></tr>
+            <tr><td class="p-3">Enable only global IPMI.</td><td class="p-3">The native global setting changed from false to true and read back true, but authenticated IPMI still failed. USERID's reported AccountTypes lacked IPMI.</td><td class="p-3">Global enablement, account interface access, and channel privilege are separate checks.</td></tr>
+            <tr><td class="p-3">Add IPMI through an authenticated Redfish account PATCH.</td><td class="p-3">HTTP 403 <code>PasswordChangeRequired</code>, although account GET reported <code>PasswordChangeRequired=false</code>. Readback confirmed no AccountTypes change.</td><td class="p-3">Account representation and authentication middleware can disagree. Preserve both observations rather than choosing the convenient one.</td></tr>
+            <tr><td class="p-3">Retry with a fresh Redfish token to eliminate stale Basic-auth state.</td><td class="p-3">Session creation returned 201 and a manager read returned 200, but the same PATCH still returned 403. Test sessions were removed with 204.</td><td class="p-3">Fresh login was not the fix. Read access did not establish working account modification.</td></tr>
+            <tr><td class="p-3">Submit the configured password through the normal Redfish Password PATCH.</td><td class="p-3">HTTP 400 <code>PropertyValueFormatError</code>, with message argument “null”, despite a JSON string request. Length and character-class checks passed.</td><td class="p-3">Do not infer that the request contained null. Reuse and minimum-change-interval policies were plausible, not proven causes; no further change was claimed.</td></tr>
+            <tr><td class="p-3">Restart the vendor security/session manager.</td><td class="p-3">After a private configuration backup, the replacement SM registered and reached ready. SSH still failed at session creation.</td><td class="p-3">Restart did not fix the defect. Inspect restart scripts first: this one also initializes account/certificate state. Never confuse restart with its destructive reset operation.</td></tr>
+            <tr><td class="p-3">Propose recovery before capturing the decisive syscall trace.</td><td class="p-3">Logs and ARM disassembly localized the failing call, but there was no syscall trace of that failure.</td><td class="p-3">Say “localized, not explained.” Establish a bounded tracing path early instead of spending repeated cycles on hypotheses.</td></tr>
+            <tr><td class="p-3">Use the firmware's <code>/usr/bin/strace</code>.</td><td class="p-3">It was a dangling link into the absent optional debug filesystem.</td><td class="p-3">Check the resolved executable and its loader, not just whether a pathname exists.</td></tr>
+            <tr><td class="p-3">Fetch ARM packages using an x86 container's default package state and keys.</td><td class="p-3">Fetch initially lacked an index; an explicit ARM index update then failed signature validation with the wrong architecture's keys.</td><td class="p-3">Use the ARM repository index and the supplied ARMv7 key directory. Signature verification remained enabled.</td></tr>
+            <tr><td class="p-3">Copy a verified tracer to <code>/tmp</code>, or consider <code>/run</code>, <code>/var/log</code>, <code>/dev</code>, and <code>/proc</code>.</td><td class="p-3">Transfer and checksum succeeded, but execution from /tmp failed 126. The other writable mount locations inspected were also noexec; /var/log resolved into the noexec whitelist filesystem.</td><td class="p-3">Changing directory names does not change mount flags. /proc is not ordinary file storage.</td></tr>
+            <tr><td class="p-3">Mount a new executable RAM filesystem after boot.</td><td class="p-3">Kernel: <code>welded mounts are locked, refusing mount</code>; exit 32. No diagnostic mount was created.</td><td class="p-3">Move the mount creation to the existing early-boot integration point. The verified solution is above.</td></tr>
+            <tr><td class="p-3">Use an interpreter-based tracer instead.</td><td class="p-3">Python and ctypes worked, but python-ptrace imports stalled and were interrupted before attachment. Source inspection found ARM register support but no ARM32 syscall-name selection in that revision.</td><td class="p-3">Register support is not complete tracer support. No SSH/SM trace was obtained from this attempt; ordinary interpreter execution was not proof of tracing.</td></tr>
+            <tr><td class="p-3">Put tools directly into the signed SquashFS or embed the bundle in the fixed kernel region.</td><td class="p-3">These were rejected designs, not failed boots. Replacing the signed filesystem would invalidate its signature; the recompressed boot archive had only about 2.5 KB spare.</td><td class="p-3">Inspect integrity and capacity constraints first. A small early mount hook plus later tool loading fit the existing image.</td></tr>
+            <tr><td class="p-3">Accept QMP disk-backup completion or a qcow2 check as proof of a usable backup.</td><td class="p-3">The QMP target disappeared for an unexplained reason. The fallback conversion of the temporary overlay passed <code>qemu-img check</code> but omitted unchanged backing data.</td><td class="p-3">Capture the complete runtime backing graph. Verify filesystem consistency and known firmware bytes, not just container structure. The original fallback was incomplete; see the recovery correction below.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-6 leading-7 text-stone-300">The failed runtime experiments are retained in run <code class="break-all">20260913T020333Z-10a78c9d-b001-44e4-a9e4-9c5f2f4ec2cb</code>; the successful diagnostic-mount proof is in the later run listed above. Raw operator logs and private backups are not published here. No credentials, tokens, or account-store contents are needed to reproduce the lessons.</p>
+    </section>
+
+    <section class="mt-10 border border-emerald-500/40 bg-emerald-950/30 p-6">
+      <h2 class="text-2xl font-bold">Historical remote IPMI — warm restore, 2026-09-10</h2>
+      <p class="mt-3">A matched RAM and full-disk checkpoint passed three authenticated IPMI reads after an independent restore. The normal managed entry restored a second instance and reached READY in 94 seconds, with authenticated IPMI stable for 68 seconds. These are historical results, not current TAP acceptance; the commands below document that earlier run.</p>
+      <pre class="mt-4 overflow-auto">cd ~/src/oob/zbmc
+sudo ./tools/zbmc lenovo-xcc start --warm --no-web
+sudo ./tools/zbmc lenovo-xcc ipmi mc info
+sudo ./tools/zbmc lenovo-xcc ipmi chassis status</pre>
+      <p class="mt-3">Debby deployment: 10.250.0.45, standard UDP/623; private zbmc.conf supplies ZBMC_LENOVO_DIR and ZBMC_LENOVO_PASSWORD. USERID uses a changed password, not the factory password. Checkpoint files are private and are not distributed by build.sh. The preserved original and validation VMs remain paused on separate addresses/ports.</p>
+      <p class="mt-3">Restore requires the matched ckpt/state.gz and ckpt/emmc.qcow2, recorded boot artifacts, and exact QEMU SHA-256 0239888e57aeb1f73508f90eddd042f295988a275145a9717b0878cda041da69. ckpt/manifest.json records hashes. Native authentication and account/channel permissions remain enforced. Snapshot restore discards changes made after capture; provisioned settings are stored in the captured state.</p>
+      <p class="mt-3">Observed warm HTTPS root returns 200, but web-login correctness is not part of this IPMI acceptance. The cold-only observations below are historical, not current remote-IPMI readiness claims.</p>
+    </section>
+
     <section class="mt-12 grid gap-4 sm:grid-cols-3">
       <article class="border border-emerald-500/40 bg-emerald-950/30 p-6">
         <p class="font-mono text-xs uppercase tracking-widest text-emerald-400">Verified</p>
@@ -23,16 +112,17 @@
         <p class="mt-3 text-2xl font-bold">~46 minutes</p>
         <p class="mt-2 text-stone-300">The default contract reached READY on Debby in 46m06s, including the 60-second hold.</p>
       </article>
-      <article class="border border-rose-500/40 bg-rose-950/30 p-6">
-        <p class="font-mono text-xs uppercase tracking-widest text-rose-400">Not declared</p>
-        <p class="mt-3 text-2xl font-bold">IPMI / SSH</p>
-        <p class="mt-2 text-stone-300">UDP/623 receives requests without replies. SSH resets before key exchange.</p>
+      <article class="border border-cyan-500/40 bg-cyan-950/30 p-6">
+        <p class="font-mono text-xs uppercase tracking-widest text-cyan-400">Verified</p>
+        <p class="mt-3 text-2xl font-bold">Serial root shell</p>
+        <p class="mt-2 text-stone-300">The host-local console socket provides an emulator-only diagnostic shell; network SSH remains disabled.</p>
       </article>
     </section>
 
     <section class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
       <h2 class="text-2xl font-bold">What the runtime changes</h2>
       <p class="mt-4 leading-7 text-stone-300">The kernel and signed rootfs are preserved. The built-in initramfs adds a runtime observer and replaces <code class="text-amber-300">vpdoctor</code> with a sleeping process because the physical watchdog/platform contract is unavailable. The AST2600 watchdog remains modeled, but QEMU ignores its reset action: under slower TCG execution it expires before XCC finishes starting services. The SRAM image selects Newyork-pass1 but is reconstructed from preserved platform assets; it is not a physical SRAM capture.</p>
+      <p class="mt-4 leading-7 text-stone-300">Lenovo's DHCP hook receives QEMU's lease but its <code class="text-amber-300">avctifconfig</code> control path does not install the accepted address in Linux. The emulator-only getty hook waits for Lenovo's own DHCP completion marker, then installs QEMU user networking's fixed <code class="text-amber-300">10.0.2.15/24</code> address and <code class="text-amber-300">10.0.2.2</code> default route. Health probing waits for both this network marker and the vendor's Web-Available marker.</p>
     </section>
 
     <section class="mt-12 grid gap-8 md:grid-cols-2">
@@ -40,13 +130,14 @@
         <h2 class="text-2xl font-bold">Run</h2>
         <pre class="mt-4 overflow-x-auto bg-black p-5 text-sm text-emerald-300"><code>./tools/zbmc lenovo-xcc build
 sudo ./tools/zbmc lenovo-xcc start
+./tools/zbmc lenovo-xcc console
 ./tools/zbmc lenovo-xcc web
 ./tools/zbmc lenovo-xcc status</code></pre>
       </div>
       <div>
         <h2 class="text-2xl font-bold">Pinned inputs</h2>
         <ul class="mt-4 space-y-3 text-stone-300">
-          <li>Preserved zImage with block-spliced observer initramfs</li>
+          <li>Preserved zImage plus a deterministic block-spliced serial-shell derivative</li>
           <li>Lenovo DTB, reconstructed SRAM, and PTABLES</li>
           <li>Compressed 7 GiB initialized eMMC image</li>
           <li>QEMU 11 FPGA/eMMC GP0 patch with bounded tracing</li>
@@ -54,21 +145,102 @@ sudo ./tools/zbmc lenovo-xcc start
       </div>
     </section>
 
-    <section id="copying-files" class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
-      <h2 class="text-2xl font-bold">Copying files</h2>
-      <p class="mt-4 leading-7 text-stone-300">The current runtime has no established arbitrary-file
-        transfer recipe. SSH resets before key exchange, so the
-        <a class="text-amber-300 underline" href="../../README.html#copying-files-into-a-bmc">shared SSH upload commands</a>
-        do not work. <code>sudo ./tools/zbmc lenovo-xcc console</code> attaches the interactive serial socket,
-        but socket access alone does not establish a Linux shell or usable login.</p>
-      <p class="mt-4 leading-7 text-stone-300">The kernel/initramfs already contains an observer used during
-        bring-up; it is not a host-directory mount or file-upload interface. Inserting another executable
-        into that boot path requires a custom image build. The signed vendor rootfs remains preserved;
-        copying into <code>work/lenovo-xcc/</code> or uploading through the firmware-update UI is not a
-        documented way to install a program inside the BMC.</p>
+    <section class="mt-12 border-l-4 border-cyan-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Diagnostic console</h2>
+      <p class="mt-4 leading-7 text-stone-300">Lenovo’s normal <code class="text-cyan-300">lcw_login</code> requires a response signed by a vendor debug key that is not present in the firmware. The derived kernel changes only the built-in initramfs: before normal <code class="text-cyan-300">switch_root</code>, it bind-mounts an emulator-only getty launcher over the serial login script. The original kernel, eMMC, root filesystem, and appended DTBs remain unchanged. Access is limited to the host Unix socket exposed by <code class="text-cyan-300">zbmc console</code>.</p>
+    </section>
+
+    <section class="mt-12 border-l-4 border-emerald-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Authenticated remote IPMI</h2>
+      <p class="mt-4 leading-7 text-stone-300">Verified on 2026-09-09 with both standard ipmitool and zipmi: repeated controller information and chassis status reads succeed using cipher suite 17. Account role and IPMI channel privilege are separate: the native Administrator role did not grant channel access until standard local <code>ipmitool user priv 2 4 1</code> set channel 1, user 2 to ADMINISTRATOR.</p>
+      <p class="mt-4 leading-7 text-stone-300">Provision through supported management interfaces: change the mandatory factory password, enable IPMI for USERID and globally with native users/portcontrol, then verify the channel privilege. Preserve the provisioned disk: normal runtime writes use a temporary overlay. Factory image builds do not contain this account change. A saved provisioned disk is under managed cold-boot verification. The launcher uses fdtget/fdtput from device-tree-compiler to derive a separate kernel-runtime.zImage: only appended device-tree boot arguments change, adding the native 1800-second Gunicorn startup timeout. This firmware ignores the external QEMU -append value.</p>
+      <pre class="mt-4 overflow-x-auto bg-black p-5 text-sm text-emerald-300"><code># In private, mode-0600 zbmc.conf:
+ZBMC_LENOVO_PASSWORD='your-provisioned-password'
+
+./tools/zbmc lenovo-xcc ipmi mc info
+./tools/zbmc lenovo-xcc ipmi chassis status</code></pre>
+      <p class="mt-4 leading-7 text-stone-300">The command and readiness paths use the same password-authenticated ipmitool call, with the password passed through its environment. IPMI readiness requires a successful controller read. SSH and Redfish are outside the readiness contract; successful IPMI does not establish Web login health.</p>
     </section>
 
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="backing-capture-correction">
+  <h2 class="text-2xl font-semibold">13 September: disk-capture failure and recovery</h2>
+  <p class="mt-4">The previous claim that a bare conversion of QEMU's temporary disk was a complete crash-consistent backup was incorrect. The converted qcow2 passed its container check, but unchanged backing data was absent: its 157,007,872-byte root filesystem read entirely as zeros, while the changed account file retained data. A boot from that copy failed with “Resize inode not valid”.</p>
+  <p class="mt-4">Filesystem salvage alone was insufficient: it moved missing directory entries into lost+found but could not restore absent file bytes. Those experiments were confined to disposable copies; original evidence was preserved.</p>
+  <p class="mt-4">Rejoining a fresh copy to the exact original seed restored the directory structure. Standard journal recovery then passed for UD0 and GP0, followed by full read-only filesystem checks. The recovered root filesystem and detached signature compared byte-for-byte with the intact seed. The manually salvaged copy was not used.</p>
+  <p class="mt-4">The capture helper now supplies the backing node explicitly. A disposable-image check verifies that the resulting standalone image contains both an unchanged pattern from the base and a changed pattern from the overlay. Container validity alone is not content completeness.</p>
+  <p class="mt-4">Reconstructed launch image SHA-256: <code>84a54c008300dfc2c9b63071025b64a75d501e9a6a7cb1289ee3a8c59a9b6ac4</code>. Boot under test: <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>. Authentication and full-service acceptance remain unverified.</p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="native-services-recovery">
+  <h2 class="text-2xl font-semibold" id="13-september-native-services-recovered-on-tap">13 September: native services recovered on TAP</h2>
+  <p class="mt-4">The recovery involved two kinds of fixes: restoring native services, and correcting tests that misreported working services.</p>
+  <div class="mt-6 overflow-x-auto">
+    <table class="w-full border-collapse text-left text-sm">
+      <caption class="mb-3 text-left text-lg font-semibold">Recovery synopsis</caption>
+      <thead class="bg-stone-800"><tr><th scope="col" class="p-3">Area</th><th scope="col" class="p-3">What changed</th></tr></thead>
+      <tbody class="divide-y divide-stone-700">
+        <tr><th scope="row" class="p-3 align-top">Disk</th><td class="p-3">Reconstructed the recovery disk with its missing backing-image data. Filesystem checks and comparisons of the vendor rootfs and signature passed.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">SSH startup</th><td class="p-3">Created the missing <code>/var/run/sshd</code> directory. Changed the running listener from nice <code>5</code> to <code>-10</code>; subsequent authenticated CLI sessions worked. The priority effect was not isolated from tracing overhead.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">SSH validation</th><td class="p-3">Replaced <code>echo up</code>, which is invalid in Lenovo's management CLI, with supported <code>help</code>. Allowed a bounded 40-second probe.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">IPMI</th><td class="p-3">Enabled the global service, added account IPMI access by re-entering the existing password, then changed channel-1/user-2 privilege from <code>NO ACCESS</code> to <code>ADMINISTRATOR</code>. All through native interfaces, without password rotation.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">Web validation</th><td class="p-3">Replaced the old SLiRP-era console-marker requirement with actual login, authenticated session-identity verification, and logout.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">Launcher</th><td class="p-3">Fixed the background helper losing private configuration and consequently trying the factory password.</td></tr>
+        <tr><th scope="row" class="p-3 align-top">Status</th><td class="p-3">Added <code>--all-services</code> to test all six services without changing the old run's exclusions or timeout history.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-4">Authenticated Redfish reads were already working once the recovered services settled. TAP networking needed no further change in this pass. No replacement management service or new authentication bypass was introduced in this service-recovery pass.</p>
+  <p class="mt-4"><strong>Proof:</strong> two complete zBMC <code>READY [6/6]</code> results, more than two minutes apart, plus passing regression and runtime tests. <strong>Follow-up:</strong> the matched warm checkpoint was subsequently verified below; cold-boot reproduction and deployment as the default warm checkpoint remain outstanding.</p>
+  <p class="mt-4">Verified live in run <code>20260913T162526Z-369ff65e-cf55-402e-be75-881acc92a354</code>: zBMC reports all six services working. SSH authenticates and executes the native Lenovo CLI's help command; IPMI performs an authenticated controller read using cipher 17; Redfish reads a protected account; Web logs in, reads the matching session identity, and logs out. ICMP and the interactive serial console also pass.</p>
+  <pre class="mt-4 overflow-x-auto rounded bg-stone-950 p-4"><code>sudo tools/zbmc lenovo-xcc status -v --all-services
+Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
+  <p class="mt-4">The explicit <code>--all-services</code> status option probes all six services regardless of the old run's exclusions. It does not edit the run manifest or erase its one-hour startup timeout. This live recovery is not proof of a reproducible cold boot or a tested warm checkpoint.</p>
+  <h3 class="mt-6 text-xl font-semibold">What failed, and what fixed it</h3>
+  <ul class="mt-4 list-disc space-y-3 pl-6">
+    <li>The background Web helper did not load private configuration before the box descriptor. It could use the factory password. Both subprocess paths now load the private configuration; a non-exported-setting regression covers the helper.</li>
+    <li>SSH first timed out before its banner. With guest load around 34 on two CPUs, a bounded trace showed slow but progressing process startup. After detaching the tracer and changing the existing SSH listener from nice 5 to -10, authenticated CLI commands passed. The scheduling effect was not isolated from tracing overhead. This scheduling change is live-only; cold-start reproduction remains unverified.</li>
+    <li>The generic SSH validator sent <code>echo up</code>, which the native Lenovo CLI rejects. A box-specific health hook now executes supported <code>help</code>, requiring successful exit and the expected command listing. The background helper uses the same check. Lenovo's bounded probe allows 40 seconds.</li>
+    <li>The Web marker was an old SLiRP startup prerequisite, not functional proof. Its vendor producer only waited for an nginx-ready file. The replacement follows the shipped Web client's nonce, login, session-info, and logout sequence.</li>
+    <li>The first diagnostic Web client incorrectly put a JSON content-type header on empty GET requests: login succeeded, but session-info and logout returned HTTP400. Matching the shipped client—no content-type on these GETs—produced successful identity verification and logout. Tokens and passwords are not logged.</li>
+    <li>IPMI required three independent settings: global protocol enablement, account interface permission, and channel privilege. Global enablement through authenticated Redfish succeeded. AccountTypes PATCH returned PasswordChangeRequired despite account GET reporting false.</li>
+    <li>The documented native <code>users -ai</code> command required re-entry of the existing password to add IPMI access. That operation succeeded without rotating the password. Readback showed WebUI, Redfish, ManagerConsole, and IPMI retained together.</li>
+    <li>IPMI still failed because channel1/user2 reported NO ACCESS. Standard local <code>ipmitool user priv 2 4 1</code> changed it to ADMINISTRATOR; readback and the host's authenticated controller read then passed. No authentication bypass or replacement IPMI service was used.</li>
+  </ul>
+  <p class="mt-4">Evidence remains in the named run: <code>full-service-validation-20260913.log</code>, <code>service-state-20260913.log</code>, <code>ssh-priority-check-20260913.log</code>, <code>web-session-check2-20260913.log</code>, and redacted <code>ipmi-cli-provision-20260913.log</code>. The serial log records channel readback and original scheduling state. Targeted SSH/Web regressions, the status suite, and Lenovo runtime tests pass. An initial status-suite run failed its process-cleanup check; its reruns passed.</p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="tap-warm-checkpoint">
+  <h2 class="text-2xl font-semibold" id="13-september-isolated-tap-warm-recovery-verified">13 September: isolated TAP warm recovery verified</h2>
+  <p class="mt-4">The recovered VM was flushed, then paused while QEMU performed a native full-disk backup and exported matching RAM/device migration state. Successful backup completion was checked before migration. The original VM resumed afterwards. The new private checkpoint passed qcow2 and gzip integrity checks; its disk and state hashes remained unchanged through the restore test. The previous checkpoint was not overwritten.</p>
+  <p class="mt-4">A separate instance restored the checkpoint using the identical QEMU executable and captured runtime-kernel bytes. The existing warm launcher expects <code>kernel-shell.zImage</code>, so the isolated test supplied the captured <code>kernel-runtime.zImage</code> bytes under that filename. Separate runtime files, sockets, and a PID file prevented accidental checks against the original.</p>
+  <p class="mt-4">The copy used an isolated Linux network namespace containing only loopback and TAP, with no external link. Its copied guest IP and MAC therefore could not collide with the original. Only one Lenovo VM ran during validation: the original remained paused and recoverable, then resumed when testing ended. The test copy remains paused and preserved.</p>
+  <ul class="mt-4 list-disc space-y-2 pl-6">
+    <li>QEMU restore completed in <strong>7.4 seconds</strong>. This is state-load time, not full-service ready time.</li>
+    <li>The serial shell executed a fresh console-liveness command.</li>
+    <li>The first early zBMC check passed five services but failed IPMI. That failure is retained in the evidence.</li>
+    <li>A bounded retry succeeded without any post-restore account or service configuration changes. The exact cause of the transient IPMI failure and precise ready time were not established.</li>
+    <li>Subsequent full zBMC checks at <strong>13:07:51 and 13:09:10 PDT</strong> both reported <code>READY [6/6]</code>: ICMP, authenticated native SSH CLI, authenticated IPMI, protected Redfish, native Web login/session/logout, and Console.</li>
+  </ul>
+  <p class="mt-4">The experiment used the existing low-level warm launcher, followed by <code>zbmc lenovo-xcc status -v --all-services</code> inside the isolated namespace. Status correctly labeled this test process unmanaged; a managed startup-time result is not claimed. The normal <code>start --warm</code> path still points to the older pre-TAP checkpoint and remains blocked. This experiment proves the newly captured, matched checkpoint—not arbitrary checkpoint compatibility or cold-boot persistence.</p>
+  <p class="mt-4">Checkpoint: <code>work/lenovo-xcc-warm/tap-checkpoint-20260913T200242Z</code>. Test evidence: <code>work/lenovo-xcc-warm/tap-warm-test-20260913T200242Z</code>, including initial <code>validation-1.txt</code>, both <code>settled-validation-*.txt</code>, <code>console-liveness.txt</code>, and <code>accepted.json</code>. Checkpoint contents are private because memory and disk can contain credentials.</p>
+  <p class="mt-4 break-all text-sm"><strong>Disk SHA-256:</strong> <code>8752a48d26bb187030af05881ec6440d3334d2e2bcd881318e605171349c8e46</code></p>
+  <p class="mt-2 break-all text-sm"><strong>Compressed migration-state SHA-256:</strong> <code>85f70b2a80c5b882a4252e53f49300f8a1b82a87d92522a56fe3111cf09c0815</code></p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="cold-verification">
+  <h2 class="text-2xl font-semibold" id="13-september-cold-verification-failed">13 September: cold verification failed</h2>
+  <p class="mt-4">A fresh QEMU process booted the preserved, provisioned disk without saved RAM or incoming migration, on an isolated guest-owned TAP network. Filesystem and rootfs mount checks passed. This tests the provisioned disk, not automatic provisioning of the factory seed.</p>
+  <p class="mt-4">The first cold attempt identified a missing native SSH prerequisite: <code>/var/run/sshd</code>. An experimental repair in the deployed working tree adds directory creation with mode0755 to both replacement SSH launch paths and propagates mkdir/chmod failures. The regression fails on the previous source and passes on the repaired source. Two independent kernel builds were byte-identical, and the Lenovo runtime tests passed. This uncommitted repair remains under validation; it is not a published accepted build or a cold-service success claim.</p>
+  <p class="mt-4"><strong>The repaired cold attempt still failed.</strong> Native SSH launch was observed by27m46s, without the previous directory error, but no authenticated management service passed during the one-hour test. The last completed zBMC observation, at59m42s, passed ICMP and Console and failed SSH, IPMI, Redfish, and Web UI. One earlier ICMP sample also failed, then recovered. The candidate was paused and preserved after the deadline; the original instance was resumed.</p>
+  <p class="mt-4">SSH remained unreachable despite a live native daemon. The HTTP front end returned HTTP 502 during a diagnostic service-root request; authenticated Web probes later timed out. Guest CPU totals showed heavy high-priority platform activity and little CPU time for SSH at nice 5. Scheduling starvation is a hypothesis, not an isolated cause. No live service-priority, account, or password changes were applied during this cold attempt.</p>
+  <p class="mt-4"><strong>Recovery verified:</strong> the original instance passed all six zBMC checks again at 15:29:37 and 15:31:14 PDT after resume. Its historical startup-watch timeout remains preserved; these are fresh live-service results, not rewritten startup history.</p>
+  <p class="mt-4 break-all">Evidence on Debby: <code>work/lenovo-xcc-warm/tap-cold-sshd-test-20260913T2128</code> (console, exact QEMU argv, network hook, and validation results) and <code>work/lenovo-cold-sshd-20260913T2128</code> (controller log, build/test evidence, and original-instance revalidation). The captured checkpoint was protected by QEMU <code>snapshot=on</code>. Acceptance requires two six-service zBMC passes at least60seconds apart plus an executed console command; this run did not meet it.</p>
+</section>
+<section class="mx-auto max-w-6xl p-8 text-stone-200" id="managed-warm-20260913">
+  <h2 class="text-2xl font-semibold">13 September: managed warm startup passed; IPMI remains intermittent</h2>
+  <p class="mt-4">After Debby rebooted, the preserved matched TAP checkpoint restored through normal <code>zbmc lenovo-xcc start --warm</code>. All six services passed at 84 seconds. IPMI then failed, recovered, and all required services passed a 67-second stability window; startup reached READY in 3m37s. A subsequent status passed 6/6, but the next default status at 16:42 PDT was DEGRADED 5/6 because IPMI failed again. This is not a claim of sustained IPMI reliability or successful cold startup.</p>
+  <p class="mt-4">Guard commit <code>87a1628</code> verifies checkpoint disk, RAM, runtime kernel, board data, source network and QEMU hashes before launch, requires destination TAP, and preserves old launcher logs/PID records on rejection. Default READY now requires SSH, IPMI, Redfish, Web UI and console, with shared ICMP validation. Focused guard, Lenovo runtime and status-spacing regressions passed.</p>
+  <p class="mt-4">Debby's private configuration now selects <code>work/lenovo-xcc-warm/tap-managed-20260913-i5gsSN</code>. Its previous configuration is preserved there as <code>zbmc.conf.before-managed</code>. Checkpoint disk/RAM and configuration are private and must not be published. Do not run build against this recovered runtime: build artifacts are not a replacement for its provisioned state.</p>
+  <p class="mt-4 break-all">Evidence: runtime <code>managed-start.log</code> and run <code>runs/20260913T233717Z-e2817348-3b92-477d-85de-40d7e397cc73</code>. Earlier statements above about an unreplaced default checkpoint describe the preceding experiments and are superseded by this managed restore. Cold service readiness remains unresolved.</p>
+</section>
   </main>
 </body>
 </html>

@@ -8,26 +8,30 @@
 #       platform). Unpacked from encrypted_ASMB-787_20220912.ima_enc ("encrypted" is a misnomer — it
 #       is plain XZ-SquashFS; see tools/unpack-ami).
 #
-# ACCEPTANCE (2026-08-27): retained serial login only, measured at 9m38s on the reference host.
-# Full MegaRAC userland starts, but the 5.4.11-ami guest rejects QEMU's internal NC-SI response, so
-# external SSH, IPMI, Redfish, and Web-UI are not reachable. QEMU consumes NC-SI before the netdev;
-# an external responder cannot repair this path. Use the console.
+# HISTORICAL (2026-08-27): retained serial login worked, measured at 9m38s on the reference host;
+# external networking remained blocked by the 5.4.11-ami NC-SI mismatch.
+# VERIFIED (2026-09-10): a deterministic derived kernel bypasses the forced NC-SI call after the
+# FTGMAC direct-PHY path is initialized. A clean build and cold boot reached the serial console and
+# guest-owned 10.250.0.50 over TAP; ARP resolved the QEMU NIC MAC and ICMP passed 20/20.
 #
 # ACCESS:
 #   Console : zbmc asmb787 console            (serial ttyS4; login sysadmin / superuser -> uid 0 root)
 #             zbmc asmb787 console '<cmd>'    (run one command over the console fifo)
-#   Network : not accepted; requires a guest-kernel or emulator compatibility fix
+#   Network : TAP/direct L2; guest owns the configured zBMC address
 ZBMC_NAME=advantech-asmb787
-ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - console-only; external networking blocked by NC-SI compatibility"
+ZBMC_NETWORK_MODE=tap
+ZBMC_TAP=ztap-asmb
+ZBMC_MAC=52:54:00:fa:00:50
+ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - direct-L2 TAP and serial console verified"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
 ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR")}"   # work/advantech-asmb787/
 
-# Address comes from zbmc.conf; expose the BMC's native service ports on that address.
+# Address comes from zbmc.conf and is owned by the guest FTGMAC.
 ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
-ZBMC_HINT='zbmc advantech-asmb787 console   (login sysadmin/superuser; external networking not accepted)'
+ZBMC_HINT='guest-owned TAP address and serial console verified; management-service repair is separate'
 IPMI_USER=admin
 IPMI_PW=superuser
 IPMI_KEY=00
@@ -44,8 +48,8 @@ ZBMC_QEMU_MAJOR=10
 ZBMC_QEMU_VERSION=10.0.11
 ZBMC_QEMU_MACHINE=ast2600-evb
 ZBMC_REQUIRED_SERVICES=console
-ZBMC_L2_REQUIRED=0
 ZBMC_DEFAULT_NO_WEB=1
+ZBMC_PROBE_AFTER_BOOTSTRAP=1
 
 PIDF="$ZBMC_DIR/zbmc.pid"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/svc.log}"
@@ -55,19 +59,19 @@ SOCK="$ZBMC_DIR/cin"        # fifo: echo 'cmd' > "$SOCK" drives the console
 # Boot artifacts if missing, then background the real init path. Reference login time: about 10 minutes.
 zbmc_boot() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] || bash "$PROJ_DIR/build.sh" "$ZBMC_DIR" >/dev/null 2>&1
-  _zbmc_lo_alias "$ZBMC_IP"
   rm -f "$ZBMC_DIR/.loggedin"                          # fresh boot = at the login prompt
-  BG=1 IP="$ZBMC_IP" HTTPS_PORT="$WEB_PORT" IPMI_PORT="$IPMI_PORT" SSH_PORT="$SSH_PORT" ZBMC_QEMU="$ZBMC_QEMU" \
+  BG=1 IP="$ZBMC_IP" TAP="$ZBMC_TAP" MAC="$ZBMC_MAC" ZBMC_QEMU="$ZBMC_QEMU" \
     WD="$ZBMC_DIR" ZBMC_CONSOLE_LOG="$CONSOLE_LOG" \
     bash "$PROJ_DIR/boot.sh" >/dev/null 2>&1
   local n=0 qp=; while [ $n -lt 40 ]; do
-    qp=$(pgrep -f "hostfwd=udp:$ZBMC_IP:$IPMI_PORT" | head -1); [ -n "$qp" ] && break
+    qp=$(pgrep -f "ifname=$ZBMC_TAP" | head -1); [ -n "$qp" ] && break
     sleep 0.3; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
-  [ -f "$ZBMC_DIR/mtdflash.bin" ] && { echo "ready (built)"; return 0; }
+  [ -f "$ZBMC_DIR/mtdflash.bin" ] && [ -f "$ZBMC_DIR/kernel-direct.uImage" ] && \
+    { echo "ready (built)"; return 0; }
   echo "not built — run: zbmc advantech-asmb787 build"; return 1
 }
 
@@ -92,10 +96,11 @@ zbmc_console_health() {
   grep -q 'login:' "$CONSOLE_LOG" 2>/dev/null && { echo "serial login prompt observed"; return 0; }
   echo "waiting for serial login prompt"; return 1
 }
-# web/ipmi/ssh: this box is CONSOLE-ONLY (older AMI kernel can't complete NC-SI link-up under qemu).
-zbmc_web()         { echo "$ZBMC_NAME: console-only box — no external Redfish. Use:  zbmc $ZBMC_NAME console"; return 1; }
-zbmc_ipmi()        { echo "$ZBMC_NAME: console-only box — no external IPMI.    Use:  zbmc $ZBMC_NAME console"; return 1; }
-zbmc_ipmi_health() { echo "console-only (no external IPMI — NC-SI kernel wall); the console works"; return 1; }
-zbmc_ssh()         { echo "$ZBMC_NAME: console-only box — no sshd reachable.   Use:  zbmc $ZBMC_NAME console"; return 1; }
+# Management transport now reaches the guest directly. Full IPMI, protected
+# Redfish/Web-UI, and privileged SSH acceptance remain separate service work.
+zbmc_web()         { echo "$ZBMC_NAME: HTTPS root responds, but protected Redfish/Web-UI is not accepted yet"; return 1; }
+zbmc_ipmi()        { echo "$ZBMC_NAME: RMCP+ session is not accepted yet"; return 1; }
+zbmc_ipmi_health() { echo "RMCP+ session is not accepted yet"; return 1; }
+zbmc_ssh()         { echo "$ZBMC_NAME: SSH authenticates, but firmware denies shell privilege"; return 1; }
 
-ZBMC_READY_GREP='login:'
+ZBMC_READY_GREP='zbmc: Advantech direct-PHY FTGMAC address'

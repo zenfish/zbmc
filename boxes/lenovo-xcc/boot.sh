@@ -14,21 +14,45 @@ SOCK="${SOCK:-$WD/serial.sock}"
 QMP="${QMP:-$WD/qmp.sock}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 LAUNCH_LOG="${LOG:-$WD/launcher.log}"
+TAP="${TAP:-}"
 
-for file in kernel.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2; do
+for file in kernel.zImage kernel-shell.zImage xcc.dtb sram.bin ptables.bin emmc.qcow2; do
   [ -f "$WD/$file" ] || { echo "missing $WD/$file - run: zbmc lenovo-xcc build" >&2; exit 1; }
 done
 
+kernel="$WD/kernel-runtime.zImage"
+disk="$WD/emmc.qcow2"
+incoming=()
+if [ -n "${ZBMC_WARM:-}" ]; then
+  [ -n "$TAP" ] || { echo "Lenovo warm checkpoint rejected: destination TAP is required" >&2; exit 1; }
+  for file in state.gz emmc.qcow2; do
+    [ -s "$WD/ckpt/$file" ] || { echo "missing warm checkpoint: $file" >&2; exit 1; }
+  done
+  python3 "$HERE/verify-warm.py" "$WD" "$QEMU_BIN" >&2
+  kernel="$WD/kernel-shell.zImage"
+  disk="$WD/ckpt/emmc.qcow2"
+  incoming=(-incoming defer)
+else
+  python3 "$HERE/configure-boot.py" "$WD/kernel-shell.zImage" "$WD/kernel-runtime.zImage.part"
+  mv "$WD/kernel-runtime.zImage.part" "$kernel"
+fi
+
 rm -f "$SOCK" "$QMP"
+: >"$LAUNCH_LOG"
+if [ -n "$TAP" ]; then
+  net0=(-netdev "tap,id=net0,ifname=$TAP,script=no,downscript=no")
+else
+  net0=(-netdev "user,id=net0,hostname=lenovo-xcc,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$HTTP_PORT-:80,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623")
+fi
 nohup "$QEMU_BIN" \
   -M "ast2600-evb,xcc-fpga=true,xcc-ptables-file=$WD/ptables.bin" -m 1G \
-  -kernel "$WD/kernel.zImage" -dtb "$WD/xcc.dtb" \
+  -kernel "$kernel" -dtb "$WD/xcc.dtb" \
   -append 'console=ttyS4,115200 earlyprintk clk_ignore_unused loglevel=8' \
-  -drive "file=$WD/emmc.qcow2,format=qcow2,if=sd,index=2,snapshot=on" \
+  -drive "file=$disk,format=qcow2,if=sd,index=2,snapshot=on" \
   -global emmc.boot-partition-size=4194304 \
   -global emmc.gp0-partition-size=3565158400 \
   -device "loader,file=$WD/sram.bin,addr=0x10000000,force-raw=on" \
-  -netdev "user,id=net0,hostname=lenovo-xcc,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$HTTP_PORT-:80,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623" \
+  "${net0[@]}" \
   -net nic,model=ftgmac100,netdev=net0,macaddr=52:54:00:12:34:60 \
   -netdev user,id=net1 -net nic,model=ftgmac100,netdev=net1,macaddr=52:54:00:12:34:61 \
   -netdev user,id=net2 -net nic,model=ftgmac100,netdev=net2,macaddr=52:54:00:12:34:62 \
@@ -36,5 +60,14 @@ nohup "$QEMU_BIN" \
   -display none -monitor none \
   -qmp "unix:$QMP,server=on,wait=off" \
   -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
-  -serial chardev:serial0 -watchdog-action none -no-reboot >"$LAUNCH_LOG" 2>&1 &
-echo "$!"
+  -serial chardev:serial0 -watchdog-action none -no-reboot "${incoming[@]}" >>"$LAUNCH_LOG" 2>&1 &
+qp=$!
+if [ -n "${ZBMC_WARM:-}" ]; then
+  if ! python3 "$HERE/restore.py" "$QMP" "$WD/ckpt/state.gz" >>"$LAUNCH_LOG" 2>&1; then
+    # This child never became a usable runtime; abort only its private snapshot.
+    kill -KILL "$qp" 2>/dev/null || true
+    wait "$qp" || true
+    exit 1
+  fi
+fi
+echo "$qp"

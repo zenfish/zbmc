@@ -18,6 +18,7 @@
 #   already has SERIAL/SMBUS/BT/IPMB=0, so only SMM, SOL, NM_IPMB_BUS need flipping. Keep LAN/UDS/KCS.
 set -eu
 R="${1:?usage: qemu-patch-rootfs.sh <rootfs-dir>}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # --- FIX 1: inject conf-seed + symlink before every IPMIMain launch in ipmistack -------------------
 IPMISTACK="$R/etc/init.d/ipmistack"
@@ -37,5 +38,10 @@ sed -i.bak -E \
  "$IC"
 rm -f "$IC.bak"
 
+# --- FIX 3: configure the DT-selected direct-PHY interface before vendor networking ------------
+install -m 0755 "$HERE/direct-network.sh" "$R/etc/init.d/zbmc-direct-network"
+ln -sfn ../init.d/zbmc-direct-network "$R/etc/rcS.d/S41zbmc-direct-network"
+
 echo "[qemu-patch] ipmistack conf-seed+/conf/BMC symlink injected; IPMI.conf: kept LAN/UDS/KCS,"
 echo "[qemu-patch] disabled smm/sol/serial/smbus/bt/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable"
+echo "[qemu-patch] installed direct-PHY FTGMAC startup before networking"

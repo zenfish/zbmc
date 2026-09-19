@@ -40,7 +40,9 @@ except sqlite3.OperationalError:
     pass  # no platform table → base defaults only
 
 # network/IPMI overrides so fullfw's RMCP listener gets a real IP + IPMI-over-LAN enabled
-_IP, _MASK, _GW = "10.0.2.15", "255.255.255.0", "10.0.2.2"
+_IP = os.environ.get("CVIP", "10.0.2.15")
+_MASK = os.environ.get("CVMASK", "255.255.255.0")
+_GW = os.environ.get("CVGW", "10.0.2.2")
 NET_OVERRIDE = {}
 # fullfw/libtcpi reads CurrentIPv4 (read-only, derived). osinterface derives it from the STATIC
 # IPv4/IPv4Static config at startup -> set the static groups so the derivation yields our IP.
@@ -51,6 +53,7 @@ for grp in ("CurrentIPv4", "IPv4", "IPv4Static", "NICStatic"):
 for grp in ("CurrentIPv4", "IPv4"):
     NET_OVERRIDE[("iDRAC.Embedded.1", grp, "Enable")] = "1"
     NET_OVERRIDE[("iDRAC.Embedded.1", grp, "DHCPEnable")] = "0"
+NET_OVERRIDE[("iDRAC.Embedded.1", "IPMILan", "Enable")] = "1"
 
 if os.path.exists(out_path):
     os.remove(out_path)
@@ -84,6 +87,18 @@ for fqdd, grp, attr, dflt, maxlen, supp in meta.execute(
         rows.append((fqdd, grp, idx, attr, "" if dflt is None else dflt, maxlen or 0))
 
 out.executemany("INSERT OR IGNORE INTO CfgValueTable VALUES (?,?,?,?,?,?)", rows)
+ipmi_key = os.environ.get("IPMIKEY", "915F32F49A97456D0D6D66EEE5ED84C894B414AFEB69DADFF891AF14F4B98964")
+for group, index, values in (
+    ("Users", 2, {"UserName": "root", "Enable": "1", "IpmiLanPrivilege": "4",
+                  "Privilege": "511", "SolEnable": "1", "IPMIKey": ipmi_key}),
+    ("SecureDefaultPassword", 1, {"DefaultUserCreated": "1"}),
+    ("IPMIUserInfo", 2, {"UserChannelAccess": "1414141414141414",
+                         "StdPayload": "1010101010101010"}),
+):
+    for attribute, value in values.items():
+        out.execute("UPDATE CfgValueTable SET AttributeValue=? "
+                    "WHERE GroupName=? AND GroupIndex=? AND AttributeName=?",
+                    (value, group, index, attribute))
 out.commit()
 print(f"platform={platform}  attrs->{len(rows)} rows  ({skipped} suppressed)")
 for f, g, i, a, v in out.execute("SELECT FQDD,GroupName,GroupIndex,AttributeName,AttributeValue "

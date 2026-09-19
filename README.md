@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=7498771300f2e3f216406d0289f09e35095321304183f64262bb07d84c39028f body-sha256=72369f5d0ec9e971fbb87f4db62fc228b568b6e34c142972d619070d59730ab8 -->
+<!-- html2md:auto source=README.html source-sha256=388cbd23da0226b673bb557a0b71b08ecb3e395f5caabe50f3fa7b2dfaab3071 body-sha256=1a32914321d73bebf50fe98530f6c2863b3d646fe9e81c7edc477a081644bfb4 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -18,29 +18,31 @@ There's a [GETTING-STARTED.md](GETTING-STARTED.md) doc that walks through the pr
 
 Resource sizing is guidance, not an enforced check. Individual BMCs request 128 MiB to 1 GiB of guest RAM; allow roughly 2 GiB host RAM and 5 GiB free disk for one-at-a-time use. Fleet timings in this README came from a four-core host and will be slower on smaller systems.
 
-> It aggregates vendor and research firmware and documents fleet-shared *default* credentials (calvin, factory IPMIKeys, CredVault keys, etc.). Those aren't repo secrets — they are already present in the source firmware or published research bundles. The tracked tree contains no live/customer secrets or private keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
+> It aggregates vendor and research firmware and documents fleet-shared *default* credentials (calvin, factory IPMIKeys, CredVault keys, etc.). Those aren't repo secrets — they are already present in the source firmware or published research bundles; the value here is *documenting the danger*. The tracked tree contains no live/customer secrets or private keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
 
 ## The denizens/animals
 
-`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records exact-build acceptance measured on my plucky four-core lenovo; it is a reproducibility baseline, not a promise that every vendor service is complete.
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records validation on the four-core Debby host: fleet observations are from 2026-09-10; Lenovo was updated on 2026-09-13. This is not a fresh fleet-wide assessment. Each name links to that animal's box material.
 
-| `zbmc` name | Accepted function | Exact-build result / measured cold start |
-|----|----|----|
-| **openbmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 4m32s |
-| **nvidia-obmc** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 5m21s |
-| **advantech-asmb787** | retained serial login; external network is blocked by the unmodeled NC-SI path | pass - 9m38s |
-| **idrac10** | ICMP, SSH, IPMI, static Redfish ServiceRoot; no vendor Web-UI | pass - 7m37s |
-| **megarac-hpe** | ICMP and retained IPMI; Redfish/Web-UI unavailable; vendor SSH absent | pass - 8m07s total; fourth cold-boot attempt succeeded after three `IPMIMain` crash rerolls |
-| **ieit** | IPMI, Redfish, vendor Web-UI; optional SMASH/CLP over SSH transport is not a Unix shell; user networking, so no ICMP | pass - 1m55s |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI does not answer and Redfish is disabled | partial - Web-UI pass in 9m40s; 15m cold readiness deadline |
-| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | vendor Web-UI; user networking, so no ICMP; IPMI receives requests without replying and SSH resets before key exchange | partial - Web-UI READY in 46m06s including a 60s stable hold; 60m cold readiness deadline |
-| **supermicro-x14** | ICMP, SSH, IPMI, Redfish, Web-UI | pass - 3m31s |
-| **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
-| **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
+| `zbmc` name | QEMU network | ICMP | SSH | IPMI | Redfish | Web-UI | Console | Boot | Issues |
+|----|----|----|----|----|----|----|----|----|----|
+| **[openbmc](boxes/openbmc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc openbmc status -v`; no warm checkpoint is published. |
+| **[nvidia-obmc](boxes/nvidia-obmc/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc nvidia-obmc status -v`; no warm checkpoint is published. |
+| **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
+| **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
+| **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
+| **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap. |
+| **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ❌; Warm ✅ | Managed TAP `start --warm` reached six-service READY on 2026-09-14 in 189s after Lenovo-only serialized probe scheduling. Three live `zbmc lenovo-xcc -v` checks passed 6/6 while the health watcher was active, and the run history had zero degraded/probe-busy/IPMI-read-failed samples. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window. |
+| **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
+| **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
+| **[idrac9](boxes/idrac9/index.md)** | TAP / direct L2 | ✅ | ⚠️ FLAKY | ❌ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable. |
 
-These times were measured with one BMC at a time. `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+Service marks apply to the run described in Issues; they do not imply cold or warm startup reproducibility.
 
-Supermicro X10 uses the same loopback-alias allocation and standard service ports as the rest of the zoo. QEMU user networking forwards those ports to its private guest address.
+Legend: ✅ passed in the current TAP topology, ❌ did not pass the latest current-topology validation or is unsupported, and ⚠️ FLAKY passed but did not remain stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+
+All eleven descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md). The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
@@ -75,76 +77,21 @@ Every fetched artifact is SHA-256 verified. `firmware/download-fw.sh` reports wh
 
 ## Copying files into a BMC
 
-You can copy scripts, executables, and data into a running emulated BMC. Start with `/tmp` in the guest. Copying into the host's `work/<box>/` does not make a file appear inside the BMC; there is no generic `zbmc push` or shared host directory.
+Copy a script, executable, or data file into a running BMC through the guest interface that box actually exposes. A host-side file in `work/<box>/` is not automatically visible inside the guest; there is no generic `zbmc push` command. Use `/tmp` for uploads and verify a checksum before executing:
 
-### Copy over SSH
-
-For **openbmc, nvidia-obmc, idrac9, idrac10, and supermicro-x14**, run this from the repository root on the **Linux host running QEMU**. The wrapper selects the configured address and credentials/key:
-
-    box=openbmc                       # choose one of the five boxes above
-    sudo ./tools/zbmc "$box" start     # skip if already running
+    # Linux-shell boxes: openbmc, nvidia-obmc, idrac9, idrac10, supermicro-x14
+    box=openbmc
+    sudo ./tools/zbmc "$box" start       # omit if already running
     ./tools/zbmc "$box" ssh -T 'cat > /tmp/my-tool' < ./my-tool
-
-    # Compare checksum and byte count; the filenames will differ.
     cksum ./my-tool
     ./tools/zbmc "$box" ssh 'cksum /tmp/my-tool'
-
-    # After the checksums match, for an executable:
     ./tools/zbmc "$box" ssh 'chmod 755 /tmp/my-tool && /tmp/my-tool'
 
-The local `< ./my-tool` supplies the bytes; the quoted `> /tmp/my-tool` runs inside the BMC. `-T` disables terminal allocation so binary bytes are preserved. Omit the last command for data files. This needs only SSH stdin and guest `cat`, with no SFTP server or guest `scp` binary. Modern [scp uses SFTP by default](https://man.openbsd.org/scp.1); `scp -O` only helps when the guest supports legacy SCP. A vendor management prompt over SSH does not imply a Linux shell.
+The input redirection supplies bytes from the host; the quoted command runs inside the BMC. `-T` preserves binary stdin. This uses SSH and guest `cat`, so it does not require SFTP or guest `scp`. Build executables for the guest architecture and ABI; check with `uname -m` and `file`. iDRAC10 is AArch64; the other current images are 32-bit ARM, with X10 requiring ARMv5-compatible code.
 
-### Copy from a guest shell
+For a Linux console with guest networking, serve a file from the host with `python3 -m http.server 8765 --bind 127.0.0.1` and fetch it from the guest using `wget http://10.0.2.2:8765/my-tool`. iRMC uses `192.168.2.2`; Advantech has no usable external network. X10 prefers paced base64 chunks over its serial console because its SSH wrapper consumes stdin for commands and larger network transfers can destabilize the old guest driver. IEIT SSH is SMASH/CLP rather than a Unix shell; Lenovo XCC has no established arbitrary-file transfer path. MegaRAC's injected SSH requires the explicit isolated-lab opt-in; its `shell` verb starts a separate no-network VM.
 
-With a **Linux console shell and working guest networking**, you can instead serve a dedicated directory from the QEMU host:
-
-    # Host, separate terminal; leave running during the transfer.
-    mkdir -p work/transfer
-    cp ./my-tool work/transfer/
-    python3 -m http.server 8765 --bind 127.0.0.1 --directory work/transfer
-
-At the **guest shell**, if `wget` is available:
-
-    wget -O /tmp/my-tool http://10.0.2.2:8765/my-tool
-    cksum /tmp/my-tool
-    # Compare with the host's cksum ./my-tool before executing.
-    chmod 755 /tmp/my-tool
-    /tmp/my-tool
-
-`10.0.2.2` is QEMU user networking's host address, not the BMC's loopback alias shown by `zbmc list`. **iRMC uses `192.168.2.2` instead.** Stop the server with Ctrl-C when finished. Advantech's blocked network cannot use this method.
-
-For small text scripts, type directly at a **guest Linux shell**:
-
-    cat > /tmp/hello.sh <<'EOF'
-    #!/bin/sh
-    echo "Hello from the BMC"
-    uname -m
-    EOF
-    chmod 755 /tmp/hello.sh
-    /tmp/hello.sh
-
-For a binary over serial, use the [base64 recipe on the X10 page](boxes/supermicro-x10/README.md#copying-files). Wait until boot automation releases the console, obtain a Linux shell prompt, and send one command at a time. `console` can be interactive, accept a command argument, or just tail a log depending on the box.
-
-### Which method for each box?
-
-| Box | File-transfer path / exception |
-|----|----|
-| openbmc, nvidia-obmc, supermicro-x14 | Use the SSH recipe above; these expose Linux shells. |
-| idrac9, idrac10 | Use the SSH recipe; the wrapper selects the installed lab key. iDRAC9's `/admin1->` prompt is a real shell in this emulation. |
-| [supermicro-x10](boxes/supermicro-x10/README.md#copying-files) | Use serial/base64 for binaries. Its SSH wrapper consumes stdin to send commands, and larger SSH flows can panic the old guest network driver. |
-| [megarac-hpe](boxes/megarac-hpe/index.md#copying-files) | Use the live console shell. Injected SSH is an explicit lab opt-in, not the default service. |
-| [ieit](boxes/ieit/index.md#copying-files) | SSH is SMASH/CLP, not a Linux shell. Use build-time insertion; a live Linux shell through its serial socket has not been established. |
-| [irmc-fujitsu](boxes/irmc-fujitsu/index.md#copying-files) | The default cold runtime provides a root console shell. Use HTTP via `192.168.2.2` or serial; SSH remains vendor-gated. |
-| [lenovo-xcc](boxes/lenovo-xcc/index.md#copying-files) | SSH is unavailable. Serial access exists, but the current runtime has no established arbitrary-file transfer recipe. |
-| advantech-asmb787 | No external networking. `sudo ./tools/zbmc advantech-asmb787 console 'printf "hello\n" > /tmp/hello.txt; cat /tmp/hello.txt'` auto-logs in as `sysadmin`. With no command, `console` only tails the log. For binaries, send each generated base64 command through this command interface, checking that the guest has `base64 -d` first. |
-
-### Executables and persistence
-
-**Build for the guest, not the host.** Host x86_64 or macOS binaries will not run on these BMCs. Check `uname -m` in the guest and `file ./my-tool` / `readelf -h -l ./my-tool` on the host. iDRAC10 uses AArch64; the other current boxes use 32-bit ARM, with X10 requiring ARMv5-compatible code. Match the CPU, endianness, ABI (including float ABI), and guest loader/libraries. A static executable avoids shared-library dependencies but still needs the correct CPU and kernel support. Scripts need an installed interpreter, a correct shebang, and Unix line endings.
-
-`Exec format error` usually means the wrong format or architecture; `not found` for an existing file can mean a missing ELF loader or script interpreter. For `Permission denied`, check executable permissions and mount options (`noexec`).
-
-**Treat `/tmp` uploads as disposable.** They do not survive a fresh cold boot. Other writable paths may also live in temporary QEMU overlays; restoring an older warm checkpoint restores its older state. For repeatable experiments, keep the original on the host and replay the transfer after startup. To bake files into a cold image, follow that box's build/repack recipe (see the [IEIT example](boxes/ieit/index.md#copying-files)): editing an extracted rootfs directory alone does not update the packed image or an existing warm checkpoint. Keep custom images separate from pinned vendor inputs and never edit a backing image while QEMU is using it.
+Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a fresh cold boot; a warm checkpoint restores its captured state. For repeatable experiments, replay the transfer after startup. To bake a file into a cold image, use that box's existing build/repack recipe and keep custom images separate from pinned vendor inputs.
 
 ## Exact QEMU builds and Docker package
 
@@ -168,9 +115,9 @@ The Docker base image and package version are pinned, and the packager verifies 
 
 ## Network configuration
 
-By default, each box binds to a Linux loopback alias in the **10.0.{6,7,8,9}.x** range, broken out by vendor family:
+Every advertised address is assigned inside the guest on a Linux TAP/direct-L2 management interface. The host bridge routes the packets but does not own the guest address, and zBMC does not proxy management ports. Descriptor fallback addresses retain the historical vendor ranges below; deployments normally override them with a site pool such as Debby's `10.250.0.x`:
 
-| Subnet | Vendor | Boxes |
+| Fallback range | Vendor | Boxes |
 |----|----|----|
 | 10.0.6.x | Vendor firmware | megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68), lenovo-xcc (.69) |
 | 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |

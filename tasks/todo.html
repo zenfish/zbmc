@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=d973fa694f00d01cd5ea7dd10fbac43bfe9ae767a8548ae234ecc279a442abda body-sha256=576f539ca55eaffadeb572c373a7d03b2a11f969b7cacfea435358753be0bc12 -->
+<!-- zmd2html:auto source-sha256=17864b19c2fcc98ab8a732cec8f4066bd285239ea8d1664f9ddbfc129afb4430 body-sha256=c839760442aa02b8ba182737e63835c0c93471ae38c9094ac079da5129b891c0 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Document copying files into an emulated BMC</title>
+<title>Fix GitHub contract workflow</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 <style type="text/tailwindcss">
@@ -41,39 +41,10 @@
 <div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
   <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
   <div>
-    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Document copying files into an emulated BMC</h1>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Fix GitHub contract workflow</h1>
   </div>
 </div>
 
-<ul class="task-list">
-<li><label><input type="checkbox" checked="" />Trace the dispatcher and
-per-box shell, network, and image paths.</label></li>
-<li><label><input type="checkbox" checked="" />Document file and
-executable transfer in the main README, with per-box
-exceptions.</label></li>
-<li><label><input type="checkbox" checked="" />Verify command behavior,
-documentation pairs, links, and preservation of existing
-edits.</label></li>
-</ul>
-<h2 id="review">Review</h2>
-<p>Documented the existing SSH stdin path for five boxes, HTTP pull and
-serial text/base64 alternatives, all eleven boxes' transfer limits,
-executable compatibility, and cold/warm persistence. Added focused notes
-for X10, MegaRAC, iRMC, and Lenovo, plus an IEIT build-time insertion
-example. No runtime behavior changed.</p>
-<p>Verified all six documented SSH wrapper paths (including opt-in
-MegaRAC) with a transport double that checks exact binary stdin and
-command arguments. Executed the documented X10 base64 generator and
-decoded its output byte-for-byte, including NUL, CR/LF, and high bytes.
-Eleven documented shell blocks passed syntax checks; 34 local HTML
-links/anchors and all 47 documentation pairs passed. A second source
-review found no remaining substantive issues. No live guest boot,
-transfer, or IEIT firmware rebuild was performed on this macOS host.</p>
-<p>The pre-existing README Markdown edits were already present in its
-HTML body; verified equality before regenerating Markdown. Restored HTML
-as the unambiguous README source and preserved the existing prose and
-unrelated Lenovo runtime changes.</p>
-<h1 id="fix-github-contract-workflow">Fix GitHub contract workflow</h1>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="" />Inspect the original and
 follow-up GitHub Actions logs.</label></li>
@@ -90,7 +61,7 @@ generated-file, and multiple-file selection.</label></li>
 <li><label><input type="checkbox" checked="" />Verify focused and full
 contract suites and inspect the final diff.</label></li>
 </ul>
-<h2 id="review-1">Review</h2>
+<h2 id="review">Review</h2>
 <p>The original GitHub run failed because the new iLO5 contract requires
 <code>Crypto.Cipher.AES</code>, while the clean runner lacked that
 module. Two follow-up runs proved Ubuntu's
@@ -119,7 +90,7 @@ Markdown operator documentation.</label></li>
 <li><label><input type="checkbox" checked="" />Cold-boot and verify the
 60-second stability hold on Debby.</label></li>
 </ul>
-<h2 id="review-2">Review</h2>
+<h2 id="review-1">Review</h2>
 <p>The Lenovo XCC runtime preserves the vendor kernel and root
 filesystem, adds the minimum platform emulation required for the
 FPGA/eMMC startup path, and declares only the reproduced vendor WebUI.
@@ -134,21 +105,7 @@ AST2600 watchdog remains modeled. The cold readiness deadline is 60
 minutes. The focused runtime test, full repository suite, and all
 documentation pairs pass.</p>
 <h1 id="ilo5-svcsilo-bring-up">iLO5 svcsILO bring-up</h1>
-<ul class="task-list">
-<li><label><input type="checkbox" checked="" />Recover the prior Debby
-runtime state and verify saved svcsILO dumps.</label></li>
-<li><label><input type="checkbox" checked="" />Replace the incorrect
-physical-dump address model with the proven virtual image.</label></li>
-<li><label><input type="checkbox" checked="" />Trace the
-<code>0x12070</code> path through both <code>memset</code> calls to
-synchronous config IPC.</label></li>
-<li><label><input type="checkbox" checked="" />Prove a svcsILO-scoped
-default-config fastpath advances the former deadlock.</label></li>
-<li><label><input type="checkbox" />Localize the next wait after the
-final default-config request and obtain guest network
-readiness.</label></li>
-</ul>
-<h2 id="review-3">Review</h2>
+<h2 id="review-2">Review</h2>
 <p>The live Debby run in
 <code>work/ilo5-debby-attempt-139/renode.log</code> proved the tracked
 <code>gxp_dev.py</code> fix is on-path and changes behavior in the
@@ -163,24 +120,36 @@ before the guest clears them.</p>
 <code>ILOMAIN_COMMAND</code> handling. This verifies the narrowest
 correct change in the device model: preserve non-mailbox register writes
 so later firmware reads can observe guest-programmed state.</p>
-<p>Attempt 142 recovered the authoritative 151,552-byte virtual dump
-from attempt 126 and proved the previous
-<code>ALLOC30</code>/<code>REQ19</code> hook labels came from treating
-non-contiguous physical pages as a linear virtual image. Corrected hooks
-show both zeroing calls return; the actual block is the shared
-<code>0x01882918</code> wrapper, which builds syscall descriptor
-<code>0x98</code> and waits in SVC 0 for an absent config backend.</p>
-<p>A fingerprint-scoped runtime fastpath now returns transport success
-while retaining each caller's pre-zeroed response buffer as
-factory/default configuration. The live run advances through nine
-requests, including OEM property get/set and command 2/3 state traffic.
-It has not reached the later <code>0x11e50</code> milestone, and
-<code>10.0.2.15</code> still does not answer ARP or ports 22/23/80/443,
-so no tracked fastpath patch is ready to commit yet. Evidence is
-preserved on Debby in
-<code>work/ilo5-debby-attempt-142/renode.sync-config-block.log</code>,
-<code>renode.oem-fastpath-next-block.log</code>, and the current
-<code>renode.log</code>.</p>
+<h1 id="migrate-idrac10-management-networking-to-tap">Migrate iDRAC10
+management networking to TAP</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Put
+<code>10.250.0.31</code> on the guest GMAC via <code>ztap-idrac10</code>
+with stable MAC <code>52:54:00:fa:00:31</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Remove the host
+management alias and management <code>hostfwd</code>; retain isolated
+USB SLiRP only for bootstrap payloads.</label></li>
+<li><label><input type="checkbox" checked="" />Validate cold ARP, ICMP,
+SSH, authenticated IPMI, and protected Redfish through
+zBMC.</label></li>
+<li><label><input type="checkbox" checked="" />Create a TAP-native
+checkpoint and validate the warm restore through zBMC.</label></li>
+</ul>
+<h2 id="review-3">Review</h2>
+<p>Cold run
+<code>20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce</code>
+reached READY for ICMP, SSH, authenticated IPMI <code>mc info</code>,
+and protected Redfish. Its ARP entry maps <code>10.250.0.31</code> to
+<code>52:54:00:fa:00:31</code>; the host has no <code>.31</code>
+address; and the QEMU management NIC is TAP-backed with no management
+<code>hostfwd</code>.</p>
+<p>Warm run
+<code>20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6</code>
+restored the marker
+<code>tap ztap-idrac10 52:54:00:fa:00:31 10.250.0.31</code> and reached
+the same four-service READY contract in 2m47s. Exact topology and probe
+output is preserved in each run's <code>probes/tap-validation.txt</code>
+or <code>probes/tap-warm-validation.txt</code>.</p>
 </div>
 </body>
 </html>

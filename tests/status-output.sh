@@ -31,22 +31,30 @@ ZBMC_DIR="$TEST_ROOT"
 ZBMC_IP=$(_zbmc_resolve_ip fake 2 127.0.0.1)
 ZBMC_HOST=fake
 ZBMC_SSH_NOTE="${TEST_SSH_NOTE:-}"
+FIXTURE_SETTING_AT_LOAD="${FIXTURE_PRIVATE_SETTING:-}"
 PIDF="$ZBMC_DIR/zbmc.pid"
 LOG="$ZBMC_DIR/console.log"
 CONSOLE_LOG="$LOG"
 IPMI_USER=root
 IPMI_PW=test
 ZBMC_REQUIRED_SERVICES="${TEST_REQUIRED:-ssh ipmi webui}"
-ZBMC_L2_REQUIRED="${TEST_L2_REQUIRED:-1}"
+ZBMC_NETWORK_MODE="${TEST_NETWORK_MODE:-tap}"
 ZBMC_DISABLED_SERVICES="${TEST_DISABLED:-redfish console}"
-zbmc_ready(){ echo "ready (fixture)"; }
+zbmc_ready(){ echo "${TEST_BUILD_MESSAGE:-ready (fixture)}"; }
 zbmc_running(){
   if [ "${TEST_DISCOVER_RUNNING:-0}" = 1 ] || [ "${TEST_FLEET_ORDER:-0}" = 1 ]; then echo "$$"; fi
 }
 zbmc_ssh(){
+  [ "${TEST_NATIVE_SSH:-0}" != 1 ] || return 77
+  if [ "${TEST_REQUIRE_PRIVATE_CONFIG:-0}" = 1 ]; then
+    [ "$FIXTURE_SETTING_AT_LOAD" = nonexported-test-setting ] || return 1
+  fi
   [ "${TEST_SSH_DOWN:-0}" = 1 ] && { echo "no response"; return 1; }
   echo up
 }
+if [ "${TEST_NATIVE_SSH:-0}" = 1 ]; then
+  zbmc_ssh_health(){ return "${TEST_NATIVE_SSH_EXIT:-0}"; }
+fi
 zbmc_ipmi_health(){
   [ -f "$TEST_ROOT/ipmi-down" ] && { echo "no response"; return 1; }
   mkdir "$TEST_ACTIVITY_ROOT" 2>/dev/null || { echo "concurrent probe"; return 1; }
@@ -99,8 +107,14 @@ listed=$("$fixture/tools/zbmc" list)
 expect "$listed" "fake                 127.0.0.1"
 
 down=$("$fixture/tools/zbmc" fake status)
-[ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
+[ "$(labels <<<"$down")" = $'QEMU\nLast run\nBuild\nAuth' ] || { printf 'unexpected down status:\n%s\n' "$down" >&2; exit 1; }
 expect "$down" "Last run  : READY after 10m 12s; UP for 9m 48s; STOPPED — operator requested shutdown"
+expect "$down" "Auth      : root/test"
+private=$(ZBMC_AUTH_HINT="root / private credential" "$fixture/tools/zbmc" fake status)
+expect "$private" "Auth      : root / private credential"
+unprefixed=$(TEST_BUILD_MESSAGE="cold artifacts installed" "$fixture/tools/zbmc" fake status)
+expect "$unprefixed" "Build     : READY cold artifacts installed"
+[[ "$private" != *root/test* ]] || { echo "private credential exposed" >&2; exit 1; }
 [[ "$down" != *"had reached READY"* ]] || { printf 'redundant highest stage:\n%s\n' "$down" >&2; exit 1; }
 
 cat > "$TEST_ROOT/runs/run-1/termination.json" <<'EOF'
@@ -167,7 +181,7 @@ printf '%s\n' "$$" > "$TEST_ROOT/runs/run-1/qemu.pid"
 ps -o lstart= -p "$$" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > "$TEST_ROOT/runs/run-1/qemu.start"
 printf 'current run serial output\n' > "$TEST_ROOT/runs/run-1/console.log"
 ready=$("$fixture/tools/zbmc" fake status)
-[ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
+[ "$(labels <<<"$ready")" = $'QEMU\nCurrent run\nBuild\nAuth\nHealth' ] || { printf 'unexpected ready status:\n%s\n' "$ready" >&2; exit 1; }
 [[ "$ready" != *"checking services"* ]] || { printf 'spinner leaked into captured output:\n%s\n' "$ready" >&2; exit 1; }
 expect "$ready" "Current run : READY (startup took 10m 12s)"
 expect "$ready" "Health    : READY [4/4 - ICMP, SSH, IPMI, Web-UI]"
@@ -209,12 +223,18 @@ verbose=$("$fixture/tools/zbmc" fake status --verbose)
 expect "$verbose" "Observed  :"
 expect "$verbose" $'Evidence  : '"$TEST_ROOT/runs/run-1"$'\nConsole log : '"$TEST_ROOT/runs/run-1/console.log (live)"$'\nFollow      : tail -f '"$TEST_ROOT/runs/run-1/console.log"
 expect "$verbose" "ICMP      : READY (127.0.0.1 answers ICMP)"
+expect "$verbose" "Network   : TAP/DIRECT-L2 (guest owns advertised IP)"
 expect "$verbose" "SSH       : READY (zbmc 127.0.0.1 ssh)"
 expect "$verbose" "IPMI      : STARTING"
 [[ "$(grep '^IPMI' <<<"$verbose")" != *"("* ]] || { printf 'starting row included probe failure detail:\n%s\n' "$verbose" >&2; exit 1; }
 expect "$verbose" "Redfish   : N/A (disabled)"
 expect "$verbose" "Web-UI    : READY (fixture Web-UI"
 expect "$verbose" "Console   : N/A (disabled)"
+
+forwarded=$(TEST_NETWORK_MODE=user "$fixture/tools/zbmc" fake status --verbose)
+expect "$forwarded" "ICMP      : UNAVAILABLE (guest address is not directly reachable; QEMU user networking cannot carry guest ICMP)"
+expect "$forwarded" "Network   : USER/FORWARDED (QEMU user networking; advertised IP is a host alias)"
+expect "$forwarded" "Health    : 2/3 READY [SSH, Web-UI]; 1 STARTING [IPMI]"
 
 # A root-started run can leave current-run unreadable to the ordinary operator;
 # status must still discover the group-readable runs/latest evidence link.
@@ -282,6 +302,11 @@ no_web=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/
 expect "$no_web" "Redfish   : FAILED (expected; no HTTPS response)"
 expect "$no_web" "Web-UI    : N/A (disabled)"
 expect "$no_web" "Health    : DEGRADED [3/4 - ICMP, SSH, IPMI; Redfish failed]"
+all_services=$(TEST_DISABLED=console TEST_REQUIRED="ssh ipmi redfish" "$fixture/tools/zbmc" fake status --verbose --all-services)
+expect "$all_services" 'Web-UI    : FAILED'
+expect "$all_services" 'Console   : AVAILABLE'
+expect "$all_services" 'Health    : DEGRADED [4/6'
+grep -Fq -- '--no-web' "$TEST_ROOT/runs/run-1/manifest.json"
 
 printf 'fake 192.0.2.1\n' > "$fixture/zhosts.txt"
 touch "$TEST_ROOT/ipmi-down" "$TEST_ROOT/webui-down"
@@ -312,11 +337,11 @@ runlib_default=$(TEST_ROOT="$TEST_ROOT" bash -c '
 [ "$runlib_default" = "ssh ipmi redfish|0" ] || { echo "unexpected default runlib services: $runlib_default" >&2; exit 1; }
 
 printf '%s\n' '{"command":"zbmc fake start --no-web"}' > "$TEST_ROOT/runs/run-1/manifest.json"
-console_required=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
+console_required=$(TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status)
 expect "$console_required" "Health    : READY [1/1 - Console]"
-console_required_v=$(TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
-expect "$console_required_v" "ICMP      : N/A (not configured)"
-console_failed=$(TEST_CONSOLE_DOWN=1 TEST_REQUIRED=console TEST_L2_REQUIRED=0 TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+console_required_v=$(TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
+expect "$console_required_v" "ICMP      : UNAVAILABLE (guest address is not directly reachable; QEMU user networking cannot carry guest ICMP)"
+console_failed=$(TEST_CONSOLE_DOWN=1 TEST_REQUIRED=console TEST_NETWORK_MODE=user TEST_DISABLED=redfish "$fixture/tools/zbmc" fake status -v)
 expect "$console_failed" "Console   : FAILED (expected; no serial prompt)"
 expect "$console_failed" "Health    : DEGRADED [0/1 - Console failed]"
 
@@ -423,5 +448,26 @@ expect "$fleet_verbose" "Observed  :"
 fleet_shorthand=$("$fixture/tools/zbmc" all -v)
 expect "$fleet_shorthand" "checking status on 2 inmates"
 expect "$fleet_shorthand" "Observed  :"
+
+printf 'FIXTURE_PRIVATE_SETTING=nonexported-test-setting\n' > "$fixture/zbmc.conf"
+private_ssh=$(TEST_REQUIRE_PRIVATE_CONFIG=1 TEST_ZBMC="$fixture/tools/zbmc" bash -c '
+  ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
+  BF="$_REPO/boxes/fake/zbmc.box"
+  ZBMC_NAME=fake
+  ZBMC_IP=127.0.0.1
+  _probe_ssh
+')
+expect "$private_ssh" 'ok|'
+
+for rc in 0 1; do
+  native_ssh=$(TEST_NATIVE_SSH=1 TEST_NATIVE_SSH_EXIT="$rc" TEST_ZBMC="$fixture/tools/zbmc" bash -c '
+    ZBMC_SOURCE_ONLY=1 . "$TEST_ZBMC"
+    BF="$_REPO/boxes/fake/zbmc.box"
+    ZBMC_NAME=fake
+    ZBMC_IP=127.0.0.1
+    _probe_ssh
+  ')
+  if [ "$rc" = 0 ]; then expect "$native_ssh" 'ok|'; else expect "$native_ssh" 'fail|'; fi
+done
 
 echo "status output: PASS"

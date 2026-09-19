@@ -1,17 +1,3 @@
-# Document copying files into an emulated BMC
-
-- [x] Trace the dispatcher and per-box shell, network, and image paths.
-- [x] Document file and executable transfer in the main README, with per-box exceptions.
-- [x] Verify command behavior, documentation pairs, links, and preservation of existing edits.
-
-## Review
-
-Documented the existing SSH stdin path for five boxes, HTTP pull and serial text/base64 alternatives, all eleven boxes' transfer limits, executable compatibility, and cold/warm persistence. Added focused notes for X10, MegaRAC, iRMC, and Lenovo, plus an IEIT build-time insertion example. No runtime behavior changed.
-
-Verified all six documented SSH wrapper paths (including opt-in MegaRAC) with a transport double that checks exact binary stdin and command arguments. Executed the documented X10 base64 generator and decoded its output byte-for-byte, including NUL, CR/LF, and high bytes. Eleven documented shell blocks passed syntax checks; 34 local HTML links/anchors and all 47 documentation pairs passed. A second source review found no remaining substantive issues. No live guest boot, transfer, or IEIT firmware rebuild was performed on this macOS host.
-
-The pre-existing README Markdown edits were already present in its HTML body; verified equality before regenerating Markdown. Restored HTML as the unambiguous README source and preserved the existing prose and unrelated Lenovo runtime changes.
-
 # Fix GitHub contract workflow
 
 - [x] Inspect the original and follow-up GitHub Actions logs.
@@ -45,18 +31,21 @@ Debby run `20260902T071810Z-f43e4719-cfe5-49fe-b034-69bed9d53719` survived the f
 
 # iLO5 svcsILO bring-up
 
-- [x] Recover the prior Debby runtime state and verify saved svcsILO dumps.
-- [x] Replace the incorrect physical-dump address model with the proven virtual image.
-- [x] Trace the `0x12070` path through both `memset` calls to synchronous config IPC.
-- [x] Prove a svcsILO-scoped default-config fastpath advances the former deadlock.
-- [ ] Localize the next wait after the final default-config request and obtain guest network readiness.
-
 ## Review
 
 The live Debby run in `work/ilo5-debby-attempt-139/renode.log` proved the tracked `gxp_dev.py` fix is on-path and changes behavior in the previously blocked svcsILO startup region. Before the fix, repeated control-register reads after event-service init returned `0x0`; with the fix, the same run shows persisted read-backs like `off=0xb0 -> 0x808`, `off=0xc4 -> 0x704`, and `off=0xa0 -> 0x101` before the guest clears them.
 
 That run also reaches `SVCSILO_MAIN`, crosses `phase=after-event-service-init`, and continues to later `ILOMAIN_COMMAND` handling. This verifies the narrowest correct change in the device model: preserve non-mailbox register writes so later firmware reads can observe guest-programmed state.
 
-Attempt 142 recovered the authoritative 151,552-byte virtual dump from attempt 126 and proved the previous `ALLOC30`/`REQ19` hook labels came from treating non-contiguous physical pages as a linear virtual image. Corrected hooks show both zeroing calls return; the actual block is the shared `0x01882918` wrapper, which builds syscall descriptor `0x98` and waits in SVC 0 for an absent config backend.
+# Migrate iDRAC10 management networking to TAP
 
-A fingerprint-scoped runtime fastpath now returns transport success while retaining each caller's pre-zeroed response buffer as factory/default configuration. The live run advances through nine requests, including OEM property get/set and command 2/3 state traffic. It has not reached the later `0x11e50` milestone, and `10.0.2.15` still does not answer ARP or ports 22/23/80/443, so no tracked fastpath patch is ready to commit yet. Evidence is preserved on Debby in `work/ilo5-debby-attempt-142/renode.sync-config-block.log`, `renode.oem-fastpath-next-block.log`, and the current `renode.log`.
+- [x] Put `10.250.0.31` on the guest GMAC via `ztap-idrac10` with stable MAC `52:54:00:fa:00:31`.
+- [x] Remove the host management alias and management `hostfwd`; retain isolated USB SLiRP only for bootstrap payloads.
+- [x] Validate cold ARP, ICMP, SSH, authenticated IPMI, and protected Redfish through zBMC.
+- [x] Create a TAP-native checkpoint and validate the warm restore through zBMC.
+
+## Review
+
+Cold run `20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce` reached READY for ICMP, SSH, authenticated IPMI `mc info`, and protected Redfish. Its ARP entry maps `10.250.0.31` to `52:54:00:fa:00:31`; the host has no `.31` address; and the QEMU management NIC is TAP-backed with no management `hostfwd`.
+
+Warm run `20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6` restored the marker `tap ztap-idrac10 52:54:00:fa:00:31 10.250.0.31` and reached the same four-service READY contract in 2m47s. Exact topology and probe output is preserved in each run's `probes/tap-validation.txt` or `probes/tap-warm-validation.txt`.

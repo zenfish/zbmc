@@ -78,41 +78,11 @@ PATCHES = [
      "Gate 4: BSP 'Signed as %s' prints dangling bl1-region sig ptr (0x100005FC, unmapped) -> "
      "force r2=0 so banner takes the no-%s 'Unsigned boot block' branch; kills the ilobsp MMU fault"),
 
-    # --- Gate 6 (2026-06-26): main-init parked forever in the iodion netcfg config-store
-    #     validate/repair spin -> never reaches the app-init that leads to ilomain ---
-    # ROOT CAUSE (live-proven, not static guessing):
-    #   After Gate 4 the BSP boots and the main-init thread (stack 0x4213C3C8) runs, post-KernelMain,
-    #   the kernel-init guard 0x4109c170 -> ... -> netcfg-init 0x410247d4 -> config-init 0x410246c8 ->
-    #   the iodion ("nics/iodion.ram") config LOAD at 0x410244f0. Its loop head is 0x410244f4:
-    #       loop: r2 = config_validate(0x41018d88, base=0x41125e68, 0x800)
-    #             r2 in {0,4} -> return (config OK);  r2 in {1,2,3} -> error-log + repair, b 0x410244f4;
-    #             else -> b 0x410244f4   (so EVERY non-OK result loops)
-    #   The validators are 0x410185a4 (type-3, magic 0x439cd202) and 0x41018600 (type-1, magic
-    #   0x439cd203), each = "block magic+type match AND 32-bit word-sum checksum == stored sum".
-    #   The persistent config store lives in NVRAM/flash that we do NOT back in emulation, so its
-    #   RAM image at 0x41125e68 is all-zero -> magic never matches -> validators return 2 ("mismatch")
-    #   -> 0x41018d88 returns 3 -> the loop repairs (no valid source copy, so it stays bad) and retries
-    #   FOREVER. LIVE EVIDENCE: a Renode stack-dump hook at 0x410247d4 caught the return chain
-    #   0x4109c170 / 0x410a5b3x (the same 0x410Axxxx init neighborhood as ilomain's container 0x410a3908),
-    #   and the 0.15s trace showed 0x410244f0's body (0x41024500) executing 645x while the loop's
-    #   return point 0x41024504 / the post-config link-check 0x410247e8 NEVER executed. Hot steady state
-    #   was checksum 0x41018590 + scheduler ping-pong with the INTEGRITY idle loop 0x4100ee28 dead.
-    # FIX (emulation-faithful: "the empty NVRAM config store reads as valid"): short-circuit BOTH leaf
-    #   validators to return 0 (=valid). 0x41018cdc/0x41018d88/0x41018868 all funnel through these two,
-    #   so every config-init loop in the module converges. Each validator becomes `mov r0,#0; bx lr`
-    #   (no stack use, callee-saved regs untouched -> safe to skip the push/pop).
-    # VERIFIED (Renode, on-disk patched, RunFor 0.15s): distinct PCs 7432 -> 9751 (>8452); the config
-    #   spin + scheduler churn vanish from the hot set; main-init advances past the netcfg link-check
-    #   (0x410221b4) into app-init 0x410a4xxx; KernelMain returns (0x4109c1ac) and the INTEGRITY idle
-    #   loop 0x4100ee28 now RUNS (842 hits, was 0). 0 CPU faults (data-abort 0x410bb1c4 / undef 0x410bc164
-    #   never fire), clean "Machine paused". NEXT wall (Gate 7, distinct issue): with config solved the
-    #   boot thread finishes synchronous init and the idle task hits `wfi` @0x410a4564; no timer/tick is
-    #   modeled (Gate-3 family) so the CPU sleeps forever and ilomain's task 0x410a3908 is never
-    #   scheduled -> needs a periodic timer IRQ source, not a kernel patch.
-    (0x410185a4, 0xe92d4020, 0xe3a00000, "Gate 6: iodion config validator(type-3) -> mov r0,#0 (empty NVRAM reads valid)"),
-    (0x410185a8, 0xe1a05000, 0xe12fff1e, "Gate 6: iodion config validator(type-3) -> bx lr"),
-    (0x41018600, 0xe92d4020, 0xe3a00000, "Gate 6: iodion config validator(type-1) -> mov r0,#0 (empty NVRAM reads valid)"),
-    (0x41018604, 0xe1a05000, 0xe12fff1e, "Gate 6: iodion config validator(type-1) -> bx lr"),
+    # Gate 6 retired: shared SRAM is now modeled. Preserve native config magic,
+    # version and checksum checks so blank SRAM selects the firmware's defaults.
+    # Forcing validity left version zero and made NetworkService retry writes
+    # with error 3 forever (verified attempt155, 2026-09-07).
+
 ]
 
 def main(src, dst):

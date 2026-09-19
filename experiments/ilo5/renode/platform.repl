@@ -22,8 +22,12 @@ lowram: Memory.MappedMemory @ sysbus 0x00000000          // null page + low scra
     size: 0x100000
 dram: Memory.MappedMemory @ sysbus 0x41000000            // DRAM / kernel-load region (memtest target)
     size: 0x8000000
-phyram: Memory.MappedMemory @ sysbus 0x80000000          // 0x80F00000/0x84F00000 PHY data-lane test region
-    size: 0x5000000
+gxp_scan: Python.PythonPeripheral @ sysbus 0x80000000   // native MR80000 GPIO scan page
+    size: 0x1000
+    initable: true
+    filename: "@PERIPHERALS@/gxp_scan.py"
+phyram: Memory.MappedMemory @ sysbus 0x80001000          // preserve adjacent PHY data-lane test region
+    size: 0x4fff000
 cfgram: Memory.MappedMemory @ sysbus 0xCEFF0000          // config region bootblock writes+verifies
     size: 0x100000
 

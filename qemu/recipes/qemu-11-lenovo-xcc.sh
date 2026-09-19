@@ -11,4 +11,5 @@ QEMU_DATA_FILES=()
 QEMU_PATCHES=(
   "$ROOT/qemu/patches/ftgmac100-rx-descriptor-reuse.patch"
   "$ROOT/qemu/patches/lenovo-xcc-fpga-emmc-gp0.patch"
+  "$ROOT/qemu/patches/lenovo-xcc-timer-frequency.patch"
 )

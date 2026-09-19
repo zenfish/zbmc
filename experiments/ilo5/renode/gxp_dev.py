@@ -1,8 +1,10 @@
 # gxp_dev.py - named stub for GXP device controller @0xD1000000 (ASCII-only for IronPython).
 # Logs accesses, returns ledger values (default 0). Observed: read 0x20, write byte 0x8 -> 0x24.
 if request.IsInit:
+    TRACE_ENABLED = False
     REGISTERS = {
         0x20: 0x00000000,
+        0x3b: 0x20,  # Primary interface has a valid non-NC-SI PHY.
     }
     # Gate 5: gxp_dev @0xD1000000 is a register MAILBOX. The driver poll @0x41021834 does:
     #   strb cmd,[0x34] ; r3=[0x30] ; cmp cmd,(r3>>24) ; if eq -> result = r3 & 0x00ffffff
@@ -18,10 +20,14 @@ elif request.IsRead:
         request.Value = ((LASTCMD[0] & 0xff) << 24) | 0x80
     else:
         request.Value = REGISTERS.get(request.Offset, 0x00000000)
-    self.InfoLog("gxp_dev READ  off=0x%x -> 0x%x" % (request.Offset, request.Value))
+    if TRACE_ENABLED:
+        self.InfoLog("gxp_dev READ  off=0x%x -> 0x%x" % (request.Offset, request.Value))
+elif request.IsUser:
+    TRACE_ENABLED = bool(request.Value)
 else:
     if request.Offset == 0x34:
         LASTCMD[0] = request.Value & 0xff      # remember the command byte to echo at 0x30
     else:
         REGISTERS[request.Offset] = request.Value
-    self.InfoLog("gxp_dev WRITE off=0x%x val=0x%x" % (request.Offset, request.Value))
+    if TRACE_ENABLED:
+        self.InfoLog("gxp_dev WRITE off=0x%x val=0x%x" % (request.Offset, request.Value))

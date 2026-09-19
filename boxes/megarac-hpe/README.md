@@ -1,73 +1,56 @@
-<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=28cea9cedddb4a076f4f4cbe8e35e2d0faf9a99c6de594907114d9f608cc4ad7 body-sha256=c4d7b816dbf32a39605f899f33fc558f71bfb610bee3dfda585527348486af88 -->
+<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=4f8501a27f5254386d73d83b4e1c6b34a2b463222f98ea2269f93cc5cd877f5a body-sha256=eb74f109c5e62bd350d9a6adbf5c1595d05818313fd63a1693a4d8acac455784 -->
 
-**Historical investigation record (2026-07-28).** Current release acceptance is ICMP plus retained IPMI. Redfish/Web-UI are unavailable, vendor SSH is absent, and the 2026-08-27 cold run took 8m07s total; its fourth attempt succeeded after three automatic rerolls. Injected blank-password network shells are disabled unless requested. Use the repository README, SECURITY.md, and `zbmc megarac-hpe status -v` for current behavior.
+zbmc box · verified 2026-09-08
 
-# Virtual HPE Cray XD670 BMC
+# HPE XD670 MegaRAC on QEMU
 
-AMI **MegaRAC SP-X** (Linux 5.4.184-ami) on Aspeed **AST2600**, emulated with `qemu-system-arm -M ast2600-evb`.
+A cold boot of the preserved AMI MegaRAC SP-X firmware on the AST2600 model. Native IPMI, authenticated Redfish, and the vendor Web-UI login/dashboard path are required.
 
-Firmware: `XD670_BMC_v1.27_signed.bin.hpm` · zoo box `zbmc megarac-hpe` · 2026-07-28
+## IPMI
 
-## Why this box
+Verified RMCP+ on UDP/623 with `admin`/`superuser`.
 
-The HPE Cray XD670 (a Gigabyte **G593** platform, 8× NVIDIA HGX H100/H200) does **not** run iLO. Its BMC is AMI MegaRAC SP-X — the same stack Eclypsium hit in [BMC&C Part 3](https://eclypsium.com/blog/ami-megarac-vulnerabilities-bmc-part-3/) with **CVE-2024-54085** (unauthenticated Redfish takeover via a crafted `X-Server-Addr` header). Eclypsium confirmed their work on the XD670 "+ Qemu" but published no emulation recipe; this box is that recipe, derived independently. First MegaRAC-on-Gigabyte entry in the zbmc zoo.
+## Redfish + Web UI
 
-## Firmware anatomy (HPM → bootable pieces)
+Managers plus Web-UI session/dashboard APIs must stay healthy for 60 seconds.
 
-The `.hpm` is a PICMGFWU (HPM.1) wrapper around AMI **FMH** modules — **not** a linear flash image, so you can't just `dd` a flash and boot it. `extract.sh` carves:
+## Warm start
 
-| Piece | File offset | Notes |
-|----|----|----|
-| Kernel FIT (u-boot fitImage) | `0x37502CF` | Linux 5.4.184-ami, load 0x80001000; `dumpimage -p 0` for the raw Image |
-| Rootfs (squashfs, xz) | `0x56028F` | 49.9 MiB; booted as a RAM disk (`root=/dev/ram0`) |
-| /conf, /bkupconf (JFFS2) | `0x12028F`, `0x2C028F` | placed into a 64 MB NOR image with **named** mtd partitions |
+Broken: the saved ASPEED SRAM is 0x17000 bytes; current QEMU requires 0x18000.
 
-## Boot recipe & gotchas
+## Start and use it
 
-- qemu `-kernel` cannot unpack a FIT — extract the raw kernel `Image` first.
-- Built-in `ram0` caps at 43008 KiB but the rootfs is 51108 KiB → must pass `ramdisk_size=131072`.
-- Console is **ttyS4** (AST2600 UART5), matching the firmware's baked-in bootargs.
-- Attaching the flash via `-drive if=mtd` needs it to be **exactly 64 MB** (FMC models a `w25q512jv`).
-- `mountall.sh` finds `/conf` & `/bkupconf` by **name** in `/proc/mtd`, so the `mtdparts=` partition names must match. Empty conf partitions are auto-populated from `/etc/defconfig`.
-- Console login: **sysadmin / superuser** (MegaRAC factory default; uid 0, restricted `defshell`). `init=/bin/sh` gives an unrestricted root shell.
+    export ZBMC_POOL=10.250.0
+    sudo -E ./tools/zbmc megarac-hpe up --deadline 900
+    ./tools/zbmc megarac-hpe status
+    ./tools/zbmc megarac-hpe ipmi mc info
+    curl -sk -u admin:superuser https://10.250.0.40/redfish/v1/Managers
+    sudo -E ./tools/zbmc megarac-hpe stop
 
-## Status
+Expected cold READY time is about seven minutes. Authenticated Managers alternated between success and failure twice during initialization; READY is withheld until all functional probes remain healthy through the full hold.
 
-Working
+## What was repaired
 
-Full MegaRAC userland boots: real `/sbin/init`, `/conf` from JFFS2, config generated, eth0 gets DHCP, redis + event-service (luajit) + sync-agent + lighttpd + **IPMIMain** all up. Interactive console + root shell. **External Redfish ServiceRoot is reachable**: `curl -sk https://<ip>/redfish/v1/` → *AMI Redfish Server, Redfish 1.11.0*. The CVE-2024-54085 lua is present at `/usr/local/redfish/extensions/host-interface/host-interface-support-module.lua` (v1.27 is post-patch: the `X-Server-Addr` bypass is rejected).
+1.  Firmware-info FMH preserved. The generated NOR had omitted the 0x140-byte module at HPM offset `0x3ef028f`. Without it, `/proc/ractrends/Helper/FwInfo` lacked `FW_CODEBASEVERSION`, and `GetDevID` called `strncpy(destination, NULL, 8)`.
+2.  Fixed partitions encoded in the DTB. The QEMU image uses explicit uboot, conf, bkupconf, extlog, www, and root ranges instead of vendor `ami,spx-fmh` discovery.
+3.  The accepted rootfs behavior restored. KCS1–3 remain enabled; the premature `rc-init-complete` marker, SIGSEGV preload tracer, and timing-gate heartbeat are absent. IPMIMain diagnostics remain visible.
+4.  Readiness made functional. IPMI, authenticated Redfish Managers, and the Web UI's own session/dashboard APIs are all required continuously for 60 seconds.
 
-The IPMIMain SIGSEGV fix (Ghidra RE)
+## Rebuild from the HPM
 
-`IPMIMain` used to SIGSEGV at startup, and after 15 crashes `procmgr` reboots the BMC (reboot loop). The reported PC `0x2c004` was a red herring — it's the signal handler; the real fault is `MsgHndlr` @`0x14864` in `libipmimsghndlr.so` dereferencing an **uninitialised field of the per-instance `g_BMCInfo[]` slot**. Two root causes, both emulation gaps:
+    boxes/megarac-hpe/build-from-hpm.sh work/megarac-hpe-build
 
-- **Missing `/conf/BMC` symlink.** `IPMIMain` opens the literal path `/conf/BMC/IPMI.conf` to build the interface table; nothing creates the `/conf/BMC → BMC1/ast2600evb_ami` symlink under qemu. Fix: seed `/conf` from `/etc/defconfig` + create the symlink before first launch (in `etc/init.d/ipmistack`, sentinel-gated so it survives respawns).
-- **Interfaces with no qemu hardware.** `MsgHndlr` spawns one thread per enabled interface and faults on those whose hardware qemu doesn't model — SERIAL (`ttyS2`) + SOL (`ttyS3`) (kernel only brings up `ttyS0/ttyS4`), plus IPMB/SMBUS/SMM. Fix: disable them in the seeded `IPMI.conf`; keep LAN, UDS, KCS1-3, BT.
+The builder verifies HPM SHA-256 `4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76`, fixes the SquashFS creation time, and normalizes patched files to the firmware build epoch. Two independent builds compared byte-for-byte equal. The accepted bundle is published without replacing historical files under `megarac-hpe/cold-20260908/`.
 
-Both are applied by `qemu-patch-rootfs.sh` (invoked from `extract.sh`) — no binary patching. Result: **boots stable — no SIGSEGV, no reboot loop** — and external Redfish ServiceRoot is reachable.
+| Artifact | SHA-256 |
+|----|----|
+| kernel.Image | 94843f212aaccfe311b34b874711ccbb387e5fe9d8a6caf4e3583bfbc18958e1 |
+| dtb-a1.dtb | 57699dc066fd995075f234acd9b489461bda28a9e6f91b6b275363cb338b5939 |
+| rootfs.sqfs | d757b2ee0654c7a125e24316d2cfcb05f5919d0962a6901f71f1f0a9a9239b62 |
+| mtdflash.bin | d64412d0d0c13fc6bb03f52ea35bedf8762919a5c069c51a808e5e374b8e252e |
 
-IPMI + auth now GREEN
+## Evidence boundary
 
-Two more RE passes made IPMIMain run stably and provision its user, so **IPMI 2.0 RMCP+ and authenticated Redfish both work**:
+The normal contract verifies vendor IPMI and Redfish plus successful Web-UI session creation and administrator dashboard data. A rendered-browser screenshot was unavailable in this session. Vendor SSH is absent. Optional injected Dropbear, telnet, direct root console, and SMASH replacement are diagnostic substitutions; enable them only in an isolated lab with `ZBMC_INSECURE_LAB_ACCESS=1`.
 
-- **Node-Manager self-stop.** `IPMIConf.c` refuses to run if `NM_IPMB_BUS` ∈ {0,1,2} points at a disabled IPMB bus. Set `NM_IPMB_BUS=0xFF` (≥3 = disable). Also disable **BT** — the central MsgHndlr thread faults on it too. qemu ast2600-evb backs only LAN + UDS + KCS.
-- **Empty user table.** Once stable, IPMIMain auto-provisions the MegaRAC default IPMI user `admin` / `superuser` (Administrator, LAN channel 1) into `/conf/BMC1/UserConfig.ini`. Redfish shares that table via `pam_ipmi.so`. (My earlier failures used `sysadmin` — the Linux/console account — not the IPMI user.)
-
-Verified: `ipmitool -I lanplus -U admin -P superuser mc info` → Gigabyte MfgID 15370, IPMI 2.0; `curl -u admin:superuser https://<ip>/redfish/v1/Managers` → real ManagerCollection JSON. SEGV=0, no reboot loop.
-
-Reliable via warm snapshot (~4s restore)
-
-IPMIMain hits a nondeterministic message-handler race on cold boot (central-MsgHndlr NULL-deref on an early client message; `maxcpus=1`/unloaded host don't remove it) — a good roll is fully green, a bad roll crash-loops. This paragraph records the historical snapshot-first experiment; current starts are cold by default and `zbmc megarac-hpe start --warm` is explicit.
-
-**Address:** loopback `127.0.0.1` — IPMI `:5623`, Redfish `:5443`, ssh `:5022`. (Real-IP lo0-alias hostfwd serves Redfish/TCP fine, but qemu SLIRP mangles RMCP+'s multi-packet UDP on an alias, so IPMI-623 only stays reliable on loopback.) Verified: `ipmitool -I lanplus -H 127.0.0.1 -p 5623 -U admin -P superuser mc info` → Gigabyte MfgID 15370; `curl -sk -u admin:superuser https://127.0.0.1:5443/redfish/v1/Managers` → real JSON.
-
-## Run it
-
-    cd /Volumes/yyy/phd/bmc/HP/cray/xd670-virtual
-    ./extract.sh                 # regenerate artifacts from the HPM (one-time)
-    ./boot-cray.sh               # raw root shell (init=/bin/sh)
-    ./boot-cray-svc.sh           # full init + networking (console login sysadmin/superuser)
-
-    zbmc megarac-hpe console     # via the zoo dispatcher
-
-HPE Cray XD670 BMC · MegaRAC SP-X v1.27 · AST2600 · qemu ast2600-evb · part of the zbmc zoo.
+Detailed evidence: [EMULATION-STATUS.html](EMULATION-STATUS.md).

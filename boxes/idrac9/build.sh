@@ -34,6 +34,7 @@ for e in "${BUNDLE[@]}"; do
   [ "$(sha "$out")" = "$want" ] || { echo "SHA-256 mismatch on $f" >&2; exit 1; }
 done
 chmod 600 "$WD/img/vmkey"
+WD="$WD" "$HERE/build-p4.sh"
 
 echo "[*] bundle ready in $WD"
 echo "next:  ./tools/zbmc idrac9 start ; ./tools/zbmc idrac9 ipmi mc info"

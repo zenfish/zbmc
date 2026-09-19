@@ -10,16 +10,33 @@ bash -n "$box/zbmc.box"
 
 grep -Fxq 'ZBMC_QEMU_MAJOR=11' "$box/zbmc.box"
 grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
+grep -Fxq 'ZBMC_NETWORK_MODE=tap' "$box/zbmc.box"
+grep -Fxq 'ZBMC_TAP=ztap-irmc2' "$box/zbmc.box"
+grep -Fxq 'ZBMC_MAC=52:54:00:fa:42:02' "$box/zbmc.box"
 grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_DISABLED_SERVICES="redfish"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_READY_DEADLINE=900' "$box/zbmc.box"
 grep -Fxq "ZBMC_READY_GREP='INIT: Entering runlevel: 3'" "$box/zbmc.box"
 grep -Fq 'source_flash_sha256=89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86ba96d6016ce2ed' "$box/build.sh"
 
-grep -Fq -- '-nic user -nic user' "$box/boot.sh"
-grep -Fq -- '-nic "user,net=192.168.2.0/24' "$box/boot.sh"
-grep -Fq 'hostfwd=udp:$IP:$IPMI_PORT-:623' "$box/boot.sh"
-grep -Fq 'hostfwd=tcp:$IP:$HTTPS_PORT-:443' "$box/boot.sh"
+grep -Fq 'tap,id=net2,ifname=$TAP2,script=no,downscript=no' "$box/boot.sh"
+grep -Fq 'zbmc_ip=$IP zbmc_gateway=10.0.0.1' "$box/boot.sh"
+grep -Fq 'ZBMC_TAP_NETWORK_READY $zbmc_ip' "$box/build.sh"
+grep -Fq 'busybox ifconfig eth0 "$zbmc_ip" netmask 255.0.0.0 up' "$box/build.sh"
+grep -Fq '8 10.0.0.1 eth0 1800' "$box/zbmc.box"
+python3 - "$box/build.sh" <<'PY'
+import ast
+import pathlib
+import re
+import subprocess
+import sys
+
+text = pathlib.Path(sys.argv[1]).read_text()
+match = re.search(r'addition = (""".*?""")', text, re.DOTALL)
+assert match, "missing derived initramfs addition"
+addition = ast.literal_eval(match.group(1))
+subprocess.run(["bash", "-n"], input=addition, text=True, check=True)
+PY
 grep -Fq 'irmc_no_redfish' "$box/boot.sh"
 grep -Fq 'initramfs-shell.cpio.gz' "$box/boot.sh"
 grep -Fq 'irmc_diag_shell' "$box/boot.sh"

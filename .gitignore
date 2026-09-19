@@ -18,3 +18,4 @@ __pycache__/
 
 # local working notes, not part of the repo
 Notes.changes
+build/

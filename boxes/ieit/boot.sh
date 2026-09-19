@@ -9,6 +9,8 @@ IP="${IP:-127.0.0.1}"
 SSH_PORT="${SSH_PORT:-5022}"
 HTTPS_PORT="${HTTPS_PORT:-5443}"
 IPMI_PORT="${IPMI_PORT:-5623}"
+TAP="${TAP:-ztap-ieit}"
+MAC="${MAC:-52:54:00:fa:00:41}"
 SOCK="${SOCK:-$WD/serial.sock}"
 QMP="${QMP:-$WD/qmp.sock}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
@@ -26,7 +28,8 @@ nohup "$QEMU_BIN" \
     -device "loader,file=$WD/service-ramdisk.uimage,addr=0x85000000,force-raw=on" \
     -display none -monitor none \
     -qmp "unix:$QMP,server=on,wait=off" \
-    -nic "user,hostname=ieit,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623" \
+    -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no" \
+    -net "nic,netdev=bmcnet,macaddr=$MAC" \
     -chardev "socket,id=serial0,path=$SOCK,server=on,wait=off,logfile=$CONSOLE_LOG,logappend=off" \
     -serial chardev:serial0 >"$LAUNCH_LOG" 2>&1 &
 echo "$!"

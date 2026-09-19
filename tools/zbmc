@@ -109,6 +109,41 @@ _zbmc_lo_alias(){
 }
 export -f _zbmc_lo_alias
 
+_zbmc_network_prepare(){
+  [ "${ZBMC_NETWORK_MODE:-user}" = tap ] || return 0
+  local tap owner taps="${ZBMC_TAPS:-${ZBMC_TAP:-}}"
+  [ -n "$taps" ] || { echo "$ZBMC_NAME: TAP mode requires ZBMC_TAP or ZBMC_TAPS" >&2; return 1; }
+  [[ "${ZBMC_MAC:-}" =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]] || {
+    echo "$ZBMC_NAME: TAP mode requires a valid stable ZBMC_MAC" >&2
+    return 1
+  }
+  owner=${SUDO_USER:-${USER:-$(id -un)}}
+  for tap in $taps; do
+    [[ "$tap" =~ ^[a-zA-Z0-9_.-]+$ ]] && [ "${#tap}" -le 15 ] || {
+      echo "$ZBMC_NAME: invalid TAP name '$tap'" >&2
+      _zbmc_network_cleanup
+      return 1
+    }
+    "$_SELF/zbmc-net" add-tap "$tap" "$owner" "$ZBMC_IP" "$ZBMC_MAC" || {
+      _zbmc_network_cleanup
+      return 1
+    }
+  done
+  if [ "$(id -u)" = 0 ]; then ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
+  else sudo -n ip addr del "$ZBMC_IP/32" dev lo 2>/dev/null || true
+  fi
+  ZBMC_CAPTURE_INTERFACES="${ZBMC_CAPTURE_INTERFACES:-br-zbmc $taps}"
+  export ZBMC_CAPTURE_INTERFACES
+}
+
+_zbmc_network_cleanup(){
+  [ "${ZBMC_NETWORK_MODE:-user}" = tap ] || return 0
+  local tap
+  for tap in ${ZBMC_TAPS:-${ZBMC_TAP:-}}; do
+    "$_SELF/zbmc-net" del-tap "$tap" >/dev/null 2>&1 || true
+  done
+}
+
 REGISTRY=( "$_REPO"/boxes/*/zbmc.box )
 
 boxname_of(){ ( set -u; . "$1" 2>/dev/null; echo "${ZBMC_NAME:-}" ); }
@@ -126,6 +161,7 @@ _zbmc_warm_state(){
   echo READY
 }
 boxwarm_of(){ ( set -u; . "$1" 2>/dev/null; _zbmc_warm_state ); }
+boxnetwork_of(){ ( set -u; . "$1" 2>/dev/null; case "${ZBMC_NETWORK_MODE:-}" in user) echo USER/FORWARDED;; tap) echo TAP/DIRECT-L2;; *) echo UNDECLARED;; esac ); }
 find_box(){
   local want="$1" f name ip
   for f in "${REGISTRY[@]}"; do
@@ -156,7 +192,7 @@ usage(){
   echo "                    --no-wait leaves a supervised readiness watcher running"
   echo "  down|stop         stop captures, archive final evidence, then stop QEMU"
   echo "  restart           down then blocking up"
-  echo "  status [-f] [-v]  concise health; -v explains checks; -f follows startup (default verb)"
+  echo "  status [-f] [-v] [--all-services]  health; -v explains; -f follows; --all-services probes all six services"
   echo "  explain [RUN_ID]  explain the latest (or named) run and its terminal cause"
   echo "  evidence [RUN_ID] show the run evidence directory and its files"
   echo "  memdump [DIR]     pause once; dump guest RAM, QEMU process memory, and metadata"
@@ -189,6 +225,20 @@ _probe_lock_file(){
   fi
   [ -w "$file" ] || return 1
   printf '%s\n' "$file"
+}
+
+_probe_group_lock(){
+  [ "${ZBMC_SERIAL_SERVICE_PROBES:-0}" = 1 ] || return 0
+  command -v flock >/dev/null 2>&1 || return 0
+  local lock_file
+  lock_file=$(_probe_lock_file services) || return 0
+  exec 7<>"$lock_file" || return 0
+  flock -w "${ZBMC_SERIAL_PROBE_LOCK_WAIT:-120}" 7
+}
+
+_probe_group_unlock(){
+  [ "${ZBMC_SERIAL_SERVICE_PROBES:-0}" = 1 ] || return 0
+  exec 7>&- 2>/dev/null || true
 }
 
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
@@ -245,14 +295,24 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
   [ "$pw" = 2 ] && { echo "authfail||password rejected"; return; }
   echo "fail||no answer (warming/down)"; }
 
+_zbmc_ssh_check(){
+  if declare -F zbmc_ssh_health >/dev/null; then
+    zbmc_ssh_health
+  else
+    local output
+    output=$(zbmc_ssh "echo up") && grep -q up <<<"$output"
+  fi
+}
+export -f _zbmc_ssh_check
+
 _probe_ssh(){
-  local cmd='.'" '$BF'"'; zbmc_ssh '\''echo up'\'''
+  local cmd='{ [ ! -f "$1/zbmc.conf" ] || . "$1/zbmc.conf"; } && . "$2" && _zbmc_ssh_check'
   if command -v flock >/dev/null 2>&1; then
     local lock_file; lock_file=$(_probe_lock_file ssh) || { echo "fail||probe lock unavailable"; return; }
     exec 8<>"$lock_file" || { echo "fail||probe lock unavailable"; return; }
     flock -w 6 8 || { echo "fail||probe busy"; return; }
   fi
-  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" 2>/dev/null | grep -q up; then
+  if timeout -s KILL "${ZBMC_SSH_PROBE_TIMEOUT:-10}" bash -c "$cmd" zbmc-ssh-probe "$_REPO" "$BF" >/dev/null 2>&1; then
     echo "ok|zbmc $ZBMC_IP ssh${ZBMC_SSH_NOTE:+; $ZBMC_SSH_NOTE}|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
@@ -323,9 +383,9 @@ _need_root(){ # verbs that bind privileged ports or control qemu need root
 BOX="$1"; shift
 # `zbmc list` / `zbmc -l` — box names plus reserved IPs (no status).
 if [ "$BOX" = list ] || [ "$BOX" = -l ] || [ "$BOX" = --list ]; then
-  printf "%-20s %-15s %s\n" "NAME" "RESERVED IP" "WARM"
+  printf "%-20s %-15s %-16s %s\n" "NAME" "RESERVED IP" "NETWORK" "WARM"
   for f in "${REGISTRY[@]}"; do [ -f "$f" ] || continue
-    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %-15s %s\n" "$n" "$(boxip_of "$f")" "$(boxwarm_of "$f")"
+    n="$(boxname_of "$f")"; [ -n "$n" ] && printf "%-20s %-15s %-16s %s\n" "$n" "$(boxip_of "$f")" "$(boxnetwork_of "$f")" "$(boxwarm_of "$f")"
   done
   exit 0
 fi
@@ -655,9 +715,12 @@ case "$VERB" in
         fi
         _zr_event BUILD ready "$_rmsg"
       fi
-    # zbmc_boot self-elevates (sudo), sets the loopback alias + /etc/hosts, and binds service ports
-    # directly — the box is reachable at its real IP the moment services come up. No socat/net-up step.
+    _zbmc_network_prepare || {
+      _zr_archive_logs; _zr_snapshot failure; _zr_event NETWORK failed 'host TAP preparation failed'; _zr_result failed NETWORK 'host TAP preparation failed'
+      echo "$ZBMC_NAME: network preparation failed; evidence: $ZBMC_RUN_DIR" >&2; exit 1
+    }
     qp=$(zbmc_boot) || {
+      _zbmc_network_cleanup
       _zr_archive_logs; _zr_snapshot failure; _zr_event LAUNCH failed 'box launcher returned failure'; _zr_result failed LAUNCH 'box launcher returned failure'
       echo "$ZBMC_NAME: boot failed; evidence: $ZBMC_RUN_DIR" >&2; exit 1
     }
@@ -665,6 +728,7 @@ case "$VERB" in
     if [ -z "$qp" ] || ! ps -p "$qp" >/dev/null 2>&1; then
       echo "$ZBMC_NAME: boot failed — QEMU did not stay running; check $LOG" >&2
       rm -f "$PIDF"
+      _zbmc_network_cleanup
       _zr_archive_logs; _zr_snapshot failure; _zr_event QEMU failed 'QEMU did not stay running'; _zr_result failed QEMU 'QEMU did not stay running'
       exit 1
     fi
@@ -683,14 +747,14 @@ case "$VERB" in
     # Bring up a configured HTTP service once SSH is reachable. --no-web disables only Web-UI;
     # Redfish remains independent and may use the same box hook.
     if [[ " $ZBMC_REQUIRED_SERVICES " == *' redfish '* ]] || { [ "$do_web" = 1 ] && [[ " $ZBMC_REQUIRED_SERVICES " == *' webui '* ]]; }; then
-      nohup bash -c '. "$1"
+      nohup bash -c '{ [ ! -f "$9/zbmc.conf" ] || . "$9/zbmc.conf"; } && . "$1" || exit
         ZBMC_IP="$2"; SSH_PORT="$3"; IPMI_PORT="$4"; WEB_PORT="$5"; qp="$6"
         ZBMC_DIR="$7"; ZBMC_HOST="$8"
         for i in $(seq 1 240); do
           ps -p "$qp" >/dev/null 2>&1 || exit
-          if zbmc_ssh "echo up" 2>/dev/null | grep -q up; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
+          if _zbmc_ssh_check >/dev/null 2>&1; then sleep 20; ZBMC_AUTO_WEB=1 zbmc_web; exit; fi
           sleep 8
-        done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" \
+        done' bash "$BF" "$ZBMC_IP" "$SSH_PORT" "$IPMI_PORT" "$WEB_PORT" "$qp" "$ZBMC_DIR" "$ZBMC_HOST" "$_REPO" \
         </dev/null >"$ZBMC_DIR/web-bringup.log" 2>&1 &
       echo $! > "$ZBMC_DIR/web-bringup.pid"
     fi
@@ -730,7 +794,9 @@ case "$VERB" in
       fi
       rm -f "$PIDF"
       echo "$ZBMC_NAME stopped (qemu $p exited)"
-    else echo "$ZBMC_NAME not running"; fi ;;
+    else echo "$ZBMC_NAME not running"; fi
+    declare -F zbmc_post_stop >/dev/null && zbmc_post_stop
+    _zbmc_network_cleanup ;;
   restart)
     _restart_args=()
     while [ $# -gt 0 ]; do
@@ -760,11 +826,12 @@ case "$VERB" in
     _dump_dir="${1:-$ZBMC_DIR/memdumps/$(date -u +%Y%m%dT%H%M%SZ)-$(_zr_guid)}"
     "$_SELF/zbmc-memdump" "$p" "${QMP_SOCK:-${QMP:-}}" "$_dump_dir" "$ZBMC_NAME" ;;
   status)
-    _follow=0; ZBMC_DETAIL=0
+    _follow=0; _all_services=0; ZBMC_DETAIL=0
     for _a in "$@"; do case "$_a" in
       -f|--follow) _follow=1;;
       -v|--verbose) ZBMC_DETAIL=1;;
       -d|--debug) ZBMC_DETAIL=2;;
+      --all-services) _all_services=1;;
     esac; done
     _colored_state(){
       case "$1" in
@@ -944,13 +1011,15 @@ PY
       else _rmsg="unknown (no zbmc_ready)"; _rrc=1; fi
       if [ "$_rrc" = 0 ]; then
         _rmsg="${_rmsg#ready}"
-        echo "$(_colored_state READY)$_rmsg"
+        _rmsg="${_rmsg# }"
+        echo "$(_colored_state READY)${_rmsg:+ $_rmsg}"
       else
         echo "$(_colored_state FAILED) ($_rmsg)"
       fi
+      printf "%-9s : %s%s%s\n" "Auth" "$CP" "${ZBMC_AUTH_HINT:-$IPMI_USER/$IPMI_PW}" "$CZ"
       if [ "$_running" = 0 ]; then break; fi
-      if [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then
-        _l2st=na; _l2nt=
+      if [ "${ZBMC_NETWORK_MODE:-user}" = user ]; then
+        _l2st=unavailable; _l2nt="QEMU user networking cannot carry guest ICMP"
       elif ping -c 1 -W 1 "$ZBMC_IP" >/dev/null 2>&1; then
         _l2st=ok; _l2nt="$ZBMC_IP answers ICMP"
       else
@@ -962,27 +1031,37 @@ PY
       [ -w "$tmp_base" ] || tmp_base="${TMPDIR:-/tmp}"
       tmp=$(mktemp -d "${tmp_base%/}/status.XXXXXXXX" 2>/dev/null || mktemp -d "${TMPDIR:-/tmp}/zbmc-status.XXXXXXXX")
       _disabled(){
+        [ "$_all_services" = 0 ] || return 1
         [ "$1" = webui ] && [ "$_webui_run_disabled" = 1 ] && return 0
         [[ " ${ZBMC_DISABLED_SERVICES:-} " == *" $1 "* ]]
       }
-      _required(){ [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
+      _required(){ [ "$_all_services" = 1 ] || [ "$1" = l2 ] || [[ " ${ZBMC_REQUIRED_SERVICES:-ssh ipmi webui} " == *" $1 "* ]]; }
       _should_probe(){ [ "$1" = console ] || _required "$1"; }
       _probe_pids=()
+      _probe_group_lock || true
+      _probe_start(){
+        local _fn="$1" _out="$2"
+        if [ "${ZBMC_SERIAL_SERVICE_PROBES:-0}" = 1 ]; then
+          echo "$("$_fn")" > "$_out"
+        else
+          ( echo "$("$_fn")" > "$_out" ) & _probe_pids+=("$!")
+        fi
+      }
       if _disabled ssh; then echo "na||disabled" > "$tmp/ssh"
       elif ! _should_probe ssh; then echo "skip||not configured" > "$tmp/ssh"
-      else ( echo "$(_probe_ssh)" > "$tmp/ssh" ) & _probe_pids+=("$!"); fi
+      else _probe_start _probe_ssh "$tmp/ssh"; fi
       if _disabled ipmi; then echo "na||disabled" > "$tmp/ipmi"
       elif ! _should_probe ipmi; then echo "skip||not configured" > "$tmp/ipmi"
-      else ( echo "$(_probe_ipmi)" > "$tmp/ipmi" ) & _probe_pids+=("$!"); fi
+      else _probe_start _probe_ipmi "$tmp/ipmi"; fi
       if _disabled redfish; then echo "na||disabled" > "$tmp/redfish"
       elif ! _should_probe redfish; then echo "skip||not configured" > "$tmp/redfish"
-      else ( echo "$(_probe_redfish)" > "$tmp/redfish" ) & _probe_pids+=("$!"); fi
+      else _probe_start _probe_redfish "$tmp/redfish"; fi
       if _disabled webui; then echo "na||disabled" > "$tmp/webui"
       elif ! _should_probe webui; then echo "skip||not configured" > "$tmp/webui"
-      else ( echo "$(_probe_webui)" > "$tmp/webui" ) & _probe_pids+=("$!"); fi
+      else _probe_start _probe_webui "$tmp/webui"; fi
       if _disabled console; then echo "na||disabled" > "$tmp/console"
       elif ! _should_probe console; then echo "skip||not configured" > "$tmp/console"
-      else ( echo "$(_probe_console)" > "$tmp/console" ) & _probe_pids+=("$!"); fi
+      else _probe_start _probe_console "$tmp/console"; fi
       if declare -F zbmc_ncsi_health >/dev/null && [[ " ${ZBMC_REQUIRED_SERVICES:-} " != *' ncsi '* ]]; then
         ZBMC_REQUIRED_SERVICES="${ZBMC_REQUIRED_SERVICES:+$ZBMC_REQUIRED_SERVICES }ncsi"
       fi
@@ -990,7 +1069,7 @@ PY
       if [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' ncsi '* ]]; then
         _ncsi_expected=1
         if _disabled ncsi; then echo "na||disabled" > "$tmp/ncsi"
-        else ( echo "$(_probe_ncsi)" > "$tmp/ncsi" ) & _probe_pids+=("$!"); fi
+        else _probe_start _probe_ncsi "$tmp/ncsi"; fi
       fi
       _background_pids=("${_probe_pids[@]}")
       _si=0; _sf='|/-\'
@@ -1004,6 +1083,7 @@ PY
       done
       for _probe_pid in "${_probe_pids[@]}"; do wait "$_probe_pid"; done
       _background_pids=()
+      _probe_group_unlock
       [ -t 1 ] && printf '\r%*s\r' 64 ''
       IFS='|' read -r _sshst _sshds _sshnt < "$tmp/ssh"
       IFS='|' read -r _ipmist _ipmids _ipmint < "$tmp/ipmi"
@@ -1016,7 +1096,7 @@ PY
       _classify(){
         local raw="$1" service="$2"
         if _disabled "$service"; then _state=N/A; _why=disabled
-        elif [ "$service" = l2 ] && [ "${ZBMC_L2_REQUIRED:-1}" = 0 ]; then _state=N/A; _why="not configured"
+        elif [ "$service" = l2 ] && [ "$raw" = unavailable ]; then _state=UNAVAILABLE; _why="guest address is not directly reachable"
         elif [ "$raw" = na ]; then _state=N/A; _why=unsupported
         elif [ "$service" = console ]; then
           if [ "$raw" = ok ]; then _state=AVAILABLE; _why="operator access"
@@ -1054,9 +1134,9 @@ PY
       }
       _count(){
         local state="$1" why="$2" name="$3"
-        if [ "$state" = N/A ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
+        if [ "$state" = N/A ] || [ "$state" = UNAVAILABLE ]; then _na_n=$((_na_n+1)); _add_name _na_names "$name"; return; fi
         if [ "$state" = AVAILABLE ]; then
-          [[ " ${ZBMC_REQUIRED_SERVICES:-} " == *' console '* ]] || return
+          _required console || return
           _expected_n=$((_expected_n+1)); _ready_n=$((_ready_n+1)); _add_name _ready_names "$name"
           return
         fi
@@ -1101,7 +1181,13 @@ PY
         if [ "$_ncsi_expected" = 1 ]; then
           _row NC-SI "$_ncsistate" "$_ncsiwhy" "$_ncsids" "$_ncsint"
         fi
-        printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$ZBMC_NAME" "$CZ"
+        case "${ZBMC_NETWORK_MODE:-user}" in
+          user) _network="USER/FORWARDED (QEMU user networking; advertised IP is a host alias)"; _net_owner="host alias for $ZBMC_NAME" ;;
+          tap) _network="TAP/DIRECT-L2 (guest owns advertised IP)"; _net_owner="guest address for $ZBMC_NAME" ;;
+          *) _network="UNKNOWN"; _net_owner="network mode undeclared for $ZBMC_NAME" ;;
+        esac
+        printf "%-9s : %s\n" "Network" "$_network"
+        printf "%-9s : %s%s%s  (%s%s%s)\n" "Net (IP)" "$CP" "$ZBMC_IP" "$CZ" "$CC" "$_net_owner" "$CZ"
         if [ -n "${ZBMC_REMEDIATION:-}" ]; then
           printf "%-9s : %s (%s)\n" "Remediation" "$(_colored_state CONFIGURED)" "$ZBMC_REMEDIATION"
         else

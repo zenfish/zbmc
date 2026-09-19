@@ -14,8 +14,8 @@ CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 QEMU_BIN="${ZBMC_QEMU:-${QEMU:-qemu-system-arm}}"
 IP="${ZBMC_IP:-${IP:-10.0.6.66}}"
 HTTPS_PORT="${HTTPS_PORT:-443}"; SSH_PORT="${SSH_PORT:-22}"; TELNET_PORT="${TELNET_PORT:-23}"; IPMI_PORT="${IPMI_PORT:-623}"
-HOSTFWD="hostfwd=tcp:$IP:$HTTPS_PORT-:443,hostfwd=udp:$IP:$IPMI_PORT-:623"
-[ "${ZBMC_INSECURE_LAB_ACCESS:-0}" != 1 ] || HOSTFWD="$HOSTFWD,hostfwd=tcp:$IP:$SSH_PORT-:22,hostfwd=tcp:$IP:$TELNET_PORT-:23"
+TAP="${TAP:-ztap-hpe}"
+MAC="${MAC:-52:54:00:fa:00:40}"
 SNAP="${SNAP:-$WD/cray-snap.gz}"; SNAPFLASH="${SNAPFLASH:-$WD/cray-snap-flash.bin}"
 [ -f "$SNAP" ] && [ -f "$SNAPFLASH" ] || { echo "no snapshot ($SNAP / $SNAPFLASH) — run snapshot-megarac-hpe.sh on a green boot first" >&2; exit 1; }
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -23,7 +23,7 @@ MTDPARTS='mtdparts=1e620000.spi:1M(uboot),2M(conf),2M(bkupconf),1M(extlog),4M(ww
 APPEND="console=ttyS4,115200n8 root=/dev/ram0 ro rootfstype=squashfs ramdisk_size=131072 ramdisk_blocksize=4096 $MTDPARTS rootwait"
 # scope the kill to THIS box (hostname=megarac-hpe is in its hostfwd) — a bare
 # '-M ast2600-evb' match nukes every ast2600 zoo box (x14, asmb787, evb, ...).
-$SUDO pkill -9 -f 'hostname=megarac-hpe' 2>/dev/null || true; sleep 2
+$SUDO pkill -9 -f "ifname=$TAP" 2>/dev/null || true; sleep 2
 $SUDO rm -f "$WD/cray-qmp.sock" "$WD/cray.sock"
 cp -f "$SNAPFLASH" "$WD/cray-restore-flash.bin"   # fresh writable copy -> repeatable restore
 $SUDO "$QEMU_BIN" -M ast2600-evb -m 1024 -display none -no-reboot \
@@ -32,7 +32,8 @@ $SUDO "$QEMU_BIN" -M ast2600-evb -m 1024 -display none -no-reboot \
   -incoming "exec:gunzip -c < $SNAP" \
   -kernel "$WD/kernel.Image" -dtb "$WD/dtb-a1.dtb" -initrd "$WD/rootfs.sqfs" \
   -drive "file=$WD/cray-restore-flash.bin,format=raw,if=mtd" \
-  -net nic -net "user,$HOSTFWD,hostname=megarac-hpe" \
+  -netdev "tap,id=bmcnet,ifname=$TAP,script=no,downscript=no" \
+  -net "nic,netdev=bmcnet,macaddr=$MAC" \
   -append "$APPEND" >> "$WD/restore-console.log" 2>&1 &
 QP=$!
 disown $QP 2>/dev/null || true

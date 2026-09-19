@@ -71,4 +71,9 @@ grep -Fq 'git.trouble.org' "$repo/GETTING-STARTED.md" "$repo/boxes/idrac10/WARM-
 grep -Fq 'boxes/idrac10/WARM-START.md' "$repo/README.md" "$repo/GETTING-STARTED.md"
 grep -Fq 'Docker packages exact QEMU builds' "$repo/SECURITY.md"
 
+# Pandoc omits content outside <main>; preserve Lenovo's recovery evidence.
+grep -Fxq '## 13 September: native services recovered on TAP' "$repo/boxes/lenovo-xcc/index.md"
+grep -Fxq '## 13 September: isolated TAP warm recovery verified' "$repo/boxes/lenovo-xcc/index.md"
+grep -Fxq '## 13 September: cold verification failed' "$repo/boxes/lenovo-xcc/index.md"
+
 echo 'current documentation contract: PASS'
