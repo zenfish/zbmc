@@ -1,10 +1,12 @@
-<!-- html2md:auto source=README.html source-sha256=8be626c471aa1ff347a29a1e303b2dda8ef808f0fcc62fb5633d1c8a24a2cd2c body-sha256=e5c228e47ebcc1f7db4c79c5857f2e7436c9603ebff0e604ca0f62e72e8b4704 -->
+<!-- html2md:auto source=README.html source-sha256=7498771300f2e3f216406d0289f09e35095321304183f64262bb07d84c39028f body-sha256=72369f5d0ec9e971fbb87f4db62fc228b568b6e34c142972d619070d59730ab8 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
 Boot real vendor **BMC**s (Baseboard Management Controller) firmware under QEMU, driven by one dispatcher (`zbmc`), for reverse-engineering and security research on the out-of-band management stack (IPMI / RMCP+, Redfish, the web UI, the RAKP auth path) **without owning the physical server**.
 
-Invaluable for testing [zipmi](https://github.com/zenfish/zipmi) on a variety of BMCs.
+Currently *LINUX* only. In particular, I run it via Debian 13 on x86_64 hardware (a teeny tiny Lenovo ThinkCentre M715q, which is a pretty nifty system.) There are a variety of reasons for this, but for now, c'est la vie. I've rewritten this enough times to get really tired of it, and along the way an effort was made to have a set of tools that can easily (hopefully!) launch 'n monitor bmcs, along with some nicities like watching/logging into the console, dumping BMC ram, etc.
+
+It can be quite useful for testing things (e.g. [zipmi](https://github.com/zenfish/zipmi)) on a variety of BMCs.
 
 This is my own working zoo plus the tools, per-box boot recipes, a full field write-up, and an agent skill so others can reproduce it on their own images. C&C very welcome, as are new recipes/methods/improvements on what I have here. This turned out to be a bit more black magic than I'd anticipated beating these into submission (at least... mostly beaten... still a bit to do.)
 
@@ -16,11 +18,11 @@ There's a [GETTING-STARTED.md](GETTING-STARTED.md) doc that walks through the pr
 
 Resource sizing is guidance, not an enforced check. Individual BMCs request 128 MiB to 1 GiB of guest RAM; allow roughly 2 GiB host RAM and 5 GiB free disk for one-at-a-time use. Fleet timings in this README came from a four-core host and will be slower on smaller systems.
 
-> It aggregates vendor and research firmware and documents fleet-shared *default* credentials (calvin, factory IPMIKeys, CredVault keys, etc.). Those aren't repo secrets — they are already present in the source firmware or published research bundles; the value here is *documenting the danger*. The tracked tree contains no live/customer secrets or private keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
+> It aggregates vendor and research firmware and documents fleet-shared *default* credentials (calvin, factory IPMIKeys, CredVault keys, etc.). Those aren't repo secrets — they are already present in the source firmware or published research bundles. The tracked tree contains no live/customer secrets or private keys. Some fetched lab bundles include deliberately shared research identities; see [SECURITY.md](SECURITY.md).
 
 ## The denizens/animals
 
-`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records exact-build acceptance measured on the four-core Debby host; it is a reproducibility baseline, not a promise that every vendor service is complete.
+`zbmc list` shows these; run any with `sudo ./tools/zbmc <name> start`. Firmware isn't present in the current tree. `build.sh` fetches SHA-256-pinned vendor images and derived boot artifacts from the source listed in each build recipe; some are vendor downloads and some are project-mirror-only. The table records exact-build acceptance measured on my plucky four-core lenovo; it is a reproducibility baseline, not a promise that every vendor service is complete.
 
 | `zbmc` name | Accepted function | Exact-build result / measured cold start |
 |----|----|----|
@@ -36,7 +38,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **supermicro-x10** | forwarded SSH, IPMI, Redfish, Web-UI on its loopback alias; 60s stable hold | pass - 2m38s |
 | **idrac9** | ICMP, SSH, IPMI, vendor Web-UI; Redfish is unavailable in the P4 boot | pass - 10m31s |
 
-These times were measured with one BMC at a time on a Lenovo m715q (a small four-core Intel system). `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
+These times were measured with one BMC at a time. `zbmc` learns timing profiles from completed runs, but cold firmware startup remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with `start --warm` because QEMU machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
 Supermicro X10 uses the same loopback-alias allocation and standard service ports as the rest of the zoo. QEMU user networking forwards those ports to its private guest address.
 

@@ -43,14 +43,20 @@
     <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">zbmc — a zoo of virtual BMCs under QEMU</h1>
   </div>
 </div>
-
 <p>Boot real vendor <strong>BMC</strong>s (Baseboard Management
 Controller) firmware under QEMU, driven by one dispatcher
 (<code>zbmc</code>), for reverse-engineering and security research on
 the out-of-band management stack (IPMI / RMCP+, Redfish, the web UI, the
 RAKP auth path) <strong>without owning the physical server</strong>.</p>
-<p>Invaluable for testing <a
-href="https://github.com/zenfish/zipmi">zipmi</a> on a variety of
+<p>Currently <em>LINUX</em> only. In particular, I run it via Debian 13
+on x86_64 hardware (a teeny tiny Lenovo ThinkCentre M715q, which is a
+pretty nifty system.) There are a variety of reasons for this, but for
+now, c'est la vie. I've rewritten this enough times to get really tired
+of it, and along the way an effort was made to have a set of tools that
+can easily (hopefully!) launch 'n monitor bmcs, along with some nicities
+like watching/logging into the console, dumping BMC ram, etc.</p>
+<p>It can be quite useful for testing things (e.g. <a
+href="https://github.com/zenfish/zipmi">zipmi</a>) on a variety of
 BMCs.</p>
 <p>This is my own working zoo plus the tools, per-box boot recipes, a
 full field write-up, and an agent skill so others can reproduce it on
@@ -83,10 +89,9 @@ from a four-core host and will be slower on smaller systems.</p>
 <p>It aggregates vendor and research firmware and documents fleet-shared
 <em>default</em> credentials (calvin, factory IPMIKeys, CredVault keys,
 etc.). Those aren't repo secrets — they are already present in the
-source firmware or published research bundles; the value here is
-<em>documenting the danger</em>. The tracked tree contains no
-live/customer secrets or private keys. Some fetched lab bundles include
-deliberately shared research identities; see <a
+source firmware or published research bundles. The tracked tree contains
+no live/customer secrets or private keys. Some fetched lab bundles
+include deliberately shared research identities; see <a
 href="SECURITY.html">SECURITY.md</a>.</p>
 </blockquote>
 <h2 id="the-denizensanimals">The denizens/animals</h2>
@@ -96,7 +101,7 @@ present in the current tree. <code>build.sh</code> fetches
 SHA-256-pinned vendor images and derived boot artifacts from the source
 listed in each build recipe; some are vendor downloads and some are
 project-mirror-only. The table records exact-build acceptance measured
-on the four-core Debby host; it is a reproducibility baseline, not a
+on my plucky four-core lenovo; it is a reproducibility baseline, not a
 promise that every vendor service is complete.</p>
 <table>
 <thead>
@@ -142,16 +147,19 @@ is not a Unix shell; user networking, so no ICMP</td>
 <td>pass - 1m55s</td>
 </tr>
 <tr>
-<td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
+<td><strong><a
+href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
 <td>vendor Web-UI; user networking, so no ICMP; IPMI does not answer and
 Redfish is disabled</td>
 <td>partial - Web-UI pass in 9m40s; 15m cold readiness deadline</td>
 </tr>
 <tr>
-<td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
+<td><strong><a
+href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
 <td>vendor Web-UI; user networking, so no ICMP; IPMI receives requests
 without replying and SSH resets before key exchange</td>
-<td>partial - Web-UI READY in 46m06s including a 60s stable hold; 60m cold readiness deadline</td>
+<td>partial - Web-UI READY in 46m06s including a 60s stable hold; 60m
+cold readiness deadline</td>
 </tr>
 <tr>
 <td><strong>supermicro-x14</strong></td>
@@ -172,14 +180,13 @@ boot</td>
 </tr>
 </tbody>
 </table>
-<p>These times were measured with one BMC at a time on a Lenovo m715q (a
-small four-core Intel system). <code>zbmc</code> learns timing profiles
-from completed runs, but cold firmware startup remains load-sensitive.
-Warm snapshots are explicit for MegaRAC-HPE, X14, and iDRAC10 with
-<code>start --warm</code> because QEMU machine-version drift can
-invalidate a checkpoint. iDRAC9 and Lenovo XCC are cold-only. The iDRAC10 checkpoint is
-downloaded as a hash-pinned matched bundle from
-<code>git.trouble.org</code>; see <a
+<p>These times were measured with one BMC at a time. <code>zbmc</code>
+learns timing profiles from completed runs, but cold firmware startup
+remains load-sensitive. Warm snapshots are explicit for MegaRAC-HPE,
+X14, and iDRAC10 with <code>start --warm</code> because QEMU
+machine-version drift can invalidate a checkpoint. iDRAC9 and Lenovo XCC
+are cold-only. The iDRAC10 checkpoint is downloaded as a hash-pinned
+matched bundle from <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start
 runbook</a>.</p>
 <p>Supermicro X10 uses the same loopback-alias allocation and standard
@@ -193,7 +200,7 @@ Virtualizing BMC Firmware Was Hard</a>.</p>
 <p>Full walkthrough (with a glossary): <strong><a
 href="GETTING-STARTED.html">GETTING-STARTED.md</a></strong>. The short
 version:</p>
-<pre class="bash"><code># Debian 13 on x86_64
+<pre><code># Debian 13 on x86_64
 sudo apt install docker.io curl git ca-certificates util-linux-extra fakeroot squashfs-tools u-boot-tools \
   device-tree-compiler qemu-utils expect gcc-aarch64-linux-gnu sshpass socat \
   netcat-openbsd iproute2 iputils-ping tcpdump libarchive-tools \
@@ -207,13 +214,13 @@ sudo ./tools/zbmc openbmc start # boot vanilla OpenBMC (about 4m30s on the refer
 ./tools/zbmc openbmc web</code></pre>
 <p>For iDRAC10, the build installs both cold and warm artifacts. Check
 availability, then choose either path:</p>
-<pre class="bash"><code>./tools/zbmc list                     # iDRAC10 should show WARM READY
+<pre><code>./tools/zbmc list                     # iDRAC10 should show WARM READY
 sudo ./tools/zbmc idrac10 start --warm
 sudo ./tools/zbmc idrac10 start       # cold remains the default</code></pre>
 <p>No firmware is present in the current checkout; <code>build.sh</code>
 fetches what a box needs via the applicable box recipe or
 <code>firmware/download-fw.sh</code>:</p>
-<pre class="bash"><code>./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh openbmc</code></pre>
+<pre><code>./firmware/download-fw.sh            # all, or: ./firmware/download-fw.sh openbmc</code></pre>
 <p>Every fetched artifact is SHA-256 verified.
 <code>firmware/download-fw.sh</code> reports whether the source is a
 vendor URL or the project mirror; several derived boot bundles are
@@ -331,7 +338,7 @@ through <code>build.sh</code>; these commands reproduce it:</p>
 criteria for removing a variant are documented in <a
 href="docs/why-multiple-qemu-builds.html">Why zbmc Ships Multiple QEMU
 Builds</a>.</p>
-<pre class="bash"><code>tools/build-qemu --plan qemu-11-arm
+<pre><code>tools/build-qemu --plan qemu-11-arm
 tools/build-qemu qemu-11-arm
 tools/build-qemu qemu-11-idrac10
 
@@ -366,8 +373,8 @@ family:</p>
 <tr>
 <td>10.0.6.x</td>
 <td>Vendor firmware</td>
-<td>megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68),
-lenovo-xcc (.69)</td>
+<td>megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68), lenovo-xcc
+(.69)</td>
 </tr>
 <tr>
 <td>10.0.7.x</td>
@@ -394,7 +401,7 @@ lenovo-xcc (.69)</td>
 <p>If your network already uses the default 10.0.{6,7,8,9}.x range, copy
 <code>zbmc.conf.example</code> to <code>zbmc.conf</code> (gitignored)
 and set <strong>one</strong> of:</p>
-<pre class="bash"><code># Pool mode — relocate every box into any /24 you control (first 3 octets):
+<pre><code># Pool mode — relocate every box into any /24 you control (first 3 octets):
 ZBMC_POOL=10.250.0       # still in 10/8 but out of the way
 # ZBMC_POOL=192.168.9    # or a completely different block
 # → openbmc=.10, nvidia-obmc=.11, x10=.20, x14=.21,
@@ -424,7 +431,7 @@ reverse-engineering reports. Markdown-to-HTML uses the vendored
 writer. Edit the side without an <code>html2md:auto</code> or
 <code>zmd2html:auto</code> marker; the marked side is generated and will
 be overwritten. Regenerate or verify the pairs with:</p>
-<pre class="bash"><code>tools/install-pandoc-docs
+<pre><code>tools/install-pandoc-docs
 export PATH=&quot;$PWD/work/deps/pandoc-3.7.0.2/bin:$PATH&quot;
 ./tools/sync-docs               # verify pairs and same-format links; default and CI behavior
 ./tools/sync-docs --write       # regenerate marked siblings, then run the same check
