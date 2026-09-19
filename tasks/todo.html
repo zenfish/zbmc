@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=c913e62d766a8d59c85ffd0a5ff742930ba31e55f1a83e2fe81956844e6a9bae body-sha256=cd20fb9141142551c9a7bb2b2829657a0f69e3f0fde049ebe77e0c94765809a6 -->
+<!-- zmd2html:auto source-sha256=d973fa694f00d01cd5ea7dd10fbac43bfe9ae767a8548ae234ecc279a442abda body-sha256=576f539ca55eaffadeb572c373a7d03b2a11f969b7cacfea435358753be0bc12 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fix GitHub contract workflow</title>
+<title>Document copying files into an emulated BMC</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 <style type="text/tailwindcss">
@@ -41,10 +41,39 @@
 <div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
   <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
   <div>
-    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Fix GitHub contract workflow</h1>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Document copying files into an emulated BMC</h1>
   </div>
 </div>
 
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Trace the dispatcher and
+per-box shell, network, and image paths.</label></li>
+<li><label><input type="checkbox" checked="" />Document file and
+executable transfer in the main README, with per-box
+exceptions.</label></li>
+<li><label><input type="checkbox" checked="" />Verify command behavior,
+documentation pairs, links, and preservation of existing
+edits.</label></li>
+</ul>
+<h2 id="review">Review</h2>
+<p>Documented the existing SSH stdin path for five boxes, HTTP pull and
+serial text/base64 alternatives, all eleven boxes' transfer limits,
+executable compatibility, and cold/warm persistence. Added focused notes
+for X10, MegaRAC, iRMC, and Lenovo, plus an IEIT build-time insertion
+example. No runtime behavior changed.</p>
+<p>Verified all six documented SSH wrapper paths (including opt-in
+MegaRAC) with a transport double that checks exact binary stdin and
+command arguments. Executed the documented X10 base64 generator and
+decoded its output byte-for-byte, including NUL, CR/LF, and high bytes.
+Eleven documented shell blocks passed syntax checks; 34 local HTML
+links/anchors and all 47 documentation pairs passed. A second source
+review found no remaining substantive issues. No live guest boot,
+transfer, or IEIT firmware rebuild was performed on this macOS host.</p>
+<p>The pre-existing README Markdown edits were already present in its
+HTML body; verified equality before regenerating Markdown. Restored HTML
+as the unambiguous README source and preserved the existing prose and
+unrelated Lenovo runtime changes.</p>
+<h1 id="fix-github-contract-workflow">Fix GitHub contract workflow</h1>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="" />Inspect the original and
 follow-up GitHub Actions logs.</label></li>
@@ -61,7 +90,7 @@ generated-file, and multiple-file selection.</label></li>
 <li><label><input type="checkbox" checked="" />Verify focused and full
 contract suites and inspect the final diff.</label></li>
 </ul>
-<h2 id="review">Review</h2>
+<h2 id="review-1">Review</h2>
 <p>The original GitHub run failed because the new iLO5 contract requires
 <code>Crypto.Cipher.AES</code>, while the clean runner lacked that
 module. Two follow-up runs proved Ubuntu's
@@ -90,7 +119,7 @@ Markdown operator documentation.</label></li>
 <li><label><input type="checkbox" checked="" />Cold-boot and verify the
 60-second stability hold on Debby.</label></li>
 </ul>
-<h2 id="review-1">Review</h2>
+<h2 id="review-2">Review</h2>
 <p>The Lenovo XCC runtime preserves the vendor kernel and root
 filesystem, adds the minimum platform emulation required for the
 FPGA/eMMC startup path, and declares only the reproduced vendor WebUI.
@@ -119,7 +148,7 @@ default-config fastpath advances the former deadlock.</label></li>
 final default-config request and obtain guest network
 readiness.</label></li>
 </ul>
-<h2 id="review-2">Review</h2>
+<h2 id="review-3">Review</h2>
 <p>The live Debby run in
 <code>work/ilo5-debby-attempt-139/renode.log</code> proved the tracked
 <code>gxp_dev.py</code> fix is on-path and changes behavior in the

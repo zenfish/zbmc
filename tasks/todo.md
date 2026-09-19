@@ -1,3 +1,17 @@
+# Document copying files into an emulated BMC
+
+- [x] Trace the dispatcher and per-box shell, network, and image paths.
+- [x] Document file and executable transfer in the main README, with per-box exceptions.
+- [x] Verify command behavior, documentation pairs, links, and preservation of existing edits.
+
+## Review
+
+Documented the existing SSH stdin path for five boxes, HTTP pull and serial text/base64 alternatives, all eleven boxes' transfer limits, executable compatibility, and cold/warm persistence. Added focused notes for X10, MegaRAC, iRMC, and Lenovo, plus an IEIT build-time insertion example. No runtime behavior changed.
+
+Verified all six documented SSH wrapper paths (including opt-in MegaRAC) with a transport double that checks exact binary stdin and command arguments. Executed the documented X10 base64 generator and decoded its output byte-for-byte, including NUL, CR/LF, and high bytes. Eleven documented shell blocks passed syntax checks; 34 local HTML links/anchors and all 47 documentation pairs passed. A second source review found no remaining substantive issues. No live guest boot, transfer, or IEIT firmware rebuild was performed on this macOS host.
+
+The pre-existing README Markdown edits were already present in its HTML body; verified equality before regenerating Markdown. Restored HTML as the unambiguous README source and preserved the existing prose and unrelated Lenovo runtime changes.
+
 # Fix GitHub contract workflow
 
 - [x] Inspect the original and follow-up GitHub Actions logs.

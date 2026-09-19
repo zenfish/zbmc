@@ -16,6 +16,23 @@ vendor SSH is not part of the accepted path.</p>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>./build.sh megarac-hpe
 sudo ./tools/zbmc megarac-hpe start
 ./tools/zbmc megarac-hpe status -v</code></pre>
+<h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
+<p>The rebuilt cold service image provides a root Linux console. Confirm a shell prompt before sending
+commands; older warm images may still present a vendor login. Use the
+<a class="text-blue-700 underline" href="../../README.html#copy-from-a-guest-shell">shared guest-shell recipes</a>,
+or send a small command to the live console from the host:</p>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc megarac-hpe console 'printf "hello\n" &gt; /tmp/hello.txt; cat /tmp/hello.txt'</code></pre>
+<p class="mt-3"><code>zbmc megarac-hpe shell</code> starts a separate <code>init=/bin/sh</code> VM without
+the normal network/IPMI services; it does not attach to the running service VM.</p>
+<p class="mt-3">If you specifically want the existing injected SSH service in an isolated lab, enable it
+both when starting a stopped box and when invoking SSH. The default path leaves it disabled:</p>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo env ZBMC_INSECURE_LAB_ACCESS=1 ./tools/zbmc megarac-hpe start
+ZBMC_INSECURE_LAB_ACCESS=1 ./tools/zbmc megarac-hpe ssh -T 'cat &gt; /tmp/my-tool' &lt; ./my-tool
+cksum ./my-tool
+ZBMC_INSECURE_LAB_ACCESS=1 ./tools/zbmc megarac-hpe ssh 'cksum /tmp/my-tool'</code></pre>
+<p class="mt-3">After matching checksums, use <code>chmod 755 /tmp/my-tool</code> and execute it through
+the same shell. Match the guest ABI: the packaged lab Dropbear uses ARM soft-float because this modeled
+CPU lacks the VFP support that a hard-float binary would require. Uploads to <code>/tmp</code> are disposable.</p>
 <h2 class="text-xl font-semibold mt-6 mb-2">Documents</h2>
 <ul class="list-disc pl-6 space-y-1">
 <li><a class="text-blue-700 underline" href="README.html">Virtual HPE XD670 BMC</a></li>

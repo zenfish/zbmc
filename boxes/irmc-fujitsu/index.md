@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=b40f19e170a3377b84226380d4bc2868b2aea89c491b4d9043d82304818f43b7 body-sha256=161a36be7b9cedbb4a57c63046179be2af9a951e6f8aa190a06de998939ae835 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=440622c01c8d63c9d9a7c1f21ec199901b5ca5d31d25f53771e7bf46a81bbf40 body-sha256=268662522a186ac0403c47eab2cf15a05243635e7c2ff2fe18d8b636f7cd9701 -->
 
 # Fujitsu iRMC S6
 
@@ -21,6 +21,14 @@ The cold build downloads five SHA-256-pinned artifacts from `https://git.trouble
 - **Not accepted:** SSH reaches the vendor-gated `defshell`, not a Unix command shell.
 
 The Debby acceptance run `20260901T054304Z-62f6d82f-9aa2-4f98-8e5e-98a425cd2667` reached HTTP 200 at 9m22s and passed the stability hold at 9m40s.
+
+## Copying files
+
+The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the vendor-gated `defshell`. On the host, attach after startup and press Enter for the shell:
+
+    sudo ./tools/zbmc irmc-fujitsu console --nostderr
+
+Follow the [shared host HTTP-server recipe](../../README.md#copy-from-a-guest-shell), but use `http://192.168.2.2:8765/my-tool` in the guest's `wget` command. This box's QEMU user network is `192.168.2.0/24`; the generic `10.0.2.2` address does not apply. Check the guest checksum before executing, use a compatible ARM32 binary, and expect `/tmp` to disappear on a cold boot. Small text/base64 payloads can also be entered at the serial shell. Ctrl-\] detaches.
 
 ## Cold artifact set
 

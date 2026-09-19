@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=70b17b5371cead7c8679282e14cbf851a8250a68048b70ffb5cb9cdb27f00894 body-sha256=28b1b87dbb5bcd07bb9ccd0a977a5a1024478554e4a553a2c096b7fbfafbd6d9 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=cc3c26ac3ab1f2d74b62215f641c9fef18fe7bc5aaa2dfdc78d2b7e406d2db0a body-sha256=7e746aee4f49c9aa4f8eeac1bce8b70d09bdcb1cda9713d4acf536ae23144aec -->
 
 zbmc / preserved firmware
 
@@ -41,5 +41,11 @@ The kernel and signed rootfs are preserved. The built-in initramfs adds a runtim
 - Lenovo DTB, reconstructed SRAM, and PTABLES
 - Compressed 7 GiB initialized eMMC image
 - QEMU 11 FPGA/eMMC GP0 patch with bounded tracing
+
+## Copying files
+
+The current runtime has no established arbitrary-file transfer recipe. SSH resets before key exchange, so the [shared SSH upload commands](../../README.md#copying-files-into-a-bmc) do not work. `sudo ./tools/zbmc lenovo-xcc console` attaches the interactive serial socket, but socket access alone does not establish a Linux shell or usable login.
+
+The kernel/initramfs already contains an observer used during bring-up; it is not a host-directory mount or file-upload interface. Inserting another executable into that boot path requires a custom image build. The signed vendor rootfs remains preserved; copying into `work/lenovo-xcc/` or uploading through the firmware-update UI is not a documented way to install a program inside the BMC.
 
 Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.

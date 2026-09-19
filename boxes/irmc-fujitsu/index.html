@@ -31,6 +31,18 @@ the first two slots are retained because the firmware binds its management inter
 <p>The Debby acceptance run <code>20260901T054304Z-62f6d82f-9aa2-4f98-8e5e-98a425cd2667</code>
 reached HTTP 200 at 9m22s and passed the stability hold at 9m40s.</p>
 
+<h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
+<p>The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the
+vendor-gated <code>defshell</code>. On the host, attach after startup and press Enter for the shell:</p>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc irmc-fujitsu console --nostderr</code></pre>
+<p class="mt-3">Follow the <a class="text-blue-700 underline"
+href="../../README.html#copy-from-a-guest-shell">shared host HTTP-server recipe</a>, but use
+<code>http://192.168.2.2:8765/my-tool</code> in the guest's <code>wget</code> command.
+This box's QEMU user network is <code>192.168.2.0/24</code>; the generic <code>10.0.2.2</code> address
+does not apply. Check the guest checksum before executing, use a compatible ARM32 binary, and expect
+<code>/tmp</code> to disappear on a cold boot. Small text/base64 payloads can also be entered at the
+serial shell. Ctrl-] detaches.</p>
+
 <h2 class="text-xl font-semibold mt-6 mb-2">Cold artifact set</h2>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto text-xs"><code>e139d58349922e59b763d5d1824e8fb60865524c206dda3b975769d5c4641df3  kernel.bin
 877bcd44fd590e800035ac221d386fc6908cb20ddcc575708ad1558bec758592  system-patched.dtb

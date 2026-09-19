@@ -54,6 +54,20 @@ sudo ./tools/zbmc lenovo-xcc start
       </div>
     </section>
 
+    <section id="copying-files" class="mt-12 border-l-4 border-amber-400 bg-stone-900 p-8">
+      <h2 class="text-2xl font-bold">Copying files</h2>
+      <p class="mt-4 leading-7 text-stone-300">The current runtime has no established arbitrary-file
+        transfer recipe. SSH resets before key exchange, so the
+        <a class="text-amber-300 underline" href="../../README.html#copying-files-into-a-bmc">shared SSH upload commands</a>
+        do not work. <code>sudo ./tools/zbmc lenovo-xcc console</code> attaches the interactive serial socket,
+        but socket access alone does not establish a Linux shell or usable login.</p>
+      <p class="mt-4 leading-7 text-stone-300">The kernel/initramfs already contains an observer used during
+        bring-up; it is not a host-directory mount or file-upload interface. Inserting another executable
+        into that boot path requires a custom image build. The signed vendor rootfs remains preserved;
+        copying into <code>work/lenovo-xcc/</code> or uploading through the firmware-update UI is not a
+        documented way to install a program inside the BMC.</p>
+    </section>
+
     <footer class="mt-16 border-t border-stone-800 pt-6 text-sm text-stone-500">Large artifacts are SHA-256 pinned at git.trouble.org. Firmware remains subject to its vendor license.</footer>
   </main>
 </body>

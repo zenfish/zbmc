@@ -19,6 +19,35 @@
       Linux using <code>./build.sh supermicro-x10</code> and <code>sudo ./tools/zbmc supermicro-x10 start</code>.</p>
   </header>
 
+  <section id="copying-files" class="mb-8">
+    <h2 class="text-xl font-semibold text-slate-900 mb-3">Copying files</h2>
+    <p class="mb-3">Use the live serial shell for binaries. X10's SSH wrapper uses stdin to send commands,
+      so the <a class="text-blue-700 underline" href="../../README.html#copy-over-ssh">shared SSH upload recipe</a>
+      does not apply. Larger SSH flows can also panic the old guest network driver.
+      The existing <code>start-x10.py</code> transfers its license shim using the same paced base64 method below.</p>
+    <p class="mb-3">On the host, from the repository root, generate commands for <code>./my-tool</code>:</p>
+    <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>python3 - &lt;&lt;'PY'
+import base64
+from pathlib import Path
+data = base64.b64encode(Path("my-tool").read_bytes()).decode("ascii")
+print(": &gt; /tmp/my-tool.b64")
+for start in range(0, len(data), 512):
+    print("printf '%s' '" + data[start:start + 512] + "' &gt;&gt; /tmp/my-tool.b64")
+print("base64 -d &lt; /tmp/my-tool.b64 &gt; /tmp/my-tool &amp;&amp; cksum /tmp/my-tool")
+PY
+cksum ./my-tool
+sudo ./tools/zbmc supermicro-x10 console</code></pre>
+    <p class="mt-3">Wait for startup to finish before attaching. Press Enter for the existing root shell;
+      paste the generated commands <strong>one at a time, waiting for the prompt after each</strong>.
+      Do not paste raw binary bytes. Compare the guest checksum and byte count with the host's output,
+      then run <code>chmod 755 /tmp/my-tool &amp;&amp; /tmp/my-tool</code> for an executable.
+      Ctrl-] detaches. This is intended for small payloads; large files are slow over serial.</p>
+    <p class="mt-3">Use an ARMv5TE-compatible executable with the correct ABI; ARMv7 and AArch64 binaries
+      will not work here. <code>/tmp</code> is temporary, and each cold start recreates the writable flash
+      copy from the master. See the <a class="text-blue-700 underline"
+      href="../../README.html#executables-and-persistence">shared compatibility and persistence notes</a>.</p>
+  </section>
+
   <section class="mb-8">
     <h2 class="text-xl font-semibold text-slate-900 mb-3">Why this box</h2>
     <p>THE WEAK-CIPHER ORACLE. Unlike modern BMCs (iDRAC9/10, X14 offer only cipher suites 3+17),

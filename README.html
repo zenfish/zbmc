@@ -220,6 +220,103 @@ vendor URL or the project mirror; several derived boot bundles are
 mirror-only because they contain the documented emulation adaptations.
 See <a href="SECURITY.html">SECURITY.md</a> for the trust and provenance
 boundary.</p>
+<h2 id="copying-files-into-a-bmc">Copying files into a BMC</h2>
+<p>You can copy scripts, executables, and data into a running emulated BMC.
+Start with <code>/tmp</code> in the guest. Copying into the host's
+<code>work/&lt;box&gt;/</code> does not make a file appear inside the BMC;
+there is no generic <code>zbmc push</code> or shared host directory.</p>
+
+<h3 id="copy-over-ssh">Copy over SSH</h3>
+<p>For <strong>openbmc, nvidia-obmc, idrac9, idrac10, and supermicro-x14</strong>,
+run this from the repository root on the <strong>Linux host running QEMU</strong>.
+The wrapper selects the configured address and credentials/key:</p>
+<pre class="bash"><code>box=openbmc                       # choose one of the five boxes above
+sudo ./tools/zbmc "$box" start     # skip if already running
+./tools/zbmc "$box" ssh -T 'cat &gt; /tmp/my-tool' &lt; ./my-tool
+
+# Compare checksum and byte count; the filenames will differ.
+cksum ./my-tool
+./tools/zbmc "$box" ssh 'cksum /tmp/my-tool'
+
+# After the checksums match, for an executable:
+./tools/zbmc "$box" ssh 'chmod 755 /tmp/my-tool &amp;&amp; /tmp/my-tool'</code></pre>
+<p>The local <code>&lt; ./my-tool</code> supplies the bytes; the quoted
+<code>&gt; /tmp/my-tool</code> runs inside the BMC. <code>-T</code> disables terminal
+allocation so binary bytes are preserved. Omit the last command for data files.
+This needs only SSH stdin and guest <code>cat</code>, with no SFTP server or guest
+<code>scp</code> binary. Modern <a href="https://man.openbsd.org/scp.1">scp uses
+SFTP by default</a>; <code>scp -O</code> only helps when the guest supports legacy
+SCP. A vendor management prompt over SSH does not imply a Linux shell.</p>
+
+<h3 id="copy-from-a-guest-shell">Copy from a guest shell</h3>
+<p>With a <strong>Linux console shell and working guest networking</strong>,
+you can instead serve a dedicated directory from the QEMU host:</p>
+<pre class="bash"><code># Host, separate terminal; leave running during the transfer.
+mkdir -p work/transfer
+cp ./my-tool work/transfer/
+python3 -m http.server 8765 --bind 127.0.0.1 --directory work/transfer</code></pre>
+<p>At the <strong>guest shell</strong>, if <code>wget</code> is available:</p>
+<pre class="sh"><code>wget -O /tmp/my-tool http://10.0.2.2:8765/my-tool
+cksum /tmp/my-tool
+# Compare with the host's cksum ./my-tool before executing.
+chmod 755 /tmp/my-tool
+/tmp/my-tool</code></pre>
+<p><code>10.0.2.2</code> is QEMU user networking's host address, not the BMC's
+loopback alias shown by <code>zbmc list</code>. <strong>iRMC uses
+<code>192.168.2.2</code> instead.</strong> Stop the server with Ctrl-C when finished.
+Advantech's blocked network cannot use this method.</p>
+<p>For small text scripts, type directly at a <strong>guest Linux shell</strong>:</p>
+<pre class="sh"><code>cat &gt; /tmp/hello.sh &lt;&lt;'EOF'
+#!/bin/sh
+echo "Hello from the BMC"
+uname -m
+EOF
+chmod 755 /tmp/hello.sh
+/tmp/hello.sh</code></pre>
+<p>For a binary over serial, use the
+<a href="boxes/supermicro-x10/README.html#copying-files">base64 recipe on the X10 page</a>.
+Wait until boot automation releases the console, obtain a Linux shell prompt, and
+send one command at a time. <code>console</code> can be interactive, accept a
+command argument, or just tail a log depending on the box.</p>
+
+<h3 id="file-transfer-by-box">Which method for each box?</h3>
+<table>
+<thead><tr><th>Box</th><th>File-transfer path / exception</th></tr></thead>
+<tbody>
+<tr><td>openbmc, nvidia-obmc, supermicro-x14</td><td>Use the SSH recipe above; these expose Linux shells.</td></tr>
+<tr><td>idrac9, idrac10</td><td>Use the SSH recipe; the wrapper selects the installed lab key. iDRAC9's <code>/admin1-&gt;</code> prompt is a real shell in this emulation.</td></tr>
+<tr><td><a href="boxes/supermicro-x10/README.html#copying-files">supermicro-x10</a></td><td>Use serial/base64 for binaries. Its SSH wrapper consumes stdin to send commands, and larger SSH flows can panic the old guest network driver.</td></tr>
+<tr><td><a href="boxes/megarac-hpe/index.html#copying-files">megarac-hpe</a></td><td>Use the live console shell. Injected SSH is an explicit lab opt-in, not the default service.</td></tr>
+<tr><td><a href="boxes/ieit/index.html#copying-files">ieit</a></td><td>SSH is SMASH/CLP, not a Linux shell. Use build-time insertion; a live Linux shell through its serial socket has not been established.</td></tr>
+<tr><td><a href="boxes/irmc-fujitsu/index.html#copying-files">irmc-fujitsu</a></td><td>The default cold runtime provides a root console shell. Use HTTP via <code>192.168.2.2</code> or serial; SSH remains vendor-gated.</td></tr>
+<tr><td><a href="boxes/lenovo-xcc/index.html#copying-files">lenovo-xcc</a></td><td>SSH is unavailable. Serial access exists, but the current runtime has no established arbitrary-file transfer recipe.</td></tr>
+<tr><td>advantech-asmb787</td><td>No external networking. <code>sudo ./tools/zbmc advantech-asmb787 console 'printf "hello\n" &gt; /tmp/hello.txt; cat /tmp/hello.txt'</code> auto-logs in as <code>sysadmin</code>. With no command, <code>console</code> only tails the log. For binaries, send each generated base64 command through this command interface, checking that the guest has <code>base64 -d</code> first.</td></tr>
+</tbody>
+</table>
+
+<h3 id="executables-and-persistence">Executables and persistence</h3>
+<p><strong>Build for the guest, not the host.</strong> Host x86_64 or macOS binaries
+will not run on these BMCs. Check <code>uname -m</code> in the guest and
+<code>file ./my-tool</code> / <code>readelf -h -l ./my-tool</code> on the host.
+iDRAC10 uses AArch64; the other current boxes use 32-bit ARM, with X10 requiring
+ARMv5-compatible code. Match the CPU, endianness, ABI (including float ABI), and
+guest loader/libraries. A static executable avoids shared-library dependencies
+but still needs the correct CPU and kernel support. Scripts need an installed
+interpreter, a correct shebang, and Unix line endings.</p>
+<p><code>Exec format error</code> usually means the wrong format or architecture;
+<code>not found</code> for an existing file can mean a missing ELF loader or script
+interpreter. For <code>Permission denied</code>, check executable permissions and
+mount options (<code>noexec</code>).</p>
+<p><strong>Treat <code>/tmp</code> uploads as disposable.</strong> They do not survive
+a fresh cold boot. Other writable paths may also live in temporary QEMU overlays;
+restoring an older warm checkpoint restores its older state. For repeatable
+experiments, keep the original on the host and replay the transfer after startup.
+To bake files into a cold image, follow that box's build/repack recipe (see the
+<a href="boxes/ieit/index.html#copying-files">IEIT example</a>): editing an extracted
+rootfs directory alone does not update the packed image or an existing warm
+checkpoint. Keep custom images separate from pinned vendor inputs and never edit
+a backing image while QEMU is using it.</p>
+
 <h2 id="exact-qemu-builds-and-docker-package">Exact QEMU builds and
 Docker package</h2>
 <p>Every box descriptor pins a QEMU executable, version, machine, and

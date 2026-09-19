@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/supermicro-x10/README.html source-sha256=6464f1f3eb4359f3fbb22f2a5ff758de861e804db39ce9ff411dd18ddb708af6 body-sha256=5c3f7070514b49103f013afd85d22b240fce03f856f20e419fe53f85dc18dfc8 -->
+<!-- html2md:auto source=boxes/supermicro-x10/README.html source-sha256=0b61875a4abdda0100c9d196efd4a3e7d665acc975990b8a189781dbeb5250b2 body-sha256=5e4ea4b3a9bbfef14ab518eabd94a16272889927401cf284f3f4ea9589d866bc -->
 
 # Virtual Supermicro X10 BMC
 
@@ -7,6 +7,28 @@ ASPEED **AST2400** (ARMv5TEJ), FW 3.93, emulated with `qemu-system-arm -M super
 Firmware: `BMC_X10AST2400-32M_20210528_03.93_STD.bin` · zoo box `zbmc supermicro-x10` · 2026-08-23
 
 **Historical bring-up record.** The macOS/Docker attempts below explain discarded approaches. The supported 0.1.1 path is x86_64 Linux using `./build.sh supermicro-x10` and `sudo ./tools/zbmc supermicro-x10 start`.
+
+## Copying files
+
+Use the live serial shell for binaries. X10's SSH wrapper uses stdin to send commands, so the [shared SSH upload recipe](../../README.md#copy-over-ssh) does not apply. Larger SSH flows can also panic the old guest network driver. The existing `start-x10.py` transfers its license shim using the same paced base64 method below.
+
+On the host, from the repository root, generate commands for `./my-tool`:
+
+    python3 - <<'PY'
+    import base64
+    from pathlib import Path
+    data = base64.b64encode(Path("my-tool").read_bytes()).decode("ascii")
+    print(": > /tmp/my-tool.b64")
+    for start in range(0, len(data), 512):
+        print("printf '%s' '" + data[start:start + 512] + "' >> /tmp/my-tool.b64")
+    print("base64 -d < /tmp/my-tool.b64 > /tmp/my-tool && cksum /tmp/my-tool")
+    PY
+    cksum ./my-tool
+    sudo ./tools/zbmc supermicro-x10 console
+
+Wait for startup to finish before attaching. Press Enter for the existing root shell; paste the generated commands **one at a time, waiting for the prompt after each**. Do not paste raw binary bytes. Compare the guest checksum and byte count with the host's output, then run `chmod 755 /tmp/my-tool && /tmp/my-tool` for an executable. Ctrl-\] detaches. This is intended for small payloads; large files are slow over serial.
+
+Use an ARMv5TE-compatible executable with the correct ABI; ARMv7 and AArch64 binaries will not work here. `/tmp` is temporary, and each cold start recreates the writable flash copy from the master. See the [shared compatibility and persistence notes](../../README.md#executables-and-persistence).
 
 ## Why this box
 
