@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=664df9fc1cd6e689e47d5e9015f98f2a8e07deb3c9b85aa90b92e80a48f7c626 body-sha256=9be3dcbf8a695bcc3b68294b9cf35cfe531ea638d6c261ba92fdd35a47d1b2d9 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=47f688283b75c014f424a50468e1a074124ec265ca5db3d22919ce453e6c9f94 body-sha256=95c4451e02569cad86162f93b5dbe2dbf0f23fd6f5acf1227ad0919c840702a7 -->
 
 zbmc / preserved firmware
 
@@ -264,10 +264,8 @@ Evidence: runtime `managed-start.log` and run `runs/20260913T233717Z-e2817348-3b
 
 ## Extracting the filesystem
 
-Lenovo stores its filesystems inside the qcow2 eMMC image. Enumerate partitions and extract each supported filesystem read-only with libguestfs:
+Lenovo stores its filesystems inside the qcow2 eMMC image. Use the repository extractor to enumerate every mountable partition and export each one read-only under `work/lenovo-xcc/fs`. It does not modify the source image:
 
-    mkdir -p work/lenovo-xcc/fs
-    guestfish --ro -a work/lenovo-xcc/emmc.qcow2
-    # at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...
+    ./tools/extract-image-filesystems work/lenovo-xcc/emmc.qcow2 work/lenovo-xcc/fs
 
-The signed vendor layers and GPT metadata remain packed in `emmc.qcow2`; there is no verified plain `unsquashfs` recipe for the complete XCC image.
+The command requires `guestfish` from `libguestfs-tools`. It reports each device and filesystem type as it is extracted. Unknown, swap, signed boot, and partition-table regions remain packed because they are not filesystems.

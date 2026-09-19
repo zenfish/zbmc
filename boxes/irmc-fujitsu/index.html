@@ -50,13 +50,9 @@ aed0ce8eb706180b21e798acad707d26f2e7a9e5d8d6f5933ec3ad7f2f13ad14  initramfs.cpio
 e029ad09372a37c400b30446701440f905a855042174d3222e542261acbb152c  flash64.img
 4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78  rootfs-sd.img</code></pre>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
-<p>The SD image format is vendor-specific. Enumerate it before extracting any partition into <code>work/irmc-fujitsu/fs</code>:</p>
-<pre><code>mkdir -p work/irmc-fujitsu/fs
-guestfish --ro -a work/irmc-fujitsu/rootfs-sd.img
-# at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...</code></pre>
-<p>The initramfs is a separate packed CPIO archive:</p>
-<pre><code>mkdir -p work/irmc-fujitsu/fs/initramfs
-gzip -dc work/irmc-fujitsu/initramfs.cpio.gz | (cd work/irmc-fujitsu/fs/initramfs &amp;&amp; cpio -idm --no-absolute-filenames)</code></pre>
+<p>The SD image format is vendor-specific. Use the repository extractor to enumerate every mountable partition and export each one read-only under <code>work/irmc-fujitsu/fs</code>. It does not modify the source image:</p>
+<pre><code>./tools/extract-image-filesystems work/irmc-fujitsu/rootfs-sd.img work/irmc-fujitsu/fs</code></pre>
+<p>The command requires <code>guestfish</code> from <code>libguestfs-tools</code>. It reports each device and filesystem type as it is extracted. Unknown, swap, signed boot, and partition-table regions remain packed because they are not filesystems.</p>
 </main>
 </body>
 </html>

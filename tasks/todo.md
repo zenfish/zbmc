@@ -59,3 +59,22 @@ Warm run `20260910T214232Z-a11c6152-44a9-4cfc-a313-b1fece55a4c6` restored the ma
 ## Review
 
 All eleven BMCs now have an extraction recipe. Local SquashFS probes passed for OpenBMC, NVIDIA OpenBMC, Supermicro X14, iDRAC9, and iDRAC10 at the documented offsets. The recipes leave boot artifacts unchanged; Lenovo XCC and Fujitsu iRMC remain explicitly format-discovery cases where the repository does not verify a generic offline root extraction.
+
+# Complete partition-image extraction
+
+- [x] Add `tools/extract-image-filesystems` to discover and export every mountable filesystem from raw or qcow2 images.
+- [x] Replace Lenovo and Fujitsu discovery-only page text with the runnable extractor.
+
+## Review
+
+The remaining partition-image cases now have an actionable command. The extractor is read-only, refuses to overwrite an existing output tree, and leaves unknown/swap/boot metadata packed. It requires `guestfish` from `libguestfs-tools`; syntax and documentation-pair checks pass locally, but the current macOS host lacks guestfish for a live image run.
+
+# Embedded-region completeness correction
+
+- [x] Document OpenBMC writable JFFS2 alongside its SquashFS root.
+- [x] Document Advantech root, Web UI, both configuration copies, and DRE JFFS2.
+- [x] Document both MegaRAC configuration JFFS2 copies and the X14 initramfs.
+
+## Review
+
+The per-box recipes now cover every filesystem region identified by the checked-in build and boot recipes. Partition images use the new read-only discovery extractor; embedded regions use their recorded offsets and native filesystem tools. No boot artifact is modified.

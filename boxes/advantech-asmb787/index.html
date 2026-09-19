@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=e4f2e4aa0a2039225cd227ce753497a3e83befb009780bdb9bdec9f81d8a7a83 body-sha256=70edccd9d24d6424ba0a87d1cca641ff2a91c44801c288301718ac7120fc37ee -->
+<!-- zmd2html:auto source-sha256=7fccfb9bb6f4b7b12652c343257918adad163a7ee0d0c81d911d0a61adb18c08 body-sha256=74d4cce0a8f223879752c5d52b917c9d0d020c6a1eff7ed0e7e445e198354ad6 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc Advantech ASMB-787</title>
@@ -53,10 +53,19 @@ filesystem into the requested tree:</p>
 RSQ=$(find work/advantech-asmb787/unpacked/fw-blobs -name &#39;sqsh_*.sqsh&#39; -type f -printf &#39;%s %p\n&#39; | sort -nr | head -1 | cut -d&#39; &#39; -f2-)
 unsquashfs -d work/advantech-asmb787/fs/rootfs &quot;$RSQ&quot;
 find work/advantech-asmb787/unpacked/fw-blobs -name &#39;sqsh_*.sqsh&#39; -print</code></pre>
-<p>To recover the configuration JFFS2 regions as well, run
-<code>jefferson -f -d work/advantech-asmb787/fs/conf &lt;region.jffs2&gt;</code>
-on the carved files. <code>rootfs.sqfs</code> is the QEMU-patched copy;
-the command above reads the vendor tree.</p>
+<p>Extract every embedded filesystem from the packed NOR as well:</p>
+<pre><code>mkdir -p work/advantech-asmb787/fs/{rootfs,www,conf,bkupconf,dre}
+mapfile -t sqsh &lt; &lt;(find work/advantech-asmb787/unpacked/fw-blobs -name &#39;sqsh_*.sqsh&#39; -type f -printf &#39;%s %p\n&#39; | sort -nr | cut -d&#39; &#39; -f2-)
+unsquashfs -d work/advantech-asmb787/fs/rootfs &quot;${sqsh[0]}&quot;
+unsquashfs -d work/advantech-asmb787/fs/www &quot;${sqsh[1]}&quot;
+for spec in &quot;0xd0000 0x1f0000 conf&quot; &quot;0x2d0000 0x1f0000 bkupconf&quot; &quot;0x2e10000 0 dre&quot;; do
+  set -- $spec; args=(if=firmware/encrypted_ASMB-787_20220912.ima_enc of=&quot;work/advantech-asmb787/fs/$3.jffs2&quot; bs=1 skip=$(( $1 )) status=none)
+  [ &quot;$2&quot; = 0 ] || args+=(count=$(( $2 )))
+  dd &quot;${args[@]}&quot;
+  jefferson -f -d &quot;work/advantech-asmb787/fs/$3&quot; &quot;work/advantech-asmb787/fs/$3.jffs2&quot;
+done</code></pre>
+<p>The rootfs artifact is the QEMU-patched copy; the other trees come
+from the original firmware.</p>
 </div>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=fe6bcfb1e6b7472cb8b0d3eb33dee5ec600d3a9eb6584d027751b3ccfa5792be body-sha256=0dc36b9a2cf40c28d7d84b4de742f857362a80074a5de68e36d3becf443f5c5d -->
+<!-- zmd2html:auto source-sha256=ffa5f75ceec87d9818fdd7445d5d129ae9b9eec348e290c4b68c3517aea25135 body-sha256=19958f43d6380b24e4332badee7af11c8faa26467ed170abcccba8fc67d6d588 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -168,6 +168,38 @@ at the documented offsets. The recipes leave boot artifacts unchanged;
 Lenovo XCC and Fujitsu iRMC remain explicitly format-discovery cases
 where the repository does not verify a generic offline root
 extraction.</p>
+<h1 id="complete-partition-image-extraction">Complete partition-image
+extraction</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Add
+<code>tools/extract-image-filesystems</code> to discover and export
+every mountable filesystem from raw or qcow2 images.</label></li>
+<li><label><input type="checkbox" checked="" />Replace Lenovo and
+Fujitsu discovery-only page text with the runnable
+extractor.</label></li>
+</ul>
+<h2 id="review-5">Review</h2>
+<p>The remaining partition-image cases now have an actionable command.
+The extractor is read-only, refuses to overwrite an existing output
+tree, and leaves unknown/swap/boot metadata packed. It requires
+<code>guestfish</code> from <code>libguestfs-tools</code>; syntax and
+documentation-pair checks pass locally, but the current macOS host lacks
+guestfish for a live image run.</p>
+<h1 id="embedded-region-completeness-correction">Embedded-region
+completeness correction</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Document OpenBMC writable
+JFFS2 alongside its SquashFS root.</label></li>
+<li><label><input type="checkbox" checked="" />Document Advantech root,
+Web UI, both configuration copies, and DRE JFFS2.</label></li>
+<li><label><input type="checkbox" checked="" />Document both MegaRAC
+configuration JFFS2 copies and the X14 initramfs.</label></li>
+</ul>
+<h2 id="review-6">Review</h2>
+<p>The per-box recipes now cover every filesystem region identified by
+the checked-in build and boot recipes. Partition images use the new
+read-only discovery extractor; embedded regions use their recorded
+offsets and native filesystem tools. No boot artifact is modified.</p>
 </div>
 </body>
 </html>

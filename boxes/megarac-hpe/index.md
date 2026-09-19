@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=48307513c54f62b5ec4257e57ce7b62545370627def2ec6227ffdfc417182ff0 body-sha256=f20d1ab97ebf81cf14bf070882e5b8be9f04e68b9482f8d394e55f1e92afe46a -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=8f6afbda6346d75b6a67c246f8c7f3d6aaff7a2d4cad01a412004a11602494b3 body-sha256=5e49a3ab76568a80adc39efe30ed555b1c82229d7086046bec40bda448d8e123 -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -35,9 +35,13 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 
 ## Extracting the filesystem
 
-The accepted runtime root is the packed `rootfs.sqfs`. Extract it into `work/megarac-hpe/fs/rootfs`:
+Extract the packed root SquashFS and both 2 MiB JFFS2 configuration copies into `work/megarac-hpe/fs`:
 
-    mkdir -p work/megarac-hpe/fs/rootfs
+    mkdir -p work/megarac-hpe/fs/rootfs work/megarac-hpe/fs/conf1 work/megarac-hpe/fs/conf2
     unsquashfs -d work/megarac-hpe/fs/rootfs work/megarac-hpe/rootfs.sqfs
+    dd if=work/megarac-hpe/mtdflash.bin of=work/megarac-hpe/fs/conf1.jffs2 bs=1 skip=$((0x100000)) count=$((0x200000)) status=none
+    dd if=work/megarac-hpe/mtdflash.bin of=work/megarac-hpe/fs/conf2.jffs2 bs=1 skip=$((0x300000)) count=$((0x200000)) status=none
+    jefferson -f -d work/megarac-hpe/fs/conf1 work/megarac-hpe/fs/conf1.jffs2
+    jefferson -f -d work/megarac-hpe/fs/conf2 work/megarac-hpe/fs/conf2.jffs2
 
-The configuration partitions remain inside `mtdflash.bin`; use `binwalk -eM -C work/megarac-hpe/fs work/megarac-hpe/mtdflash.bin` when you also need those packed regions.
+The kernel, NOR bootloader, and firmware-info FMH remain packed.

@@ -21,10 +21,12 @@ sudo ./tools/zbmc openbmc start
 <li><a class="text-blue-700 underline" href="IPMI-REDFISH-INVENTORY.html">IPMI and Redfish inventory</a></li>
 </ul>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
-<p>The build artifact is a complete flash image. Extract its root SquashFS at offset <code>0xa00000</code> into <code>work/openbmc/fs</code>:</p>
-<pre><code>mkdir -p work/openbmc/fs
-unsquashfs -o 10485760 -d work/openbmc/fs work/openbmc/flash.mtd</code></pre>
-<p>The U-Boot, kernel, and other flash regions remain packed in <code>flash.mtd</code>.</p>
+<p>The flash contains the read-only SquashFS root and a writable JFFS2 region. Extract both into <code>work/openbmc/fs</code>:</p>
+<pre><code>mkdir -p work/openbmc/fs/rootfs work/openbmc/fs/rwfs
+unsquashfs -o 10485760 -d work/openbmc/fs/rootfs work/openbmc/flash.mtd
+dd if=work/openbmc/flash.mtd of=work/openbmc/fs/rwfs.jffs2 bs=1 skip=$((0x2a00000)) status=none
+jefferson -f -d work/openbmc/fs/rwfs work/openbmc/fs/rwfs.jffs2</code></pre>
+<p>The U-Boot and kernel regions remain packed in <code>flash.mtd</code>.</p>
 </main>
 </body>
 </html>

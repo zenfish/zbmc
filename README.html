@@ -265,7 +265,7 @@ state. For repeatable experiments, replay the transfer after startup. To
 bake a file into a cold image, use that box's existing build/repack recipe
 and keep custom images separate from pinned vendor inputs.</p>
 <h2 id="extracting-bmc-filesystems">Extracting BMC filesystems</h2>
-<p><code>build.sh</code> produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has the exact read-only extraction recipe; all recipes default to <code>work/&lt;box&gt;/fs</code>:</p>
+<p><code>build.sh</code> produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has a read-only extraction recipe; all recipes default to <code>work/&lt;box&gt;/fs</code>:</p>
 <table>
 <thead>
 <tr>

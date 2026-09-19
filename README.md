@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=a27247d7eef80992fa12a395c0ad2bf60e6a10087480f20d01ca847214184cfe body-sha256=5c9d1aed9937c6043c940bbb0fe9cc1ca4bd1e0ad06d033102cfdbbd74cf47cc -->
+<!-- html2md:auto source=README.html source-sha256=0a9afbdb6f1e20fe240cc82d761cfa51716a70f84931003ed903f7f80657451d body-sha256=163c0436164f1dd7b331401a849b66b0e69b3bb37b6e83bae2fb8e4315761ca2 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -95,7 +95,7 @@ Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a
 
 ## Extracting BMC filesystems
 
-`build.sh` produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has the exact read-only extraction recipe; all recipes default to `work/<box>/fs`:
+`build.sh` produces the packed artifacts that QEMU boots. It does not automatically leave a browseable filesystem tree. Each BMC page has a read-only extraction recipe; all recipes default to `work/<box>/fs`:
 
 | BMC | Recipe |
 |----|----|

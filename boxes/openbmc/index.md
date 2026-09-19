@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=4184e7b73c142d61c9311d0480b776e45e4938e0644a58778e125f724bf4ef4b body-sha256=c84c4613af8ce172e0564203b9db177388845fe910057859598ca5e044d22a30 -->
+<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=da236f0d5a12a500f94084987f3a060d3b2e69e37900d42bfb4b80092dcffb44 body-sha256=a1600d1ae43c503e4efd965639b41cc29c292dd4f57f9185ad9344ad55eca1e9 -->
 
 # zbmc OpenBMC
 
@@ -17,9 +17,11 @@ Vanilla AST2600 OpenBMC control image. The accepted cold run reached ICMP, SSH, 
 
 ## Extracting the filesystem
 
-The build artifact is a complete flash image. Extract its root SquashFS at offset `0xa00000` into `work/openbmc/fs`:
+The flash contains the read-only SquashFS root and a writable JFFS2 region. Extract both into `work/openbmc/fs`:
 
-    mkdir -p work/openbmc/fs
-    unsquashfs -o 10485760 -d work/openbmc/fs work/openbmc/flash.mtd
+    mkdir -p work/openbmc/fs/rootfs work/openbmc/fs/rwfs
+    unsquashfs -o 10485760 -d work/openbmc/fs/rootfs work/openbmc/flash.mtd
+    dd if=work/openbmc/flash.mtd of=work/openbmc/fs/rwfs.jffs2 bs=1 skip=$((0x2a00000)) status=none
+    jefferson -f -d work/openbmc/fs/rwfs work/openbmc/fs/rwfs.jffs2
 
-The U-Boot, kernel, and other flash regions remain packed in `flash.mtd`.
+The U-Boot and kernel regions remain packed in `flash.mtd`.

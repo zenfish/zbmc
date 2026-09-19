@@ -40,10 +40,14 @@ CPU lacks the VFP support that a hard-float binary would require. Uploads to <co
 <li><a class="text-blue-700 underline" href="EMULATION-STATUS.html">Historical emulation status</a></li>
 </ul>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
-<p>The accepted runtime root is the packed <code>rootfs.sqfs</code>. Extract it into <code>work/megarac-hpe/fs/rootfs</code>:</p>
-<pre><code>mkdir -p work/megarac-hpe/fs/rootfs
-unsquashfs -d work/megarac-hpe/fs/rootfs work/megarac-hpe/rootfs.sqfs</code></pre>
-<p>The configuration partitions remain inside <code>mtdflash.bin</code>; use <code>binwalk -eM -C work/megarac-hpe/fs work/megarac-hpe/mtdflash.bin</code> when you also need those packed regions.</p>
+<p>Extract the packed root SquashFS and both 2 MiB JFFS2 configuration copies into <code>work/megarac-hpe/fs</code>:</p>
+<pre><code>mkdir -p work/megarac-hpe/fs/rootfs work/megarac-hpe/fs/conf1 work/megarac-hpe/fs/conf2
+unsquashfs -d work/megarac-hpe/fs/rootfs work/megarac-hpe/rootfs.sqfs
+dd if=work/megarac-hpe/mtdflash.bin of=work/megarac-hpe/fs/conf1.jffs2 bs=1 skip=$((0x100000)) count=$((0x200000)) status=none
+dd if=work/megarac-hpe/mtdflash.bin of=work/megarac-hpe/fs/conf2.jffs2 bs=1 skip=$((0x300000)) count=$((0x200000)) status=none
+jefferson -f -d work/megarac-hpe/fs/conf1 work/megarac-hpe/fs/conf1.jffs2
+jefferson -f -d work/megarac-hpe/fs/conf2 work/megarac-hpe/fs/conf2.jffs2</code></pre>
+<p>The kernel, NOR bootloader, and firmware-info FMH remain packed.</p>
 </main>
 </body>
 </html>

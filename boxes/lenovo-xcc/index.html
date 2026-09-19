@@ -242,11 +242,9 @@ Health    : READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code></pre>
   <p class="mt-4 break-all">Evidence: runtime <code>managed-start.log</code> and run <code>runs/20260913T233717Z-e2817348-3b92-477d-85de-40d7e397cc73</code>. Earlier statements above about an unreplaced default checkpoint describe the preceding experiments and are superseded by this managed restore. Cold service readiness remains unresolved.</p>
 </section>
   <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
-<p>Lenovo stores its filesystems inside the qcow2 eMMC image. Enumerate partitions and extract each supported filesystem read-only with libguestfs:</p>
-<pre><code>mkdir -p work/lenovo-xcc/fs
-guestfish --ro -a work/lenovo-xcc/emmc.qcow2
-# at the guestfish prompt: run; list-filesystems; mount /dev/sdaN /; tar-out / - ...</code></pre>
-<p>The signed vendor layers and GPT metadata remain packed in <code>emmc.qcow2</code>; there is no verified plain <code>unsquashfs</code> recipe for the complete XCC image.</p>
+<p>Lenovo stores its filesystems inside the qcow2 eMMC image. Use the repository extractor to enumerate every mountable partition and export each one read-only under <code>work/lenovo-xcc/fs</code>. It does not modify the source image:</p>
+<pre><code>./tools/extract-image-filesystems work/lenovo-xcc/emmc.qcow2 work/lenovo-xcc/fs</code></pre>
+<p>The command requires <code>guestfish</code> from <code>libguestfs-tools</code>. It reports each device and filesystem type as it is extracted. Unknown, swap, signed boot, and partition-table regions remain packed because they are not filesystems.</p>
 </main>
 </body>
 </html>

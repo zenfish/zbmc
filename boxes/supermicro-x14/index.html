@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=54bfc1ff3ad2d95daa132ae0452f9ccee9d066b98c0e08a149deda15f1e88f6d body-sha256=2ddbbcad975ba54d5fb8f10c26fc39eebcdab79bdfd3351e20c6916d863e3d7d -->
+<!-- zmd2html:auto source-sha256=7b7474402b30b330dc10fd7b9baf50df603939719103c73d9d9548b257143e06 body-sha256=2105e579879293e97b9171d86273727c369f0f263199a31db99da6b5e4768b9c -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc Supermicro X14</title>
@@ -53,6 +53,9 @@
 unsquashfs -o 5242880 -d work/supermicro-x14/fs/rofs work/supermicro-x14/emmc.img
 mkdir -p work/supermicro-x14/fs/rwfs
 guestfish --ro -a work/supermicro-x14/emmc.img -m /dev/sda17:/ tar-out / - | tar -xpf - -C work/supermicro-x14/fs/rwfs</code></pre>
+<p>Extract the boot initramfs separately:</p>
+<pre><code>mkdir -p work/supermicro-x14/fs/initramfs
+xz -dc work/supermicro-x14/initramfs-patched.bin | (cd work/supermicro-x14/fs/initramfs &amp;&amp; cpio -idm --no-absolute-filenames)</code></pre>
 <p><code>x14-ce0-64m.img</code> is NOR flash and is kept packed. See <a
 href="REPRODUCE.html">REPRODUCE.md</a> for the boot artifact layout.</p>
 </div>
