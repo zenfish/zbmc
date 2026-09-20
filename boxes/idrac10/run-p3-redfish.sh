@@ -71,7 +71,7 @@ puts "[expect] network up"
 
 # boot-apache-guest.sh: setup + mock backend + crng wait + Apache start
 puts "[expect] running boot-apache-guest.sh (mock backend + crng wait + Apache)..."
-send "wget -q --timeout=15 http://10.0.2.2:8080/boot-apache-guest.sh -O /tmp/b.sh && sh /tmp/b.sh 2>&1\r"
+send "wget -q --timeout=15 http://10.0.2.2:8080/boot-apache-guest.sh -O /tmp/b.sh && HOST_URL=http://10.0.2.2:8080 sh /tmp/b.sh 2>&1\r"
 set timeout 360
 expect {
     "APACHE_READY" {

@@ -19,8 +19,19 @@ cp -r /usr/share/factory/etc/apache2/extra /var/volatile/apache2/ 2>/dev/null ||
 
 # Serve the currently implemented Redfish ServiceRoot as static JSON.
 cat > /var/volatile/apache2/conf.d/minimal-redfish.conf << 'RFEOF'
-AliasMatch ^/redfish/?$     /tmp/rf_v.json
+AliasMatch ^/redfish/?$  /tmp/rf_v.json
 AliasMatch ^/redfish/v1/?$  /tmp/rf_root.json
+AliasMatch ^/redfish/v1/Systems/?$  /tmp/rf_systems.json
+AliasMatch ^/redfish/v1/Systems/System\.Embedded\.1/?$  /tmp/rf_system1.json
+AliasMatch ^/redfish/v1/Managers/?$  /tmp/rf_managers.json
+AliasMatch ^/redfish/v1/Managers/iDRAC\.Embedded\.1/?$  /tmp/rf_idrac.json
+AliasMatch ^/redfish/v1/Chassis/?$  /tmp/rf_chassis.json
+AliasMatch ^/redfish/v1/Chassis/System\.Embedded\.1/?$  /tmp/rf_chassis1.json
+AliasMatch ^/redfish/v1/AccountService/?$  /tmp/rf_acct.json
+AliasMatch ^/redfish/v1/AccountService/Accounts/?$  /tmp/rf_accts.json
+AliasMatch ^/redfish/v1/AccountService/Accounts/1/?$  /tmp/rf_acct1.json
+AliasMatch ^/redfish/v1/SessionService/?$  /tmp/rf_session.json
+AliasMatch ^/redfish/v1/UpdateService/?$  /tmp/rf_update.json
 <Directory /tmp>
     AllowOverride None
     Require all granted
