@@ -78,3 +78,15 @@ The remaining partition-image cases now have an actionable command. The extracto
 ## Review
 
 The per-box recipes now cover every filesystem region identified by the checked-in build and boot recipes. Partition images use the new read-only discovery extractor; embedded regions use their recorded offsets and native filesystem tools. No boot artifact is modified.
+
+# Audit Lenovo XCC shell scripts
+
+- [x] Recover and hash-verify every path in the 191-script manifest.
+- [x] Review hardware, bus, recovery, service, provisioning, and vendor-helper scripts.
+- [x] Flag sensitive capabilities, cold-boot relevance, IBM provenance, and unresolved behavior.
+- [x] Publish a Tailwind HTML report with every manifest path represented exactly once.
+- [x] Verify HTML parsing, catalog coverage, and repository whitespace.
+
+## Review
+
+The recovered archive contains exactly the 191 requested paths and has SHA-256 `35c631100b4b6b12a534bbfa8626fc143f15d52f42b2e7cdea58910dc0195425`. The report in `docs/lenovo-xcc-shell-script-findings.html` documents direct MDIO, I²C, FPGA/CIO, MMIO, VUART, NC-SI, IPMI, PCH-reset, firmware-recovery, state-erasure, diagnostic-export, forwarding, virtual-media, listener, and provisioning capabilities. It identifies five scripts with direct IBM copyright, separates broader IMM inheritance from authorship, and explicitly marks proprietary-binary and ambiguous-shell boundaries unresolved. Static verification found all 191 unique manifest paths exactly once in the catalog; Python's HTML parser, the documentation sync check, and `git diff --check` pass.

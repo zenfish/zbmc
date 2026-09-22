@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=ffa5f75ceec87d9818fdd7445d5d129ae9b9eec348e290c4b68c3517aea25135 body-sha256=19958f43d6380b24e4332badee7af11c8faa26467ed170abcccba8fc67d6d588 -->
+<!-- zmd2html:auto source-sha256=7756a0c2f6e0fe54990917fe3b6c9870c19eee59ef651cc39420cbbf4a5d8c8e body-sha256=50cd4797a21e56332371c715bef92ec9c5d2feb01e2a5fc1c2c349aafa29bc9c -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -200,6 +200,35 @@ configuration JFFS2 copies and the X14 initramfs.</label></li>
 the checked-in build and boot recipes. Partition images use the new
 read-only discovery extractor; embedded regions use their recorded
 offsets and native filesystem tools. No boot artifact is modified.</p>
+<h1 id="audit-lenovo-xcc-shell-scripts">Audit Lenovo XCC shell
+scripts</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Recover and hash-verify
+every path in the 191-script manifest.</label></li>
+<li><label><input type="checkbox" checked="" />Review hardware, bus,
+recovery, service, provisioning, and vendor-helper scripts.</label></li>
+<li><label><input type="checkbox" checked="" />Flag sensitive
+capabilities, cold-boot relevance, IBM provenance, and unresolved
+behavior.</label></li>
+<li><label><input type="checkbox" checked="" />Publish a Tailwind HTML
+report with every manifest path represented exactly once.</label></li>
+<li><label><input type="checkbox" checked="" />Verify HTML parsing,
+catalog coverage, and repository whitespace.</label></li>
+</ul>
+<h2 id="review-7">Review</h2>
+<p>The recovered archive contains exactly the 191 requested paths and
+has SHA-256
+<code>35c631100b4b6b12a534bbfa8626fc143f15d52f42b2e7cdea58910dc0195425</code>.
+The report in <code>docs/lenovo-xcc-shell-script-findings.html</code>
+documents direct MDIO, I²C, FPGA/CIO, MMIO, VUART, NC-SI, IPMI,
+PCH-reset, firmware-recovery, state-erasure, diagnostic-export,
+forwarding, virtual-media, listener, and provisioning capabilities. It
+identifies five scripts with direct IBM copyright, separates broader IMM
+inheritance from authorship, and explicitly marks proprietary-binary and
+ambiguous-shell boundaries unresolved. Static verification found all 191
+unique manifest paths exactly once in the catalog; Python's HTML parser,
+the documentation sync check, and <code>git diff --check</code>
+pass.</p>
 </div>
 </body>
 </html>
