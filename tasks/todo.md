@@ -116,3 +116,23 @@ The VGPIO handler is registered at NetFn `0x2e`/Cmd `0x92` for two OEM IDs. It c
 Earlier unsupported claims were corrected: `/dc/ibmc/nonce_flag` is absent from the evidence; offset `+0x5d` is not a proved nonce-required flag; `Kcs_SMM_RcvCallback` is a notification hook, not the payload receiver; and the v1 and v2 WHEA writers are separate classes. The detailed report retains all 191 catalog entries. Artifact UUIDs remain `485be802-d991-400d-9afe-e03e20a40760` for the full report and `c975c2aa-4408-4c9a-b03d-531949f7bb76` for the handoff.
 
 Verification reparsed both reports and the generated task HTML, asserted the mobile viewport and Tailwind shell, found all required SMI/SMM sections, preserved exactly 191 catalog rows, rehashed every cited firmware/library artifact, passed `tests/sync-docs-cli.sh`, confirmed the documentation pair is synchronized, and passed `git diff --check`. The repository-wide `tests/run` instead stops in the unrelated existing `advantech-console-lifecycle.sh` test because BSD `sed` treats its temporary pathname as a command; no Lenovo-documentation assertion failed.
+
+# Resolve Lenovo MMIO, MDIO, and host-DMA boundaries
+
+- [x] Trace `hub_reset.sh`, `memdump`, `peek`, and `poke` to their BMC `/dev/mem` mechanism.
+- [x] Recover the XCC 4.30 MDIO sysfs handler and establish its exact Clause 22/45 scope.
+- [x] Compare the retained scripts against the XCC 6.92 kernel and identify the removed endpoint.
+- [x] Recover the disabled AST2600 X-DMA node, driver API, PCIe gates, and runtime dependencies.
+- [x] Reconcile the Lenovo candidate with the proved Dell BCM5709 experiment and Supermicro X-DMA architecture.
+- [x] Correct and expand both durable Lenovo reports.
+- [x] Stamp, validate, and commit the report update.
+
+## Review
+
+`hub_reset.sh` is CPU-mediated BMC MMIO, not DMA, and 0x40800000 remains an unidentified vendor block. The actual Lenovo host-DMA candidate is the AST2600 X-DMA engine at 0x1e6e7000. Lenovo ships both hardware description and a complete kernel driver, but disables the DT node and omits its mandatory reserved-memory pool; live PCIe link, BusMaster, gate, and host-IOMMU state remain unproved.
+
+The old MDIO wording was too broad. The recovered XCC 4.30 implementation targets a fixed PHY address per interface and reaches Clause 22 registers plus encoded Clause 45/MMD space through bit-banged MDC/MDIO. It cannot address MAC MMIO, descriptor rings, PCIe configuration/BARs, X-DMA, BMC RAM, or host RAM. XCC 6.92 still ships the shell wrappers but no longer contains their kernel endpoint.
+
+The Dell comparison now follows the July 22 proof rather than the stale May 14 planning report. With VT-d disabled, the BCM5709 consumed a forged TX descriptor pointing at another process's physical page, internally looped those bytes into RX, and recovered the marker; a later 1 MiB run recovered real RAM. The later bulk dumper's RX-ring regression produced zero-filled chunks, but does not invalidate the single-shot arbitrary-physical-read proof. Dell commit `27f71aaaf` and the three source files under `/Volumes/yyy/phd/mobo/NIC/bcm5709/` are the durable implementation evidence.
+
+Verification reparsed the findings, handoff, and generated task HTML; compared all 191 catalog rows exactly against the acquisition manifest; asserted the Tailwind/mobile shell and the corrected X-DMA/MDIO/Dell claims; passed `tests/sync-docs-cli.sh`; and passed `git diff --check`. The report and handoff retain artifact UUIDs `485be802-d991-400d-9afe-e03e20a40760` and `c975c2aa-4408-4c9a-b03d-531949f7bb76`.

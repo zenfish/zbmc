@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=4cc6865074f64ad7cf73ace9bc3dd93773969ed0be70f9e72feb7a281bc0ca44 body-sha256=a90428a48acd188174c4f7f2d43dd880807f9ffbf73f81b2599bb92f1ee50385 -->
+<!-- zmd2html:auto source-sha256=51387e20e219b81965952714a7f1dd5ee3d7dec7c770ab2348c136b44f021cb6 body-sha256=11f7f250963230367d3e979a167cc6d88ab8f95f9b79fdecb30e38ab2957816a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -312,6 +312,59 @@ repository-wide <code>tests/run</code> instead stops in the unrelated
 existing <code>advantech-console-lifecycle.sh</code> test because BSD
 <code>sed</code> treats its temporary pathname as a command; no
 Lenovo-documentation assertion failed.</p>
+<h1 id="resolve-lenovo-mmio-mdio-and-host-dma-boundaries">Resolve Lenovo
+MMIO, MDIO, and host-DMA boundaries</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Trace
+<code>hub_reset.sh</code>, <code>memdump</code>, <code>peek</code>, and
+<code>poke</code> to their BMC <code>/dev/mem</code>
+mechanism.</label></li>
+<li><label><input type="checkbox" checked="" />Recover the XCC 4.30 MDIO
+sysfs handler and establish its exact Clause 22/45 scope.</label></li>
+<li><label><input type="checkbox" checked="" />Compare the retained
+scripts against the XCC 6.92 kernel and identify the removed
+endpoint.</label></li>
+<li><label><input type="checkbox" checked="" />Recover the disabled
+AST2600 X-DMA node, driver API, PCIe gates, and runtime
+dependencies.</label></li>
+<li><label><input type="checkbox" checked="" />Reconcile the Lenovo
+candidate with the proved Dell BCM5709 experiment and Supermicro X-DMA
+architecture.</label></li>
+<li><label><input type="checkbox" checked="" />Correct and expand both
+durable Lenovo reports.</label></li>
+<li><label><input type="checkbox" checked="" />Stamp, validate, and
+commit the report update.</label></li>
+</ul>
+<h2 id="review-9">Review</h2>
+<p><code>hub_reset.sh</code> is CPU-mediated BMC MMIO, not DMA, and
+0x40800000 remains an unidentified vendor block. The actual Lenovo
+host-DMA candidate is the AST2600 X-DMA engine at 0x1e6e7000. Lenovo
+ships both hardware description and a complete kernel driver, but
+disables the DT node and omits its mandatory reserved-memory pool; live
+PCIe link, BusMaster, gate, and host-IOMMU state remain unproved.</p>
+<p>The old MDIO wording was too broad. The recovered XCC 4.30
+implementation targets a fixed PHY address per interface and reaches
+Clause 22 registers plus encoded Clause 45/MMD space through bit-banged
+MDC/MDIO. It cannot address MAC MMIO, descriptor rings, PCIe
+configuration/BARs, X-DMA, BMC RAM, or host RAM. XCC 6.92 still ships
+the shell wrappers but no longer contains their kernel endpoint.</p>
+<p>The Dell comparison now follows the July 22 proof rather than the
+stale May 14 planning report. With VT-d disabled, the BCM5709 consumed a
+forged TX descriptor pointing at another process's physical page,
+internally looped those bytes into RX, and recovered the marker; a later
+1 MiB run recovered real RAM. The later bulk dumper's RX-ring regression
+produced zero-filled chunks, but does not invalidate the single-shot
+arbitrary-physical-read proof. Dell commit <code>27f71aaaf</code> and
+the three source files under
+<code>/Volumes/yyy/phd/mobo/NIC/bcm5709/</code> are the durable
+implementation evidence.</p>
+<p>Verification reparsed the findings, handoff, and generated task HTML;
+compared all 191 catalog rows exactly against the acquisition manifest;
+asserted the Tailwind/mobile shell and the corrected X-DMA/MDIO/Dell
+claims; passed <code>tests/sync-docs-cli.sh</code>; and passed
+<code>git diff --check</code>. The report and handoff retain artifact
+UUIDs <code>485be802-d991-400d-9afe-e03e20a40760</code> and
+<code>c975c2aa-4408-4c9a-b03d-531949f7bb76</code>.</p>
 </div>
 </body>
 </html>
