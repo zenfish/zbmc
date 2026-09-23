@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=51387e20e219b81965952714a7f1dd5ee3d7dec7c770ab2348c136b44f021cb6 body-sha256=11f7f250963230367d3e979a167cc6d88ab8f95f9b79fdecb30e38ab2957816a -->
+<!-- zmd2html:auto source-sha256=c1535febc4f128764a821a641145a7dbb0705c3746de636adb1b425b21726dbd body-sha256=11fe874cf23f9f726781bae34962f84d7922ab6de5b132655677a4f3eefcddd8 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -358,6 +358,24 @@ arbitrary-physical-read proof. Dell commit <code>27f71aaaf</code> and
 the three source files under
 <code>/Volumes/yyy/phd/mobo/NIC/bcm5709/</code> are the durable
 implementation evidence.</p>
+<p>Follow-up corrected an overclaim about <code>hub_reset.sh</code>:
+<code>/dev/mem</code> proves the BMC CPU issued the access, not what
+decoded it. The AST2600 A3 map leaves 0x40000000–0x4fffffff unassigned;
+AHBC8C does not remap that gap; Lenovo's DTB contains neither RAM nor a
+peripheral/PCIe window at 0x40800000. That makes a standard AST2600
+host-memory window unlikely, but only real-hardware resource capture,
+fault behavior, state correlation, and ultimately a reserved host-page
+marker can distinguish stale/unmapped code from undocumented board logic
+or a hidden bridge.</p>
+<p>The shipped <code>libmod_sysfw.so.0.0.0</code> also proves the path
+remains integrated: <code>bios_device::ipmi_usb_reset</code> maps
+request byte 0 to <code>/bin/hub_reset.sh -d</code>, byte 1 to
+<code>-h</code>, and rejects other values with 0xc9. The script ignores
+that argument, so both valid requests run the same
+disconnect/wait/reconnect sequence, and the caller performs no visible
+address-window setup. This narrows the software behavior without
+identifying the live hardware decoder or the external IPMI
+NetFn/command.</p>
 <p>Verification reparsed the findings, handoff, and generated task HTML;
 compared all 191 catalog rows exactly against the acquisition manifest;
 asserted the Tailwind/mobile shell and the corrected X-DMA/MDIO/Dell
