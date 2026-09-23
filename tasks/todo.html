@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=4e6e1f52821196cf54322432fb542158d589b05f0d44490f04840508da9015fe body-sha256=873a6f311a226397fc8c927c855a181254210e6ee556cd5729b8efb152c85f88 -->
+<!-- zmd2html:auto source-sha256=4cc6865074f64ad7cf73ace9bc3dd93773969ed0be70f9e72feb7a281bc0ca44 body-sha256=a90428a48acd188174c4f7f2d43dd880807f9ffbf73f81b2599bb92f1ee50385 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -62,14 +62,16 @@ generated-file, and multiple-file selection.</label></li>
 contract suites and inspect the final diff.</label></li>
 </ul>
 <h2 id="review">Review</h2>
-<p>The original GitHub run failed because the new iLO5 contract requires
-<code>Crypto.Cipher.AES</code>, while the clean runner lacked that
-module. Two follow-up runs proved Ubuntu's
-<code>python3-pycryptodome</code> package was installed and its Python
-selected, but Debian-family packaging exposes <code>Cryptodome</code>,
-not the upstream toolbox's <code>Crypto</code> namespace. CI now creates
-an isolated venv with pinned PyPI <code>pycryptodome</code> 3.23.0, and
-the iLO5 reproduction guide uses the same dependency boundary.</p>
+<p>The iLO5 firmware-unpacking CI test failed because Airbus's iLO5
+decryption scripts import <code>Crypto.Cipher.AES</code>, while the
+clean runner lacked that Python namespace. Two follow-up runs proved
+Ubuntu's <code>python3-pycryptodome</code> package was installed and its
+Python selected, but Debian-family packaging exposes
+<code>Cryptodome</code>, not the upstream toolbox's expected
+<code>Crypto</code> namespace. CI now creates an isolated venv with
+pinned PyPI <code>pycryptodome</code> 3.23.0, and the iLO5 reproduction
+guide uses the same dependency boundary. This work is unrelated to the
+Lenovo XCC investigation below.</p>
 <p><code>tools/sync-docs</code> also accepts one or more
 <code>.md</code> or <code>.html</code> selectors, preserves those
 selectors during post-write verification, and leaves its no-argument
@@ -232,6 +234,84 @@ three sentences. Static verification found all 191 unique manifest paths
 exactly once and exact text equality with the three independently
 reviewed expansion datasets; Python's HTML parser, the documentation
 sync check, and <code>git diff --check</code> pass.</p>
+<p>The continuation handoff in
+<code>docs/lenovo-xcc-shell-script-handoff.html</code> preserves the
+post-catalog analysis: front-panel USB ownership, NMI and SMI paths,
+MySQL schemas and missing dumps, VGPIO framing, eMMC acquisition limits,
+FFDC push behavior, secure-erase acquisition targets, PFR/PCH recovery,
+evidence gaps, operator constraints, and prioritized next steps. It
+makes conversation compaction safe without treating static firmware as
+live device state.</p>
+<p>The handoff also includes a narrow-screen layout: phone-sized
+typography and spacing, wrapped command/hash text, compact list
+indentation, and separated finding sections. HTML parsing, required
+mobile-style checks, and <code>git diff --check</code> pass.</p>
+<h1 id="deepen-lenovo-xcc-smismm-analysis">Deepen Lenovo XCC SMI/SMM
+analysis</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Extract and hash a
+minimal binary evidence set from the preserved XCC 6.92
+SquashFS.</label></li>
+<li><label><input type="checkbox" checked="" />Trace nonce
+authentication and KCS/SMM request and response paths.</label></li>
+<li><label><input type="checkbox" checked="" />Trace VGPIO/WHEA
+dispatch, data stores, and BIOS event definitions.</label></li>
+<li><label><input type="checkbox" checked="" />Trace FPGA SMI
+generation, SMI-pin reset, and SMM-less transport behavior.</label></li>
+<li><label><input type="checkbox" checked="" />Reconcile evidence into
+explicit send, receive, handle, data, and authorization
+conclusions.</label></li>
+<li><label><input type="checkbox" checked="" />Update and stamp both
+Tailwind HTML reports.</label></li>
+<li><label><input type="checkbox" checked="" />Validate report
+structure, evidence claims, repository checks, and commit the
+result.</label></li>
+</ul>
+<h2 id="review-8">Review</h2>
+<p>Static analysis of the XCC 6.92 SquashFS now separates seven
+mechanisms that earlier shell-only evidence blurred together: diagnostic
+NMI, fixed RTC-sync SMI, the queued SMI device, nonce-authenticated
+KCS-SMM, the MPFA memory-fault doorbell plus OEM-IPMI records,
+VGPIO/WHEA event plumbing, and the unrelated chassis-PSoC protocol named
+SMMLESS. The report states direction, payload, trigger, authorization
+boundary, response behavior, and negative findings for each path.</p>
+<p>The strongest proved CPU-SMM path is host-to-BMC: a 32-byte
+<code>secure_nonce</code> is split between TWR and a 16-byte KCS prefix,
+checked before a narrow NetFn/Cmd whitelist, then stripped before
+ordinary IPMI dispatch. The BMC returns ordinary KCS responses. The
+callbacks fail open if unregistered, but normal initialization registers
+them; no practical startup bypass, arbitrary SMI handler selection,
+arbitrary SMM execution, SMRAM access, unsolicited BMC-to-SMM payload
+channel, or network entry into KCS-SMM is established.</p>
+<p>The VGPIO handler is registered at NetFn <code>0x2e</code>/Cmd
+<code>0x92</code> for two OEM IDs. It can operate only on configured
+logical mappings; <code>AssertWHEA</code> creates SEL/auxiliary-log
+state and an 18-byte v2 <code>GPIO</code> record in
+<code>whea-data</code>, while filtered CPU SELs produce 24-byte v1
+<code>IBMC</code> records. This can synthesize telemetry, but no direct
+SMI or host acceptance is proved. MPFA uses a separate NetFn
+<code>0x3a</code>/Cmd <code>0xcd</code> record exchange plus a one-bit
+SMI doorbell. The SMMLESS path is instead BMC-to-chassis-PSoC I2C and
+has no demonstrated relationship to x86 SMM.</p>
+<p>Earlier unsupported claims were corrected:
+<code>/dc/ibmc/nonce_flag</code> is absent from the evidence; offset
+<code>+0x5d</code> is not a proved nonce-required flag;
+<code>Kcs_SMM_RcvCallback</code> is a notification hook, not the payload
+receiver; and the v1 and v2 WHEA writers are separate classes. The
+detailed report retains all 191 catalog entries. Artifact UUIDs remain
+<code>485be802-d991-400d-9afe-e03e20a40760</code> for the full report
+and <code>c975c2aa-4408-4c9a-b03d-531949f7bb76</code> for the
+handoff.</p>
+<p>Verification reparsed both reports and the generated task HTML,
+asserted the mobile viewport and Tailwind shell, found all required
+SMI/SMM sections, preserved exactly 191 catalog rows, rehashed every
+cited firmware/library artifact, passed
+<code>tests/sync-docs-cli.sh</code>, confirmed the documentation pair is
+synchronized, and passed <code>git diff --check</code>. The
+repository-wide <code>tests/run</code> instead stops in the unrelated
+existing <code>advantech-console-lifecycle.sh</code> test because BSD
+<code>sed</code> treats its temporary pathname as a command; no
+Lenovo-documentation assertion failed.</p>
 </div>
 </body>
 </html>
