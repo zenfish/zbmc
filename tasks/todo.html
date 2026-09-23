@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7756a0c2f6e0fe54990917fe3b6c9870c19eee59ef651cc39420cbbf4a5d8c8e body-sha256=50cd4797a21e56332371c715bef92ec9c5d2feb01e2a5fc1c2c349aafa29bc9c -->
+<!-- zmd2html:auto source-sha256=4e6e1f52821196cf54322432fb542158d589b05f0d44490f04840508da9015fe body-sha256=873a6f311a226397fc8c927c855a181254210e6ee556cd5729b8efb152c85f88 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -225,10 +225,13 @@ PCH-reset, firmware-recovery, state-erasure, diagnostic-export,
 forwarding, virtual-media, listener, and provisioning capabilities. It
 identifies five scripts with direct IBM copyright, separates broader IMM
 inheritance from authorship, and explicitly marks proprietary-binary and
-ambiguous-shell boundaries unresolved. Static verification found all 191
-unique manifest paths exactly once in the catalog; Python's HTML parser,
-the documentation sync check, and <code>git diff --check</code>
-pass.</p>
+ambiguous-shell boundaries unresolved. Every catalog entry now explains
+its concrete mechanism, enabled capability, operational or security
+implications, dependencies, provenance, and evidence limits in at least
+three sentences. Static verification found all 191 unique manifest paths
+exactly once and exact text equality with the three independently
+reviewed expansion datasets; Python's HTML parser, the documentation
+sync check, and <code>git diff --check</code> pass.</p>
 </div>
 </body>
 </html>
