@@ -206,15 +206,29 @@ The regression test exercises generated guest commands, exact-line marker handli
 - [x] Prove the live socket owner, threads, file descriptors, and queue endpoints.
 - [x] Trace RMCP/RMCP+ receive, message dispatch, and response framing through the vendor libraries.
 - [x] Map representative successful commands to cached state, files, network helpers, callbacks, IPC, and device boundaries.
-- [x] Record unresolved physical backends and the missing exact `bind()` timestamp without overclaiming.
+- [x] Record unresolved physical backends and directly bound the listener appearance time without overclaiming.
 - [x] Publish and verify a durable Tailwind HTML report and generated Markdown pair.
 
 ## Review
 
-The retained run proves that `IPMIMain` existed by guest uptime 51.852 seconds, unanswered Open Session probes continued through elapsed 218.807 seconds, and the first RMCP+ Open Session Response was captured at elapsed 451.541 seconds. Authenticated IPMI completed at 490 seconds and managed READY followed at 532 seconds. The management interface bounced until roughly 410 seconds, so the packet capture bounds external usability but cannot distinguish an early wildcard `bind()` from a later bind. Resolving the exact syscall time requires a future instrumented boot; no additional cold boot was performed.
+The first retained run proves that `IPMIMain` existed by guest uptime 51.852 seconds, unanswered Open Session probes continued through elapsed 218.807 seconds, and the first RMCP+ Open Session Response was captured at elapsed 451.541 seconds. Authenticated IPMI completed at 490 seconds and managed READY followed at 532 seconds. A later instrumented cold boot sampled `/proc/net/udp6` and `/proc/net/tcp6` every 100 ms: both port-623 sockets were absent at guest uptime 41.75 seconds and first appeared together at 106.99 seconds, but firmware network reconfiguration repeatedly closed and recreated them. The final stable pair appeared at 484.42 seconds and the run reached authenticated IPMI/Web readiness at 619 seconds. The vendor `ipmistack restart` experiment crashed `IPMIMain` and required a cold reboot, so it is not a safe tracing mechanism.
 
 Live `/proc` evidence ties wildcard UDP/623 inode 20142 to PID 304 fd 52. The same process contains `RecvLANPkt`, `LANIfcTask`, `LANMonitor`, `LANTimer`, and eight `MsgHndlr` threads. Static analysis proves the route: `recvfrom` → `/var/LANIfcQ` → `ProcessRMCPReq` → `/var/MsgHndlrQ` → privilege/command-table dispatch → `/var/LANResQ` → RMCP+ framing → `sendto`. The queue names are IPC endpoints inside the multi-threaded process, not evidence of a second IPMI daemon.
 
-Response sources are command-specific. Get Device ID combines initialized `g_BMCInfo` state with `/proc/ractrends/Helper/FwInfo`; channel and user replies read locked objects initialized from AMI configuration files; LAN replies combine those objects with live kernel-network helpers; SEL and SDR read in-process repositories backed by persistent/NVR files; chassis status mixes cached bytes with platform callbacks; and FRU delegates to a platform callback whose Fujitsu physical backend remains unresolved. `IPMIMain` has live I2C, KCS, GPIO, IPMB-queue, `/dev/mem`, reset, netmon, and misc-control handles, but the report does not attribute cached responses to those devices merely because the descriptors exist.
+Response sources are command-specific. Fujitsu overrides generic Get Device ID with `OEM_FTS_GetDeviceID`: the device byte comes from `system.conf`, the product bytes from OEM SDR subtype `0x22`, and the remaining bytes are constants. Channel and user replies read locked objects initialized from AMI configuration files; LAN replies combine those objects with live kernel-network helpers; SEL and SDR read in-process repositories backed by persistent/NVR files; chassis status mixes cached bytes with platform callbacks; and FRU delegates to a platform callback whose Fujitsu physical backend remains unresolved. `IPMIMain` has live I2C, KCS, GPIO, IPMB-queue, `/dev/mem`, reset, netmon, and misc-control handles, but the report does not attribute cached responses to those devices merely because the descriptors exist.
 
 The new `boxes/irmc-fujitsu/ipmi-path.html` report contains the full timing, call chain, response-source table, confidence limits, evidence locations, and SHA-256 hashes. `tools/sync-docs --write` produced its Markdown pair and refreshed the Fujitsu overview pair.
+
+# Resolve field-level provenance for iRMC IPMI replies
+
+- [x] Correct Get Device ID to the Fujitsu OEM handler selected at runtime.
+- [x] Map each observed Device ID, chassis, channel, LAN, user, and SEL field to its exact handler expression and backing source.
+- [x] Distinguish direct proof, configuration provenance, runtime kernel/device input, and unresolved callback boundaries.
+- [x] Cite retained binaries, decompilations, live captures, paths, hashes, and symbol/offset evidence in the report.
+- [x] Regenerate the Markdown pair, verify the focused runtime/docs checks, and commit the correction.
+
+## Review
+
+The report now traces every retained Device ID, chassis, channel, LAN, user, and SEL response field to the selected runtime handler, the exact expression or copy offset, and its constant, file, mutable object, repository, helper, callback, or device backing. It labels ELF and Ghidra addresses separately and records unresolved loader, event-producer, kernel-driver, and physical-signal boundaries instead of inferring them. A final `libnetwork` pass closed the LAN-helper boundary: interface values come from socket ioctls, the default gateway from `/proc/net/route`, and gateway MAC from `/proc/net/arp` or an active Layer-2 ARP exchange.
+
+Fresh live evidence includes raw replies, guest configuration, the complete 25,952-byte SDR repository, and the complete 100 ms listener trace through READY. Static evidence includes named decompilations for the OEM Device ID, channel, chassis, LAN, user, SEL, socket, and network-helper paths. The report records paths, artifact UUIDs where registered, and SHA-256 hashes for each retained artifact. The focused runtime test was updated for the opt-in listener tracer and passes; HTMLParser, Pandoc, `git diff --check`, and the documentation-sync CLI test also pass. `tools/sync-docs --write` reported all 55 documentation pairs synchronized before its two unrelated ignored Lenovo Markdown byproducts were removed.

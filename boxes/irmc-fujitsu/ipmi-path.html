@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- z-artifact: d261976a-0995-46ca-95bb-28ae45ac0b1e -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -17,11 +18,11 @@
   <section class="mt-8 rounded-xl border border-amber-500/40 bg-amber-950/30 p-5">
     <h2 class="text-xl font-semibold text-amber-300">Bottom line</h2>
     <p class="mt-2">The listener is not a separate daemon or proxy. PID 304, <code class="text-amber-200">/usr/local/bin/IPMIMain</code>, owns the dual-stack UDP/623 socket. Its LAN threads decode RMCP/RMCP+, pass decoded IPMI messages through named queues to message-handler threads in the same process, and frame the returned data back onto the original socket.</p>
-    <p class="mt-3">There is no single response source. Identity, users, channels, LAN settings, SEL, and SDR are primarily memory-resident structures initialized from persistent configuration or repository files. Chassis, sensor, and FRU handlers can cross into platform callbacks and hardware-abstraction code. The process has live handles for I2C, KCS, GPIO, IPMB-related queues, <code class="text-amber-200">/dev/mem</code>, and other devices, but their presence does not prove that every command uses them.</p>
+    <p class="mt-3">There is no single response source. Fujitsu replaces AMI's generic Get Device ID handler with an OEM handler; that handler combines one platform-INI byte, hardcoded revision/vendor bytes, and a product ID from an OEM SDR record. Users and channels come from locked objects loaded from INI files. LAN replies deliberately mix configuration with current network state. SEL metadata is computed from a locked repository. Chassis, sensor, and FRU handlers can cross into platform callbacks and hardware-abstraction code. The process has live handles for I2C, KCS, GPIO, IPMB-related queues, <code class="text-amber-200">/dev/mem</code>, and other devices, but their presence does not prove that every command uses them.</p>
   </section>
 
   <section class="mt-10">
-    <h2 class="text-2xl font-semibold text-white">When UDP/623 becomes usable</h2>
+    <h2 class="text-2xl font-semibold text-white">When the listener binds—and when it becomes usable</h2>
     <div class="mt-4 overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-700 text-sm">
         <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Elapsed</th><th class="px-4 py-3">Observed event</th><th class="px-4 py-3">What it proves</th></tr></thead>
@@ -33,10 +34,16 @@
           <tr><td class="px-4 py-3 font-mono">+451.541 s</td><td class="px-4 py-3">First captured 52-byte RMCP+ Open Session Response</td><td class="px-4 py-3">UDP/623 is externally usable by this instant.</td></tr>
           <tr><td class="px-4 py-3 font-mono">+490 s</td><td class="px-4 py-3">First complete authenticated RMCP+ health result</td><td class="px-4 py-3">Session establishment, authentication, dispatch, and response all work.</td></tr>
           <tr><td class="px-4 py-3 font-mono">+532 s</td><td class="px-4 py-3">Run declared READY after stability interval</td><td class="px-4 py-3">This is an acceptance-policy timestamp, not listener startup.</td></tr>
+          <tr class="border-t-2 border-cyan-700"><td class="px-4 py-3 font-mono">41.75 s guest uptime<br><span class="text-slate-500">instrumented run</span></td><td class="px-4 py-3">The tracer starts; UDP6 and TCP6 port 623 are both absent</td><td class="px-4 py-3">Run <code>20260924T084004Z-28287029-4051-4120-b5fa-31af60225ae3</code> directly samples <code>/proc/net/udp6</code> and <code>/proc/net/tcp6</code> every 100 ms from the <code>ipmistack</code> startup path.</td></tr>
+          <tr><td class="px-4 py-3 font-mono">106.99 s guest uptime</td><td class="px-4 py-3">UDP6 inode 7503 appears in state <code>07</code>; TCP6 inode 7504 appears in state <code>0A</code></td><td class="px-4 py-3">This is the first bind, bounded to the preceding 100 ms sampling interval—not the stable listener. UDP/623 and listening TCP/623 are created together.</td></tr>
+          <tr><td class="px-4 py-3 font-mono">122.45–476.38 s</td><td class="px-4 py-3">Repeated socket replacement and loss</td><td class="px-4 py-3">Transitions occur at 122.45 (new pair), 123.91 (both absent), 150.50 (new pair), 456.53 (new pair), 469.12 (TCP absent), 470.57 (both absent), 474.63 (new pair), and 476.38 (both absent). Firmware network reconfiguration makes “first bind” an unsafe readiness proxy.</td></tr>
+          <tr><td class="px-4 py-3 font-mono">484.42 s</td><td class="px-4 py-3">UDP6 inode 20116 and TCP6 inode 20119 appear</td><td class="px-4 py-3">This pair remains present through the successful health checks: the final stable bind observed in this run.</td></tr>
+          <tr><td class="px-4 py-3 font-mono">+619 s</td><td class="px-4 py-3">Instrumented run reaches READY</td><td class="px-4 py-3">Authenticated <code>mc info</code> and the required web health check succeed after the final stable bind.</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="mt-4 rounded-lg border border-slate-700 bg-slate-900 p-4 text-sm"><strong class="text-white">Unresolved exact instant:</strong> this run did not trace <code>bind()</code>. It proves that the process exists by 51.852 seconds, that early probes fail through 218.807 seconds, and that the first reply occurs at 451.541 seconds. Because the interface was not usable until roughly 410 seconds, packet capture cannot distinguish an early wildcard bind from a bind performed later. Exact bind time requires a new boot with syscall tracing or frequent guest-side snapshots of <code>/proc/net/udp6</code>; no new cold boot was performed for this report.</p>
+    <p class="mt-4 rounded-lg border border-slate-700 bg-slate-900 p-4 text-sm"><strong class="text-white">How to interpret the two runs:</strong> the earlier packet capture establishes first external RMCP+ success at 451.541 seconds. The later guest-side trace establishes first socket appearance at 106.99 seconds, repeated teardown/rebind activity, and the final stable pair at 484.42 seconds. These are different boots: compare the ordering and behavior, not the absolute timestamps. In both, a bound wildcard socket is necessary but is not sufficient evidence of stable remote service.</p>
+    <p class="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/20 p-4 text-sm"><strong class="text-amber-300">This was not stock behavior:</strong> the successful boots use the derived-initramfs <code>irmc_ipmi_prep</code> hook. Before <code>IPMIMain</code>, it marks the mapped LAN interface enabled/up, sets <code>AMI_DYNAMIC_LAN_IFC_SUPPORT=1</code>, and removes <code>/tmp/BMC1/IPMIConfig.dat</code> so the process rebuilds its cached configuration. The instrumented run additionally enables <code>irmc_trace_ipmi</code>; that tracer observes sockets but does not create them. Do not use the vendor <code>/etc/init.d/ipmistack restart</code> path for diagnosis: the experiment made <code>IPMIMain</code> SIGSEGV/core and it did not recover until a cold reboot.</p>
   </section>
 
   <section class="mt-10">
@@ -52,7 +59,7 @@
   <section class="mt-10">
     <h2 class="text-2xl font-semibold text-white">End-to-end request and response route</h2>
     <ol class="mt-4 space-y-4 text-slate-300">
-      <li><strong class="text-cyan-300">1. Socket creation.</strong> <code>libipmilan.so.13.8.0</code> creates an IPv4 or IPv6 datagram socket, applies options including <code>SO_BINDTODEVICE</code> and <code>SO_REUSEADDR</code>, and binds the configured RMCP port.</li>
+      <li><strong class="text-cyan-300">1. Socket creation.</strong> Static analysis follows <code>LANIfcTask</code> → <code>UpdateLANStateChange</code> → the internal socket initializer in <code>libipmilan.so.13.8.0</code>. It calls <code>socket(AF_INET6, type, protocol)</code>, applies <code>SO_BINDTODEVICE</code> for the configured interface and <code>SO_REUSEADDR</code>, then <code>bind()</code>s the wildcard configured RMCP port. The datagram socket is the RMCP/RMCP+ path; the second stream socket calls <code>listen()</code> and is TCP/623.</li>
       <li><strong class="text-cyan-300">2. Receive thread.</strong> <code>RecvLANPkt</code> waits with <code>select</code>, receives with <code>recvfrom</code>, attaches peer/interface metadata, and posts the record to <code>/var/LANIfcQ</code>.</li>
       <li><strong class="text-cyan-300">3. LAN protocol thread.</strong> <code>LANIfcTask</code> consumes <code>/var/LANIfcQ</code> and calls <code>ProcessRMCPReq</code>. That code validates RMCP/RMCP+ framing, session state, sequence numbers, authentication/HMAC, and encryption.</li>
       <li><strong class="text-cyan-300">4. Message-handler handoff.</strong> The decoded IPMI request is posted to <code>/var/MsgHndlrQ</code>. The LAN path blocks waiting on <code>/var/LANResQ</code>.</li>
@@ -68,14 +75,134 @@
       <table class="min-w-full divide-y divide-slate-700 text-sm">
         <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Command</th><th class="px-4 py-3">Handler</th><th class="px-4 py-3">Response source</th><th class="px-4 py-3">Bus / IPC implications</th></tr></thead>
         <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
-          <tr><td class="px-4 py-3">Get Device ID<br><code>mc info</code></td><td class="px-4 py-3"><code>GetDevID</code><br><code>libipmimsghndlr</code> 0x48d7c</td><td class="px-4 py-3">Mostly cached <code>g_BMCInfo</code>. On first use it opens <code>/proc/ractrends/Helper/FwInfo</code> and parses <code>FW_VERSION=%d.%d.%d[.%d]</code>. A platform callback may adjust manufacturer-specific bytes.</td><td class="px-4 py-3">No live host-bus read is present in the generic handler. The observed Fujitsu IANA 10368/product <code>0x0666</code> come from initialized platform state.</td></tr>
-          <tr><td class="px-4 py-3">Get Chassis Status</td><td class="px-4 py-3"><code>GetChassisStatus</code><br><code>libipmimsghndlr</code> 0x4b3b8</td><td class="px-4 py-3">Copies cached chassis bytes under a mutex, then invokes platform callbacks for current power and miscellaneous state.</td><td class="px-4 py-3">Mixed cache and hardware abstraction. In this image the generic <code>PDK_GetPowerState</code> stub returns zero; miscellaneous state can call <code>haGetChassisIntrusionRawStatus</code>. Exact board-level backing beyond those callbacks is not yet proved.</td></tr>
-          <tr><td class="px-4 py-3">Get Channel Info</td><td class="px-4 py-3"><code>GetChInfo</code> → <code>getChannelInfo</code></td><td class="px-4 py-3">Reads a locked in-memory channel object. Channel records are initialized from AMI IPMI configuration, including <code>LanChcfg*.ini</code> and generated channel structures.</td><td class="px-4 py-3">No per-request bus operation or external daemon RPC was found.</td></tr>
-          <tr><td class="px-4 py-3">Get LAN Configuration Parameters</td><td class="px-4 py-3"><code>GetLanConfigParam</code><br>0x60eb8</td><td class="px-4 py-3">Mixes cached LAN structures with network helpers such as <code>GetEthIndex</code>, <code>GetIfcName</code>, <code>nwReadNWCfg_v4_v6</code>, <code>nwGetNWInformations</code>, and <code>nwGetSrcMacAddr</code>. Startup inputs include <code>/conf/BMC1/LanIfccfg.ini</code>, <code>lancfg*.ini</code>, and <code>LanChcfg*.ini</code>.</td><td class="px-4 py-3">Filesystem-backed during initialization, then memory- and kernel-network-state backed. This explains why the reply reflects the active address and MAC.</td></tr>
-          <tr><td class="px-4 py-3">Get User Name / Get User Access</td><td class="px-4 py-3"><code>GetUserName</code> 0x411d4<br><code>GetUserAccess</code> 0x40e84</td><td class="px-4 py-3">Reads locked user and per-channel user objects via <code>getUserIdInfo</code>, <code>getChUserIdInfo</code>, and <code>getChannelInfo</code>. Startup configuration names include <code>UserConfig.ini</code>, <code>FixedUserInfo.ini</code>, and <code>UserEncPswd.ini</code>.</td><td class="px-4 py-3">Memory-resident configuration loaded from persistent storage. No per-request SQL/Redis/other-process lookup was found in these handlers.</td></tr>
-          <tr><td class="px-4 py-3">Get SEL Info / Get SEL Entry</td><td class="px-4 py-3"><code>GetSELInfo</code> 0x6e7e0<br><code>GetSELEntry</code> 0x6ee3c</td><td class="px-4 py-3">Reads a locked in-process SEL repository and NVR-backed structures through <code>GetSDRSELNVRAddr</code>. Named persistent inputs include <code>SEL.dat</code>, <code>selconfig.ini</code>, and <code>selreclaiminfo.ini</code>.</td><td class="px-4 py-3">Persistent-file/NVR-backed cache; not a live sensor-bus transaction for each query.</td></tr>
+          <tr><td class="px-4 py-3">Get Device ID<br><code>mc info</code></td><td class="px-4 py-3"><code>OEM_FTS_GetDeviceID</code><br><code>libipmipdkcmds</code><br>ELF 0x26240 · Ghidra 0x36240</td><td class="px-4 py-3">Fujitsu's <code>g_Oem_App_CmdHndlr</code> replaces App command <code>0x01</code>. Device ID comes from <code>/usr/local/platform/sdrcfg/system.conf</code>; product ID comes from OEM SDR subtype <code>0x22</code>; all other returned bytes are constants in the OEM handler.</td><td class="px-4 py-3">The generic AMI <code>GetDevID</code> and <code>/proc/ractrends/Helper/FwInfo</code> are not on the live path. No host-bus read occurs for this reply.</td></tr>
+          <tr><td class="px-4 py-3">Get Chassis Status</td><td class="px-4 py-3"><code>GetChassisStatus</code><br>ELF 0x4b3b8 · Ghidra 0x5b3b8</td><td class="px-4 py-3">Loads <code>chassiscfg.ini</code>-derived cached bytes, then invokes registered Fujitsu callbacks: <code>PDK_GetPSGood</code>, <code>PDK_GetLastPowerEvent</code>, and <code>PDK_GetMiscChassisState</code>.</td><td class="px-4 py-3">Mixed persistent cache, runtime state, and hardware input. Power crosses a cached host-state bit, configured GPIO, and <code>/dev/miscctrl</code> power-good query. Intrusion also reaches <code>/dev/miscctrl</code>; its final board signal remains unresolved.</td></tr>
+          <tr><td class="px-4 py-3">Get Channel Info</td><td class="px-4 py-3"><code>GetChInfo</code><br>ELF 0x40278 · Ghidra 0x50278 → <code>getChannelInfo</code></td><td class="px-4 py-3">Reads the locked channel-2 object. The loader and live values trace to <code>/conf/BMC1/LanChcfg1.ini</code>; despite the filename suffix, that section declares <code>ChannelNumber=2</code>. The active-session count is mutable runtime state.</td><td class="px-4 py-3">No per-request bus operation or external daemon RPC was found.</td></tr>
+          <tr><td class="px-4 py-3">Get LAN Configuration Parameters</td><td class="px-4 py-3"><code>GetLanConfigParam</code><br>ELF 0x60eb8 · Ghidra 0x70eb8</td><td class="px-4 py-3">Parameter 4 reads the helper result or cached address-source state; parameters 3, 6, and 12 call <code>nwReadNWCfg_v4_v6</code>; parameter 5 calls <code>nwGetNWInformations</code>; parameter 13 refreshes through <code>nwGetSrcMacAddr</code>. <code>LanIfccfg.ini</code> maps channel 2 to active <code>eth0</code>.</td><td class="px-4 py-3">The live DHCP values override stale defaults in <code>lancfg2.ini</code>. <code>libnetwork</code> obtains interface fields with Linux socket ioctls, the default gateway from <code>/proc/net/route</code>, and gateway MAC from the ARP table or an active ARP request.</td></tr>
+          <tr><td class="px-4 py-3">Get User Name / Get User Access</td><td class="px-4 py-3"><code>GetUserName</code><br>ELF 0x411d4 · Ghidra 0x511d4<br><code>GetUserAccess</code><br>ELF 0x40e84 · Ghidra 0x50e84</td><td class="px-4 py-3"><code>GetUserName</code> copies 16 bytes at user-record offset <code>+5</code>. <code>GetUserAccess</code> packs channel counts and the per-channel user's privilege/callback/link/IPMI flags. Live records match <code>UserConfig.ini</code> and <code>LanChcfg2.ini</code>.</td><td class="px-4 py-3">Memory-resident configuration loaded from persistent storage; no per-request SQL, Redis, or other-process lookup was found.</td></tr>
+          <tr><td class="px-4 py-3">Get SEL Info / Get SEL Entry</td><td class="px-4 py-3"><code>GetSELInfo</code><br>ELF 0x6e7e0 · Ghidra 0x7e7e0<br><code>GetSELEntry</code><br>ELF 0x6ee3c · Ghidra 0x7ee3c</td><td class="px-4 py-3">Reads a mutex-protected repository header. Entry count and timestamps come from shared-SEL or NVR header fields; free bytes are computed as <code>(capacity − entries) × 0x12</code>; operation bits come from command-enable checks.</td><td class="px-4 py-3">Repository/NVR-backed cache, not a live sensor-bus transaction for each query. <code>selreclaiminfo.ini</code> corroborates timestamp persistence; its count lagged the live header by one.</td></tr>
           <tr><td class="px-4 py-3">Get SDR Repository / records</td><td class="px-4 py-3"><code>GetSDRRepositoryInfo</code><br><code>GetSDR</code></td><td class="px-4 py-3">Locked in-process SDR metadata and records initialized by <code>SDRInitAgent</code>. Sensor-reading commands can additionally call platform hooks.</td><td class="px-4 py-3">The earlier SDR timeout is above the network layer and is consistent with repository/hardware initialization problems; it is not evidence that UDP/623 failed.</td></tr>
           <tr><td class="px-4 py-3">Read FRU Data</td><td class="px-4 py-3"><code>ReadFRUData</code> 0x60490</td><td class="px-4 py-3">After locking, the generic handler delegates to a platform callback at function-table offset <code>+0x16c</code>.</td><td class="px-4 py-3">The observed completion code <code>0x81</code> originates below generic dispatch. The exact Fujitsu callback and its physical FRU backing remain unresolved.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">How to read the provenance tables</h2>
+    <p class="mt-3 text-slate-300">Offsets below are offsets in the command payload after the completion code; they are the bytes printed by <code>zipmi raw</code>. “Expression” means the exact construction in the selected handler. “Backing source” identifies where the input existed before the request: a constant, a named file/key, mutable process state, a repository record, or a callback boundary. A matching value alone is not treated as causation where the code selects another source.</p>
+    <div class="mt-4 grid gap-3 sm:grid-cols-3">
+      <div class="rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-4"><strong class="text-emerald-300">Proved</strong><p class="mt-1 text-sm text-slate-300">Wire bytes, handler expression, and source were matched statically and, where possible, against the live guest.</p></div>
+      <div class="rounded-lg border border-amber-500/30 bg-amber-950/20 p-4"><strong class="text-amber-300">Boundary</strong><p class="mt-1 text-sm text-slate-300">The handler's helper or callback is identified, but its final kernel/board implementation is not attributed without further evidence.</p></div>
+      <div class="rounded-lg border border-slate-600 bg-slate-900 p-4"><strong class="text-slate-200">Not inferred</strong><p class="mt-1 text-sm text-slate-300">An open device descriptor elsewhere in <code>IPMIMain</code> is not assigned to a response unless this command path reaches it.</p></div>
+    </div>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">Get Device ID: every returned byte</h2>
+    <p class="mt-3 text-slate-300">Live data: <code>06 02 01 00 02 bf 80 28 00 66 06 02 3f 00 53</code>. This corrects the earlier attribution to AMI's generic <code>GetDevID</code>. The generic function would return Device ID <code>0x20</code>; the live reply starts with <code>0x06</code>. Fujitsu registers command <code>0x01</code> in <code>g_Oem_App_CmdHndlr</code> to <code>OEM_FTS_GetDeviceID</code>, and that function reproduces all 15 bytes exactly.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Payload offset</th><th class="px-4 py-3">Observed / meaning</th><th class="px-4 py-3">Exact expression</th><th class="px-4 py-3">Backing source</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3">0</td><td class="px-4 py-3"><code>06</code> · Device ID</td><td class="px-4 py-3"><code>getSystemConfiguration(2, &amp;value, 1)</code></td><td class="px-4 py-3"><code>/usr/local/platform/sdrcfg/system.conf</code>, <code>[systeminfo] device_id=0x06</code>. The function lazily parses this INI and caches the byte.</td></tr>
+          <tr><td class="px-4 py-3">1</td><td class="px-4 py-3"><code>02</code> · device revision; Device-SDR bit clear</td><td class="px-4 py-3">Literal <code>0x02</code></td><td class="px-4 py-3">Hardcoded in the Fujitsu handler.</td></tr>
+          <tr><td class="px-4 py-3">2–3</td><td class="px-4 py-3"><code>01 00</code> · firmware revision 1.00</td><td class="px-4 py-3">Literals <code>0x01</code>, <code>0x00</code></td><td class="px-4 py-3">Hardcoded. These bytes do <em>not</em> come from <code>/proc/ractrends/Helper/FwInfo</code> on this command path.</td></tr>
+          <tr><td class="px-4 py-3">4</td><td class="px-4 py-3"><code>02</code> · IPMI version</td><td class="px-4 py-3">Literal <code>0x02</code></td><td class="px-4 py-3">Hardcoded.</td></tr>
+          <tr><td class="px-4 py-3">5</td><td class="px-4 py-3"><code>bf</code> · additional-device-support bitmap</td><td class="px-4 py-3">Literal <code>0xbf</code></td><td class="px-4 py-3">Hardcoded.</td></tr>
+          <tr><td class="px-4 py-3">6–8</td><td class="px-4 py-3"><code>80 28 00</code> · little-endian IANA <code>0x002880</code> = 10368, Fujitsu</td><td class="px-4 py-3">Three literal assignments</td><td class="px-4 py-3">Hardcoded vendor identity.</td></tr>
+          <tr><td class="px-4 py-3">9–10</td><td class="px-4 py-3"><code>66 06</code> · little-endian product ID <code>0x0666</code></td><td class="px-4 py-3"><code>FtsGetSdrrId()</code></td><td class="px-4 py-3">OEM SDR subtype <code>0x22</code>, record ID <code>0x0197</code>, record offsets <code>+0x0f..+0x10</code>. The 128-entry OEM-SDR cache is populated while Fujitsu processes type-<code>0xc0</code> SDRs loaded from <code>/usr/local/platform/sdrcfg/SDR.dat</code>.</td></tr>
+          <tr><td class="px-4 py-3">11–14</td><td class="px-4 py-3"><code>02 3f 00 53</code> · auxiliary firmware-revision bytes</td><td class="px-4 py-3">Four literal assignments</td><td class="px-4 py-3">Hardcoded. Their more specific Fujitsu meaning is unresolved; the report does not invent one.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-950/20 p-4 text-sm text-slate-300"><strong class="text-cyan-300">Why two places say 0x0666:</strong> <code>system.conf</code> also contains <code>system_id=0x0666</code>, but the Get Device ID product bytes are not read from that key. They are read from the cached subtype-<code>0x22</code> SDR record. The equality is corroboration, not the data path.</p>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">Get Chassis Status: cache plus callbacks</h2>
+    <p class="mt-3 text-slate-300">Live data: <code>20 01 41 00</code>. <code>GetChassisStatus</code> first copies four cached bytes under the chassis mutex, then selectively rewrites them. This is the clearest example of a mixed source: persistent/runtime cache provides defaults, while registered platform callbacks can replace current power, last-power-event, and miscellaneous state.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Offset</th><th class="px-4 py-3">Observed / decode</th><th class="px-4 py-3">Handler construction</th><th class="px-4 py-3">What is and is not proved</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3">0</td><td class="px-4 py-3"><code>20</code> · current power bit 0 = off; restore-policy bits <code>01</code> = restore previous state</td><td class="px-4 py-3">Clear cached bit 0, call callback-table slot 0, then OR its Boolean result into bit 0; retain cached bits 6:1.</td><td class="px-4 py-3"><code>chassiscfg.ini: PowerState=32</code> supplies <code>0x20</code>. Slot 0 is <code>PDK_GetPSGood</code>, which returns <code>isHostOn() &amp;&amp; haGetPowerOk() &amp;&amp; haIsSystemPowerOk()</code>. <code>isHostOn()</code> reads cached host-state bit 0; <code>haGetPowerOk()</code> samples a configured GPIO with <code>get_gpio_data</code>; <code>haIsSystemPowerOk()</code> reaches <code>/dev/miscctrl</code> command <code>0x7fff4d09</code>. Which board rails/signals feed that GPIO and miscctrl result remains unresolved.</td></tr>
+          <tr><td class="px-4 py-3">1</td><td class="px-4 py-3"><code>01</code> · last-power-event bit 0 set</td><td class="px-4 py-3">Copy cached byte, then callback-table slot <code>0x32</code> replaces it through <code>PDK_GetLastPowerEvent</code>.</td><td class="px-4 py-3"><code>chassiscfg.ini: LastPowerEvent=0</code>, so live <code>1</code> is runtime state from the PDK's internal last-event byte, not the file. The setter/event producer remains unresolved.</td></tr>
+          <tr><td class="px-4 py-3">2</td><td class="px-4 py-3"><code>41</code> · misc-state base bit 6 plus intrusion bit 0</td><td class="px-4 py-3">Discard the cached misc byte, add internal drive/cooling bits 2/3 if set, seed <code>0x40</code> (or identify-state <code>0x50</code>/<code>0x60</code>), then invoke slot <code>0xc1</code>.</td><td class="px-4 py-3">Slot <code>0xc1</code> is <code>PDK_GetMiscChassisState</code>; it calls <code>haGetChassisIntrusionRawStatus</code> and ORs bit 0 when asserted. The raw query reaches <code>/dev/miscctrl</code> command <code>0x7fff4d05</code>. A clear/re-read path additionally accesses AST2600 addresses <code>0x1e6e2014</code>, <code>0x1e6ef000</code>, and <code>0x1e6ef010</code> through <code>mmap_read32</code>/<code>mmap_write32</code>. Thus <code>0x41 = 0x40 + intrusion</code>; the final pin/CPLD/board signal is still not proved.</td></tr>
+          <tr><td class="px-4 py-3">3</td><td class="px-4 py-3"><code>00</code> · front-panel button-disable bitmap</td><td class="px-4 py-3">Fourth byte of the mutex-protected cached chassis status; not rewritten by this handler.</td><td class="px-4 py-3"><code>chassiscfg.ini: FPBtnEnables=0</code>. No per-request bus access appears in the handler for this byte.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">Get Channel Info 2: every returned field</h2>
+    <p class="mt-3 text-slate-300">Live data: <code>02 04 01 82 f2 1b 00 00 00</code>. <code>GetChInfo</code> locks the BMC-instance channel table, resolves channel 2 through <code>getChannelInfo</code>, and packs the response from that object.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Offset</th><th class="px-4 py-3">Value</th><th class="px-4 py-3">Object expression</th><th class="px-4 py-3">Initialization / runtime source</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3">0</td><td class="px-4 py-3"><code>02</code> · channel number</td><td class="px-4 py-3">Validated request channel</td><td class="px-4 py-3"><code>LanChcfg1.ini: ChannelNumber=2</code>. The filename is an internal configuration index, not the returned channel number.</td></tr>
+          <tr><td class="px-4 py-3">1</td><td class="px-4 py-3"><code>04</code> · 802.3 LAN medium</td><td class="px-4 py-3"><code>((object[10] &amp; 3) &lt;&lt; 5) | (object[9] &gt;&gt; 3)</code></td><td class="px-4 py-3"><code>ChannelMedium=4</code>.</td></tr>
+          <tr><td class="px-4 py-3">2</td><td class="px-4 py-3"><code>01</code> · IPMB-1.0 protocol</td><td class="px-4 py-3"><code>(object[10] &gt;&gt; 2) &amp; 0x1f</code></td><td class="px-4 py-3"><code>ChannelProtocol=1</code>.</td></tr>
+          <tr><td class="px-4 py-3">3</td><td class="px-4 py-3"><code>82</code> · session support 2, active sessions 2</td><td class="px-4 py-3"><code>((object[11] &amp; 1) &lt;&lt; 7) | ((object[10] &gt;&gt; 7) &lt;&lt; 6) | ((object[11] &gt;&gt; 1) &amp; 0x3f)</code></td><td class="px-4 py-3"><code>SessionSupport=2</code> is configured. The file has <code>ActiveSession=0</code>; live <code>2</code> proves the object is updated after load.</td></tr>
+          <tr><td class="px-4 py-3">4–6</td><td class="px-4 py-3"><code>f2 1b 00</code> · protocol-vendor IANA <code>0x001bf2</code></td><td class="px-4 py-3"><code>memcpy(object + 0x13, 3)</code></td><td class="px-4 py-3"><code>ProtocolVendorId/0..2 = 242,27,0</code>.</td></tr>
+          <tr><td class="px-4 py-3">7–8</td><td class="px-4 py-3"><code>00 00</code> · auxiliary channel info</td><td class="px-4 py-3"><code>memcpy(object + 0x16, 2)</code></td><td class="px-4 py-3"><code>AuxiliaryInfo/0..1=0</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">LAN channel 2: which layer supplies each value</h2>
+    <p class="mt-3 text-slate-300">Each raw response begins with parameter-revision byte <code>0x11</code>. The live interface mapping is <code>/conf/BMC1/LanIfccfg.ini</code>: channel 2 → <code>eth0</code>, enabled and up. Crucially, <code>lancfg2.ini</code> still contains fallback address <code>192.168.2.100</code> and gateway <code>192.168.2.203</code>, while the replies contain the active DHCP network. That contrast proves which branches are live-state-backed.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Selector / raw reply</th><th class="px-4 py-3">Displayed value</th><th class="px-4 py-3">Handler source</th><th class="px-4 py-3">Implication</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3"><code>4: 11 02</code></td><td class="px-4 py-3">Address source: DHCP</td><td class="px-4 py-3">Depending on dynamic-LAN state, byte zero returned by <code>nwReadNWCfg_v4_v6</code> or cached LAN-object byte <code>+0x1d50</code>.</td><td class="px-4 py-3"><code>lancfg2.ini</code> also has <code>IPAddrSrc=2</code>; the retained trace does not distinguish the two equal-valued branches for this selector.</td></tr>
+          <tr><td class="px-4 py-3"><code>3: 11 0a fa 00 2a</code></td><td class="px-4 py-3"><code>10.250.0.42</code></td><td class="px-4 py-3"><code>nwReadNWCfg_v4_v6</code>, then copy four bytes from helper-result offset <code>+0x0d</code>.</td><td class="px-4 py-3"><code>libnetwork</code> refreshes this field through an <code>AF_INET</code>/<code>SOCK_DGRAM</code> socket and <code>SIOCGIFADDR</code> (<code>0x8915</code>). Active kernel interface state, not the stale INI address.</td></tr>
+          <tr><td class="px-4 py-3"><code>5: 11 52 54 00 fa 42 02</code></td><td class="px-4 py-3"><code>52:54:00:fa:42:02</code></td><td class="px-4 py-3"><code>nwGetNWInformations</code>, then copy result bytes <code>+1..+6</code>.</td><td class="px-4 py-3">The helper opens an <code>AF_INET</code>/<code>SOCK_DGRAM</code> socket and issues <code>SIOCGIFHWADDR</code> (<code>0x8927</code>). The result matches the QEMU NIC configured in <code>zbmc.box</code>.</td></tr>
+          <tr><td class="px-4 py-3"><code>6: 11 ff 00 00 00</code></td><td class="px-4 py-3"><code>255.0.0.0</code></td><td class="px-4 py-3"><code>nwReadNWCfg_v4_v6</code>, then copy four bytes from helper-result offset <code>+0x15</code>.</td><td class="px-4 py-3"><code>SIOCGIFNETMASK</code> (<code>0x891b</code>) supplies the live <code>/8</code> interface mask.</td></tr>
+          <tr><td class="px-4 py-3"><code>12: 11 0a 00 00 01</code></td><td class="px-4 py-3"><code>10.0.0.1</code></td><td class="px-4 py-3"><code>nwReadNWCfg_v4_v6</code>, then copy four bytes from helper-result offset <code>+0x19</code>.</td><td class="px-4 py-3"><code>GetDefaultGateway</code> opens and parses <code>/proc/net/route</code>, selects the matching interface with route flags <code>3</code>, and copies its four gateway bytes.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 text-sm text-slate-300"><strong class="text-white">The helper boundary is closed:</strong> these functions are implemented by <code>/usr/local/lib/libnetwork.so.13.9.0</code>, not another daemon. In addition to the captured fields above, selector 13 calls <code>nwGetSrcMacAddr</code>: it first searches <code>/proc/net/arp</code> for the target IPv4 address and interface; if absent, it opens an <code>AF_PACKET</code>/<code>SOCK_DGRAM</code> socket and performs an active ARP exchange with <code>ioctl</code>, <code>bind</code>, <code>sendto</code>, <code>select</code>, and <code>recvfrom</code>. That selector can therefore emit Layer-2 traffic when queried.</p>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">Users: name, existence, and channel privilege</h2>
+    <p class="mt-3 text-slate-300"><code>GetUserName</code> and <code>GetUserAccess</code> do not query an authentication daemon. Under the user mutex they resolve records through <code>getUserIdInfo</code>, <code>getChUserIdInfo</code>, and <code>getChannelInfo</code>.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Query / raw</th><th class="px-4 py-3">Construction</th><th class="px-4 py-3">Persistent source</th><th class="px-4 py-3">Meaning</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3">User 1 name: 16 zero bytes</td><td class="px-4 py-3"><code>memcpy(response + 1, user_record + 5, 16)</code></td><td class="px-4 py-3"><code>UserConfig.ini</code> record 0: <code>UserId=1</code>, <code>UserName=</code>, <code>FixedUser=1</code>.</td><td class="px-4 py-3">A real fixed, enabled null-name IPMI user—not a failed read.</td></tr>
+          <tr><td class="px-4 py-3">User 2 name: <code>61 64 6d 69 6e</code> + padding</td><td class="px-4 py-3">Same 16-byte copy</td><td class="px-4 py-3"><code>UserConfig.ini</code> record 1: <code>UserId=2</code>, <code>UserName=admin</code>, <code>UserStatus=1</code>.</td><td class="px-4 py-3">The displayed <code>admin</code> is a persisted BMC-local account name.</td></tr>
+          <tr><td class="px-4 py-3">User 1 access: <code>10 42 01 50</code></td><td class="px-4 py-3">Counts packed from channel object; final byte packs privilege nibble and callback/link/IPMI flags.</td><td class="px-4 py-3"><code>LanChcfg2.ini</code> channel-user 0: <code>AccessLimit=0</code>, callback 1, link auth 0, IPMI messaging 1.</td><td class="px-4 py-3">Runtime object says maximum IDs 16, enabled IDs 2, fixed-name IDs 1. The captured file corroborates 2 and 1 but stores <code>MaxUser=0</code>; the loader rule producing runtime 16 remains unresolved.</td></tr>
+          <tr><td class="px-4 py-3">User 2 access: <code>10 42 01 55</code></td><td class="px-4 py-3">Same packing; low privilege nibble is <code>5</code>.</td><td class="px-4 py-3"><code>LanChcfg2.ini</code> channel-user 1: <code>AccessLimit=5</code>, callback 1, link auth 0, IPMI messaging 1.</td><td class="px-4 py-3">Privilege <code>5</code> is OEM, which is why <code>ipmitool user list 2</code> prints “OEM.” User-access initialization and channel-info initialization use distinct indexed configuration structures.</td></tr>
+          <tr><td class="px-4 py-3">User 3: completion <code>0xcc</code></td><td class="px-4 py-3">Reject if no valid <code>getUserIdInfo</code> record with magic <code>0x55534552</code> (“USER”) exists.</td><td class="px-4 py-3">Slot 2 has <code>UserId=0</code>, blank name, and no valid configured record. Other unused slots look the same, but only ID 3 was retained as a raw request.</td><td class="px-4 py-3">“Invalid data field” means no configured user record for that requested ID, not a LAN or authentication transport failure.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 text-sm text-slate-300"><strong class="text-white">Exact access-byte packing:</strong> byte 0 is <code>(((channel[0x1c] &amp; 7) &lt;&lt; 3) | (channel[0x1b] &gt;&gt; 5)) &amp; 0x3f</code> → <code>0x10</code> maximum IDs. Byte 1's low six bits are <code>(((channel[0x1d] &amp; 1) &lt;&lt; 5) | (channel[0x1c] &gt;&gt; 3)) &amp; 0x3f</code> → 2 current IDs; user status <code>1</code> supplies the high <code>0x40</code>, producing <code>0x42</code>. Byte 2 is <code>(channel[0x1d] &gt;&gt; 1) &amp; 0x3f</code> → one fixed-name ID. Byte 3 is <code>(AccessLimit &amp; 0x0f) | (UserAccessCallback &lt;&lt; 4) | (LinkAuth &lt;&lt; 5) | (IPMIMessaging &lt;&lt; 6)</code>, producing <code>0x50</code> or <code>0x55</code>.</p>
+    <p class="mt-4 text-sm text-slate-400">Password material is not returned by these commands. The firmware separately names <code>UserEncPswd.ini</code>, but this trace intentionally follows only fields present in Get User Name/Access replies.</p>
+  </section>
+
+  <section class="mt-10">
+    <h2 class="text-2xl font-semibold text-white">Get SEL Info: computed repository metadata</h2>
+    <p class="mt-3 text-slate-300">Two read-only samples demonstrate the live update: <code>51 33 00 68 1c f8 5c 6d 38 00 00 00 00 0f</code> (51 entries, 7272 bytes free), then <code>51 35 00 44 1c b1 5d 6d 38 00 00 00 00 0f</code> (53 entries, 7236 bytes free). Two added entries consume <code>2 × 0x12 = 36</code> bytes exactly.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Offsets</th><th class="px-4 py-3">Value</th><th class="px-4 py-3">Exact construction</th><th class="px-4 py-3">Backing</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3">0</td><td class="px-4 py-3"><code>51</code> · SEL version 0x51</td><td class="px-4 py-3">Literal <code>0x51</code></td><td class="px-4 py-3">Hardcoded IPMI SEL format version.</td></tr>
+          <tr><td class="px-4 py-3">1–2</td><td class="px-4 py-3"><code>33 00</code> then <code>35 00</code></td><td class="px-4 py-3">Little-endian 16-bit entry count from the selected shared-SEL or NVR repository header.</td><td class="px-4 py-3">Locked in-process repository state. The nearby file snapshot had <code>NumRecords=52</code> while the live header returned 53. File lag, loader adjustment, or differing field semantics are all possible; this trace does not choose among them.</td></tr>
+          <tr><td class="px-4 py-3">3–4</td><td class="px-4 py-3"><code>68 1c</code> then <code>44 1c</code></td><td class="px-4 py-3"><code>min((capacity_entries − current_entries) × 0x12, configured_max)</code></td><td class="px-4 py-3">Repository capacity/count; each SEL record is 18 bytes. This arithmetic exactly matches both samples.</td></tr>
+          <tr><td class="px-4 py-3">5–8</td><td class="px-4 py-3"><code>f8 5c 6d 38</code> then <code>b1 5d 6d 38</code></td><td class="px-4 py-3">Little-endian 32-bit last-add timestamp from repository header offset <code>+6</code> (shared mode) or <code>+8</code> (NVR mode).</td><td class="px-4 py-3">Repository metadata. <code>selreclaiminfo.ini: AddTimeStamp</code> is the persistent companion; the precise branch selected in this live process was not captured.</td></tr>
+          <tr><td class="px-4 py-3">9–12</td><td class="px-4 py-3"><code>00 00 00 00</code> · last erase time</td><td class="px-4 py-3">Little-endian 32-bit last-erase field</td><td class="px-4 py-3"><code>selreclaiminfo.ini: EraseTimeStamp=0</code> corroborates the value.</td></tr>
+          <tr><td class="px-4 py-3">13</td><td class="px-4 py-3"><code>0f</code> · all four reported operations supported</td><td class="px-4 py-3">Start at zero; OR bits after <code>GetCommandEnabledStatus</code> checks for Storage commands <code>0x41</code>, <code>0x42</code>, <code>0x45</code>, and <code>0x46</code>. Overflow would set bit 7 separately.</td><td class="px-4 py-3">Live command-enable table; no overflow bit was set.</td></tr>
         </tbody>
       </table>
     </div>
@@ -90,8 +217,11 @@
     <div class="rounded-xl border border-slate-700 bg-slate-900 p-5">
       <h2 class="text-xl font-semibold text-white">What remains unknown</h2>
       <ul class="mt-3 list-disc space-y-2 pl-6 text-slate-300">
-        <li>The exact <code>bind()</code> timestamp in the existing cold run.</li>
-        <li>The final physical source behind every platform callback, especially FRU and chassis signals.</li>
+        <li>The exact instruction-level <code>bind()</code> timestamps; the instrumented run bounds each observed socket transition to a 100 ms polling interval, including first appearance at 106.99 seconds and final stable appearance at 484.42 seconds.</li>
+        <li>The final board signal behind the configured <code>haGetPowerOk</code> GPIO and the kernel-driver-to-pin mapping for <code>/dev/miscctrl</code> commands <code>0x7fff4d09</code> (system power-good) and <code>0x7fff4d05</code> (chassis intrusion). The software and driver boundaries are proved; GPIO/CPLD/eSPI/IPMB attribution beyond them is not.</li>
+        <li>The producer that changes Fujitsu's runtime last-power-event byte from persisted 0 to returned 1, and the exact active-session increment site.</li>
+        <li>The final physical backend for FRU callbacks.</li>
+        <li>The Fujitsu-specific interpretation of auxiliary Device ID bytes <code>02 3f 00 53</code> beyond the IPMI “auxiliary firmware revision” field.</li>
         <li>Whether the real RX2540 M7 routes particular callbacks over GPIO, I2C/IPMB, eSPI, CPLD/FPGA, or another controller differently from this reduced QEMU platform.</li>
         <li>Why full SDR enumeration exceeded the client timeout; the transport and dispatcher remained healthy.</li>
       </ul>
@@ -100,13 +230,49 @@
 
   <section class="mt-10">
     <h2 class="text-2xl font-semibold text-white">Evidence and reproducibility</h2>
-    <p class="mt-3 text-slate-300">Live evidence is retained on Debby under <code>/home/zen/src/oob/zbmc/work/irmc-fujitsu/runs/20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560/</code>. Process/socket captures are under <code>/home/zen/xcc-shell-audit-20260922/irmc-ipmi-{proc,sockets}.txt</code>. Static-analysis inputs and decompilations are under <code>work/irmc-ipmi-analysis/</code>.</p>
+    <p class="mt-3 text-slate-300">Every claim above is tied to one of four evidence classes: retained network/process capture, live read-only IPMI response, live guest configuration capture, or static analysis of a named binary. Live run evidence remains on Debby under <code>/home/zen/src/oob/zbmc/work/irmc-fujitsu/runs/20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560/</code>; the field-level evidence was copied into this checkout so it survives loss of the running VM.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-700 text-sm">
+        <thead class="bg-slate-900 text-left text-slate-300"><tr><th class="px-4 py-3">Evidence</th><th class="px-4 py-3">What it establishes</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3"><code>work/irmc-ipmi-analysis/live-field-raw-20260924.txt</code></td><td class="px-4 py-3">Fresh raw Device ID, chassis, channel, LAN, user, and SEL replies from <code>10.250.0.42</code>.</td></tr>
+          <tr><td class="px-4 py-3"><code>guest-system-conf-live.txt</code></td><td class="px-4 py-3">Live <code>system.conf</code>, including <code>device_id=0x06</code>, <code>system_id=0x0666</code>, platform comments, and board configuration.</td></tr>
+          <tr><td class="px-4 py-3"><code>guest-field-source-live.txt</code><br><code>guest-field-source-focused-live.txt</code></td><td class="px-4 py-3">Live channel, interface, LAN, user, and SEL INI data used to compare persistent state with runtime replies.</td></tr>
+          <tr><td class="px-4 py-3"><code>live-chassis-channel-config.txt</code><br><code>chassis-channel-field-provenance.c</code></td><td class="px-4 py-3">Live chassis/channel configuration plus the decompiled callback chain through cached host state, GPIO, <code>/dev/miscctrl</code>, and AST2600 register accesses.</td></tr>
+          <tr><td class="px-4 py-3"><code>irmc-fujitsu-sdr.bin</code></td><td class="px-4 py-3">The complete 25,952-byte live SDR repository used to verify record <code>0x0197</code>, OEM subtype <code>0x22</code>, and product bytes <code>66 06</code>.</td></tr>
+          <tr><td class="px-4 py-3"><code>evidence/irmc-listener-trace-console-20260924.log</code><br><code>ipmilan-decomp/{LANIfcTask,UpdateLANStateChange,InitializeSocket-real}.c</code></td><td class="px-4 py-3">The complete 100 ms guest-side socket timeline through READY and the static call path that creates, binds, and listens on UDP/TCP port 623. Console artifact UUID: <code>d17fa867-6df9-529e-b1c7-de5d157a7fbb</code>.</td></tr>
+          <tr><td class="px-4 py-3"><code>evidence/libnetwork.so.13.9.0</code><br><code>evidence/libnetwork-backends.c</code></td><td class="px-4 py-3">The exact ioctl, procfs, and active-ARP implementations behind the live LAN response helpers. Registered binary artifact UUID: <code>af62ea9c-7f9a-50a6-95cc-1bc01d94242e</code>; decompilation document UUID: <code>57b05f54-4753-4fb3-b45c-43ffbb1536b7</code>.</td></tr>
+          <tr><td class="px-4 py-3"><code>pdk-preprocess-device.c</code><br><code>fts-util-device-id.c</code></td><td class="px-4 py-3">Decompiled Fujitsu Device ID override, system-configuration parser, and OEM-SDR product lookup.</td></tr>
+          <tr><td class="px-4 py-3"><code>msghndlr-channel.c</code><br><code>msghndlr-response-sources.c</code></td><td class="px-4 py-3">Decompiled channel, chassis, LAN, user, and SEL handlers. Addresses in these files are Ghidra image addresses; tables label ELF and Ghidra offsets separately where both are cited.</td></tr>
+          <tr><td class="px-4 py-3"><code>irmc-ipmi-{proc,sockets}.txt</code> on Debby</td><td class="px-4 py-3">PID/thread/file-descriptor/socket ownership and IPC queue endpoints.</td></tr>
+        </tbody>
+      </table>
+    </div>
     <div class="mt-4 overflow-x-auto rounded-lg bg-black/40 p-4 font-mono text-xs text-slate-300"><pre>2769dd187b7649adb4e7b01af9b4d83fd00ef0e2838a6cc6cc5936a1a448bcf5  host-br-zbmc.pcap0
 5bf47aca53c4375621bf1e4436a0829b07c247253d4ac8bb2c9f8c3872744c94  console.log
 9c0e95d41675315c24c161949a1f83fa77a3e45d4f2e6fe41b92495d056cebae  IPMIMain
 77225865ef06a97260779d2a5a569e57e8b602c397529e8ddd3c81756a365fb1  libipmilan.so.13.8.0
 26231f8e7cb1c7685e3fb7cde0d48dd26bb49aebd836ca0a18bed512d3ecb8c8  libipmimsghndlr.so.13.37.0
-e9e2ecfb37a6844097c028e975aa391ecea00cbd2c216baff488ac41204101ca  libipmistack.so.13.18.0</pre></div>
+e9e2ecfb37a6844097c028e975aa391ecea00cbd2c216baff488ac41204101ca  libipmistack.so.13.18.0
+35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804  libipmipdkcmds.so.1.53.20
+2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a  libfts_util.so.1.30.73
+04a13853e4abe56a68587c3279827a7d304fb61d2bbde5b716f588a5999ee1a5  libipmipdk.so.13.10.0
+5a722a9019ed19c8ab1ed7b69bbb35300451af8b2e29b527c949db50f5eaf756  libipmipar.so.13.20.0
+a22b7f6465e258bb15b4a5f6f4da909f1254e6b9bebdea7b564486df760f327e  libfts_SocHalSdUtil.so.13.0.0
+1860eb452ba0a173e68154dc00562664e59331c9e88f4d87ed60933f33c10b6f  libmiscctrl.so.13.3.0
+c95c510443e2eec44b5597ca6a82bbc049662ccefed30d7e41124ce5edf28e56  live-field-raw-20260924.txt
+5fbd894fdce0f7f68d72a833f9688388be6ec40872a2a196f1ac0063bc1a8bb0  guest-system-conf-live.txt
+5fc4ba2bc5af4b56e710652c51d118c16a9febbbd39fd55ff5258c91eec44fe9  guest-field-source-live.txt
+d6a53b896cb27de1b5a7a0ce7897726756e2caf65e5eedf8a60e9361f9127d65  guest-field-source-focused-live.txt
+b1130025144a1e2d51acacca0a8ae512963857cda1fed064f3bea80bf8af54b7  live-chassis-channel-config.txt
+82188f6b3899852b7991216e101253b4537fc73d69e72b7cadc19e86c15e17e1  chassis-channel-field-provenance.c
+a1fcc4367e865b88a25864b8418d22f5c147109c874d4d9f7fb4df6a773b3d07  irmc-fujitsu-sdr.bin
+bf7acb8c15656738cf2f5864c834e8fb16485b2d1b7be7bbd2eae6359880865f  evidence/irmc-listener-trace-console-20260924.log
+468f216bb5d8b68139c800a429e088284ee371cc975854f63c86d99fa873bbbb  ipmilan-decomp/LANIfcTask.c
+c5701e8994a69713092bfd6b611867484baab829a1d7c36da73a890af7e1a206  ipmilan-decomp/UpdateLANStateChange.c
+8688b6b06a52e796a99257a4044edb2fff0fb544a13d4323caf0384e7a734ccb  ipmilan-decomp/InitializeSocket-real.c
+365fc1ae2b07f32e699775dd27a282f5c172bc61bd2642d7506aeeaf48670e9a  evidence/libnetwork.so.13.9.0
+53adb3441e4817e3fca69cc47ad9c1b67e13f33c680d46727c358fc489be4d95  evidence/libnetwork-backends.c</pre></div>
   </section>
 
   <footer class="mt-10 border-t border-slate-700 pt-5 text-sm text-slate-400">

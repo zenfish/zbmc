@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=864068e35f98b25ca16d2cd80988b753f0d3b9cc27e668faaf12c77479f02384 body-sha256=24a6573d9556e6e1b2c15627c13b0d93c8b975a7fa45104a0d88f9f1dedddcfb -->
+<!-- zmd2html:auto source-sha256=ea00dbd1f7077b0fb944446c948cbb84864e863ff8ade0e7f2ec79e49851adba body-sha256=fb99f7f494d6897d6f91263e2d0d2250361188406b6f2b9f339eff0abcbe600a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>lessons</title>
@@ -59,7 +59,70 @@ firmware-script catalog wording | summarized argument and counter
 behavior as “target” and “counter moves” without naming either or
 stating test limitations | name exact inputs, fields, routing
 assumptions, and ignored statuses; mark missing consumers unresolved |
-terse labels can imply stronger behavior than the script proves</p>
+terse labels can imply stronger behavior than the script proves
+2026-09-23 | shared task ledger context | called an HPE
+firmware-unpacking test the “new iLO5 contract” without naming the
+unpacker and let it appear adjacent to Lenovo work | name the exact
+tool/test and explicitly separate unrelated project sections | vague
+shorthand creates false technical relationships 2026-09-23 | Lenovo SMM
+naming | treated SMMLESS/PSoC chassis-management symbols as evidence
+about x86 System Management Mode | resolve vendor acronyms from
+surrounding devices, transports, and callers before joining evidence
+paths | identical acronyms can name unrelated trust domains 2026-09-23 |
+Lenovo binary inference | promoted strings and decompiler field guesses
+into nonce-path claims before tracing exact symbols and callbacks |
+trace producer, consumer, registration, and data movement end-to-end;
+label missing providers unknown | string presence and neighboring
+offsets do not prove runtime semantics 2026-09-23 | Dell DMA comparison
+| treated a stale May status page as current after the user said the
+BCM5709 DMA proof had succeeded | search later source, run records,
+commits, and session history before calling a path unproved | project
+summaries can lag successful experiments by months 2026-09-23 | Lenovo
+0x40800000 classification | promoted “BMC-issued physical access” into
+“definitely device MMIO and not host RAM” while the target was
+unidentified | separate the initiating address space from the responding
+target and preserve undocumented bridge/alias possibilities until
+measured | CPU-side access mechanics do not prove what hardware decodes
+an address 2026-09-23 | HD iRMC execution host | defaulted to Debby
+because it is the fleet runtime host even though HD's launcher uses
+macOS-specific <code>lo0 alias</code> semantics | test an author's exact
+implementation first on its evidenced native host, then test portability
+separately | changing the execution environment confounds implementation
+failures with host-portability failures 2026-09-23 | iRMC IPMI diagnosis
+scope | continued diagnosing the Mac control after the user asked why it
+fails on Debby | treat Debby as the target and use the Mac only as
+comparative evidence | a reproduced symptom on another host does not
+establish the target host's failure mechanism 2026-09-23 | initramfs
+helper limitations | treated the embedded BusyBox applet set as the
+whole implementation boundary | reuse shipped applets when sufficient,
+but inject a pinned architecture-correct static helper before contorting
+the design | a derived initramfs can carry tools absent from the vendor
+image 2026-09-24 | BMC connectivity retest | improvised one-off
+listeners and probes before locating the established health and
+serial-command scripts | use <code>tools/zbmc status -v</code> for
+host-to-BMC checks and the retained serial command runner for
+BMC-to-host checks | canonical probes preserve directionality and avoid
+rediscovering transport quirks 2026-09-24 | connectivity test layering |
+led with authenticated IPMI and HTTP health when the question was
+whether packets and connections work at all | establish ICMP,
+unauthenticated RMCP discovery, and bare TCP handshakes in both
+directions before application/authentication checks | transport failures
+and service/authentication failures require different diagnoses
+2026-09-24 | iRMC IPMI recovery attribution | described IPMI working
+after reboot without first naming the derived-initramfs configuration
+fix | compare the failed and successful boot inputs before attributing
+recovery to a restart | the successful run enabled dynamic LAN and
+invalidated a stale cache, so reboot alone was not causal 2026-09-24 |
+IPMI response provenance | described commands by broad backing store
+without tracing displayed fields | map every returned byte to the
+selected runtime handler, exact expression, initialization source, and
+unresolved helper/device boundary | vendor handler overrides and mixed
+cache/callback replies make command-level summaries materially
+misleading 2026-09-24 | QEMU serial logfile capture | watched QEMU's
+serial logfile without draining the simultaneously connected socket |
+always drain the serial socket even when the logfile is the
+authoritative transcript | a full chardev socket buffer stalls guest
+console output and hides the completion marker</p>
 </div>
 </body>
 </html>

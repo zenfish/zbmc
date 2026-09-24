@@ -45,6 +45,7 @@ result = subprocess.run(
 )
 assert result.stdout == (
     "    irmc_ipmi_prep || exit 1; "
+    "irmc_ipmi_trace_listener; "
     "/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr\n"
 ), result.stdout
 PY
@@ -53,6 +54,7 @@ grep -Fq 'initramfs-shell.cpio.gz' "$box/boot.sh"
 grep -Fq 'irmc_diag_shell' "$box/boot.sh"
 grep -Fq 'irmc_diag_root' "$box/boot.sh"
 grep -Fq 'irmc_diag_ipmi' "$box/boot.sh"
+grep -Fq 'irmc_trace_ipmi' "$box/boot.sh"
 grep -Fq '/newroot/usr/local/bin/remman' "$box/build.sh"
 grep -Fq "busybox echo 'exec /bin/sh -i'" "$box/build.sh"
 grep -Fq 'getty -n -l /usr/local/bin/remman' "$box/build.sh"
@@ -63,6 +65,7 @@ grep -Fq 'section && /^Enabled=0$/' "$box/build.sh"
 grep -Fq 'section && /^Up_Status=0$/' "$box/build.sh"
 grep -Fq 'rm -f /tmp/BMC1/IPMIConfig.dat' "$box/build.sh"
 grep -Fq 'irmc_ipmi_prep || exit 1' "$box/build.sh"
+grep -Fq 'ZBMC_IPMI_LISTENER' "$box/build.sh"
 
 tmp=$(mktemp -d)
 trap 'rmdir "$tmp"' EXIT
