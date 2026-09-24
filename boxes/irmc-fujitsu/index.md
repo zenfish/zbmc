@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=85fda467b95cf00076727c9a74b376eaaba0cc6990bc21bf9030f7185584ee29 body-sha256=f2da9f1b96f7284bf3cecf6e592c94e124d0d8a7cb682ac1b4ee4f95c28ccae6 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=44e6ada5ba72f8fdbce1e60d78a03c5e2d228135deca3842f2130452d8b751a6 body-sha256=62e42c79eb12245db9e8c6a5bebc6154ec0a1b5e513ba257dcafba25e63b95b2 -->
 
 # Fujitsu iRMC S6
 
@@ -25,6 +25,8 @@ The Debby acceptance run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560`
 ## IPMI internals
 
 The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the [IPMI listener and response-source trace](ipmi-path.md).
+
+The [OEM IPMI and power-control map](oem-power-map.md) inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.
 
 ## Copying files
 

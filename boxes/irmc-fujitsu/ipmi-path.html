@@ -213,6 +213,7 @@
       <h2 class="text-xl font-semibold text-white">Hardware and IPC visible in the process</h2>
       <p class="mt-3 text-slate-300"><code>IPMIMain</code> holds descriptors for <code>/dev/mem</code>, <code>/dev/reset</code>, <code>/dev/ipmi-kcs1</code> through <code>3</code>, <code>/dev/i2c-5</code>, an I2C slave-message queue, <code>/dev/gpiochip0</code>, GPIO sysfs values, <code>/dev/netmon</code>, <code>/dev/miscctrl</code>, and <code>/dev/ttyS5</code>. It also owns queues for LAN, KCS, IPMB, UDS, Node Manager, power control, PCIe, CPU-error, and SOL paths.</p>
       <p class="mt-3 text-slate-300">Console errors prove active attempts to use missing emulated IPMB and eSPI RTC paths. They do not prove that the successful identity, LAN, user, or SEL replies traversed those buses.</p>
+      <p class="mt-3 text-slate-300">Power commands deserve a separate end-to-end treatment because their successful replies acknowledge queued work rather than completed actuation. See the <a class="text-cyan-300 underline" href="oem-power-map.html">OEM IPMI and power-control map</a> for LAN/KCS reachability, privileges, command layouts, policy, and the final LPC/SWC, GPIO, I²C/IPMB, PMBus, and cache boundaries.</p>
     </div>
     <div class="rounded-xl border border-slate-700 bg-slate-900 p-5">
       <h2 class="text-xl font-semibold text-white">What remains unknown</h2>

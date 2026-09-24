@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<!-- z-artifact: 9071144c-5b3a-4c74-8f30-3a8331e244ec -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fujitsu iRMC S6 power-control map</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+<main class="mx-auto max-w-7xl px-5 py-10 sm:px-8">
+  <header class="mb-10 border-b border-slate-700 pb-8">
+    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-400">zBMC · Fujitsu iRMC S6</p>
+    <h1 class="mt-3 text-4xl font-bold tracking-tight">Power-control, telemetry, and transport map</h1>
+    <p class="mt-4 max-w-4xl text-lg leading-8 text-slate-300">An evidence-backed map of standard and Fujitsu OEM power commands, the interfaces that can carry them, the asynchronous power engine behind them, and the AST2600, GPIO, I²C/IPMB, PMBus, cache, and policy boundaries they reach.</p>
+  </header>
+
+  <section class="mb-10 rounded-2xl border border-amber-500/40 bg-amber-950/30 p-6">
+    <h2 class="text-2xl font-semibold text-amber-300">Bottom line</h2>
+    <ul class="mt-4 list-disc space-y-3 pl-6 leading-7 text-slate-200">
+      <li><strong>Remote power control is real.</strong> Authenticated LAN requests on normal LUN 0 reach the shared dispatcher. Standard Chassis Control is Operator-level and exposes off, on, cycle, reset, NMI, soft shutdown, and two Fujitsu extensions.</li>
+      <li><strong>The broadest surprise is privilege, not transport.</strong> Fujitsu SCCI power command <code class="text-cyan-300">NetFn 0x2e / command 0x01</code> is registered at User privilege. Its selector multiplexes harmless reads and state-changing writes under the same outer privilege gate.</li>
+      <li><strong>KCS is implemented three times.</strong> <code>/dev/ipmi-kcs1</code>, <code>kcs2</code>, and <code>kcs3</code> have active listener threads and feed the same dispatch machinery. This QEMU model lacks the x86/LPC/eSPI master needed to prove a physical host transaction.</li>
+      <li><strong>Command success means acceptance, not completed actuation.</strong> Chassis Control posts work to <code>/var/ChassisCtrlQ</code>; a separate power-event engine performs the rail, reset, NMI, or shutdown sequence.</li>
+      <li><strong>The lowest recovered power-button boundary is exact.</strong> A 100 ms simulated button press reaches AST2600 LPC/SWC physical <code>0x1e789184</code>, bit 15, through <code>/dev/miscctrl</code>. It is a CPU-driven register operation, not DMA and not host-RAM access.</li>
+      <li><strong>NMI is implemented; SMI is not proved.</strong> NMI logical output <code>0x1b</code> maps through the RX2540 M7 product table to active-low AST GPIO index <code>0x69</code> (105, conventionally GPIO N1) and the GPIO HAL pulse operation. The exported Fujitsu SMI handler is a no-op stub; an LPCSMI pinmux name alone does not establish a usable SMI path.</li>
+    </ul>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">Transport reachability</h2>
+    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-700">
+      <table class="min-w-full divide-y divide-slate-700 text-left text-sm">
+        <thead class="bg-slate-900 text-slate-300"><tr><th class="px-4 py-3">Path</th><th class="px-4 py-3">Power-command status</th><th class="px-4 py-3">Evidence and limit</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3 font-semibold">LAN, LUN 0</td><td class="px-4 py-3 text-emerald-300">Proved live</td><td class="px-4 py-3">Authenticated RMCP+ carried four safe SCCI power reads. Selector <code>0x1d</code> also succeeded in a session capped at User privilege. No changing selector was sent.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">LAN, LUN 3</td><td class="px-4 py-3 text-amber-300">Transport proved; handler rejected</td><td class="px-4 py-3">A valid RMCP+ LUN-3 request received completion <code>0xc0</code>. The packet reached the BMC, but this does not prove execution of the duplicated SMM/MSMM command table.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">KCS 1–3</td><td class="px-4 py-3 text-cyan-300">Structural route proved</td><td class="px-4 py-3">Three devices, listener threads, request queues, and response queues are live. <code>KCSIfcTask</code> preserves NetFn/LUN, marks session type 4, sets current channel <code>0x0f</code>, and enters normal dispatch. No emulated host master issued a request.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">UDS</td><td class="px-4 py-3 text-cyan-300">Structural route proved</td><td class="px-4 py-3"><code>/var/MsgHndlrQUDS1</code>, <code>/var/UDS_IFC_Q1</code>, and <code>/var/UDS_RES_Q1</code> are live. Session type 7 is recognized. No UDS power transaction was injected.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">IPMB</td><td class="px-4 py-3 text-cyan-300">Structural route; peer absent</td><td class="px-4 py-3">The shared dispatcher and IPMB queues are active, but QEMU lacks the peer bus/device and logs send failures. Physical IPMB reachability is not proved.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">Internal PDK API</td><td class="px-4 py-3 text-emerald-300">Code path proved</td><td class="px-4 py-3">Requests whose response path is <code>/var/PDKAPIQ</code> bypass the configurable command firewall. Handler selection, length checks, and privilege logic still exist elsewhere; this is not a network interface.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 leading-7 text-slate-300">The <code>0xaaaa</code> table value is not “LAN-only.” In each 16-byte command record, offset <code>+10</code> is a two-bit-per-internal-channel support/configuration mask and offset <code>+12</code> is the interface selector. <code>CheckCmdCfg</code> resolves channel <code>0x0f</code> to a channel object and shifts by the object's internal field at <code>+4</code>; it does not shift directly by wire channel number 15. The live KCS object value is still uncaptured, so its final firewall decision has not been experimentally proved.</p>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">Standard Chassis Control</h2>
+    <p class="mt-3 leading-7 text-slate-300"><code>NetFn 0x00 / command 0x02 / normally LUN 0</code> is replaced by <code>OEM_FTS_ChassisControl</code>. The request is exactly one byte, minimum privilege is Operator (<code>3</code>), the channel mask is <code>0xaaaa</code>, and the interface selector is zero.</p>
+    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-700">
+      <table class="min-w-full divide-y divide-slate-700 text-left text-sm">
+        <thead class="bg-slate-900 text-slate-300"><tr><th class="px-4 py-3">Action</th><th class="px-4 py-3">Meaning</th><th class="px-4 py-3">Internal route</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3"><code>0x00</code></td><td class="px-4 py-3">Power down</td><td class="px-4 py-3">Queues event <code>0x08</code>; policy chooses orderly/agent-mediated or hard-off behavior.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x01</code></td><td class="px-4 py-3">Power on</td><td class="px-4 py-3">Queues event <code>0x04</code>; checks suppression, temperature, shared-rail, and platform state before button actuation.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x02</code></td><td class="px-4 py-3">Power cycle</td><td class="px-4 py-3">Queues composite event <code>0x0840</code>; off and delayed restart are separate phases.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x03</code></td><td class="px-4 py-3">Hard reset</td><td class="px-4 py-3">Queues event <code>0x20</code>, then pulses the reset path when platform policy permits.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x04</code></td><td class="px-4 py-3">Diagnostic interrupt / NMI</td><td class="px-4 py-3">Queues notify event <code>0x00800000</code>, ending at logical output <code>0x1b</code> → AST GPIO index <code>0x69</code> through the product-specific pulse callback.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x05</code></td><td class="px-4 py-3">Soft shutdown</td><td class="px-4 py-3">Checks ACPI state and shutdown-in-progress state, then requests a power-button pulse when appropriate.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x0d</code></td><td class="px-4 py-3">Fujitsu power-off override</td><td class="px-4 py-3">Sends an internal override message; the outer command returns before physical completion.</td></tr>
+          <tr><td class="px-4 py-3"><code>0x0e</code></td><td class="px-4 py-3">Fujitsu pulse power button</td><td class="px-4 py-3">Sends the internal pulse-button request.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mb-10 rounded-2xl border border-rose-500/40 bg-rose-950/20 p-6">
+    <h2 class="text-2xl font-semibold text-rose-300">Fujitsu SCCI power: User-level mixed read/write surface</h2>
+    <p class="mt-3 leading-7 text-slate-200">The outer command is <code>NetFn 0x2e / command 0x01</code>, begins with Fujitsu IANA bytes <code>80 28 00</code>, accepts variable request length, and has minimum privilege User (<code>2</code>). The fourth byte is a selector. Because read and write selectors share one command-table entry, the table-level privilege check alone does not distinguish them.</p>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <div class="rounded-xl border border-emerald-700/50 bg-slate-900/60 p-5">
+        <h3 class="font-semibold text-emerald-300">Safe reads proved over LAN</h3>
+        <ul class="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300">
+          <li><code>0x15</code>: last power-on reason → one zero byte.</li>
+          <li><code>0x16</code>: temporary or last power-off reason → one zero byte.</li>
+          <li><code>0x18</code>: four-byte runtime power field → four zero bytes.</li>
+          <li><code>0x1d</code>: power-off-inhibit state → one zero byte; independently proved at User session privilege.</li>
+        </ul>
+      </div>
+      <div class="rounded-xl border border-rose-700/50 bg-slate-900/60 p-5">
+        <h3 class="font-semibold text-rose-300">Mutating selectors present at the same outer privilege</h3>
+        <ul class="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300">
+          <li><code>0x17</code>: store the next/temporary power reason.</li>
+          <li><code>0x1b</code>: set the on/off reason and, for one value, emit a SEL event.</li>
+          <li><code>0x1c</code>: set power-off inhibit.</li>
+          <li><code>0x20</code>: set the next scheduled power-on time and change the power-saving-prevention reason.</li>
+        </ul>
+        <p class="mt-3 text-sm text-amber-200">The handler performs no second privilege check. It verifies only that the total request is at least four bytes before the selector switch, but the setters then read fixed fields through offsets <code>+8</code> or <code>+11</code>. That is a static out-of-bounds-read condition for short requests and a weak validation boundary, although no crash or disclosure was exercised live.</p>
+        <p class="mt-3 text-sm font-semibold text-rose-200">These write selectors were identified statically and were not invoked.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">Fujitsu C0 and D0 power families</h2>
+    <p class="mt-3 leading-7 text-slate-300">The firmware names these “C0” and “D0,” but the wire NetFns are <code>0x30</code> and <code>0x34</code> with LUN 0. Every recovered entry below is Admin privilege (<code>4</code>), variable length, channel mask <code>0xaaaa</code>, interface selector zero. Static registration proves dispatch candidates; it does not prove that every blade-oriented handler is meaningful on this RX2540 target.</p>
+    <div class="mt-4 grid gap-5 xl:grid-cols-2">
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-5">
+        <h3 class="text-lg font-semibold text-cyan-300">NetFn 0x30 (“C0”)</h3>
+        <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+          <li><code>00/01</code> get/set boot-watchdog time. Tiers 0–7 map to 120, 300, 600, 900, 1200, 1800, 3600, or 6000 seconds; the setter also accepts an extended 0–100 minute value.</li>
+          <li><code>02/03</code> get/set watchdog enable; the setter accepts only 0 or 1.</li>
+          <li><code>04/05</code> get/set watchdog behavior. The setter consumes one byte without a visible value-range check, so the meaning of nonstandard actions remains unresolved.</li>
+          <li><code>06/07</code> get/set AC-power-fail restore policy. The setter passes the first byte into <code>utSetPowerRestorepolicy</code> without a local range check; this governs whether the host stays off, restores its former state, or powers on after AC returns.</li>
+          <li><code>0a/0b</code> get/set reboot retry counter.</li>
+          <li><code>10/11</code> get/set the two-byte error-off restart delay in configuration space <code>0x32</code>.</li>
+          <li><code>19</code> clear power-on-hours by writing <code>0x02800000</code> to battery-backed POH state.</li>
+          <li><code>20/21</code> get/set whether shutdown should be graceful; <code>22</code> reports whether shutdown communication bits <code>0x0b</code> are active. The setter reads byte 0 without a local request-length check.</li>
+          <li><code>51</code> combines cached/message-LED state with <code>isHostOn</code>; <code>57</code> reports blade power-good/status; <code>59</code> requests host power-off despite its “force server-blade shutdown” name.</li>
+          <li><code>68/69</code> get/set compound ASRR policy: watchdog action, restore behavior, timeout tier/extended minutes, retry count, and restart delay.</li>
+          <li><code>6a/6b</code> get/set watchdog-timer enable.</li>
+          <li><code>87</code> returns a blade-only 14-byte “PowerFull” structure containing blade type, calculated initial/throttled consumption, and memory/PCI/mezzanine counts; it may return command-invalid on this rack server.</li>
+          <li><code>9b</code> is misleadingly named <code>setCPUErrorConfig</code> but is a no-op success stub: it returns completion 0 without reading the request or changing configuration.</li>
+        </ul>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-5">
+        <h3 class="text-lg font-semibold text-cyan-300">NetFn 0x34 (“D0”)</h3>
+        <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+          <li><code>20/21</code> set/get iRMC power-control policy. Modes 0–6 include simple and compound policies; mode 4 uses request byte 7 as an array index for four writes without a visible bound check, making this an important memory-corruption test target.</li>
+          <li><code>22</code> combines Fujitsu configuration <code>0x1a00</code> with Intel Node Manager state to report the actual performance state.</li>
+          <li><code>23/24</code> begin/end forced minimum-power mode. Start saves policy, writes configuration <code>0x1a00=2</code>, and sets a forced-state flag; end restores the saved policy.</li>
+          <li><code>27/28</code> set/get fan duty. Set requires two bytes but visibly consumes only byte 0; the purpose of byte 1 is unresolved.</li>
+          <li><code>29</code> ignores its request payload and forces the host power-on LED on.</li>
+          <li><code>2a</code> reads a 12-byte power-history sample by class and 16-bit index: minute-class indices 0–1439, a shorter class 0–743, and a platform-sized long-term class. It reads all three fields without a local length check.</li>
+          <li><code>2c</code> is stateful and mutating despite the “get counter” name. Mode 0 returns Node Manager counters, clears collection state, and starts a new CPU-throttling averaging interval; paged modes expose saved bytes. When request length is merely greater than 1 it copies 20 bytes from <code>request+1</code> without requiring 21 bytes.</li>
+          <li><code>2d</code> resolves SDR power-consumption sensor numbers for entity <code>0x1b</code> instances 0/1 and entity <code>0xe0</code> instance 0.</li>
+          <li><code>2e</code> returns a big-endian 32-bit enhanced power budget on blade systems and <code>0xc1</code> on non-blade targets.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mt-5 rounded-xl border border-amber-700/60 bg-amber-950/30 p-5">
+      <h3 class="text-lg font-semibold text-amber-200">Raw CPU bus access: NetFn 0x30 / command 0xe6</h3>
+      <p class="mt-2 text-sm leading-6 text-slate-300">This Admin command is a constrained PECI multiple-write/read primitive. The request is <code>[target, write-length, read-length, write-bytes…]</code>; it requires cached host-on state, checks that the request contains all declared write bytes, and returns <code>[completion, read-bytes…]</code>. Allowed PECI command bytes are <code>01 61 65 a1 a5 b1 b5 e1 e5 f7</code>. Several classes retry up to ten times; write classes recalculate their trailing CRC. This is meaningful CPU-package management authority, including power/thermal policy transactions, but it is neither arbitrary PECI nor host-memory access.</p>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">DCMI, Node Manager, PMBus, and stored telemetry</h2>
+    <div class="mt-4 space-y-5 leading-7 text-slate-300">
+      <p><strong class="text-slate-100">DCMI:</strong> wire NetFn <code>0x2c</code> uses group-extension ID <code>0xdc</code>. Fujitsu overrides commands <code>0x01</code> and <code>0x02</code>; the loaded DCMI library registers the complete table below. Get Power Reading combines a current platform callback with cached minimum, maximum, and average samples plus a timestamp. It is not necessarily a synchronous bus read.</p>
+      <div class="overflow-x-auto"><table class="min-w-full text-sm">
+        <thead class="bg-slate-900 text-slate-300"><tr><th class="px-4 py-3">Cmd</th><th class="px-4 py-3">Privilege</th><th class="px-4 py-3">Request bytes</th><th class="px-4 py-3">Operation and implication</th></tr></thead>
+        <tbody class="divide-y divide-slate-700">
+          <tr><td class="px-4 py-3"><code>01</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">2</td><td class="px-4 py-3">Get DCMI capabilities.</td></tr>
+          <tr><td class="px-4 py-3"><code>02</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">4</td><td class="px-4 py-3">Get current/cached minimum, maximum, average, timestamp, and sampling state.</td></tr>
+          <tr><td class="px-4 py-3"><code>03</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">3</td><td class="px-4 py-3">Get configured power limit, correction time, sampling period, and exception action.</td></tr>
+          <tr><td class="px-4 py-3"><code>04</code></td><td class="px-4 py-3">Operator</td><td class="px-4 py-3">15</td><td class="px-4 py-3">Set the power limit and enforcement behavior; this can arm a later automatic shutdown.</td></tr>
+          <tr><td class="px-4 py-3"><code>05</code></td><td class="px-4 py-3">Operator</td><td class="px-4 py-3">4</td><td class="px-4 py-3">Activate or deactivate the configured power limit.</td></tr>
+          <tr><td class="px-4 py-3"><code>06</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">3</td><td class="px-4 py-3">Get asset-tag text.</td></tr>
+          <tr><td class="px-4 py-3"><code>07</code></td><td class="px-4 py-3">Operator</td><td class="px-4 py-3">5</td><td class="px-4 py-3">Get DCMI sensor information.</td></tr>
+          <tr><td class="px-4 py-3"><code>08</code></td><td class="px-4 py-3">Operator</td><td class="px-4 py-3">variable</td><td class="px-4 py-3">Write asset-tag text.</td></tr>
+          <tr><td class="px-4 py-3"><code>09</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">3</td><td class="px-4 py-3">Get management-controller identifier text.</td></tr>
+          <tr><td class="px-4 py-3"><code>0a</code></td><td class="px-4 py-3">Admin</td><td class="px-4 py-3">variable</td><td class="px-4 py-3">Set management-controller identifier text.</td></tr>
+          <tr><td class="px-4 py-3"><code>0b</code></td><td class="px-4 py-3">Operator</td><td class="px-4 py-3">7</td><td class="px-4 py-3">Set thermal-limit configuration.</td></tr>
+          <tr><td class="px-4 py-3"><code>0c</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">3</td><td class="px-4 py-3">Get thermal-limit configuration.</td></tr>
+          <tr><td class="px-4 py-3"><code>10</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">5</td><td class="px-4 py-3">Get temperature readings.</td></tr>
+          <tr><td class="px-4 py-3"><code>12</code></td><td class="px-4 py-3">Admin</td><td class="px-4 py-3">variable</td><td class="px-4 py-3">Set DCMI discovery/timing configuration.</td></tr>
+          <tr><td class="px-4 py-3"><code>13</code></td><td class="px-4 py-3">User</td><td class="px-4 py-3">3</td><td class="px-4 py-3">Get DCMI configuration.</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong class="text-slate-100">Where watts come from:</strong> Fujitsu's platform callback locates an SDR full-sensor record with sensor type <code>0x0b</code> and an OEM identity, reads the sensor cache, and applies SDR raw-to-engineering conversion. Longer-window statistics come either from a PMBus power-meter ring buffer or from the firmware's power-history store.</p>
+      <p><strong class="text-slate-100">Power-limit enforcement:</strong> the firmware actively monitors the configured DCMI limit. After the correction interval expires, exception action 1 stores reason <code>0x21</code> and requests hard power-off; action 3 stores the same reason and requests chassis soft power-off.</p>
+      <p><strong class="text-slate-100">PSU PMBus:</strong> low-level helpers form <code>/dev/i2c-&lt;bus&gt;</code> from the selected PSU record, shift its configured 8-bit address right by one, and issue PMBus reads or writes. Energy reads decode a six-byte response into a 23-bit energy accumulator plus a 24-bit time accumulator and handle wraparound. Higher-level readings normally use caches/ring buffers.</p>
+      <p><strong class="text-slate-100">Node Manager / ME:</strong> a cold-reset helper sends a bridged request with encoded NetFn <code>0x18</code>, command <code>0x02</code>, and a 400 ms timeout. Runtime text identifies Node Manager slave address <code>0x2c</code>. The QEMU environment has no working ME/IPMB peer, so physical execution remains unproved.</p>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">Physical actuation paths</h2>
+    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-700">
+      <table class="min-w-full divide-y divide-slate-700 text-left text-sm">
+        <thead class="bg-slate-900 text-slate-300"><tr><th class="px-4 py-3">Operation</th><th class="px-4 py-3">Recovered mechanism</th><th class="px-4 py-3">Remaining boundary</th></tr></thead>
+        <tbody class="divide-y divide-slate-800 bg-slate-900/40 align-top">
+          <tr><td class="px-4 py-3 font-semibold">Ordinary on/off</td><td class="px-4 py-3"><code>haSystemPowerOn</code> and <code>haSystemPowerOff</code> both call <code>haSystemPowerOnOff(0,100)</code>. <code>/dev/miscctrl</code> ioctl <code>0x7fff4d14</code> sets LPC/SWC <code>0x1e789184</code> bit 15, then a kernel timer clears it after 100 ms.</td><td class="px-4 py-3">External motherboard net and electrical polarity are not named in the recovered DTB/module.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">Power-good</td><td class="px-4 py-3">ioctl <code>0x7fff4d09</code> reads LPC/SWC <code>0x1e789180</code>, original bit 30.</td><td class="px-4 py-3">Board-level source feeding that SoC indication.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">Reset</td><td class="px-4 py-3">Disables SCU passthrough, drives AST GPIO index <code>0x79</code> (121, conventionally P1) low, waits 200 ms, drives it high, waits 200 ms, then restores passthrough. The driver modifies SCU <code>0x1e6e2000</code> offsets <code>0x510</code>, <code>0x51c</code>, and <code>0x4bc</code>.</td><td class="px-4 py-3">GPIO 121's external motherboard reset net is unlabelled.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">NMI</td><td class="px-4 py-3">Chassis selector 4 → <code>Platform_HostDiagInt</code> → queue → notify event <code>0x00800000</code> → <code>haPulseNmiToChipset</code> → logical output <code>0x1b</code>. The product table maps it to active-low AST GPIO index <code>0x69</code> (105, conventionally N1) and <code>socPulseGPIO</code>; the caller then waits 1 ms.</td><td class="px-4 py-3">The external motherboard NMI net, GPIO-HAL pulse width, and final chipset pin remain unlabelled.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">Hard off</td><td class="px-4 py-3"><code>onUnconditionalPowerOff</code> obtains a PCH target from runtime platform data and writes in-memory value <code>0x0200</code> through <code>haI2cMasterMW</code>, retrying the I²C write up to ten times. The live QEMU object contains bus <code>0xff</code>, slave <code>0x00</code>, so this backend is unconfigured there.</td><td class="px-4 py-3">The real RX2540 M7 I²C bus and PCH slave address; QEMU's invalid/sentinel-like values are not evidence for physical hardware.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">Emergency off</td><td class="px-4 py-3">If hard-off fails or power remains, firmware reads LPC/SWC offset <code>0x188</code>, ORs <code>0x7000</code>, and writes it back: physical <code>0x1e789188</code> bits 12–14. Restore clears those bits.</td><td class="px-4 py-3">The exact rail-control semantics of those three SWC bits.</td></tr>
+          <tr><td class="px-4 py-3 font-semibold">SMI</td><td class="px-4 py-3"><code>PDK_SMIInterruptChassis</code> returns zero immediately and touches no hardware. No second SMI implementation was found.</td><td class="px-4 py-3">No usable SMI trigger is proved in this image.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mb-10 rounded-2xl border border-slate-700 bg-slate-900/50 p-6">
+    <h2 class="text-2xl font-semibold">What is proved, and what is not</h2>
+    <ul class="mt-4 list-disc space-y-3 pl-6 leading-7 text-slate-300">
+      <li>A handler table entry proves that the dispatcher can select a function after its privilege, request-length, channel, interface, and runtime feature checks. It does not prove that the target platform supports the handler's final device action.</li>
+      <li>A successful IPMI completion from Chassis Control proves that work was accepted into the asynchronous power machinery. It does not prove that the host rail, reset line, or NMI completed.</li>
+      <li>An AST physical register address proves the BMC-side mechanism. It does not, by itself, name the motherboard net connected to that SoC signal.</li>
+      <li>The three KCS listeners prove BMC-side readiness. A real server host or a model of the x86 LPC/eSPI master is still needed to prove end-to-end KCS power control.</li>
+      <li>The LUN-3 table is named <code>g_OemSMMCmdHndlr</code> in this firmware. That name must not be confused with x86 System Management Mode, and the live LUN-3 LAN request was rejected with <code>0xc0</code>.</li>
+    </ul>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-semibold">Evidence</h2>
+    <p class="mt-3 leading-7 text-slate-300">Primary retained evidence is under <code>work/irmc-ipmi-analysis/oem-power-map/</code>. No state-changing power, reset, NMI, policy, inhibit, scheduling, watchdog, cap, or restore-policy command was sent during this analysis.</p>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2 text-sm">
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-5">
+        <h3 class="font-semibold text-cyan-300">Core maps and live proof</h3>
+        <ul class="mt-3 space-y-2 text-slate-300">
+          <li><code>all-command-tables.tsv</code> — all 160 recovered Fujitsu table records.</li>
+          <li><code>COMMAND-TABLES-POWER.txt</code> — exact SCCI, DCMI, C0, D0, and raw PECI layouts, privilege, lengths, mutations, parser weaknesses, and unresolved commands; SHA-256 <code>bbbaa82ee80a7a219fafb7a66e49ce12e996fa4173e2d90d69a6a29fc2ad56a1</code>.</li>
+          <li><code>live-safe-power-queries-20260924.txt</code> — retained RMCP+ SCCI reads and LUN-3 rejection.</li>
+          <li><code>guest-transport-focused-live.txt</code> — live KCS/UDS/IPMB descriptors, queues, threads, and configuration.</li>
+          <li><code>POWER-BACKENDS.txt</code> — backend trace and exact AST2600 boundaries.</li>
+          <li><code>sys-gpio-decomp.c</code> — product GPIO callbacks and the 28-byte logical-to-AST table containing NMI output <code>0x1b → 0x69</code>; SHA-256 <code>95435eb61479c73423e711d61adf0345ab6c27be4f6bebe4ef4003cc3e2916c1</code>.</li>
+          <li><code>live-power-memory-map-20260924.txt</code> — live library base; SHA-256 <code>883343e0d01ac7e08a1d26b7384c2a143b65fee7da3d154fd7f1176f9ee97dc3</code>.</li>
+          <li><code>live-pch-config-bytes-20260924.txt</code> — relocated platform-object pointer and QEMU PCH bus/slave bytes <code>ff 00</code>; SHA-256 <code>f71d72b610a20f126ede40d600a39f5c46638461a92eb10891ecdbf1e2ab10d3</code>.</li>
+        </ul>
+      </div>
+      <div class="rounded-xl border border-slate-700 bg-slate-900/50 p-5">
+        <h3 class="font-semibold text-cyan-300">Key binary hashes</h3>
+        <ul class="mt-3 break-all space-y-2 font-mono text-xs text-slate-300">
+          <li><code>libipmimsghndlr.so.13.37.0</code>: 26231f8e7cb1c7685e3fb7cde0d48dd26bb49aebd836ca0a18bed512d3ecb8c8</li>
+          <li><code>libipmipdkcmds.so.1.53.20</code>: 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804</li>
+          <li><code>libipmikcs.so.13.4.0</code>: a8a22b1479864f2722f24b0247bbc92db04e9e10d39a0d20a6fc1388534ea60c</li>
+          <li><code>libfts_util.so.1.30.73</code>: 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a</li>
+          <li><code>miscctrl.ko</code>: 18e9060390943c98ebca3e98115b726b4a5dffef44a4e748b56204bf63b9039b</li>
+          <li><code>libfts_sys_0666.so.1.0.0</code>: b452cedc5382b86f96f9402df396ff2bdb3bd84cf207a5f6af58d34e714a3166</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="border-t border-slate-700 pt-6 text-sm text-slate-400">
+    <p><a class="text-cyan-300 underline" href="index.html">Back to Fujitsu iRMC S6</a> · <a class="text-cyan-300 underline" href="ipmi-path.html">IPMI listener and response-source trace</a></p>
+  </footer>
+</main>
+</body>
+</html>

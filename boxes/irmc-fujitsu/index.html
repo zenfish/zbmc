@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- z-artifact: 7b3c43c3-8c01-4661-b91c-02b103810539 -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -33,6 +34,7 @@ reached READY in 8m52s with authenticated IPMI and the Web UI stable for the req
 
 <h2 class="text-xl font-semibold mt-6 mb-2">IPMI internals</h2>
 <p class="mb-3">The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the <a class="text-blue-700 underline" href="ipmi-path.html">IPMI listener and response-source trace</a>.</p>
+<p class="mb-3">The <a class="text-blue-700 underline" href="oem-power-map.html">OEM IPMI and power-control map</a> inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.</p>
 
 <h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
 <p>The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the

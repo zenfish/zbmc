@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/ipmi-path.html source-sha256=2ccc1368a8ff6c43dab46c557f47310d2c6a11df2afcf1a2b242eff57a72e348 body-sha256=a70b391c6a22ef926452a5cb648471cfa288df7c9fa64ab0ec191fcbef6ae0f1 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/ipmi-path.html source-sha256=074b5ac4b7018844f2e3b102d62b186a4a5af0ae517cfefecad3cc67ae6b95e9 body-sha256=c9f333f8ba6b4cb4198e064e72037475d08402cbd5311f1852bd4d0349221a23 -->
 
 zbmc · Fujitsu iRMC S6
 
@@ -301,6 +301,8 @@ Two read-only samples demonstrate the live update: `51 33 00 68 1c f8 5c 6d 38 0
 `IPMIMain` holds descriptors for `/dev/mem`, `/dev/reset`, `/dev/ipmi-kcs1` through `3`, `/dev/i2c-5`, an I2C slave-message queue, `/dev/gpiochip0`, GPIO sysfs values, `/dev/netmon`, `/dev/miscctrl`, and `/dev/ttyS5`. It also owns queues for LAN, KCS, IPMB, UDS, Node Manager, power control, PCIe, CPU-error, and SOL paths.
 
 Console errors prove active attempts to use missing emulated IPMB and eSPI RTC paths. They do not prove that the successful identity, LAN, user, or SEL replies traversed those buses.
+
+Power commands deserve a separate end-to-end treatment because their successful replies acknowledge queued work rather than completed actuation. See the [OEM IPMI and power-control map](oem-power-map.md) for LAN/KCS reachability, privileges, command layouts, policy, and the final LPC/SWC, GPIO, I²C/IPMB, PMBus, and cache boundaries.
 
 ## What remains unknown
 
