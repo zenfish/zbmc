@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=420f4144c13b145780b05fe153755393962c46fe0ee8573705298d9c208ce9dd body-sha256=88a8ff10e8ed418daab5f1621db90a89940f7f9191d6b04779d03ac3f6abdf40 -->
+<!-- zmd2html:auto source-sha256=3f745a74af099064926109b0d1ffb77c74ff37ccd435ef23188ce109b272b5fe body-sha256=f1b8eac93743c9230079f5ab39ceadac04c8548199feb9ab680055598b1cdd60 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -518,11 +518,11 @@ ICMP, authenticated RMCP+ IPMI, and HTTP 200 HTTPS responses from Debby.
 The retained serial command runner then submitted one marked command
 through the existing QEMU serial socket; the managed console log records
 three replies from Debby (<code>10.0.0.24</code>) and three from the Mac
-(<code>10.0.0.2</code>), with 0% loss in both directions. QEMU logs
-guest serial output but does not mirror it to this socket client, so the
-runner waited for an end marker already present in the console log and
-was stopped; that is a capture-path limitation, not a network
-failure.</p>
+(<code>10.0.0.2</code>), with 0% loss in both directions. The first
+runner stopped after QEMU recorded the result because its socket-only
+completion capture was not suitable for this noisy logfile-backed
+chardev; the later reusable runner supports the logfile explicitly while
+continuing to drain the socket.</p>
 <p>The lower transport layer was then tested independently of
 credentials and application content. An unauthenticated Nmap
 <code>ipmi-version</code> probe found UDP/623 open as ASF/RMCP and
@@ -535,6 +535,38 @@ Python standard-library listener on Debby port 45690, fetched
 HTTP 200 log entry sourced from <code>10.250.0.42</code>. Thus basic
 ICMP, UDP/RMCP, and bidirectional TCP connectivity are proved before
 authenticated IPMI or Web-UI health is considered.</p>
+<h1 id="preserve-reusable-bmc-connectivity-tools">Preserve reusable BMC
+connectivity tools</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Save the host-side ICMP,
+TCP, and unauthenticated RMCP probe.</label></li>
+<li><label><input type="checkbox" checked="" />Save the reverse HTTP
+listener and guest-command generator.</label></li>
+<li><label><input type="checkbox" checked="" />Consolidate serial
+command delivery and capture into one generic runner.</label></li>
+<li><label><input type="checkbox" checked="" />Add socket and
+logfile-mode regression coverage.</label></li>
+<li><label><input type="checkbox" checked="" />Validate both directions
+against the live Fujitsu iRMC.</label></li>
+</ul>
+<h2 id="review-13">Review</h2>
+<p><code>tools/zbmc-connectivity</code> now provides <code>probe</code>,
+<code>serve</code>, and <code>guest-command</code> operations without
+embedding credentials. <code>tools/zbmc-serial-capture</code> sends a
+saved command through any QEMU Unix serial socket, optionally paces
+bytes, captures directly from the socket or follows QEMU's serial
+logfile, and waits for an exact marker line so an echoed command cannot
+produce a false success. In logfile mode it still drains the socket,
+because live validation proved that leaving the socket unread can fill
+QEMU's chardev buffer and stall guest console output.</p>
+<p>The regression test exercises generated guest commands, exact-line
+marker handling, direct socket capture, and logfile capture under enough
+simulated firmware noise to fill a socket buffer. Live validation on
+Debby repeated the full host-side probe successfully, then used only the
+saved tools to make the iRMC ping Debby and fetch
+<code>zbmc-connectivity.txt</code> over TCP. The iRMC reported three of
+three ICMP replies and <code>wget_status=0</code>; Debby's listener
+logged HTTP 200 from <code>10.250.0.42</code>.</p>
 </div>
 </body>
 </html>

@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Send saved commands to a QEMU serial socket and retain the response."""
+import argparse
+from pathlib import Path
+import select
+import socket
+import time
+
+
+def marker_seen(data: bytes, marker: bytes) -> bool:
+    return any(line.strip() == marker for line in data.replace(b"\r", b"").splitlines())
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("socket")
+parser.add_argument("commands")
+parser.add_argument("transcript")
+parser.add_argument("end_marker")
+parser.add_argument("--console-log", help="read replies from QEMU's serial logfile instead of the socket")
+parser.add_argument("--pace-ms", type=float, default=0, help="delay between transmitted bytes")
+parser.add_argument("--timeout", type=float, default=180)
+args = parser.parse_args()
+
+payload = Path(args.commands).read_bytes().rstrip(b"\r\n") + b"\r\n"
+marker = args.end_marker.encode()
+deadline = time.monotonic() + args.timeout
+pending = bytearray()
+console = Path(args.console_log) if args.console_log else None
+console_offset = console.stat().st_size if console else 0
+
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+    connection.connect(args.socket)
+    if args.pace_ms:
+        for byte in payload:
+            connection.send(bytes((byte,)))
+            time.sleep(args.pace_ms / 1000)
+    else:
+        connection.sendall(payload)
+
+    with open(args.transcript, "wb") as transcript:
+        while time.monotonic() < deadline:
+            if console:
+                # QEMU still writes serial output to the connected socket when
+                # logfile= is configured. Drain it so noisy firmware cannot
+                # fill the socket buffer and stall the guest console.
+                while select.select([connection], [], [], 0)[0]:
+                    if not connection.recv(65536):
+                        break
+                with console.open("rb") as source:
+                    source.seek(console_offset)
+                    chunk = source.read()
+                    console_offset = source.tell()
+                if not chunk:
+                    time.sleep(0.01)
+                    continue
+            else:
+                remaining = deadline - time.monotonic()
+                if not select.select([connection], [], [], min(1, remaining))[0]:
+                    continue
+                chunk = connection.recv(65536)
+                if not chunk:
+                    raise SystemExit("serial socket closed before end marker")
+            transcript.write(chunk)
+            transcript.flush()
+            pending.extend(chunk)
+            if marker_seen(pending, marker):
+                raise SystemExit(0)
+            if len(pending) > 262144:
+                del pending[:-131072]
+
+raise SystemExit(f"serial capture timed out before exact line: {args.end_marker}")

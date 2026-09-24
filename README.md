@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=f0b5711bfb92a18c321160bf4a876a214b01f175565e0a7726379550b9caed57 body-sha256=e90a16386740f37a80f8b41e02ccc0240b10f63f28c39b46396c737451e5e4b4 -->
+<!-- html2md:auto source=README.html source-sha256=efb5cf84ffb5975ea8cab537cc180d5e118ba01bd6acc630a9a10ba7b431ad22 body-sha256=7a22c23217838c7158c08de9de08c5f119f32ebc0079c8d27cd48cab4271f367 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -159,6 +159,18 @@ If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf
     ZBMC_IP_openbmc=192.168.1.100
 
 Priority: per-box `ZBMC_IP_<name>` \> pool \> `ZHOSTS_FILE` \> descriptor default. Full allocation table and examples: **[zbmc.conf.example](zbmc.conf.example)**.
+
+### Basic connectivity testing
+
+Test transport before credentials or application behavior. The reusable probe checks ICMP, plain TCP handshakes, and unauthenticated RMCP discovery on UDP/623:
+
+    ./tools/zbmc-connectivity probe 10.250.0.42
+
+    # Reverse direction: start a listener, then print the command to run in the BMC.
+    ./tools/zbmc-connectivity serve 45690 ./evidence
+    ./tools/zbmc-connectivity guest-command 10.0.0.24 45690 zbmc-connectivity.txt
+
+`tools/zbmc-serial-capture` can deliver the generated command through a QEMU Unix serial socket and retain either socket output or an existing QEMU serial logfile. Run either tool with `--help` for exact arguments. These checks deliberately do not prove authentication, authorization, or correct IPMI/Web behavior; run `tools/zbmc <box> status -v` after basic transport passes.
 
 ## Layout
 

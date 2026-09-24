@@ -414,6 +414,21 @@ ZBMC_IP_openbmc=192.168.1.100</code></pre>
 <code>ZHOSTS_FILE</code> &gt; descriptor default. Full allocation table
 and examples: <strong><a
 href="zbmc.conf.example">zbmc.conf.example</a></strong>.</p>
+<h3 id="basic-connectivity-testing">Basic connectivity testing</h3>
+<p>Test transport before credentials or application behavior. The reusable
+probe checks ICMP, plain TCP handshakes, and unauthenticated RMCP discovery on
+UDP/623:</p>
+<pre class="bash"><code>./tools/zbmc-connectivity probe 10.250.0.42
+
+# Reverse direction: start a listener, then print the command to run in the BMC.
+./tools/zbmc-connectivity serve 45690 ./evidence
+./tools/zbmc-connectivity guest-command 10.0.0.24 45690 zbmc-connectivity.txt</code></pre>
+<p><code>tools/zbmc-serial-capture</code> can deliver the generated command through
+a QEMU Unix serial socket and retain either socket output or an existing QEMU
+serial logfile. Run either tool with <code>--help</code> for exact arguments.
+These checks deliberately do not prove authentication, authorization, or
+correct IPMI/Web behavior; run <code>tools/zbmc &lt;box&gt; status -v</code> after
+basic transport passes.</p>
 <h2 id="layout">Layout</h2>
 <pre><code>build.sh      build every ready box&#39;s boot artifacts into work/&lt;box&gt;/  (./build.sh --list to preview)
 tools/        unpack-ami (MegaRAC), unpack-idrac (Dell), unpack-ilo5 (HPE), zbmc (dispatcher)

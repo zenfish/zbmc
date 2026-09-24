@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Transport-only BMC connectivity checks. No credentials or application health.
+set -euo pipefail
+
+usage(){
+  cat <<'EOF'
+usage:
+  zbmc-connectivity probe BMC_IP [TCP_PORT ...]
+  zbmc-connectivity serve PORT DIRECTORY [BIND_ADDRESS]
+  zbmc-connectivity guest-command HOST_IP PORT [PATH]
+
+probe          ICMP, TCP handshakes, and unauthenticated UDP/623 RMCP discovery
+serve          HTTP listener for a BMC-to-host TCP test
+guest-command  print the command to run on the BMC for the reverse test
+EOF
+}
+
+valid_host(){ [[ "$1" =~ ^[A-Za-z0-9._:-]+$ ]]; }
+valid_port(){ [[ "$1" =~ ^[0-9]+$ ]] && (( 1 <= 10#$1 && 10#$1 <= 65535 )); }
+
+probe(){
+  local host=${1:?BMC IP required} port output reachable=0
+  shift
+  valid_host "$host" || { echo "invalid host: $host" >&2; return 2; }
+  local ports
+  if [ "$#" -gt 0 ]; then ports=("$@"); else ports=(22 23 80 443 623 664 8443); fi
+
+  echo "ICMP"
+  if ping -c 3 -W 2 "$host"; then reachable=1; else echo "no ICMP reply"; fi
+
+  echo
+  echo "TCP"
+  command -v nc >/dev/null || { echo "nc is required" >&2; return 2; }
+  for port in "${ports[@]}"; do
+    valid_port "$port" || { echo "invalid TCP port: $port" >&2; return 2; }
+    if output=$(timeout 3 nc -zv -w 2 "$host" "$port" </dev/null 2>&1); then
+      printf 'tcp/%-5s OPEN  %s\n' "$port" "$output"
+      reachable=1
+    else
+      printf 'tcp/%-5s closed/unanswered  %s\n' "$port" "$output"
+    fi
+  done
+
+  echo
+  echo "UDP/623 RMCP (unauthenticated)"
+  if command -v nmap >/dev/null; then
+    local elevate=()
+    if [ "$(id -u)" != 0 ]; then
+      if sudo -n true 2>/dev/null; then elevate=(sudo -n); else
+        echo "SKIP: raw UDP scan needs root or passwordless sudo"
+        [ "$reachable" = 1 ]
+        return
+      fi
+    fi
+    output=$("${elevate[@]}" nmap -n -Pn -sU -p 623 --script ipmi-version "$host")
+    printf '%s\n' "$output"
+    grep -q '623/udp open' <<<"$output" && reachable=1
+  else
+    echo "SKIP: nmap is unavailable"
+  fi
+
+  [ "$reachable" = 1 ]
+}
+
+serve(){
+  local port=${1:?port required} directory=${2:?directory required} bind=${3:-0.0.0.0}
+  valid_port "$port" || { echo "invalid port: $port" >&2; return 2; }
+  [ -d "$directory" ] || { echo "not a directory: $directory" >&2; return 2; }
+  exec python3 -m http.server "$port" --bind "$bind" --directory "$directory"
+}
+
+guest_command(){
+  local host=${1:?host IP required} port=${2:?port required} path=${3:-zbmc-connectivity.txt}
+  valid_host "$host" || { echo "invalid host: $host" >&2; return 2; }
+  valid_port "$port" || { echo "invalid port: $port" >&2; return 2; }
+  [[ "$path" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "invalid path: $path" >&2; return 2; }
+  printf '%s\n' "echo ZBMC_CONNECTIVITY_BEGIN; ping -c 3 -W 2 $host; busybox wget -T 5 -O /dev/null http://$host:$port/$path; echo wget_status=\$?; echo ZBMC_CONNECTIVITY_END"
+}
+
+case "${1:-}" in
+  probe) shift; probe "$@" ;;
+  serve) shift; serve "$@" ;;
+  guest-command) shift; guest_command "$@" ;;
+  -h|--help|help|'') usage ;;
+  *) usage >&2; exit 2 ;;
+esac
