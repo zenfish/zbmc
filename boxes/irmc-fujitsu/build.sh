@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=17
+SHELL_INITRAMFS_VERSION=18
 
 mkdir -p "$WD"
 for row in "${files[@]}"; do
@@ -133,8 +133,40 @@ CFG
   rm -f /tmp/BMC1/IPMIConfig.dat
   echo '[irmc-ipmi] LAN channel enabled; stale IPMI cache removed'
 }
+
+irmc_ipmi_trace_listener()
+{
+  grep -qw irmc_trace_ipmi /proc/cmdline || return 0
+  (
+    previous=unset
+    samples=0
+    while [ "$samples" -lt 6000 ]; do
+      IFS=' ' read -r uptime ignored </proc/uptime
+      udp6=absent
+      while read -r slot local remote state queues timers retransmit uid timeout inode rest; do
+        case "$local" in
+          *:026F) udp6="present inode=$inode state=$state" ;;
+        esac
+      done </proc/net/udp6
+      tcp6=absent
+      while read -r slot local remote state queues timers retransmit uid timeout inode rest; do
+        case "$local" in
+          *:026F) tcp6="present inode=$inode state=$state" ;;
+        esac
+      done </proc/net/tcp6
+      current="$udp6|$tcp6"
+      if [ "$current" != "$previous" ]; then
+        echo "ZBMC_IPMI_LISTENER uptime=$uptime udp6=[$udp6] tcp6=[$tcp6]"
+        previous=$current
+      fi
+      samples=$((samples + 1))
+      sleep 0.1
+    done
+  ) >/dev/console 2>&1 &
+  echo "[irmc-ipmi] listener tracer started as PID $!"
+}
 EOF
-  busybox sed 's@^\\([[:space:]]*\\)\\(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr\\)$@\\1irmc_ipmi_prep || exit 1; \\2@' \
+  busybox sed 's@^\\([[:space:]]*\\)\\(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr\\)$@\\1irmc_ipmi_prep || exit 1; irmc_ipmi_trace_listener; \\2@' \
     /newroot/etc/init.d/ipmistack >> /ipmistack.ipmi
   busybox chmod 0755 /ipmistack.ipmi
   busybox mount --bind /ipmistack.ipmi /newroot/etc/init.d/ipmistack \
