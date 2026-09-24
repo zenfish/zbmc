@@ -1,8 +1,8 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=01222b8695666d559a85b577665e98f7702ee1a4b57a1bf7c99c43a77228da23 body-sha256=98fe8610b3f46d9b4a079b264d8b1929cf45168eb128613e252dff742726135d -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=9c29588233504177619c8f01e8af2cbb129fc1270fe21ac08c7fe7c4be509492 body-sha256=d94e51e00cb1a1fa44da5d0bc78453304467b1b86eef971df75b4b924f8bd283 -->
 
 # Fujitsu iRMC S6
 
-RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model. The preserved vendor Web UI works. RMCP+ IPMI starts but does not answer, and Redfish is intentionally disabled.
+RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model. Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. Redfish is intentionally disabled.
 
 ## Operation
 
@@ -15,12 +15,12 @@ The cold build downloads five SHA-256-pinned artifacts from `https://git.trouble
 
 ## Accepted boundary
 
-- **Verified:** cold boot reaches SysV runlevel 3 and the preserved Fujitsu HTTPS Web UI answers.
-- **Unknown:** `IPMIMain` launches, but UDP/623 requests receive no RMCP+ response.
+- **Verified:** cold boot reaches SysV runlevel 3, authenticated RMCP+ IPMI answers on UDP/623, and the preserved Fujitsu HTTPS Web UI answers.
+- **IPMI cold-boot fix:** a recovered `/conf` partition defaults `AMI_DYNAMIC_LAN_IFC_SUPPORT`, management `eth0 Enabled`, and `eth0 Up_Status` to zero. The derived initramfs enables them before `IPMIMain` starts and removes the stale `/tmp/BMC1/IPMIConfig.dat` shadow cache. The pinned vendor inputs remain unchanged and both QEMU drives use snapshot mode.
 - **Known broken:** starting `FTS_RedfishService` causes a reproducible `helper.ko` `fwinfo2` NULL dereference with this reduced QEMU topology, so the boot disables it.
 - **Not accepted:** SSH reaches the vendor-gated `defshell`, not a Unix command shell.
 
-The Debby acceptance run `20260901T054304Z-62f6d82f-9aa2-4f98-8e5e-98a425cd2667` reached HTTP 200 at 9m22s and passed the stability hold at 9m40s.
+The Debby acceptance run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product `0x0666` from `mc info`; five subsequent serialized HTTPS probes all returned HTTP 200 from `iRMC S6 Webserver`.
 
 ## Copying files
 

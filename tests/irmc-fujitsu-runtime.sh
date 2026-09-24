@@ -13,10 +13,10 @@ grep -Fxq 'ZBMC_QEMU_MACHINE=ast2600-evb' "$box/zbmc.box"
 grep -Fxq 'ZBMC_NETWORK_MODE=tap' "$box/zbmc.box"
 grep -Fxq 'ZBMC_TAP=ztap-irmc2' "$box/zbmc.box"
 grep -Fxq 'ZBMC_MAC=52:54:00:fa:42:02' "$box/zbmc.box"
-grep -Fxq 'ZBMC_REQUIRED_SERVICES="webui"' "$box/zbmc.box"
+grep -Fxq 'ZBMC_REQUIRED_SERVICES="ipmi webui"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_DISABLED_SERVICES="redfish"' "$box/zbmc.box"
 grep -Fxq 'ZBMC_READY_DEADLINE=900' "$box/zbmc.box"
-grep -Fxq "ZBMC_READY_GREP='INIT: Entering runlevel: 3'" "$box/zbmc.box"
+grep -Fxq "ZBMC_READY_GREP='Entering runlevel: 3'" "$box/zbmc.box"
 grep -Fq 'source_flash_sha256=89dd885694ebc86af29e900f04e22d4b63998ac35055e18c86ba96d6016ce2ed' "$box/build.sh"
 
 grep -Fq 'tap,id=net2,ifname=$TAP2,script=no,downscript=no' "$box/boot.sh"
@@ -36,14 +36,33 @@ match = re.search(r'addition = (""".*?""")', text, re.DOTALL)
 assert match, "missing derived initramfs addition"
 addition = ast.literal_eval(match.group(1))
 subprocess.run(["bash", "-n"], input=addition, text=True, check=True)
+sed_match = re.search(r"busybox sed '([^']*IPMIMain[^']*)'", addition)
+assert sed_match, "missing IPMIMain startup transformation"
+source = "    /usr/local/bin/IPMIMain --daemonize --reg-with-procmgr\n"
+result = subprocess.run(
+    ["sed", sed_match.group(1)], input=source, text=True, check=True,
+    capture_output=True,
+)
+assert result.stdout == (
+    "    irmc_ipmi_prep || exit 1; "
+    "/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr\n"
+), result.stdout
 PY
 grep -Fq 'irmc_no_redfish' "$box/boot.sh"
 grep -Fq 'initramfs-shell.cpio.gz' "$box/boot.sh"
 grep -Fq 'irmc_diag_shell' "$box/boot.sh"
 grep -Fq 'irmc_diag_root' "$box/boot.sh"
+grep -Fq 'irmc_diag_ipmi' "$box/boot.sh"
 grep -Fq '/newroot/usr/local/bin/remman' "$box/build.sh"
 grep -Fq "busybox echo 'exec /bin/sh -i'" "$box/build.sh"
 grep -Fq 'getty -n -l /usr/local/bin/remman' "$box/build.sh"
+grep -Fq 'AMI_DYNAMIC_LAN_IFC_SUPPORT=1' "$box/build.sh"
+grep -Fq '[Dynamic_IFC_Support_Cfg]' "$box/build.sh"
+grep -Fq '[LANIfcConfig/LanIfcConfig/0]' "$box/build.sh"
+grep -Fq 'section && /^Enabled=0$/' "$box/build.sh"
+grep -Fq 'section && /^Up_Status=0$/' "$box/build.sh"
+grep -Fq 'rm -f /tmp/BMC1/IPMIConfig.dat' "$box/build.sh"
+grep -Fq 'irmc_ipmi_prep || exit 1' "$box/build.sh"
 
 tmp=$(mktemp -d)
 trap 'rmdir "$tmp"' EXIT
@@ -115,6 +134,6 @@ os.close(terminal)
 os.unlink(socket_path)
 PY
 
-grep -Fq 'RMCP+ IPMI starts but does not answer' "$box/index.html"
+grep -Fq 'Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer' "$box/index.html"
 grep -Eq '^irmc-fujitsu[[:space:]]+10\.0\.6\.68$' "$repo/zhosts.txt"
 grep -Fq 'irmc-fujitsu' "$repo/qemu/recipes/qemu-11-arm.sh"

@@ -154,8 +154,8 @@ animal's box material.</p>
 </tr>
 <tr>
 <td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td>
-<td>Cold ✅; Warm ❌</td><td>Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap.</td>
+<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-23 returned authenticated Fujitsu RMCP+ <code>mc info</code> and HTTP 200 from the iRMC S6 Webserver; Redfish remains disabled because its helper crashes under the reduced QEMU topology.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>

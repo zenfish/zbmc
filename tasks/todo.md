@@ -157,3 +157,19 @@ After changing only `GUEST_IP` to the observed `.15` in the detached test worktr
 Follow-up isolated the RMCP failure independently of the host forward. The exact Debby firmware cold boot recovered an invalid `/conf` JFFS2 partition, generated fresh IPMI configuration, and started `IPMIMain`, `libipmilan`, and `LANIfcTask`, but `/proc/net/udp` contained no port 623 socket. The generated `/conf/BMC1/LanIfccfg.ini` marked management `eth0` as `Enabled=0` and `Up_Status=0`; more decisively, `/conf/BMC1/lan_kcs.ini` set `AMI_DYNAMIC_LAN_IFC_SUPPORT=0` while leaving dynamic KCS enabled. Ghidra showed `libipmilan::UpdateLANStateChange()` tests the corresponding `g_AMIBMCInfo[24]` byte before calling its UDP socket creator. Runtime memory confirmed `{dynamic LAN, dynamic KCS} = {0,1}`. `Failed firewall` is not causal: `IPMIMain` logs it and continues.
 
 The causal test enabled only management `eth0`, set `AMI_DYNAMIC_LAN_IFC_SUPPORT=1`, removed the stale binary configuration cache from the load path, and restarted `IPMIMain` in a disposable snapshot. The runtime feature bytes became `{1,1}`, the guest immediately bound dual-stack UDP/623, and host-side `ipmitool -I lanplus` returned a valid Fujitsu IPMI 2.0 `mc info` response (manufacturer 10368, product `0x0666`). Editing `LanIfccfg.ini` alone was insufficient because `IPMIMain` restored `/tmp/BMC1/IPMIConfig.dat` over the text file. This explains both the original Debby timeout and why the earlier INI-only startup hook failed.
+
+# Enable Fujitsu iRMC IPMI on cold boot
+
+- [x] Reproduce the missing UDP/623 listener on Debby after its reboot.
+- [x] Add the proven LAN feature, management-channel, and cache-invalidation changes before `IPMIMain`.
+- [x] Rebuild the derived initramfs and verify its injected startup hook.
+- [x] Cold-boot on Debby and verify guest configuration, UDP/623, authenticated IPMI, and HTTPS.
+- [x] Update operator documentation and commit the verified fix.
+
+## Review
+
+The cold-boot hook runs immediately before `IPMIMain`. It creates the two observed default INIs only when absent, enables only management `eth0`, enables dynamic LAN support, and removes the stale binary shadow cache. This is confined to the derived initramfs and snapshot-backed runtime; the five SHA-256-pinned vendor inputs remain unchanged. The packed version-17 initramfs on Debby has SHA-256 `91fa8f3beb7412792fcd7862d4a976c242978d274331744d418f89d6ee406594` and contains the management-channel, dynamic-LAN, and cache-invalidation operations.
+
+Debby run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached managed READY in 532 seconds. The guest retained `Enabled=1` and `Up_Status=1` for `eth0`, both dynamic interface flags were `1`, `/proc/net/udp6` exposed wildcard port `0x026f`, and `IPMIMain` ran as PID 305. Authenticated `mc info` returned manufacturer 10368 and product `0x0666`; five serialized follow-up HTTPS probes all returned HTTP 200, followed by another successful IPMI query.
+
+The same run also proved the old bootstrap matcher was fragile: firmware diagnostics split `INIT: Entering runlevel: 3`, so readiness never began probing services. Matching the stable substring `Entering runlevel: 3` allowed the supervisor to record BOOTSTRAP, IPMI, Web-UI, stability, and READY normally. The focused iRMC test, documentation-pair test, pair synchronization check, and `git diff --check` pass. The repository-wide `tests/run` still stops at the pre-existing macOS `sed` failure in `advantech-console-lifecycle.sh`; it fails before reaching any iRMC test.

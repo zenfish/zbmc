@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=0a9afbdb6f1e20fe240cc82d761cfa51716a70f84931003ed903f7f80657451d body-sha256=163c0436164f1dd7b331401a849b66b0e69b3bb37b6e83bae2fb8e4315761ca2 -->
+<!-- html2md:auto source=README.html source-sha256=f0b5711bfb92a18c321160bf4a876a214b01f175565e0a7726379550b9caed57 body-sha256=e90a16386740f37a80f8b41e02ccc0240b10f63f28c39b46396c737451e5e4b4 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -32,7 +32,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
-| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Two serialized TAP runs on 2026-09-10 did not reach Web-UI readiness. One briefly proved ICMP before vendor userspace restored a stale address; the next stalled before bootstrap. |
+| **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-23 returned authenticated Fujitsu RMCP+ `mc info` and HTTP 200 from the iRMC S6 Webserver; Redfish remains disabled because its helper crashes under the reduced QEMU topology. |
 | **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ❌; Warm ✅ | Managed TAP `start --warm` reached six-service READY on 2026-09-14 in 189s after Lenovo-only serialized probe scheduling. Three live `zbmc lenovo-xcc -v` checks passed 6/6 while the health watcher was active, and the run history had zero degraded/probe-busy/IPMI-read-failed samples. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window. |
 | **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
 | **[supermicro-x10](boxes/supermicro-x10/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | None observed in the completed TAP validation run. |
