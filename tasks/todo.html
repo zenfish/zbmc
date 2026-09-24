@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=c1535febc4f128764a821a641145a7dbb0705c3746de636adb1b425b21726dbd body-sha256=11fe874cf23f9f726781bae34962f84d7922ab6de5b132655677a4f3eefcddd8 -->
+<!-- zmd2html:auto source-sha256=eca4cc26f00b888202fff66e5752ec9bf7434197496973b8716bd2c54329f284 body-sha256=266b68d39ebfa019cdb3018d8adb82183985e01af2afd1cab6483b265382419d -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -383,6 +383,44 @@ claims; passed <code>tests/sync-docs-cli.sh</code>; and passed
 <code>git diff --check</code>. The report and handoff retain artifact
 UUIDs <code>485be802-d991-400d-9afe-e03e20a40760</code> and
 <code>c975c2aa-4408-4c9a-b03d-531949f7bb76</code>.</p>
+<h1 id="validate-hd-moores-fujitsu-irmc-box">Validate HD Moore's
+<code>fujitsu-irmc</code> box</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Build commit
+<code>408ed06</code> on the Mac from the exact SHA-256-pinned iRMC S6
+image.</label></li>
+<li><label><input type="checkbox" checked="" />Cold-boot the unmodified
+box and capture its real guest address and service state.</label></li>
+<li><label><input type="checkbox" checked="" />Correct only the test
+worktree's host-forward destination and repeat the cold
+boot.</label></li>
+<li><label><input type="checkbox" checked="" />Probe HTTPS, static UI
+assets, HTTP redirect, SSH, Redfish session creation, and RMCP+
+IPMI.</label></li>
+</ul>
+<h2 id="review-10">Review</h2>
+<p>The exact HD build completed under macOS/QEMU 11.0.0 and the firmware
+reached runlevel 3, serial login, <code>IPMIMain</code>, and
+<code>FTS_WebServer</code>. The published launcher is not turnkey: it
+forwards TCP/UDP services to <code>192.168.2.100</code>, while the
+emulated firmware uses DHCP and repeatedly receives
+<code>192.168.2.15</code>. It also records the transient
+<code>sudo/nohup</code> wrapper PID rather than QEMU's child PID,
+causing <code>status</code> and <code>stop</code> to report the VM down
+while it remains active.</p>
+<p>After changing only <code>GUEST_IP</code> to the observed
+<code>.15</code> in the detached test worktree, HTTPS became stable at
+approximately four minutes. Five consecutive checks returned HTTP 200
+with the same 1,769-byte iRMC page; the server identified itself as
+<code>iRMC S6 Webserver</code>, advertised <code>v2.63a-S6M6_M7</code>,
+served every tested Angular/CSS/SVG asset including the 3.14 MB main
+bundle, and redirected HTTP to HTTPS. SSH is disabled by firmware and
+resets before key exchange. Redfish session creation returns HTTP 503.
+RMCP+ <code>mc info</code> times out even though <code>IPMIMain</code>
+starts; the console records <code>Failed firewall</code>. Thus HD proved
+a booting iRMC Web frontend in principle, but the committed launcher
+cannot reach it without correcting the guest target, and its claims of
+working IPMI and SSH are not borne out.</p>
 </div>
 </body>
 </html>

@@ -140,3 +140,16 @@ Follow-up corrected an overclaim about `hub_reset.sh`: `/dev/mem` proves the BMC
 The shipped `libmod_sysfw.so.0.0.0` also proves the path remains integrated: `bios_device::ipmi_usb_reset` maps request byte 0 to `/bin/hub_reset.sh -d`, byte 1 to `-h`, and rejects other values with 0xc9. The script ignores that argument, so both valid requests run the same disconnect/wait/reconnect sequence, and the caller performs no visible address-window setup. This narrows the software behavior without identifying the live hardware decoder or the external IPMI NetFn/command.
 
 Verification reparsed the findings, handoff, and generated task HTML; compared all 191 catalog rows exactly against the acquisition manifest; asserted the Tailwind/mobile shell and the corrected X-DMA/MDIO/Dell claims; passed `tests/sync-docs-cli.sh`; and passed `git diff --check`. The report and handoff retain artifact UUIDs `485be802-d991-400d-9afe-e03e20a40760` and `c975c2aa-4408-4c9a-b03d-531949f7bb76`.
+
+# Validate HD Moore's `fujitsu-irmc` box
+
+- [x] Build commit `408ed06` on the Mac from the exact SHA-256-pinned iRMC S6 image.
+- [x] Cold-boot the unmodified box and capture its real guest address and service state.
+- [x] Correct only the test worktree's host-forward destination and repeat the cold boot.
+- [x] Probe HTTPS, static UI assets, HTTP redirect, SSH, Redfish session creation, and RMCP+ IPMI.
+
+## Review
+
+The exact HD build completed under macOS/QEMU 11.0.0 and the firmware reached runlevel 3, serial login, `IPMIMain`, and `FTS_WebServer`. The published launcher is not turnkey: it forwards TCP/UDP services to `192.168.2.100`, while the emulated firmware uses DHCP and repeatedly receives `192.168.2.15`. It also records the transient `sudo/nohup` wrapper PID rather than QEMU's child PID, causing `status` and `stop` to report the VM down while it remains active.
+
+After changing only `GUEST_IP` to the observed `.15` in the detached test worktree, HTTPS became stable at approximately four minutes. Five consecutive checks returned HTTP 200 with the same 1,769-byte iRMC page; the server identified itself as `iRMC S6 Webserver`, advertised `v2.63a-S6M6_M7`, served every tested Angular/CSS/SVG asset including the 3.14 MB main bundle, and redirected HTTP to HTTPS. SSH is disabled by firmware and resets before key exchange. Redfish session creation returns HTTP 503. RMCP+ `mc info` times out even though `IPMIMain` starts; the console records `Failed firewall`. Thus HD proved a booting iRMC Web frontend in principle, but the committed launcher cannot reach it without correcting the guest target, and its claims of working IPMI and SSH are not borne out.
