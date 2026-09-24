@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=9c29588233504177619c8f01e8af2cbb129fc1270fe21ac08c7fe7c4be509492 body-sha256=d94e51e00cb1a1fa44da5d0bc78453304467b1b86eef971df75b4b924f8bd283 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=85fda467b95cf00076727c9a74b376eaaba0cc6990bc21bf9030f7185584ee29 body-sha256=f2da9f1b96f7284bf3cecf6e592c94e124d0d8a7cb682ac1b4ee4f95c28ccae6 -->
 
 # Fujitsu iRMC S6
 
@@ -21,6 +21,10 @@ The cold build downloads five SHA-256-pinned artifacts from `https://git.trouble
 - **Not accepted:** SSH reaches the vendor-gated `defshell`, not a Unix command shell.
 
 The Debby acceptance run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product `0x0666` from `mc info`; five subsequent serialized HTTPS probes all returned HTTP 200 from `iRMC S6 Webserver`.
+
+## IPMI internals
+
+The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the [IPMI listener and response-source trace](ipmi-path.md).
 
 ## Copying files
 

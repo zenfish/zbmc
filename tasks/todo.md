@@ -199,3 +199,22 @@ The lower transport layer was then tested independently of credentials and appli
 `tools/zbmc-connectivity` now provides `probe`, `serve`, and `guest-command` operations without embedding credentials. `tools/zbmc-serial-capture` sends a saved command through any QEMU Unix serial socket, optionally paces bytes, captures directly from the socket or follows QEMU's serial logfile, and waits for an exact marker line so an echoed command cannot produce a false success. In logfile mode it still drains the socket, because live validation proved that leaving the socket unread can fill QEMU's chardev buffer and stall guest console output.
 
 The regression test exercises generated guest commands, exact-line marker handling, direct socket capture, and logfile capture under enough simulated firmware noise to fill a socket buffer. Live validation on Debby repeated the full host-side probe successfully, then used only the saved tools to make the iRMC ping Debby and fetch `zbmc-connectivity.txt` over TCP. The iRMC reported three of three ICMP replies and `wget_status=0`; Debby's listener logged HTTP 200 from `10.250.0.42`.
+
+# Trace Fujitsu iRMC IPMI listener and response sources
+
+- [x] Bound UDP/623 availability from the retained cold-run packet capture and event timeline.
+- [x] Prove the live socket owner, threads, file descriptors, and queue endpoints.
+- [x] Trace RMCP/RMCP+ receive, message dispatch, and response framing through the vendor libraries.
+- [x] Map representative successful commands to cached state, files, network helpers, callbacks, IPC, and device boundaries.
+- [x] Record unresolved physical backends and the missing exact `bind()` timestamp without overclaiming.
+- [x] Publish and verify a durable Tailwind HTML report and generated Markdown pair.
+
+## Review
+
+The retained run proves that `IPMIMain` existed by guest uptime 51.852 seconds, unanswered Open Session probes continued through elapsed 218.807 seconds, and the first RMCP+ Open Session Response was captured at elapsed 451.541 seconds. Authenticated IPMI completed at 490 seconds and managed READY followed at 532 seconds. The management interface bounced until roughly 410 seconds, so the packet capture bounds external usability but cannot distinguish an early wildcard `bind()` from a later bind. Resolving the exact syscall time requires a future instrumented boot; no additional cold boot was performed.
+
+Live `/proc` evidence ties wildcard UDP/623 inode 20142 to PID 304 fd 52. The same process contains `RecvLANPkt`, `LANIfcTask`, `LANMonitor`, `LANTimer`, and eight `MsgHndlr` threads. Static analysis proves the route: `recvfrom` → `/var/LANIfcQ` → `ProcessRMCPReq` → `/var/MsgHndlrQ` → privilege/command-table dispatch → `/var/LANResQ` → RMCP+ framing → `sendto`. The queue names are IPC endpoints inside the multi-threaded process, not evidence of a second IPMI daemon.
+
+Response sources are command-specific. Get Device ID combines initialized `g_BMCInfo` state with `/proc/ractrends/Helper/FwInfo`; channel and user replies read locked objects initialized from AMI configuration files; LAN replies combine those objects with live kernel-network helpers; SEL and SDR read in-process repositories backed by persistent/NVR files; chassis status mixes cached bytes with platform callbacks; and FRU delegates to a platform callback whose Fujitsu physical backend remains unresolved. `IPMIMain` has live I2C, KCS, GPIO, IPMB-queue, `/dev/mem`, reset, netmon, and misc-control handles, but the report does not attribute cached responses to those devices merely because the descriptors exist.
+
+The new `boxes/irmc-fujitsu/ipmi-path.html` report contains the full timing, call chain, response-source table, confidence limits, evidence locations, and SHA-256 hashes. `tools/sync-docs --write` produced its Markdown pair and refreshed the Fujitsu overview pair.

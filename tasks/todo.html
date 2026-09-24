@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=3f745a74af099064926109b0d1ffb77c74ff37ccd435ef23188ce109b272b5fe body-sha256=f1b8eac93743c9230079f5ab39ceadac04c8548199feb9ab680055598b1cdd60 -->
+<!-- zmd2html:auto source-sha256=b2d14d206288011eb3ffb78c88f85e9a3da6a11dda5ff11cd446a5aeac85a54e body-sha256=347479967fd22a5f614ec609700e2e36cc449a2be4d66a4919d7ced5562bb6dd -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -567,6 +567,63 @@ saved tools to make the iRMC ping Debby and fetch
 <code>zbmc-connectivity.txt</code> over TCP. The iRMC reported three of
 three ICMP replies and <code>wget_status=0</code>; Debby's listener
 logged HTTP 200 from <code>10.250.0.42</code>.</p>
+<h1 id="trace-fujitsu-irmc-ipmi-listener-and-response-sources">Trace
+Fujitsu iRMC IPMI listener and response sources</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Bound UDP/623
+availability from the retained cold-run packet capture and event
+timeline.</label></li>
+<li><label><input type="checkbox" checked="" />Prove the live socket
+owner, threads, file descriptors, and queue endpoints.</label></li>
+<li><label><input type="checkbox" checked="" />Trace RMCP/RMCP+ receive,
+message dispatch, and response framing through the vendor
+libraries.</label></li>
+<li><label><input type="checkbox" checked="" />Map representative
+successful commands to cached state, files, network helpers, callbacks,
+IPC, and device boundaries.</label></li>
+<li><label><input type="checkbox" checked="" />Record unresolved
+physical backends and the missing exact <code>bind()</code> timestamp
+without overclaiming.</label></li>
+<li><label><input type="checkbox" checked="" />Publish and verify a
+durable Tailwind HTML report and generated Markdown pair.</label></li>
+</ul>
+<h2 id="review-14">Review</h2>
+<p>The retained run proves that <code>IPMIMain</code> existed by guest
+uptime 51.852 seconds, unanswered Open Session probes continued through
+elapsed 218.807 seconds, and the first RMCP+ Open Session Response was
+captured at elapsed 451.541 seconds. Authenticated IPMI completed at 490
+seconds and managed READY followed at 532 seconds. The management
+interface bounced until roughly 410 seconds, so the packet capture
+bounds external usability but cannot distinguish an early wildcard
+<code>bind()</code> from a later bind. Resolving the exact syscall time
+requires a future instrumented boot; no additional cold boot was
+performed.</p>
+<p>Live <code>/proc</code> evidence ties wildcard UDP/623 inode 20142 to
+PID 304 fd 52. The same process contains <code>RecvLANPkt</code>,
+<code>LANIfcTask</code>, <code>LANMonitor</code>, <code>LANTimer</code>,
+and eight <code>MsgHndlr</code> threads. Static analysis proves the
+route: <code>recvfrom</code> → <code>/var/LANIfcQ</code> →
+<code>ProcessRMCPReq</code> → <code>/var/MsgHndlrQ</code> →
+privilege/command-table dispatch → <code>/var/LANResQ</code> → RMCP+
+framing → <code>sendto</code>. The queue names are IPC endpoints inside
+the multi-threaded process, not evidence of a second IPMI daemon.</p>
+<p>Response sources are command-specific. Get Device ID combines
+initialized <code>g_BMCInfo</code> state with
+<code>/proc/ractrends/Helper/FwInfo</code>; channel and user replies
+read locked objects initialized from AMI configuration files; LAN
+replies combine those objects with live kernel-network helpers; SEL and
+SDR read in-process repositories backed by persistent/NVR files; chassis
+status mixes cached bytes with platform callbacks; and FRU delegates to
+a platform callback whose Fujitsu physical backend remains unresolved.
+<code>IPMIMain</code> has live I2C, KCS, GPIO, IPMB-queue,
+<code>/dev/mem</code>, reset, netmon, and misc-control handles, but the
+report does not attribute cached responses to those devices merely
+because the descriptors exist.</p>
+<p>The new <code>boxes/irmc-fujitsu/ipmi-path.html</code> report
+contains the full timing, call chain, response-source table, confidence
+limits, evidence locations, and SHA-256 hashes.
+<code>tools/sync-docs --write</code> produced its Markdown pair and
+refreshed the Fujitsu overview pair.</p>
 </div>
 </body>
 </html>

@@ -31,6 +31,9 @@ the first two slots are retained because the firmware binds its management inter
 <p>The Debby acceptance run <code>20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560</code>
 reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product <code>0x0666</code> from <code>mc info</code>; five subsequent serialized HTTPS probes all returned HTTP 200 from <code>iRMC S6 Webserver</code>.</p>
 
+<h2 class="text-xl font-semibold mt-6 mb-2">IPMI internals</h2>
+<p class="mb-3">The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the <a class="text-blue-700 underline" href="ipmi-path.html">IPMI listener and response-source trace</a>.</p>
+
 <h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
 <p>The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the
 vendor-gated <code>defshell</code>. On the host, attach after startup and press Enter for the shell:</p>
