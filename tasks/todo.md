@@ -254,3 +254,16 @@ Transport proof is deliberately qualified. Four safe SCCI reads succeeded over a
 Static review identified security-relevant validation weaknesses without invoking them: User-level SCCI setters lack full length checks; D0 policy mode 4 uses an apparently unbounded request byte as an index for four runtime-array writes; D0 command `0x2c` copies 20 bytes from an undersized request and mutates counter state despite its getter name. NetFn `0x30` command `0x9b` is a no-op success stub, while `0xe6` provides a host-on-gated, command-allowlisted PECI multiple-write/read primitive rather than arbitrary PECI or host-memory access.
 
 No state-changing power, reset, NMI, SMI, policy, inhibit, scheduling, watchdog, cap, fan, LED, PECI, or restore-policy command was sent. HTML parsing, focused report assertions, documentation-pair synchronization, the iRMC runtime test, repository whitespace checks, artifact stamping/sweep, live read-only SCCI queries, live process/queue capture, and static decompilation all pass. The repository-wide documentation contract still returns 1 for its pre-existing `README.html` links to eleven `.md` box indexes; none involves the new report links. The durable report UUID is `9071144c-5b3a-4c74-8f30-3a8331e244ec`.
+
+# Reproduce the iRMC Redfish kernel panic in isolation
+
+- [x] Preserve the known-good iRMC instance and launch a separate snapshot-backed VM with unique TAPs and no `irmc_no_redfish` argument.
+- [x] Capture vendor Redfish task-manager and service startup, live process/thread wait channels, and the terminal kernel fault.
+- [x] Preserve the full console evidence and remove only the disposable VM's TAP interfaces.
+- [x] Correct the Fujitsu overview with the delayed failure timing and exact read/backtrace path.
+
+## Review
+
+The disposable run used the same pinned kernel, DTB, initramfs, 64 MiB flash image, and SD rootfs as the working instance. Its sole material service difference was omitting `irmc_no_redfish`; QEMU drives remained in snapshot mode and the working `10.250.0.42` instance was untouched. `FTS_RedfishTaskMngr` started first, followed by the unmodified `FTS_RedfishService`. The service created `/var/tmp/RedfishServer.sock` and remained alive for minutes: PID 2113 had six threads, its main thread waited in `epoll_wait()`, and two `RedfishInitThre` workers waited in `poll_schedule_timeout`.
+
+At guest uptime 804.782 seconds, service thread PID 2116 faulted at virtual address `0x10`. The kernel identifies the PC as `fwinfo2_read+0x9c/0x238 [helper]` and records the complete read path from `sys_read` through `proc_reg_read`; the fatal exception then panicked the guest. This proves the delayed `FwInfo2` attribution under the single-FMC topology and also explains why a short health check can falsely suggest that restored Redfish is stable. The complete retained console is `work/irmc-redfish-repro/console.log`, SHA-256 `9ae9ca9cf9030388ed1a4a8ba863c6b0a586ab6da6a766fde5dbd612a6d0d1f4`. The disposable QEMU process exited after the panic and `ztap-rf0`, `ztap-rf1`, and `ztap-rf2` were removed.

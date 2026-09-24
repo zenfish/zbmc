@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=44e6ada5ba72f8fdbce1e60d78a03c5e2d228135deca3842f2130452d8b751a6 body-sha256=62e42c79eb12245db9e8c6a5bebc6154ec0a1b5e513ba257dcafba25e63b95b2 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=d2e0d1e3d285bbcdad57e0bad384d5a397aca0a4848eb769a595750fecaa06e8 body-sha256=577dc83d9cf3d2c9d869b63c3418ec0020d3b2d201f5ea25f0abb813f859407e -->
 
 # Fujitsu iRMC S6
 
@@ -17,7 +17,7 @@ The cold build downloads five SHA-256-pinned artifacts from `https://git.trouble
 
 - **Verified:** cold boot reaches SysV runlevel 3, authenticated RMCP+ IPMI answers on UDP/623, and the preserved Fujitsu HTTPS Web UI answers.
 - **IPMI cold-boot fix:** a recovered `/conf` partition defaults `AMI_DYNAMIC_LAN_IFC_SUPPORT`, management `eth0 Enabled`, and `eth0 Up_Status` to zero. The derived initramfs enables them before `IPMIMain` starts and removes the stale `/tmp/BMC1/IPMIConfig.dat` shadow cache. The pinned vendor inputs remain unchanged and both QEMU drives use snapshot mode.
-- **Known broken:** starting `FTS_RedfishService` causes a reproducible `helper.ko` `fwinfo2` NULL dereference with this reduced QEMU topology, so the boot disables it.
+- **Known broken:** starting the unmodified `FTS_RedfishService` causes a delayed, reproducible kernel panic with this reduced QEMU topology. In the isolated 2026-09-24 reproduction, the service started normally and exposed `/var/tmp/RedfishServer.sock`; its main thread waited in `epoll_wait()` and its `RedfishInitThre` workers waited in `poll()`. At guest uptime 804.782 seconds, PID 2116 read `/proc/ractrends/Helper/FwInfo2` and faulted at address `0x10` in `helper.ko:fwinfo2_read+0x9c/0x238`. The kernel backtrace is `sys_read → vfs_read → __vfs_read → proc_reg_read → fwinfo2_read`, followed by `Kernel panic - not syncing: Fatal exception`. The default boot therefore passes `irmc_no_redfish` and bind-mounts a no-op over this service; it does not disable the independent task manager or Fujitsu Web UI.
 - **Not accepted:** SSH reaches the vendor-gated `defshell`, not a Unix command shell.
 
 The Debby acceptance run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product `0x0666` from `mc info`; five subsequent serialized HTTPS probes all returned HTTP 200 from `iRMC S6 Webserver`.
