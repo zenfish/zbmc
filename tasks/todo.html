@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=2c0be0fda87cdf694fd9f7a480debc7da56fd838e702f255943c03396800046f body-sha256=791291451c79511fb189ed4067f615853b5d935f4d3e7df06db50220747d2b1a -->
+<!-- zmd2html:auto source-sha256=e46a74cf99844084b9f4b4c4f0a3117c438888bada4ee6539ab7c76f22bd1095 body-sha256=5283abe9fe4aee500ae2470c1aa482cd27a0badca4bd6fdfe207ec0dcb9937ca -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -499,6 +499,30 @@ test, documentation-pair test, pair synchronization check, and
 <code>tests/run</code> still stops at the pre-existing macOS
 <code>sed</code> failure in <code>advantech-console-lifecycle.sh</code>;
 it fails before reaching any iRMC test.</p>
+<h1
+id="revalidate-irmc-bidirectional-connectivity-with-retained-tooling">Revalidate
+iRMC bidirectional connectivity with retained tooling</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Use
+<code>tools/zbmc irmc-fujitsu status -v</code> for Debby-to-BMC ICMP,
+authenticated IPMI, and HTTPS.</label></li>
+<li><label><input type="checkbox" checked="" />Reuse the retained serial
+command runner for BMC-originated ICMP tests.</label></li>
+<li><label><input type="checkbox" checked="" />Preserve the command and
+evidence under <code>/home/zen/xcc-shell-audit-20260922/</code> and the
+managed run log.</label></li>
+</ul>
+<h2 id="review-12">Review</h2>
+<p>The existing zBMC status probe reports the live iRMC run READY with
+ICMP, authenticated RMCP+ IPMI, and HTTP 200 HTTPS responses from Debby.
+The retained serial command runner then submitted one marked command
+through the existing QEMU serial socket; the managed console log records
+three replies from Debby (<code>10.0.0.24</code>) and three from the Mac
+(<code>10.0.0.2</code>), with 0% loss in both directions. QEMU logs
+guest serial output but does not mirror it to this socket client, so the
+runner waited for an end marker already present in the console log and
+was stopped; that is a capture-path limitation, not a network
+failure.</p>
 </div>
 </body>
 </html>

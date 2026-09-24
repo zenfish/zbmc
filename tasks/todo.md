@@ -173,3 +173,13 @@ The cold-boot hook runs immediately before `IPMIMain`. It creates the two observ
 Debby run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached managed READY in 532 seconds. The guest retained `Enabled=1` and `Up_Status=1` for `eth0`, both dynamic interface flags were `1`, `/proc/net/udp6` exposed wildcard port `0x026f`, and `IPMIMain` ran as PID 305. Authenticated `mc info` returned manufacturer 10368 and product `0x0666`; five serialized follow-up HTTPS probes all returned HTTP 200, followed by another successful IPMI query.
 
 The same run also proved the old bootstrap matcher was fragile: firmware diagnostics split `INIT: Entering runlevel: 3`, so readiness never began probing services. Matching the stable substring `Entering runlevel: 3` allowed the supervisor to record BOOTSTRAP, IPMI, Web-UI, stability, and READY normally. The focused iRMC test, documentation-pair test, pair synchronization check, and `git diff --check` pass. The repository-wide `tests/run` still stops at the pre-existing macOS `sed` failure in `advantech-console-lifecycle.sh`; it fails before reaching any iRMC test.
+
+# Revalidate iRMC bidirectional connectivity with retained tooling
+
+- [x] Use `tools/zbmc irmc-fujitsu status -v` for Debby-to-BMC ICMP, authenticated IPMI, and HTTPS.
+- [x] Reuse the retained serial command runner for BMC-originated ICMP tests.
+- [x] Preserve the command and evidence under `/home/zen/xcc-shell-audit-20260922/` and the managed run log.
+
+## Review
+
+The existing zBMC status probe reports the live iRMC run READY with ICMP, authenticated RMCP+ IPMI, and HTTP 200 HTTPS responses from Debby. The retained serial command runner then submitted one marked command through the existing QEMU serial socket; the managed console log records three replies from Debby (`10.0.0.24`) and three from the Mac (`10.0.0.2`), with 0% loss in both directions. QEMU logs guest serial output but does not mirror it to this socket client, so the runner waited for an end marker already present in the console log and was stopped; that is a capture-path limitation, not a network failure.
