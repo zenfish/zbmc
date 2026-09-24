@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=eca4cc26f00b888202fff66e5752ec9bf7434197496973b8716bd2c54329f284 body-sha256=266b68d39ebfa019cdb3018d8adb82183985e01af2afd1cab6483b265382419d -->
+<!-- zmd2html:auto source-sha256=5be179ec3dca275e34995f383cd2189d876671cc719a9aef3d040a233cbef869 body-sha256=169c0775fba89a39bb80a3ab484378041c8365154256789eecd9d12326873a84 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -407,7 +407,11 @@ emulated firmware uses DHCP and repeatedly receives
 <code>192.168.2.15</code>. It also records the transient
 <code>sudo/nohup</code> wrapper PID rather than QEMU's child PID,
 causing <code>status</code> and <code>stop</code> to report the VM down
-while it remains active.</p>
+while it remains active. Finally,
+<code>ifconfig lo0 alias 10.0.6.70 up</code> creates a class-A
+<code>/8</code> alias on macOS, temporarily routing the entire lab
+<code>10.0.0.0/8</code> into loopback; the test corrected that alias to
+<code>/32</code> and verified ordinary routing again.</p>
 <p>After changing only <code>GUEST_IP</code> to the observed
 <code>.15</code> in the detached test worktree, HTTPS became stable at
 approximately four minutes. Five consecutive checks returned HTTP 200
