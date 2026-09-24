@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=5be179ec3dca275e34995f383cd2189d876671cc719a9aef3d040a233cbef869 body-sha256=169c0775fba89a39bb80a3ab484378041c8365154256789eecd9d12326873a84 -->
+<!-- zmd2html:auto source-sha256=7755eceb020d708702a751402fd6e0332e20eb25b313451d1e3fe6c909d5d093 body-sha256=5f1a0405a1241878e2f47719e8cfed25fdd942a8e0807fb8794e807c95e28bbc -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -425,6 +425,34 @@ starts; the console records <code>Failed firewall</code>. Thus HD proved
 a booting iRMC Web frontend in principle, but the committed launcher
 cannot reach it without correcting the guest target, and its claims of
 working IPMI and SSH are not borne out.</p>
+<p>Follow-up isolated the RMCP failure independently of the host
+forward. The exact Debby firmware cold boot recovered an invalid
+<code>/conf</code> JFFS2 partition, generated fresh IPMI configuration,
+and started <code>IPMIMain</code>, <code>libipmilan</code>, and
+<code>LANIfcTask</code>, but <code>/proc/net/udp</code> contained no
+port 623 socket. The generated <code>/conf/BMC1/LanIfccfg.ini</code>
+marked management <code>eth0</code> as <code>Enabled=0</code> and
+<code>Up_Status=0</code>; more decisively,
+<code>/conf/BMC1/lan_kcs.ini</code> set
+<code>AMI_DYNAMIC_LAN_IFC_SUPPORT=0</code> while leaving dynamic KCS
+enabled. Ghidra showed <code>libipmilan::UpdateLANStateChange()</code>
+tests the corresponding <code>g_AMIBMCInfo[24]</code> byte before
+calling its UDP socket creator. Runtime memory confirmed
+<code>{dynamic LAN, dynamic KCS} = {0,1}</code>.
+<code>Failed firewall</code> is not causal: <code>IPMIMain</code> logs
+it and continues.</p>
+<p>The causal test enabled only management <code>eth0</code>, set
+<code>AMI_DYNAMIC_LAN_IFC_SUPPORT=1</code>, removed the stale binary
+configuration cache from the load path, and restarted
+<code>IPMIMain</code> in a disposable snapshot. The runtime feature
+bytes became <code>{1,1}</code>, the guest immediately bound dual-stack
+UDP/623, and host-side <code>ipmitool -I lanplus</code> returned a valid
+Fujitsu IPMI 2.0 <code>mc info</code> response (manufacturer 10368,
+product <code>0x0666</code>). Editing <code>LanIfccfg.ini</code> alone
+was insufficient because <code>IPMIMain</code> restored
+<code>/tmp/BMC1/IPMIConfig.dat</code> over the text file. This explains
+both the original Debby timeout and why the earlier INI-only startup
+hook failed.</p>
 </div>
 </body>
 </html>
