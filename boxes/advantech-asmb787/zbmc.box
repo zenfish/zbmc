@@ -22,7 +22,7 @@ ZBMC_NAME=advantech-asmb787
 ZBMC_NETWORK_MODE=tap
 ZBMC_TAP=ztap-asmb
 ZBMC_MAC=52:54:00:fa:00:50
-ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - direct-L2 TAP and serial console verified"
+ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - direct-L2 TAP, serial console, and IPMI verified"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
@@ -31,9 +31,9 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR"
 # Address comes from zbmc.conf and is owned by the guest FTGMAC.
 ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
-ZBMC_HINT='guest-owned TAP address and serial console verified; management-service repair is separate'
+ZBMC_HINT='guest-owned TAP address, serial console, and authenticated IPMI verified'
 IPMI_USER=admin
-IPMI_PW=admin
+IPMI_PW=superuser
 IPMI_KEY=00
 IPMI_OPTS="-C 17 -I lanplus"
 IPMI_T=20
@@ -69,6 +69,19 @@ zbmc_boot() {
   [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
 zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
+zbmc_post_launch() { # qemu-pid: clear the vendor first-login gate through standard IPMI
+  nohup bash -c '
+    for _ in $(seq 1 120); do
+      kill -0 "$1" 2>/dev/null || exit
+      timeout -s KILL 26 env PYTHONPATH="$2" python3 -m zipmi.cli.zipmi \
+        -H "$3" -p "$4" -U admin -P admin -C 17 -I lanplus -t 20 \
+        user set password 2 superuser --yes && exit
+      sleep 5
+    done
+    exit 1
+  ' bash "$1" "$ZIPMI" "$ZBMC_IP" "$IPMI_PORT" \
+    >"${ZBMC_RUN_DIR:-$ZBMC_DIR}/password-bootstrap.log" 2>&1 &
+}
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] && [ -f "$ZBMC_DIR/kernel-direct.uImage" ] && \
