@@ -4,7 +4,7 @@
 # FTS_RedfishService run under the AST2600 model.
 ZBMC_NAME=irmc-fujitsu
 ZBMC_NETWORK_MODE=tap
-ZBMC_DESC="Fujitsu iRMC S6 / AST2600 - vendor IPMI, Web-UI, and Redfish"
+ZBMC_DESC="Fujitsu iRMC S6 / AST2600 - Linux SSH, vendor IPMI, Web-UI, and Redfish"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
@@ -21,7 +21,7 @@ ZBMC_TAP=ztap-irmc2
 ZBMC_TAPS="ztap-irmc0 ztap-irmc1 $ZBMC_TAP"
 ZBMC_MAC=52:54:00:fa:42:02
 ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAPS"
-ZBMC_REQUIRED_SERVICES="ipmi redfish webui"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 ZBMC_STABILITY_SECONDS=15
 ZBMC_READY_DEADLINE=1800
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
@@ -32,6 +32,7 @@ ZBMC_EXPECTED_READY=720
 SSH_USER=sysadmin
 SSH_PW=superuser
 SSH_PORT=22
+ZBMC_SSH_PROBE_TIMEOUT=120
 IPMI_USER=admin
 IPMI_PW=admin
 IPMI_KEY=00
@@ -72,7 +73,7 @@ zbmc_ready() {
   for file in kernel.bin system-patched.dtb system-redfish.dtb initramfs.cpio.gz initramfs-shell.cpio.gz flash64.img rootfs-sd.img build-provenance.txt; do
     [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc irmc-fujitsu build"; return 1; }
   done
-  echo "ready (cold boot; IPMI, Redfish, and Web-UI work)"
+  echo "ready (cold boot; Linux SSH, IPMI, Redfish, and Web-UI work)"
 }
 
 zbmc_ipmi() {
@@ -116,9 +117,14 @@ zbmc_web() {
 }
 
 zbmc_ssh() {
-  echo "iRMC SSH uses the firmware-gated defshell; it is not a Unix shell" >&2
-  exec sshpass -p "$SSH_PW" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o ConnectTimeout=10 -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+  exec sshpass -p "$SSH_PW" ssh -o ForwardX11=no -o PubkeyAuthentication=no \
+    -o PreferredAuthentications=password -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR \
+    -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ssh_health() {
+  [ "$(zbmc_ssh 'printf zbmc-irmc-linux-shell')" = zbmc-irmc-linux-shell ]
 }
 
 zbmc_console() {

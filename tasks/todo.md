@@ -1,3 +1,26 @@
+# Enable Fujitsu iRMC Linux SSH
+
+- [x] Reconcile the older reset-before-key-exchange result with the current diagnostic shell hook.
+- [x] Identify the vendor SSH service-state gate and its boot-time owner.
+- [x] Enable only the vendor SSH service when the diagnostic shell is requested.
+- [x] Cold-build and prove remote commands, PTY shell behavior, and preserved IPMI/Redfish/Web UI.
+- [x] Update the service contract and documentation and run the full test suite.
+
+## Review
+
+The root cause was two independent vendor gates: <code>[ssh].current_state=0</code> prevented the
+SysV service from starting, and the proprietary <code>sysadmin:j:</code> passwd marker prevented
+<code>pam_unix</code> from consulting the preserved shadow hash. Initramfs version 23 changes only
+those runtime values when <code>irmc_diag_shell</code> is requested, then bind-wraps the vendor SSH
+init script. It also preserves command arguments through the existing <code>defshell → remman</code>
+diagnostic-shell bind mount.
+
+Debby cold run <code>20260925T054554Z-e12565e1-dd69-45ee-9eb1-09df9e97ea7c</code> reached READY in
+25m30s with required SSH, IPMI, Redfish, and Web UI stable. The exact SSH marker passed at 5m51s;
+an interactive PTY returned UID/GID 0 and <code>/root</code>. A final verbose status with the 120s
+Fujitsu SSH probe budget passed 5/5 network services and reported the console available. Evidence is
+retained under the run ID in the disposable Debby checkout.
+
 # Restore IEIT Linux SSH while preserving vendor CLP
 
 - [x] Recover the old authenticated SSH/SMASH evidence and readiness timings.

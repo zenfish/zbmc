@@ -11,12 +11,13 @@
 <main class="max-w-5xl mx-auto bg-white p-8 my-6 shadow-lg rounded-lg">
 <h1 class="text-3xl font-bold mb-3">Fujitsu iRMC S6</h1>
 <p class="mb-5">RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model.
-Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. The derived two-flash topology now lets the vendor Redfish DataModel initialize without the former <code>FwInfo2</code> panic.</p>
+The diagnostic runtime provides authenticated Linux SSH, RMCP+ IPMI, the preserved Fujitsu HTTPS Web UI, and Redfish. The derived two-flash topology lets the vendor Redfish DataModel initialize without the former <code>FwInfo2</code> panic.</p>
 
 <h2 class="text-xl font-semibold mt-6 mb-2">Operation</h2>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>./build.sh irmc-fujitsu
 sudo ./tools/zbmc irmc-fujitsu start
 ./tools/zbmc irmc-fujitsu status -v
+./tools/zbmc irmc-fujitsu ssh
 ./tools/zbmc irmc-fujitsu ipmi mc info</code></pre>
 <p>The cold build downloads five SHA-256-pinned artifacts from
 <code>https://git.trouble.org/zbmc/irmc-fujitsu/</code>. The guest uses the third emulated NIC;
@@ -24,11 +25,11 @@ the first two slots are retained because the firmware binds its management inter
 
 <h2 class="text-xl font-semibold mt-6 mb-2">Accepted boundary</h2>
 <ul class="list-disc pl-6 space-y-1">
-<li><strong>Verified:</strong> cold boot reaches SysV runlevel 3; authenticated RMCP+ IPMI answers on UDP/623; the Fujitsu HTTPS Web UI answers; and all 274 Redfish resources initialize before ServiceRoot returns HTTP 200.</li>
+<li><strong>Verified:</strong> cold boot reaches SysV runlevel 3; <code>sysadmin/superuser</code> opens a root BusyBox Linux shell over SSH; authenticated RMCP+ IPMI answers on UDP/623; the Fujitsu HTTPS Web UI answers; and all 274 Redfish resources initialize before ServiceRoot returns HTTP 200.</li>
 <li><strong>Static management network:</strong> before <code>IPMIMain</code> starts, the derived initramfs writes the vendor-owned LAN object <code>/conf/BMC1/lancfg0.ini</code> with <code>IPAddrSrc=1</code>, the requested IPv4 address, a <code>255.0.0.0</code> mask, the gateway, <code>IPv4_Enable=1</code>, and <code>IPv6_Enable=0</code>. <code>/conf/BMC1/LanIfccfg.ini</code> maps that zero-based LAN object to IPMI channel 2 on management <code>eth0</code>. The firmware then generates its own static <code>/conf/interfaces</code>; no host-side address repair loop remains.</li>
 <li><strong>IPMI cold-boot fix:</strong> a recovered <code>/conf</code> partition defaults <code>AMI_DYNAMIC_LAN_IFC_SUPPORT</code>, management <code>eth0 Enabled</code>, and <code>eth0 Up_Status</code> to zero. The derived initramfs enables them before <code>IPMIMain</code> starts and removes the stale <code>/tmp/BMC1/IPMIConfig.dat</code> shadow cache. The pinned vendor inputs remain unchanged and all three attached QEMU drive mappings use snapshot mode.</li>
 <li><strong>Redfish recovery:</strong> the original single-FMC topology made <code>helper.ko:fwinfo2_read</code> dereference a missing second <code>ractrends_mtd[]</code> bank at guest uptime 804.782 seconds. The derived runtime maps the same pinned 64 MiB flash image onto both FMC chip selects, concatenates those two snapshot-backed mappings for the AMI FMH parser, and mounts the original platform SquashFS before <code>switch_root</code>. A disposable VM completed all 274 DataModel entries, remained alive beyond the former panic boundary, returned HTTP 200 for ServiceRoot, and returned the expected authenticated <code>PasswordChangeRequired</code> response for Managers.</li>
-<li><strong>Not accepted:</strong> SSH reaches the vendor-gated <code>defshell</code>, not a Unix command shell.</li>
+<li><strong>SSH recovery:</strong> the diagnostic initramfs enables the vendor SSH service, normalizes the firmware-specific <code>sysadmin</code> passwd marker so PAM uses the preserved shadow hash, and bind-mounts the diagnostic shell over <code>defshell</code>'s <code>remman</code> target. Remote commands and interactive PTY sessions both reach the Linux shell; the pinned firmware and shadow hash remain unchanged.</li>
 </ul>
 <p>The Debby acceptance run <code>20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560</code>
 reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product <code>0x0666</code> from <code>mc info</code>; five subsequent serialized HTTPS probes all returned HTTP 200 from <code>iRMC S6 Webserver</code>.</p>
@@ -39,6 +40,12 @@ uptime 1782.40 seconds, the vendor configuration still had <code>IPAddrSrc=1</co
 <code>IPv4_Enable=1</code>, and <code>IPv6_Enable=0</code>; neither DHCP client nor PID file existed.
 Redfish completed 274/274 resources and became responsive, the Web UI returned HTTP 200, and
 authenticated IPMI still identified Fujitsu manufacturer 10368 and product <code>0x0666</code>.</p>
+<p class="mt-3">The Linux-SSH cold acceptance run
+<code>20260925T054554Z-e12565e1-dd69-45ee-9eb1-09df9e97ea7c</code> reached four-service READY in
+25m30s. The functional SSH probe executed an exact marker through <code>sysadmin/superuser</code>;
+an interactive PTY identified UID/GID 0 and <code>/root</code>. The final verbose check passed 5/5
+for ICMP, SSH, authenticated IPMI, authenticated Redfish, and the Web UI, with serial console
+available.</p>
 
 <h2 class="text-xl font-semibold mt-6 mb-2">IPMI internals</h2>
 <p class="mb-3">The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the <a class="text-blue-700 underline" href="ipmi-path.html">IPMI listener and response-source trace</a>.</p>
@@ -48,8 +55,8 @@ authenticated IPMI still identified Fujitsu manufacturer 10368 and product <code
 <p class="mb-3">The <a class="text-blue-700 underline" href="redfish-path.html">Redfish resource-provenance report</a> maps static resource definitions and <code>GenericMap.json</code> placeholders through the DataModel to configuration-store values, local IPMI, Redis, provider daemons, generated files, queues, and hardware-facing boundaries. It also explains the complete 274-entry initialization timeline and the misleading earlier “stuck at 162” status.</p>
 
 <h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
-<p>The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the
-vendor-gated <code>defshell</code>. On the host, attach after startup and press Enter for the shell:</p>
+<p>The default cold runtime enables the same diagnostic root Linux shell over SSH and serial. Use
+<code>sysadmin/superuser</code> for SSH, or attach to serial and press Enter:</p>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc irmc-fujitsu console --nostderr</code></pre>
 <p class="mt-3">Follow the <a class="text-blue-700 underline"
 href="../../README.html#copy-from-a-guest-shell">shared host HTTP-server recipe</a>, using an address

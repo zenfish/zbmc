@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=37132f00cea7cc914e2c332553262865dd43ddbda82ed99c5e8b5f75f80848ed body-sha256=65af433fe9397c04523f2a5108ac2b23e1d8774f76f427e099a48f4c330b726b -->
+<!-- zmd2html:auto source-sha256=7d4d76b236c048ad46a3190484659e72623a92187eca6b9abbd6a2d12d1568e6 body-sha256=6adf83a775624538bb262ff85bdcfa8925d43fd78221d788bbc40a50c249ed30 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>lessons</title>
@@ -44,34 +44,37 @@
     <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">lessons</h1>
   </div>
 </div>
-<p>2026-09-24 | iRMC Redfish recovery experiment | stopped after
-reproducing the known panic even though the user selected a recovery
-option | treat a reproduced blocker as the next diagnostic input and
-continue through the proposed recovery experiment | a checkpoint is not
-completion when the requested outcome is restored functionality
-2026-09-04 | ilo5-run-ownership | worked around root-owned attempt
-artifacts manually | reclaim ownership at the end of self-contained runs
-so reruns clone cleanly | fixes the lifecycle bug once instead of adding
-per-attempt exceptions 2026-09-10 | zbmc-native-networking | accepted
-proxy networking as sufficient for an advertised BMC IP | make the guest
-own its management IP on TAP and validate it through zBMC | port
-forwarding hides broken L2/ICMP behavior and violates the device model
-2026-09-22 | owner-controlled lab transfer | imposed ephemeral and
-secrecy handling after explicit ownership context | keep recoverable
-copies and use direct transfer unless the user requests secrecy |
-redundant safeguards increased fragility and recovery risk 2026-09-22 |
-firmware-script catalog wording | summarized argument and counter
-behavior as “target” and “counter moves” without naming either or
-stating test limitations | name exact inputs, fields, routing
-assumptions, and ignored statuses; mark missing consumers unresolved |
-terse labels can imply stronger behavior than the script proves
-2026-09-23 | shared task ledger context | called an HPE
-firmware-unpacking test the “new iLO5 contract” without naming the
-unpacker and let it appear adjacent to Lenovo work | name the exact
-tool/test and explicitly separate unrelated project sections | vague
-shorthand creates false technical relationships 2026-09-23 | Lenovo SMM
-naming | treated SMMLESS/PSoC chassis-management symbols as evidence
-about x86 System Management Mode | resolve vendor acronyms from
+<p>2026-09-24 | irmc-fujitsu SSH session recall | conflated completed
+IEIT SSH work with Fujitsu status | search session memory and retained
+run evidence before answering cross-session status | adjacent BMC work
+can look identical while having different acceptance state 2026-09-24 |
+iRMC Redfish recovery experiment | stopped after reproducing the known
+panic even though the user selected a recovery option | treat a
+reproduced blocker as the next diagnostic input and continue through the
+proposed recovery experiment | a checkpoint is not completion when the
+requested outcome is restored functionality 2026-09-04 |
+ilo5-run-ownership | worked around root-owned attempt artifacts manually
+| reclaim ownership at the end of self-contained runs so reruns clone
+cleanly | fixes the lifecycle bug once instead of adding per-attempt
+exceptions 2026-09-10 | zbmc-native-networking | accepted proxy
+networking as sufficient for an advertised BMC IP | make the guest own
+its management IP on TAP and validate it through zBMC | port forwarding
+hides broken L2/ICMP behavior and violates the device model 2026-09-22 |
+owner-controlled lab transfer | imposed ephemeral and secrecy handling
+after explicit ownership context | keep recoverable copies and use
+direct transfer unless the user requests secrecy | redundant safeguards
+increased fragility and recovery risk 2026-09-22 | firmware-script
+catalog wording | summarized argument and counter behavior as “target”
+and “counter moves” without naming either or stating test limitations |
+name exact inputs, fields, routing assumptions, and ignored statuses;
+mark missing consumers unresolved | terse labels can imply stronger
+behavior than the script proves 2026-09-23 | shared task ledger context
+| called an HPE firmware-unpacking test the “new iLO5 contract” without
+naming the unpacker and let it appear adjacent to Lenovo work | name the
+exact tool/test and explicitly separate unrelated project sections |
+vague shorthand creates false technical relationships 2026-09-23 |
+Lenovo SMM naming | treated SMMLESS/PSoC chassis-management symbols as
+evidence about x86 System Management Mode | resolve vendor acronyms from
 surrounding devices, transports, and callers before joining evidence
 paths | identical acronyms can name unrelated trust domains 2026-09-23 |
 Lenovo binary inference | promoted strings and decompiler field guesses

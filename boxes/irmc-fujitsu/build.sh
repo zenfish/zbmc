@@ -15,7 +15,7 @@ files=(
   'rootfs-sd.img|4b9cea861e4c71ce1d0c71d1b8692705e02305eda7eeba4cd322946ea9524d78'
 )
 
-SHELL_INITRAMFS_VERSION=21
+SHELL_INITRAMFS_VERSION=23
 
 mkdir -p "$WD"
 WD="$(cd "$WD" && pwd)"
@@ -88,11 +88,42 @@ if [ -n "$zbmc_ip" ]; then
   busybox echo "ZBMC_TAP_NETWORK_READY $zbmc_ip"
 fi
 if busybox grep -qw irmc_diag_shell /proc/cmdline; then
-  busybox echo '#!/bin/sh' > /diag-shell
-  busybox echo 'exec /bin/sh -i' >> /diag-shell
+  busybox cat > /diag-shell <<'SH'
+#!/bin/sh
+[ "$#" -eq 0 ] && exec /bin/sh -i
+exec /bin/sh "$@"
+SH
   busybox chmod 0755 /diag-shell
   busybox mount --bind /diag-shell /newroot/usr/local/bin/remman \\
     && busybox echo "[irmc-init] diagnostic shell enabled"
+  busybox cat > /ssh.zbmc <<'EOF'
+#!/bin/sh
+irmc_ssh_enable()
+{
+  conf=/conf/ncml.conf
+  passwd=/conf/passwd
+  [ -f "$conf" ] || { echo '[irmc-ssh] missing ncml.conf'; return 1; }
+  [ -f "$passwd" ] || { echo '[irmc-ssh] missing passwd'; return 1; }
+  awk '
+    /^\\[ssh\\]$/ { section = 1 }
+    /^\\[/ && $0 != "[ssh]" { section = 0 }
+    section && /^current_state=/ { print "current_state=1"; enabled = 1; next }
+    { print }
+    END { if (!enabled) exit 1 }
+  ' "$conf" > "$conf.zbmc" || return 1
+  grep -A2 '^\\[ssh\\]$' "$conf.zbmc" | grep -q '^current_state=1$' || return 1
+  mv "$conf.zbmc" "$conf" || return 1
+  sed 's/^sysadmin:[^:]*:/sysadmin:x:/' "$passwd" > "$passwd.zbmc" || return 1
+  grep -q '^sysadmin:x:' "$passwd.zbmc" || return 1
+  mv "$passwd.zbmc" "$passwd" || return 1
+  echo '[irmc-ssh] vendor SSH service and local sysadmin authentication enabled'
+}
+EOF
+  busybox sed '/^[[:space:]]*start)$/a\\    irmc_ssh_enable || exit 1' \\
+    /newroot/etc/init.d/ssh >> /ssh.zbmc
+  busybox chmod 0755 /ssh.zbmc
+  busybox mount --bind /ssh.zbmc /newroot/etc/init.d/ssh \\
+    && busybox echo '[irmc-init] SSH service pre-start hook installed'
 fi
 if busybox grep -qw irmc_diag_root /proc/cmdline; then
   busybox sed 's|^co:2345789:respawn:.*|co:2345789:respawn:/sbin/getty -n -l /usr/local/bin/remman -L console 38400 vt100|' \\
