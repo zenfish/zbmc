@@ -1,3 +1,12 @@
+# Restore managed IPMI on Advantech ASMB-787
+
+- [x] Recover the interrupted session and identify the live BMC and exact failing boundary.
+- [x] Prove ICMP, HTTPS, Redfish ServiceRoot, and authenticated RMCP+ independently.
+- [x] Correct process discovery, credentials, and the declared IPMI readiness contract.
+- [ ] Clear the firmware first-login gate through its supported password-change path.
+- [ ] Cold-start under zBMC management and verify status, IPMI, and a non-destructive OEM command.
+- [ ] Run focused/full checks, record review evidence, and commit the result.
+
 # Enable Fujitsu iRMC Linux SSH
 
 - [x] Reconcile the older reset-before-key-exchange result with the current diagnostic shell hook.

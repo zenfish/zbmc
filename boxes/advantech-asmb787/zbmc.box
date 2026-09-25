@@ -33,9 +33,9 @@ ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
 ZBMC_HINT='guest-owned TAP address and serial console verified; management-service repair is separate'
 IPMI_USER=admin
-IPMI_PW=superuser
+IPMI_PW=admin
 IPMI_KEY=00
-IPMI_OPTS=""
+IPMI_OPTS="-C 17 -I lanplus"
 IPMI_T=20
 SSH_USER=sysadmin
 SSH_PW=superuser
@@ -47,7 +47,7 @@ ZBMC_QEMU_SHA256=94e624f52653ecd1d226a2edd76e847dd46e00dc1ae5f4efed11fac5ef20898
 ZBMC_QEMU_MAJOR=10
 ZBMC_QEMU_VERSION=10.0.11
 ZBMC_QEMU_MACHINE=ast2600-evb
-ZBMC_REQUIRED_SERVICES=console
+ZBMC_REQUIRED_SERVICES="console ipmi"
 ZBMC_DEFAULT_NO_WEB=1
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
 
@@ -68,6 +68,7 @@ zbmc_boot() {
     sleep 0.3; n=$((n+1)); done
   [ -n "$qp" ] && echo "$qp" > "$PIDF"; echo "$qp"
 }
+zbmc_running() { pgrep -f "ast2600-evb.*ifname=$ZBMC_TAP" | head -1; }
 zbmc_build() { WD="$ZBMC_DIR" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
   [ -f "$ZBMC_DIR/mtdflash.bin" ] && [ -f "$ZBMC_DIR/kernel-direct.uImage" ] && \
@@ -96,11 +97,18 @@ zbmc_console_health() {
   grep -q 'login:' "$CONSOLE_LOG" 2>/dev/null && { echo "serial login prompt observed"; return 0; }
   echo "waiting for serial login prompt"; return 1
 }
-# Management transport now reaches the guest directly. Full IPMI, protected
-# Redfish/Web-UI, and privileged SSH acceptance remain separate service work.
+# Management transport and authenticated RMCP+ IPMI reach the guest directly.
+# Protected Redfish/Web-UI and privileged SSH acceptance remain separate work.
 zbmc_web()         { echo "$ZBMC_NAME: HTTPS root responds, but protected Redfish/Web-UI is not accepted yet"; return 1; }
-zbmc_ipmi()        { echo "$ZBMC_NAME: RMCP+ session is not accepted yet"; return 1; }
-zbmc_ipmi_health() { echo "RMCP+ session is not accepted yet"; return 1; }
+zbmc_ipmi() {
+  timeout -s KILL "$((IPMI_T + 6))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" \
+    -C 17 -I lanplus -t "$IPMI_T" "$@" 2>&1
+}
+zbmc_ipmi_health() {
+  zbmc_ipmi mc info | grep -q 'Manufacturer' || { echo "no authenticated IPMI answer"; return 1; }
+  echo "AUTH OK (Advantech ASMB-787 RMCP+)"
+}
 zbmc_ssh()         { echo "$ZBMC_NAME: SSH authenticates, but firmware denies shell privilege"; return 1; }
 
 ZBMC_READY_GREP='zbmc: Advantech direct-PHY FTGMAC address'
