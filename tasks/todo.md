@@ -4,8 +4,29 @@
 - [x] Prove ICMP, HTTPS, Redfish ServiceRoot, and authenticated RMCP+ independently.
 - [x] Correct process discovery, credentials, and the declared IPMI readiness contract.
 - [x] Clear the firmware first-login gate through its supported password-change path.
-- [ ] Cold-start under zBMC management and verify status, IPMI, and a non-destructive OEM command.
-- [ ] Run focused/full checks, record review evidence, and commit the result.
+- [x] Cold-start under zBMC management and verify status, IPMI, and a non-destructive OEM command.
+- [x] Run focused/full checks, record review evidence, and commit the result.
+
+## Review
+
+The ASMB-787 was already answering ICMP and completing RMCP+ sessions with the firmware's initial
+`admin/admin` credential. The apparent IPMI failure had two causes: the box descriptor still used
+`admin/superuser`, and MegaRAC's `PasswordChangedAtFirstLogin` gate returned completion code `0x18`
+before dispatching ordinary user-management and OEM commands. The box now uses its existing
+post-launch hook to perform the standard IPMI Set User Password operation for user 2, establishing
+the documented `admin/superuser` lab credential without patching the vendor dispatcher.
+
+Debby cold run `20260925T180428Z-f7448097-e616-4bde-9173-14d0cfe3a631` reached managed READY in
+529 seconds with ICMP, authenticated IPMI, and console required. The bootstrap log records the
+successful standard password change; `zbmc advantech-asmb787 ipmi mc info` returned Advantech
+manufacturer ID 10297/product `0x2000`; non-destructive OEM query NetFn `0x32`, Cmd `0x90` returned
+`01` instead of `0x18`; and authenticated `/redfish/v1/Systems` returned HTTP 200. Redfish is now
+part of the declared contract, while SSH and the interactive Web UI remain unaccepted.
+
+The focused lifecycle test, all 57 documentation pairs, `git diff --check`, and every repository
+test script passed. The local aggregate run lacked the untracked Renode runtime and stopped at the
+UMAC script; that script passed separately on Debby with Renode 1.16.1, and every subsequent test
+passed locally.
 
 # Enable Fujitsu iRMC Linux SSH
 

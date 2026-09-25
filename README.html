@@ -138,8 +138,8 @@ animal's box material.</p>
 <tr>
 <td><strong><a href="boxes/advantech-asmb787/">advantech-asmb787</a></strong></td>
 <td>AST2600 · Cortex-A7 · ARMv7</td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>❌</td>
-<td>Cold ✅; Warm ❌</td><td>TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails.</td>
+<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td><td>⚠️</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-25 reached managed READY for ICMP, authenticated IPMI, and console in 8m49s after the standard password-change path cleared the first-login gate; protected Redfish also returned HTTP 200 in that run. SSH authenticates but grants no usable shell; the interactive Web-UI is not yet an accepted service.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/idrac10/index.html">idrac10</a></strong></td>
