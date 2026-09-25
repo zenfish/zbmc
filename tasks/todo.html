@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=13550ae2ac01c8739095592d160e18d79dbdbf2244d7607efa2d555cbd0993fc body-sha256=a6c17543db8aef5e712ba2b8f750f3dd0b9f626e80063a0388afcf1cce16b86f -->
+<!-- zmd2html:auto source-sha256=ee4b4e9d1c0b36c8c5555c4c17f5acdd5bd1d6f050b0438a4c895f6ef01a67ae body-sha256=c6b7125e63db4735137141fe904b5f50f0ec5300dd989a431534b51715658044 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Complete Advantech ASMB-787 six-service acceptance</title>
@@ -61,8 +61,8 @@ root-cause fixes and six-service health probes.</label></li>
 six services through <code>zbmc status -v</code>.</label></li>
 <li><label><input type="checkbox" checked="" />Audit whether the
 firmware's complete OEM IPMI surface is documented.</label></li>
-<li><label><input type="checkbox" />Update the HTML-authored GitHub
-page, regenerate its Markdown mirror, push, and verify
+<li><label><input type="checkbox" checked="" />Update the HTML-authored
+GitHub page, regenerate its Markdown mirror, push, and verify
 publication.</label></li>
 <li><label><input type="checkbox" checked="" />Run the complete
 verification suite and record the review evidence.</label></li>
@@ -105,6 +105,11 @@ through <code>ilo5-gxp-scan.sh</code>, then stopped at
 <code>ilo5-gxp-umac.sh</code> because this Mac checkout lacks the
 untracked Renode runtime; that UMAC test passed separately on Debby with
 Renode 1.16.1. Every test after the UMAC boundary passed locally.</p>
+<p>GitHub publication was verified through GitHub's read-only API after
+pushing <code>main</code>: the published README rendering contained the
+exact six-service READY string, the published Advantech page contained
+the 186-command audit and 107/186 coverage statement, and the remote
+<code>main</code> SHA matched the local commit.</p>
 <h1 id="restore-managed-ipmi-on-advantech-asmb-787">Restore managed IPMI
 on Advantech ASMB-787</h1>
 <ul class="task-list">

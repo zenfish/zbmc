@@ -6,7 +6,7 @@
 - [x] Implement the minimum root-cause fixes and six-service health probes.
 - [x] Cold-boot and prove all six services through `zbmc status -v`.
 - [x] Audit whether the firmware's complete OEM IPMI surface is documented.
-- [ ] Update the HTML-authored GitHub page, regenerate its Markdown mirror, push, and verify publication.
+- [x] Update the HTML-authored GitHub page, regenerate its Markdown mirror, push, and verify publication.
 - [x] Run the complete verification suite and record the review evidence.
 
 ## Review
@@ -39,6 +39,11 @@ sync-docs CLI test, and `git diff --check` pass. The aggregate local suite passe
 `ilo5-gxp-scan.sh`, then stopped at `ilo5-gxp-umac.sh` because this Mac checkout lacks the untracked
 Renode runtime; that UMAC test passed separately on Debby with Renode 1.16.1. Every test after the
 UMAC boundary passed locally.
+
+GitHub publication was verified through GitHub's read-only API after pushing `main`: the published
+README rendering contained the exact six-service READY string, the published Advantech page contained
+the 186-command audit and 107/186 coverage statement, and the remote `main` SHA matched the local
+commit.
 
 # Restore managed IPMI on Advantech ASMB-787
 
