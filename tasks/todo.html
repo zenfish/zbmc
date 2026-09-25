@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=dce02a0c1f3fbe33d8b6b0ea2371c152bcc3dd7e39cfe33d81df6d727c1bcd7d body-sha256=2a896d2865c94f662c37c9aefa2d7ab146c627d5e5c89a3cab4b215732b8da35 -->
+<!-- zmd2html:auto source-sha256=265288f07e0b014f0d3c5b257ed95e7e4ec300395cd0d5afbe071a15f3cdd102 body-sha256=2ca4ef8fe61684a64104db9d92b99b16e5b856775b2d9b0fc3a12ac2f53e0008 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -629,6 +629,128 @@ contains the full timing, call chain, response-source table, confidence
 limits, evidence locations, and SHA-256 hashes.
 <code>tools/sync-docs --write</code> produced its Markdown pair and
 refreshed the Fujitsu overview pair.</p>
+<h1 id="restore-fujitsu-irmc-redfish">Restore Fujitsu iRMC Redfish</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Reproduce and root-cause
+the delayed <code>FwInfo2</code> kernel panic.</label></li>
+<li><label><input type="checkbox" checked="" />Prove the AMI FMH parser
+initializes <code>ractrends_mtd[]</code> on a 128 MiB two-FMC
+view.</label></li>
+<li><label><input type="checkbox" checked="" />Preserve the fixed
+<code>platform</code>/SDR partition view alongside the FMH parser
+view.</label></li>
+<li><label><input type="checkbox" checked="" />Boot a disposable
+networked VM and validate authenticated Redfish without touching the
+known-good VM.</label></li>
+<li><label><input type="checkbox" checked="" />Hold beyond the former
+804-second panic boundary and capture provenance.</label></li>
+<li><label><input type="checkbox" checked="" />Integrate the minimum
+verified boot changes, document, test, and review.</label></li>
+</ul>
+<h2 id="make-the-management-address-static">Make the management address
+static</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Identify the vendor
+source of truth and distinguish LAN object 0 from IPMI channel
+2.</label></li>
+<li><label><input type="checkbox" checked="" />Configure
+<code>lancfg0.ini</code> with static IPv4, <code>/8</code> mask, and
+gateway before <code>IPMIMain</code> loads it.</label></li>
+<li><label><input type="checkbox" checked="" />Remove the host-side
+serial address reassertion.</label></li>
+<li><label><input type="checkbox" checked="" />Cold boot on Debby and
+prove neither IPv4 nor IPv6 DHCP starts, stable IPMI/Redfish/Web, and
+survival past delayed LAN restart.</label></li>
+<li><label><input type="checkbox" checked="" />Update the Fujitsu
+report, stamp/sync artifacts, run focused checks, and
+commit.</label></li>
+</ul>
+<h2 id="review-15">Review</h2>
+<p>The version-21 derived initramfs configures Fujitsu LAN object 0
+before <code>IPMIMain</code> starts: static IPv4
+<code>10.250.0.143/8</code>, gateway <code>10.0.0.1</code>, IPv4
+enabled, and IPv6 disabled. The vendor generated a static-only
+<code>/conf/interfaces</code>. The address and authenticated IPMI
+survived the initial and delayed LAN reloads without a host-side repair
+process.</p>
+<p>The all-DHCP capture covered UDP 67/68 and 546/547 from cold boot
+through Redfish readiness and contained no packet records. At guest
+uptime 1782.40, neither DHCP client nor PID file existed. Redfish
+completed 274/274 resources, ServiceRoot returned HTTP 200 with
+<code>RedfishVersion</code>, unauthenticated Managers returned 401,
+authenticated Managers reached the expected 403
+<code>PasswordChangeRequired</code> boundary, the Web UI returned 200,
+and authenticated RMCP+ still returned Fujitsu manufacturer
+10368/product <code>0x0666</code>.</p>
+<h2 id="trace-redfish-resource-provenance">Trace Redfish resource
+provenance</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Separate definition JSON,
+generated instance JSON, backend mapping, IPC, producer process, and
+final device/file source.</label></li>
+<li><label><input type="checkbox" checked="" />Map resources 161–165
+statically, including DIMM local-IPMI/Redis paths and NetworkInterfaces
+through <code>FTS_LAN_Cache</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Preserve failed v4–v6
+consoles; prove late boot sweeps <code>/tmp</code> and
+<code>/var/tmp</code>, reject read-only <code>/home</code>, and move v7
+evidence to stable <code>/dev</code> devtmpfs.</label></li>
+<li><label><input type="checkbox" checked="" />Capture and hash a valid
+syscall trace through ResourceTree entry 165.</label></li>
+<li><label><input type="checkbox" checked="" />Correlate files, Unix
+sockets, SysV messages, waits, and exact DIMM request counts with
+resource timestamps.</label></li>
+<li><label><input type="checkbox" checked="" />Update the durable HTML
+report with the trace and live process/socket ownership
+evidence.</label></li>
+<li><label><input type="checkbox" checked="" />Stamp the report,
+register the new immutable ownership capture, and run focused
+verification.</label></li>
+</ul>
+<h2 id="review-16">Review</h2>
+<p>The valid EABI5 trace covers the tail of entry 162 through entry 170.
+For entry 163 it records 40 reads of
+<code>MemoryMetrics_def.json</code>, 40 generated
+<code>Metrics_inst.json</code> files, and 280 successful Redis
+connections—seven per DIMM—over 119.881 seconds. Entry 164 then takes
+2.675 seconds, contacts local IPMI four times, and writes an empty
+<code>MemoryDomains_inst.json</code>. Entry 165 advances in 0.239
+seconds without contacting <code>lancache.sock</code>; the static
+LAN-cache path therefore remains capability evidence rather than a
+runtime attribution for this empty collection.</p>
+<p>A fresh live <code>/proc</code> capture proves endpoint ownership in
+the same v7 VM: PID 2120 <code>FTS_RedfishServ</code> owns
+<code>RedfishServer.sock</code>, PID 294 <code>redis-server</code> owns
+<code>redis.sock</code>, PID 1922 <code>FTS_LAN_Cache</code> owns
+<code>lancache.sock</code>, PID 3836 <code>IPMIMain</code> owns
+<code>UDSocket1</code>, PID 2047 <code>FTS_RedfishTaskMngr</code> owns
+the task socket, and PID 2170 is the HTTP front end. The report now
+separates static definitions, generated output, immediate IPC source,
+producer process, and ultimate hardware/file source.</p>
+<p>Static analysis shows that entries 162 and 163 share
+<code>NEXT_SYSTEM|NEXT_MEMORY</code>;
+<code>DMItemNextHandler_Memory</code> obtains maximum DIMM index and
+each module status through local IPMI on <code>/var/UDSocket1</code>.
+Maximum index 40 causes exactly forty status requests for indices 0–39.
+Most failures map to status 7, while the enumerator excludes only status
+9, so missing emulated inventory causes forty unknown DIMM and metrics
+instances rather than an empty collection.</p>
+<p>The runtime trace closes the former ambiguity: despite their
+<code>onDemand</code> declarations, the seven metrics callbacks are
+resolved while each initial instance is materialized. Forty DIMMs
+produce exactly 280 Redis connections and forty output files. The
+apparent 21-second MemoryDomains interval was a log-semantics error:
+“entry processed” is emitted before that entry's work. In the traced
+run, metrics takes 119.881 seconds and MemoryDomains itself takes 2.675
+seconds.</p>
+<p>The complete rotated log proves all 274 ResourceTree entries
+completed and the DataModel became responsive after 17m56s. Earlier
+status checks falsely reported a stall because they read only the new
+post-rotation log. The valid trace and current live process/socket
+ownership capture are retained under
+<code>work/irmc-redfish-integration/</code>; earlier files named as
+strace/ftrace captures contained no syscall records and are not
+evidence.</p>
 <h1 id="resolve-field-level-provenance-for-irmc-ipmi-replies">Resolve
 field-level provenance for iRMC IPMI replies</h1>
 <ul class="task-list">
@@ -647,7 +769,7 @@ in the report.</label></li>
 pair, verify the focused runtime/docs checks, and commit the
 correction.</label></li>
 </ul>
-<h2 id="review-15">Review</h2>
+<h2 id="review-17">Review</h2>
 <p>The report now traces every retained Device ID, chassis, channel,
 LAN, user, and SEL response field to the selected runtime handler, the
 exact expression or copy offset, and its constant, file, mutable object,
@@ -669,6 +791,121 @@ HTMLParser, Pandoc, <code>git diff --check</code>, and the
 documentation-sync CLI test also pass.
 <code>tools/sync-docs --write</code> reported all 55 documentation pairs
 synchronized before its two unrelated ignored Lenovo Markdown byproducts
+were removed.</p>
+<h1 id="map-fujitsu-irmc-oem-power-commands">Map Fujitsu iRMC OEM power
+commands</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Recover every Fujitsu OEM
+dispatch table and decode actual wire NetFn, command, LUN, and selector
+fields.</label></li>
+<li><label><input type="checkbox" checked="" />Identify every
+power-control, power-policy, power-cap, PSU, energy, thermal-power, NMI,
+reset, and Node Manager operation.</label></li>
+<li><label><input type="checkbox" checked="" />Trace each power handler
+to its final cache, file, GPIO, miscctrl, I2C/IPMB, PSU, or other device
+boundary.</label></li>
+<li><label><input type="checkbox" checked="" />Map LAN, KCS1–3, UDS,
+IPMB, and internal reachability plus privilege/channel masks without
+issuing state-changing commands.</label></li>
+<li><label><input type="checkbox" checked="" />Publish and verify a
+durable power-first OEM command matrix with evidence paths, hashes, and
+explicit unknowns.</label></li>
+</ul>
+<h2 id="review-18">Review</h2>
+<p>The power-first report at
+<code>boxes/irmc-fujitsu/oem-power-map.html</code> covers all 160
+recovered Fujitsu table records (148 active, 135 distinct wire
+NetFn/command pairs), with detailed treatment of standard Chassis
+Control, User-level SCCI power selectors, Admin C0/D0
+policy/watchdog/history controls, the complete 15-entry DCMI table,
+constrained raw PECI, Node Manager/IPMB, PSU PMBus, and cached
+telemetry. It distinguishes registration, transport reachability,
+handler execution, queued acceptance, and final physical actuation.</p>
+<p>The final BMC-side paths are now concrete. Ordinary on/off is a 100
+ms front-panel-button pulse through <code>/dev/miscctrl</code> to
+AST2600 LPC/SWC physical <code>0x1e789184</code> bit 15; power-good is
+<code>0x1e789180</code> bit 30; emergency off uses
+<code>0x1e789188</code> bits 12–14. Reset disables SCU passthrough and
+pulses AST GPIO index <code>0x79</code>. NMI traverses Chassis Control
+selector 4, the asynchronous power engine, and the RX2540 M7 product
+table to active-low AST GPIO index <code>0x69</code> through
+<code>socPulseGPIO</code>. The final motherboard nets and GPIO-HAL NMI
+pulse width remain explicitly unresolved. Fujitsu's exported SMI handler
+is a no-op; LPCSMI pinmux presence does not establish an SMI
+actuator.</p>
+<p>The unconditional PCH-off path writes <code>0x0200</code> over I2C
+using runtime bus/slave fields. A read-only live memory capture followed
+the relocated platform-object pointer and recovered QEMU values
+<code>ff 00</code>, showing that backend is unconfigured in this
+emulation while leaving real-hardware bus/address unresolved. PMBus
+helpers directly open <code>/dev/i2c-N</code>, whereas ordinary IPMI
+wattage and history replies frequently use caches and ring buffers.</p>
+<p>Transport proof is deliberately qualified. Four safe SCCI reads
+succeeded over authenticated LAN LUN0, including one in a session capped
+at User privilege. LAN LUN3 transported but returned <code>0xc0</code>.
+Three live KCS devices/listener threads preserve NetFn/LUN and enter
+shared dispatch, but QEMU lacks the host LPC/eSPI master and the final
+command-firewall channel-object index was not captured. UDS and IPMB
+software routes exist; neither physical peer path was exercised.</p>
+<p>Static review identified security-relevant validation weaknesses
+without invoking them: User-level SCCI setters lack full length checks;
+D0 policy mode 4 uses an apparently unbounded request byte as an index
+for four runtime-array writes; D0 command <code>0x2c</code> copies 20
+bytes from an undersized request and mutates counter state despite its
+getter name. NetFn <code>0x30</code> command <code>0x9b</code> is a
+no-op success stub, while <code>0xe6</code> provides a host-on-gated,
+command-allowlisted PECI multiple-write/read primitive rather than
+arbitrary PECI or host-memory access.</p>
+<p>No state-changing power, reset, NMI, SMI, policy, inhibit,
+scheduling, watchdog, cap, fan, LED, PECI, or restore-policy command was
+sent. HTML parsing, focused report assertions, documentation-pair
+synchronization, the iRMC runtime test, repository whitespace checks,
+artifact stamping/sweep, live read-only SCCI queries, live process/queue
+capture, and static decompilation all pass. The repository-wide
+documentation contract still returns 1 for its pre-existing
+<code>README.html</code> links to eleven <code>.md</code> box indexes;
+none involves the new report links. The durable report UUID is
+<code>9071144c-5b3a-4c74-8f30-3a8331e244ec</code>.</p>
+<h1 id="reproduce-the-irmc-redfish-kernel-panic-in-isolation">Reproduce
+the iRMC Redfish kernel panic in isolation</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Preserve the known-good
+iRMC instance and launch a separate snapshot-backed VM with unique TAPs
+and no <code>irmc_no_redfish</code> argument.</label></li>
+<li><label><input type="checkbox" checked="" />Capture vendor Redfish
+task-manager and service startup, live process/thread wait channels, and
+the terminal kernel fault.</label></li>
+<li><label><input type="checkbox" checked="" />Preserve the full console
+evidence and remove only the disposable VM's TAP
+interfaces.</label></li>
+<li><label><input type="checkbox" checked="" />Correct the Fujitsu
+overview with the delayed failure timing and exact read/backtrace
+path.</label></li>
+</ul>
+<h2 id="review-19">Review</h2>
+<p>The disposable run used the same pinned kernel, DTB, initramfs, 64
+MiB flash image, and SD rootfs as the working instance. Its sole
+material service difference was omitting <code>irmc_no_redfish</code>;
+QEMU drives remained in snapshot mode and the working
+<code>10.250.0.42</code> instance was untouched.
+<code>FTS_RedfishTaskMngr</code> started first, followed by the
+unmodified <code>FTS_RedfishService</code>. The service created
+<code>/var/tmp/RedfishServer.sock</code> and remained alive for minutes:
+PID 2113 had six threads, its main thread waited in
+<code>epoll_wait()</code>, and two <code>RedfishInitThre</code> workers
+waited in <code>poll_schedule_timeout</code>.</p>
+<p>At guest uptime 804.782 seconds, service thread PID 2116 faulted at
+virtual address <code>0x10</code>. The kernel identifies the PC as
+<code>fwinfo2_read+0x9c/0x238 [helper]</code> and records the complete
+read path from <code>sys_read</code> through <code>proc_reg_read</code>;
+the fatal exception then panicked the guest. This proves the delayed
+<code>FwInfo2</code> attribution under the single-FMC topology and also
+explains why a short health check can falsely suggest that restored
+Redfish is stable. The complete retained console is
+<code>work/irmc-redfish-repro/console.log</code>, SHA-256
+<code>9ae9ca9cf9030388ed1a4a8ba863c6b0a586ab6da6a766fde5dbd612a6d0d1f4</code>.
+The disposable QEMU process exited after the panic and
+<code>ztap-rf0</code>, <code>ztap-rf1</code>, and <code>ztap-rf2</code>
 were removed.</p>
 </div>
 </body>

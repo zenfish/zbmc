@@ -1,8 +1,8 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=d2e0d1e3d285bbcdad57e0bad384d5a397aca0a4848eb769a595750fecaa06e8 body-sha256=577dc83d9cf3d2c9d869b63c3418ec0020d3b2d201f5ea25f0abb813f859407e -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=e88c6406f6b8bcf3a227be068e95a405eb0030c78ab5f86819465b6ee42fb862 body-sha256=517121758169fe7fd607666d8dd6342cd9e88478e764c2b268faed0a8b64c6d5 -->
 
 # Fujitsu iRMC S6
 
-RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model. Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. Redfish is intentionally disabled.
+RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model. Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. The derived two-flash topology now lets the vendor Redfish DataModel initialize without the former `FwInfo2` panic.
 
 ## Operation
 
@@ -15,12 +15,15 @@ The cold build downloads five SHA-256-pinned artifacts from `https://git.trouble
 
 ## Accepted boundary
 
-- **Verified:** cold boot reaches SysV runlevel 3, authenticated RMCP+ IPMI answers on UDP/623, and the preserved Fujitsu HTTPS Web UI answers.
-- **IPMI cold-boot fix:** a recovered `/conf` partition defaults `AMI_DYNAMIC_LAN_IFC_SUPPORT`, management `eth0 Enabled`, and `eth0 Up_Status` to zero. The derived initramfs enables them before `IPMIMain` starts and removes the stale `/tmp/BMC1/IPMIConfig.dat` shadow cache. The pinned vendor inputs remain unchanged and both QEMU drives use snapshot mode.
-- **Known broken:** starting the unmodified `FTS_RedfishService` causes a delayed, reproducible kernel panic with this reduced QEMU topology. In the isolated 2026-09-24 reproduction, the service started normally and exposed `/var/tmp/RedfishServer.sock`; its main thread waited in `epoll_wait()` and its `RedfishInitThre` workers waited in `poll()`. At guest uptime 804.782 seconds, PID 2116 read `/proc/ractrends/Helper/FwInfo2` and faulted at address `0x10` in `helper.ko:fwinfo2_read+0x9c/0x238`. The kernel backtrace is `sys_read → vfs_read → __vfs_read → proc_reg_read → fwinfo2_read`, followed by `Kernel panic - not syncing: Fatal exception`. The default boot therefore passes `irmc_no_redfish` and bind-mounts a no-op over this service; it does not disable the independent task manager or Fujitsu Web UI.
+- **Verified:** cold boot reaches SysV runlevel 3; authenticated RMCP+ IPMI answers on UDP/623; the Fujitsu HTTPS Web UI answers; and all 274 Redfish resources initialize before ServiceRoot returns HTTP 200.
+- **Static management network:** before `IPMIMain` starts, the derived initramfs writes the vendor-owned LAN object `/conf/BMC1/lancfg0.ini` with `IPAddrSrc=1`, the requested IPv4 address, a `255.0.0.0` mask, the gateway, `IPv4_Enable=1`, and `IPv6_Enable=0`. `/conf/BMC1/LanIfccfg.ini` maps that zero-based LAN object to IPMI channel 2 on management `eth0`. The firmware then generates its own static `/conf/interfaces`; no host-side address repair loop remains.
+- **IPMI cold-boot fix:** a recovered `/conf` partition defaults `AMI_DYNAMIC_LAN_IFC_SUPPORT`, management `eth0 Enabled`, and `eth0 Up_Status` to zero. The derived initramfs enables them before `IPMIMain` starts and removes the stale `/tmp/BMC1/IPMIConfig.dat` shadow cache. The pinned vendor inputs remain unchanged and all three attached QEMU drive mappings use snapshot mode.
+- **Redfish recovery:** the original single-FMC topology made `helper.ko:fwinfo2_read` dereference a missing second `ractrends_mtd[]` bank at guest uptime 804.782 seconds. The derived runtime maps the same pinned 64 MiB flash image onto both FMC chip selects, concatenates those two snapshot-backed mappings for the AMI FMH parser, and mounts the original platform SquashFS before `switch_root`. A disposable VM completed all 274 DataModel entries, remained alive beyond the former panic boundary, returned HTTP 200 for ServiceRoot, and returned the expected authenticated `PasswordChangeRequired` response for Managers.
 - **Not accepted:** SSH reaches the vendor-gated `defshell`, not a Unix command shell.
 
 The Debby acceptance run `20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560` reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product `0x0666` from `mc info`; five subsequent serialized HTTPS probes all returned HTTP 200 from `iRMC S6 Webserver`.
+
+The final static-network/Redfish cold acceptance on 2026-09-24 retained `10.250.0.143/8` through the initial and delayed Fujitsu LAN reloads. A capture spanning the entire boot and both reloads watched UDP ports 67, 68, 546, and 547 and contained no packets. At guest uptime 1782.40 seconds, the vendor configuration still had `IPAddrSrc=1`, `IPv4_Enable=1`, and `IPv6_Enable=0`; neither DHCP client nor PID file existed. Redfish completed 274/274 resources and became responsive, the Web UI returned HTTP 200, and authenticated IPMI still identified Fujitsu manufacturer 10368 and product `0x0666`.
 
 ## IPMI internals
 
@@ -28,13 +31,17 @@ The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and p
 
 The [OEM IPMI and power-control map](oem-power-map.md) inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.
 
+## Redfish internals
+
+The [Redfish resource-provenance report](redfish-path.md) maps static resource definitions and `GenericMap.json` placeholders through the DataModel to configuration-store values, local IPMI, Redis, provider daemons, generated files, queues, and hardware-facing boundaries. It also explains the complete 274-entry initialization timeline and the misleading earlier “stuck at 162” status.
+
 ## Copying files
 
 The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the vendor-gated `defshell`. On the host, attach after startup and press Enter for the shell:
 
     sudo ./tools/zbmc irmc-fujitsu console --nostderr
 
-Follow the [shared host HTTP-server recipe](../../README.md#copy-from-a-guest-shell), but use `http://192.168.2.2:8765/my-tool` in the guest's `wget` command. This box's QEMU user network is `192.168.2.0/24`; the generic `10.0.2.2` address does not apply. Check the guest checksum before executing, use a compatible ARM32 binary, and expect `/tmp` to disappear on a cold boot. Small text/base64 payloads can also be entered at the serial shell. Ctrl-\] detaches.
+Follow the [shared host HTTP-server recipe](../../README.md#copy-from-a-guest-shell), using an address owned by the host on the directly attached `br-zbmc` network. For example, the Debby lab host is `http://10.0.0.24:8765/my-tool`. This box uses TAP/direct layer 2, not QEMU user networking or the `10.0.2.2` proxy address. Check the guest checksum before executing, use a compatible ARM32 binary, and expect `/tmp` to disappear on a cold boot. Small text/base64 payloads can also be entered at the serial shell. Ctrl-\] detaches.
 
 ## Cold artifact set
 

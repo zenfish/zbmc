@@ -11,7 +11,7 @@
 <main class="max-w-5xl mx-auto bg-white p-8 my-6 shadow-lg rounded-lg">
 <h1 class="text-3xl font-bold mb-3">Fujitsu iRMC S6</h1>
 <p class="mb-5">RX2540 M7 firmware 02.63S / SDR 03.67 under QEMU's AST2600 model.
-Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. Redfish is intentionally disabled.</p>
+Authenticated RMCP+ IPMI and the preserved Fujitsu HTTPS Web UI both answer. The derived two-flash topology now lets the vendor Redfish DataModel initialize without the former <code>FwInfo2</code> panic.</p>
 
 <h2 class="text-xl font-semibold mt-6 mb-2">Operation</h2>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>./build.sh irmc-fujitsu
@@ -24,27 +24,38 @@ the first two slots are retained because the firmware binds its management inter
 
 <h2 class="text-xl font-semibold mt-6 mb-2">Accepted boundary</h2>
 <ul class="list-disc pl-6 space-y-1">
-<li><strong>Verified:</strong> cold boot reaches SysV runlevel 3, authenticated RMCP+ IPMI answers on UDP/623, and the preserved Fujitsu HTTPS Web UI answers.</li>
-<li><strong>IPMI cold-boot fix:</strong> a recovered <code>/conf</code> partition defaults <code>AMI_DYNAMIC_LAN_IFC_SUPPORT</code>, management <code>eth0 Enabled</code>, and <code>eth0 Up_Status</code> to zero. The derived initramfs enables them before <code>IPMIMain</code> starts and removes the stale <code>/tmp/BMC1/IPMIConfig.dat</code> shadow cache. The pinned vendor inputs remain unchanged and both QEMU drives use snapshot mode.</li>
-<li><strong>Known broken:</strong> starting the unmodified <code>FTS_RedfishService</code> causes a delayed, reproducible kernel panic with this reduced QEMU topology. In the isolated 2026-09-24 reproduction, the service started normally and exposed <code>/var/tmp/RedfishServer.sock</code>; its main thread waited in <code>epoll_wait()</code> and its <code>RedfishInitThre</code> workers waited in <code>poll()</code>. At guest uptime 804.782 seconds, PID 2116 read <code>/proc/ractrends/Helper/FwInfo2</code> and faulted at address <code>0x10</code> in <code>helper.ko:fwinfo2_read+0x9c/0x238</code>. The kernel backtrace is <code>sys_read → vfs_read → __vfs_read → proc_reg_read → fwinfo2_read</code>, followed by <code>Kernel panic - not syncing: Fatal exception</code>. The default boot therefore passes <code>irmc_no_redfish</code> and bind-mounts a no-op over this service; it does not disable the independent task manager or Fujitsu Web UI.</li>
+<li><strong>Verified:</strong> cold boot reaches SysV runlevel 3; authenticated RMCP+ IPMI answers on UDP/623; the Fujitsu HTTPS Web UI answers; and all 274 Redfish resources initialize before ServiceRoot returns HTTP 200.</li>
+<li><strong>Static management network:</strong> before <code>IPMIMain</code> starts, the derived initramfs writes the vendor-owned LAN object <code>/conf/BMC1/lancfg0.ini</code> with <code>IPAddrSrc=1</code>, the requested IPv4 address, a <code>255.0.0.0</code> mask, the gateway, <code>IPv4_Enable=1</code>, and <code>IPv6_Enable=0</code>. <code>/conf/BMC1/LanIfccfg.ini</code> maps that zero-based LAN object to IPMI channel 2 on management <code>eth0</code>. The firmware then generates its own static <code>/conf/interfaces</code>; no host-side address repair loop remains.</li>
+<li><strong>IPMI cold-boot fix:</strong> a recovered <code>/conf</code> partition defaults <code>AMI_DYNAMIC_LAN_IFC_SUPPORT</code>, management <code>eth0 Enabled</code>, and <code>eth0 Up_Status</code> to zero. The derived initramfs enables them before <code>IPMIMain</code> starts and removes the stale <code>/tmp/BMC1/IPMIConfig.dat</code> shadow cache. The pinned vendor inputs remain unchanged and all three attached QEMU drive mappings use snapshot mode.</li>
+<li><strong>Redfish recovery:</strong> the original single-FMC topology made <code>helper.ko:fwinfo2_read</code> dereference a missing second <code>ractrends_mtd[]</code> bank at guest uptime 804.782 seconds. The derived runtime maps the same pinned 64 MiB flash image onto both FMC chip selects, concatenates those two snapshot-backed mappings for the AMI FMH parser, and mounts the original platform SquashFS before <code>switch_root</code>. A disposable VM completed all 274 DataModel entries, remained alive beyond the former panic boundary, returned HTTP 200 for ServiceRoot, and returned the expected authenticated <code>PasswordChangeRequired</code> response for Managers.</li>
 <li><strong>Not accepted:</strong> SSH reaches the vendor-gated <code>defshell</code>, not a Unix command shell.</li>
 </ul>
 <p>The Debby acceptance run <code>20260924T060412Z-7a079809-e09d-44c5-8066-fddc2c54f560</code>
 reached READY in 8m52s with authenticated IPMI and the Web UI stable for the required interval. It returned Fujitsu manufacturer ID 10368 and product <code>0x0666</code> from <code>mc info</code>; five subsequent serialized HTTPS probes all returned HTTP 200 from <code>iRMC S6 Webserver</code>.</p>
+<p class="mt-3">The final static-network/Redfish cold acceptance on 2026-09-24 retained
+<code>10.250.0.143/8</code> through the initial and delayed Fujitsu LAN reloads. A capture spanning the
+entire boot and both reloads watched UDP ports 67, 68, 546, and 547 and contained no packets. At guest
+uptime 1782.40 seconds, the vendor configuration still had <code>IPAddrSrc=1</code>,
+<code>IPv4_Enable=1</code>, and <code>IPv6_Enable=0</code>; neither DHCP client nor PID file existed.
+Redfish completed 274/274 resources and became responsive, the Web UI returned HTTP 200, and
+authenticated IPMI still identified Fujitsu manufacturer 10368 and product <code>0x0666</code>.</p>
 
 <h2 class="text-xl font-semibold mt-6 mb-2">IPMI internals</h2>
 <p class="mb-3">The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the <a class="text-blue-700 underline" href="ipmi-path.html">IPMI listener and response-source trace</a>.</p>
 <p class="mb-3">The <a class="text-blue-700 underline" href="oem-power-map.html">OEM IPMI and power-control map</a> inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Redfish internals</h2>
+<p class="mb-3">The <a class="text-blue-700 underline" href="redfish-path.html">Redfish resource-provenance report</a> maps static resource definitions and <code>GenericMap.json</code> placeholders through the DataModel to configuration-store values, local IPMI, Redis, provider daemons, generated files, queues, and hardware-facing boundaries. It also explains the complete 274-entry initialization timeline and the misleading earlier “stuck at 162” status.</p>
 
 <h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files</h2>
 <p>The default cold runtime enables a diagnostic root Linux shell on serial; SSH still reaches the
 vendor-gated <code>defshell</code>. On the host, attach after startup and press Enter for the shell:</p>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc irmc-fujitsu console --nostderr</code></pre>
 <p class="mt-3">Follow the <a class="text-blue-700 underline"
-href="../../README.html#copy-from-a-guest-shell">shared host HTTP-server recipe</a>, but use
-<code>http://192.168.2.2:8765/my-tool</code> in the guest's <code>wget</code> command.
-This box's QEMU user network is <code>192.168.2.0/24</code>; the generic <code>10.0.2.2</code> address
-does not apply. Check the guest checksum before executing, use a compatible ARM32 binary, and expect
+href="../../README.html#copy-from-a-guest-shell">shared host HTTP-server recipe</a>, using an address
+owned by the host on the directly attached <code>br-zbmc</code> network. For example, the Debby lab host is
+<code>http://10.0.0.24:8765/my-tool</code>. This box uses TAP/direct layer 2, not QEMU user networking or
+the <code>10.0.2.2</code> proxy address. Check the guest checksum before executing, use a compatible ARM32 binary, and expect
 <code>/tmp</code> to disappear on a cold boot. Small text/base64 payloads can also be entered at the
 serial shell. Ctrl-] detaches.</p>
 

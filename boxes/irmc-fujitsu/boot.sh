@@ -17,17 +17,19 @@ QMP="${QMP:-$WD/qmp.sock}"
 CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$WD/console.log}"
 LAUNCH_LOG="${LOG:-$WD/launcher.log}"
 
-for file in kernel.bin system-patched.dtb initramfs-shell.cpio.gz flash64.img rootfs-sd.img; do
+for file in kernel.bin system-redfish.dtb initramfs-shell.cpio.gz flash64.img rootfs-sd.img; do
   [ -f "$WD/$file" ] || { echo "missing $WD/$file - run: zbmc irmc-fujitsu build" >&2; exit 1; }
 done
 
 rm -f "$SOCK" "$QMP"
 nohup "$QEMU_BIN" \
   -M ast2600-evb,fmc-model=w25q512jv -m 1024 \
-  -kernel "$WD/kernel.bin" -dtb "$WD/system-patched.dtb" \
+  -kernel "$WD/kernel.bin" -dtb "$WD/system-redfish.dtb" \
   -initrd "$WD/initramfs-shell.cpio.gz" \
-  -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 imagebooted=1 nosmp irqchip.gicv2_force_probe=1 loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 irmc_no_redfish irmc_diag_shell irmc_diag_root irmc_diag_ipmi irmc_trace_ipmi zbmc_ip=$IP zbmc_gateway=10.0.0.1" \
+  -append "console=ttyS4,115200n8 earlycon=uart8250,mmio32,0x1e784000,115200n8 imagebooted=1 nosmp irqchip.gicv2_force_probe=1 loglevel=7 hung_task_panic=0 hung_task_timeout_secs=0 irmc_redfish irmc_diag_shell irmc_diag_root irmc_diag_ipmi irmc_trace_ipmi zbmc_ip=$IP zbmc_gateway=10.0.0.1" \
   -drive "file=$WD/flash64.img,format=raw,if=mtd,snapshot=on" \
+  -drive "file=$WD/flash64.img,format=raw,if=none,id=fmc1,snapshot=on" \
+  -device w25q512jv,bus=ssi.0,cs=1,drive=fmc1 \
   -drive "file=$WD/rootfs-sd.img,format=raw,if=sd,snapshot=on" \
   -display none -monitor none \
   -qmp "unix:$QMP,server=on,wait=off" \

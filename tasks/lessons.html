@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=ea00dbd1f7077b0fb944446c948cbb84864e863ff8ade0e7f2ec79e49851adba body-sha256=fb99f7f494d6897d6f91263e2d0d2250361188406b6f2b9f339eff0abcbe600a -->
+<!-- zmd2html:auto source-sha256=a745c2e53457f3f3eb887f553c95cf5f176af9837e2cbace8d243da0fa9f94d5 body-sha256=f97ba6f30b82c042a512d17d88b658a398814f323b51dc95d947f0dead93a6fa -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>lessons</title>
@@ -44,7 +44,12 @@
     <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">lessons</h1>
   </div>
 </div>
-<p>2026-09-04 | ilo5-run-ownership | worked around root-owned attempt
+<p>2026-09-24 | iRMC Redfish recovery experiment | stopped after
+reproducing the known panic even though the user selected a recovery
+option | treat a reproduced blocker as the next diagnostic input and
+continue through the proposed recovery experiment | a checkpoint is not
+completion when the requested outcome is restored functionality
+2026-09-04 | ilo5-run-ownership | worked around root-owned attempt
 artifacts manually | reclaim ownership at the end of self-contained runs
 so reruns clone cleanly | fixes the lifecycle bug once instead of adding
 per-attempt exceptions 2026-09-10 | zbmc-native-networking | accepted
@@ -122,7 +127,29 @@ misleading 2026-09-24 | QEMU serial logfile capture | watched QEMU's
 serial logfile without draining the simultaneously connected socket |
 always drain the serial socket even when the logfile is the
 authoritative transcript | a full chardev socket buffer stalls guest
-console output and hides the completion marker</p>
+console output and hides the completion marker 2026-09-24 | Fujitsu iRMC
+power analysis | treated power commands as one subsection of the broader
+OEM map | make power control, policy, measurement, transport
+reachability, and physical backends the organizing structure | the
+user's research priority is the complete power surface, not a generic
+IPMI catalog 2026-09-24 | Redfish resource provenance | stopped at
+resource names and timing without naming the immediate owner and deeper
+producer | map definition, generated instance, IPC endpoint, owning PID,
+producer, and final file/device separately | a cache or socket is a
+transport boundary, not the original source of the value 2026-09-24 |
+iRMC management address | treated DHCP plus host-side address
+reassertion as a viable final configuration | set the vendor LAN object
+to static before IPMIMain loads it and prove it survives every firmware
+restart | a BMC must own its fixed management address rather than depend
+on DHCP timing or an external repair loop 2026-09-24 | QEMU static-LAN
+reload test | used system_reset with -no-reboot expecting an in-place
+reset | relaunch without -no-reboot or use a persistent overlay before
+reset testing | -no-reboot turns reset into QEMU exit and discards
+snapshot-only changes 2026-09-24 | iRMC no-DHCP acceptance | treated an
+IPv4-only packet capture and absent udhcpc as proof of no DHCP | inspect
+both address families, both DHCP clients, and UDP ports 67/68 plus
+546/547 | static IPv4 did not prevent the vendor stack from starting
+DHCPv6</p>
 </div>
 </body>
 </html>

@@ -219,6 +219,51 @@ Response sources are command-specific. Fujitsu overrides generic Get Device ID w
 
 The new `boxes/irmc-fujitsu/ipmi-path.html` report contains the full timing, call chain, response-source table, confidence limits, evidence locations, and SHA-256 hashes. `tools/sync-docs --write` produced its Markdown pair and refreshed the Fujitsu overview pair.
 
+# Restore Fujitsu iRMC Redfish
+
+- [x] Reproduce and root-cause the delayed `FwInfo2` kernel panic.
+- [x] Prove the AMI FMH parser initializes `ractrends_mtd[]` on a 128 MiB two-FMC view.
+- [x] Preserve the fixed `platform`/SDR partition view alongside the FMH parser view.
+- [x] Boot a disposable networked VM and validate authenticated Redfish without touching the known-good VM.
+- [x] Hold beyond the former 804-second panic boundary and capture provenance.
+- [x] Integrate the minimum verified boot changes, document, test, and review.
+
+## Make the management address static
+
+- [x] Identify the vendor source of truth and distinguish LAN object 0 from IPMI channel 2.
+- [x] Configure `lancfg0.ini` with static IPv4, `/8` mask, and gateway before `IPMIMain` loads it.
+- [x] Remove the host-side serial address reassertion.
+- [x] Cold boot on Debby and prove neither IPv4 nor IPv6 DHCP starts, stable IPMI/Redfish/Web, and survival past delayed LAN restart.
+- [x] Update the Fujitsu report, stamp/sync artifacts, run focused checks, and commit.
+
+## Review
+
+The version-21 derived initramfs configures Fujitsu LAN object 0 before <code>IPMIMain</code> starts: static IPv4 <code>10.250.0.143/8</code>, gateway <code>10.0.0.1</code>, IPv4 enabled, and IPv6 disabled. The vendor generated a static-only <code>/conf/interfaces</code>. The address and authenticated IPMI survived the initial and delayed LAN reloads without a host-side repair process.
+
+The all-DHCP capture covered UDP 67/68 and 546/547 from cold boot through Redfish readiness and contained no packet records. At guest uptime 1782.40, neither DHCP client nor PID file existed. Redfish completed 274/274 resources, ServiceRoot returned HTTP 200 with <code>RedfishVersion</code>, unauthenticated Managers returned 401, authenticated Managers reached the expected 403 <code>PasswordChangeRequired</code> boundary, the Web UI returned 200, and authenticated RMCP+ still returned Fujitsu manufacturer 10368/product <code>0x0666</code>.
+
+## Trace Redfish resource provenance
+
+- [x] Separate definition JSON, generated instance JSON, backend mapping, IPC, producer process, and final device/file source.
+- [x] Map resources 161–165 statically, including DIMM local-IPMI/Redis paths and NetworkInterfaces through `FTS_LAN_Cache`.
+- [x] Preserve failed v4–v6 consoles; prove late boot sweeps `/tmp` and `/var/tmp`, reject read-only `/home`, and move v7 evidence to stable `/dev` devtmpfs.
+- [x] Capture and hash a valid syscall trace through ResourceTree entry 165.
+- [x] Correlate files, Unix sockets, SysV messages, waits, and exact DIMM request counts with resource timestamps.
+- [x] Update the durable HTML report with the trace and live process/socket ownership evidence.
+- [x] Stamp the report, register the new immutable ownership capture, and run focused verification.
+
+## Review
+
+The valid EABI5 trace covers the tail of entry 162 through entry 170. For entry 163 it records 40 reads of `MemoryMetrics_def.json`, 40 generated `Metrics_inst.json` files, and 280 successful Redis connections—seven per DIMM—over 119.881 seconds. Entry 164 then takes 2.675 seconds, contacts local IPMI four times, and writes an empty `MemoryDomains_inst.json`. Entry 165 advances in 0.239 seconds without contacting `lancache.sock`; the static LAN-cache path therefore remains capability evidence rather than a runtime attribution for this empty collection.
+
+A fresh live `/proc` capture proves endpoint ownership in the same v7 VM: PID 2120 `FTS_RedfishServ` owns `RedfishServer.sock`, PID 294 `redis-server` owns `redis.sock`, PID 1922 `FTS_LAN_Cache` owns `lancache.sock`, PID 3836 `IPMIMain` owns `UDSocket1`, PID 2047 `FTS_RedfishTaskMngr` owns the task socket, and PID 2170 is the HTTP front end. The report now separates static definitions, generated output, immediate IPC source, producer process, and ultimate hardware/file source.
+
+Static analysis shows that entries 162 and 163 share `NEXT_SYSTEM|NEXT_MEMORY`; `DMItemNextHandler_Memory` obtains maximum DIMM index and each module status through local IPMI on `/var/UDSocket1`. Maximum index 40 causes exactly forty status requests for indices 0–39. Most failures map to status 7, while the enumerator excludes only status 9, so missing emulated inventory causes forty unknown DIMM and metrics instances rather than an empty collection.
+
+The runtime trace closes the former ambiguity: despite their `onDemand` declarations, the seven metrics callbacks are resolved while each initial instance is materialized. Forty DIMMs produce exactly 280 Redis connections and forty output files. The apparent 21-second MemoryDomains interval was a log-semantics error: “entry processed” is emitted before that entry's work. In the traced run, metrics takes 119.881 seconds and MemoryDomains itself takes 2.675 seconds.
+
+The complete rotated log proves all 274 ResourceTree entries completed and the DataModel became responsive after 17m56s. Earlier status checks falsely reported a stall because they read only the new post-rotation log. The valid trace and current live process/socket ownership capture are retained under `work/irmc-redfish-integration/`; earlier files named as strace/ftrace captures contained no syscall records and are not evidence.
+
 # Resolve field-level provenance for iRMC IPMI replies
 
 - [x] Correct Get Device ID to the Fujitsu OEM handler selected at runtime.
