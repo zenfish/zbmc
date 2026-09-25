@@ -1,12 +1,44 @@
 # Complete Advantech ASMB-787 six-service acceptance
 
 - [x] Reopen acceptance: require ICMP, console, IPMI, Redfish, SSH, and authenticated Web UI.
-- [ ] Trace the SSH post-authentication hang to its owning firmware state or shell.
-- [ ] Trace the Web UI login/dashboard path and distinguish slow response from broken authentication.
-- [ ] Implement the minimum root-cause fixes and six-service health probes.
-- [ ] Cold-boot and prove all six services through `zbmc status -v`.
+- [x] Trace the SSH post-authentication hang to its owning firmware state or shell.
+- [x] Trace the Web UI login/dashboard path and distinguish slow response from broken authentication.
+- [x] Implement the minimum root-cause fixes and six-service health probes.
+- [x] Cold-boot and prove all six services through `zbmc status -v`.
+- [x] Audit whether the firmware's complete OEM IPMI surface is documented.
 - [ ] Update the HTML-authored GitHub page, regenerate its Markdown mirror, push, and verify publication.
-- [ ] Run the complete verification suite and record the review evidence.
+- [x] Run the complete verification suite and record the review evidence.
+
+## Review
+
+The SSH failure was post-authentication routing, not OpenSSH or PAM. `/etc/passwd` links to
+`/conf/passwd`; `sysadmin` used `/usr/local/bin/defshell`, which routed SSH sessions to SMASH, where
+that account has no privilege. The runtime image now changes only `sysadmin` to `/bin/sh`. Exact-marker
+remote-command and forced-PTY checks both reached the BusyBox shell as UID 0.
+
+The MegaRAC Web UI was functional but absent from the acceptance contract. Its health probe now creates
+an authenticated session, requires both the CSRF token and `QSESSIONID`, reads the protected
+administrator dashboard resource, and deletes the session. IPMI and protected Redfish remain
+authenticated functional probes.
+
+Debby cold run `20260925T214443Z-ce946490-918d-40af-83be-b2957f51c753` reached
+`READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]` in 672 seconds. Follow-up proof returned
+`uid=0(sysadmin)` for non-PTY SSH, forced-PTY SSH, and the serial console; OEM query NetFn `0x32`, Cmd
+`0x90` returned `01`.
+
+The OEM documentation audit found 186 statically registered vendor commands: 179 unique NetFn `0x32`
+entries (85 core plus 94 across 37 loadable AMI modules), five NetFn `0x30` platform commands, and two
+NetFn `0x3a` platform commands. Existing material documents the YAFU block and selected sensitive
+handlers; 107/186 remotely dispatched pairs are mapped, 79/186 are unmapped, and only about ten have
+focused request/response framing analysis. Complete semantics and runtime reachability are not
+documented for the surface as a whole. Three additional NetFn `0x2e` SMM-local PDK records remain
+outside the remotely dispatched count pending transport proof.
+
+The focused Advantech lifecycle test, all 57 documentation pairs, documentation link contract,
+sync-docs CLI test, and `git diff --check` pass. The aggregate local suite passed through
+`ilo5-gxp-scan.sh`, then stopped at `ilo5-gxp-umac.sh` because this Mac checkout lacks the untracked
+Renode runtime; that UMAC test passed separately on Debby with Renode 1.16.1. Every test after the
+UMAC boundary passed locally.
 
 # Restore managed IPMI on Advantech ASMB-787
 

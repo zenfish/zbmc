@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=ac33d83b839ab4d07a701bd6e6055de2ba566ba125e7a1314f47627d95cd8b88 body-sha256=51a702018f956780fe1dd68815199ef6fd5b929ec3833f2f5b2afc8142f2f635 -->
+<!-- html2md:auto source=README.html source-sha256=5cda11ec71b4a0f9d18dc715195527d79bf86caa68c02cc7e93fc76b8beb9a2f body-sha256=7ef81ea19efcbcb5a6f13b8b0fcd16a2714416adff1c21a04c6a811f825db23e -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -28,7 +28,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 |----|----|----|----|----|----|----|----|----|----|----|
 | **[openbmc](boxes/openbmc/index.md)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc openbmc status -v`; no warm checkpoint is published. |
 | **[nvidia-obmc](boxes/nvidia-obmc/)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc nvidia-obmc status -v`; no warm checkpoint is published. |
-| **[advantech-asmb787](boxes/advantech-asmb787/)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ⚠️ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-25 reached managed READY for ICMP, authenticated IPMI, and console in 8m49s after the standard password-change path cleared the first-login gate; protected Redfish also returned HTTP 200 in that run. SSH authenticates but grants no usable shell; the interactive Web-UI is not yet an accepted service. |
+| **[advantech-asmb787](boxes/advantech-asmb787/)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-25 reached `READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]` in 11m12s. SSH remote commands and a forced PTY reached the UID-0 BusyBox shell; IPMI and protected Redfish passed; the authenticated Web session returned administrator dashboard data; and the serial console executed a marked command as UID 0. No warm checkpoint is published. |
 | **[idrac10](boxes/idrac10/index.md)** | NPCM845 · Cortex-A35 · AArch64 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | AST2500 · Cortex-A9 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-24 reached READY for all five required network services in 124 seconds, with console available; `sysadmin/admin` provides BusyBox Linux while `admin/admin` retains SMASH/CLP. |

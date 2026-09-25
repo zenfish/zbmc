@@ -40,6 +40,7 @@ IPMI_T=20
 SSH_USER=sysadmin
 SSH_PW=superuser
 SSH_PORT=22
+ZBMC_SSH_PROBE_TIMEOUT=30
 IPMI_PORT=623
 WEB_PORT=443
 ZBMC_QEMU="$(cd "$PROJ_DIR/../.." && pwd)/qemu/runtime/qemu-system-arm-debian"

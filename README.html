@@ -138,8 +138,8 @@ animal's box material.</p>
 <tr>
 <td><strong><a href="boxes/advantech-asmb787/">advantech-asmb787</a></strong></td>
 <td>AST2600 · Cortex-A7 · ARMv7</td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td><td>⚠️</td><td>✅</td>
-<td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-25 reached managed READY for ICMP, authenticated IPMI, and console in 8m49s after the standard password-change path cleared the first-login gate; protected Redfish also returned HTTP 200 in that run. SSH authenticates but grants no usable shell; the interactive Web-UI is not yet an accepted service.</td>
+<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-25 reached <code>READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code> in 11m12s. SSH remote commands and a forced PTY reached the UID-0 BusyBox shell; IPMI and protected Redfish passed; the authenticated Web session returned administrator dashboard data; and the serial console executed a marked command as UID 0. No warm checkpoint is published.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/idrac10/index.html">idrac10</a></strong></td>

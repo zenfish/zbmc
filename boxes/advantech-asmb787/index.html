@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7fccfb9bb6f4b7b12652c343257918adad163a7ee0d0c81d911d0a61adb18c08 body-sha256=74d4cce0a8f223879752c5d52b917c9d0d020c6a1eff7ed0e7e445e198354ad6 -->
+<!-- zmd2html:auto source-sha256=f04c2dc630447e18543c1dc43f74ed40e3d6bbe050edbc8e221d9b70e5f6aefa body-sha256=c613943098a2a09e3633cacf72005828fcba8e033d48b9cc51c22f67919eeb4e -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc Advantech ASMB-787</title>
@@ -66,6 +66,45 @@ for spec in &quot;0xd0000 0x1f0000 conf&quot; &quot;0x2d0000 0x1f0000 bkupconf&q
 done</code></pre>
 <p>The rootfs artifact is the QEMU-patched copy; the other trees come
 from the original firmware.</p>
+<h2 id="service-acceptance">Service acceptance</h2>
+<p>Debby cold run
+<code>20260925T214443Z-ce946490-918d-40af-83be-b2957f51c753</code>
+reached
+<code>READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code> in
+672 seconds. The acceptance probes use authenticated operations rather
+than open-port checks: SSH executes an exact marker, IPMI runs
+<code>mc info</code>, Redfish reads a protected resource, and the Web UI
+creates a session, reads administrator dashboard data, and logs out. The
+serial console also executed a marked command as UID 0.</p>
+<h2 id="oem-ipmi-documentation-coverage">OEM IPMI documentation
+coverage</h2>
+<p><strong>No: full command semantics are not yet documented.</strong> A
+static audit of this exact firmware recovered 186 vendor dispatch
+entries: 85 built into <code>libipmimsghndlr.so.13.22.0</code>, 94 from
+37 loadable <code>libipmiamioem*.so</code> modules, and seven platform
+entries from <code>libipmipdkcmds.so.6.0.0</code>. The first 179 are
+unique NetFn <code>0x32</code> commands; the platform library adds five
+NetFn <code>0x30</code> commands and two NetFn <code>0x3a</code>
+commands. The message-handler binary has SHA-256
+<code>23e5b17be7125d100db9effea1772a57ee8ecd45da0569a5a331b8eb8d627539</code>.</p>
+<p>The dispatch tables establish the opcode, minimum privilege, fixed or
+variable request length, module, and handler name. Existing YAFU
+research documents the firmware-update block and selected
+security-sensitive handlers, but only 107 of the 186 remotely dispatched
+NetFn/command pairs are mapped anywhere in the current corpus; 79 are
+unmapped, and only about ten have focused request and response framing
+analysis. Most mapped entries still lack selector definitions, full
+field layouts, completion-code behavior, side effects, channel
+restrictions, or runtime feature gates.</p>
+<p>Three additional NetFn <code>0x2e</code> SMM-local records exist in
+the PDK library, bringing the compiled total to 189. They remain outside
+the 186-command remotely dispatched count until their transport exposure
+is proved. The existing material also mixes in client wrappers and
+optional HPE/Quanta handlers that this server image does not dispatch,
+so client-library presence is not evidence of ASMB-787 server
+reachability. Do not treat the current material as a safe command
+catalog, and do not probe setters, reset, restore, flash, credential, or
+firmware-update handlers on hardware that matters.</p>
 </div>
 </body>
 </html>
