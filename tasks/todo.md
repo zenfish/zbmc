@@ -1,3 +1,13 @@
+# Complete Advantech ASMB-787 six-service acceptance
+
+- [x] Reopen acceptance: require ICMP, console, IPMI, Redfish, SSH, and authenticated Web UI.
+- [ ] Trace the SSH post-authentication hang to its owning firmware state or shell.
+- [ ] Trace the Web UI login/dashboard path and distinguish slow response from broken authentication.
+- [ ] Implement the minimum root-cause fixes and six-service health probes.
+- [ ] Cold-boot and prove all six services through `zbmc status -v`.
+- [ ] Update the HTML-authored GitHub page, regenerate its Markdown mirror, push, and verify publication.
+- [ ] Run the complete verification suite and record the review evidence.
+
 # Restore managed IPMI on Advantech ASMB-787
 
 - [x] Recover the interrupted session and identify the live BMC and exact failing boundary.

@@ -22,7 +22,7 @@ ZBMC_NAME=advantech-asmb787
 ZBMC_NETWORK_MODE=tap
 ZBMC_TAP=ztap-asmb
 ZBMC_MAC=52:54:00:fa:00:50
-ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - direct-L2 TAP, serial console, and IPMI verified"
+ZBMC_DESC="Advantech ASMB-787 (MegaRAC/AST2600) - six-service cold boot verified"
 
 # paths derive from this box file's location so it works from a fresh clone (sourced -> BASH_SOURCE).
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"                        # boxes/advantech-asmb787/
@@ -31,7 +31,7 @@ ZBMC_DIR="${ZBMC_DIR:-$(cd "$PROJ_DIR/../.." && pwd)/work/$(basename "$PROJ_DIR"
 # Address comes from zbmc.conf and is owned by the guest FTGMAC.
 ZBMC_IP=$(_zbmc_resolve_ip advantech-asmb787 50 10.0.10.10)
 ZBMC_HOST=asmb787bmc
-ZBMC_HINT='guest-owned TAP address, serial console, and authenticated IPMI verified'
+ZBMC_HINT='ICMP, console, authenticated IPMI/Redfish/Web-UI, and Linux SSH verified'
 IPMI_USER=admin
 IPMI_PW=superuser
 IPMI_KEY=00
@@ -47,8 +47,7 @@ ZBMC_QEMU_SHA256=94e624f52653ecd1d226a2edd76e847dd46e00dc1ae5f4efed11fac5ef20898
 ZBMC_QEMU_MAJOR=10
 ZBMC_QEMU_VERSION=10.0.11
 ZBMC_QEMU_MACHINE=ast2600-evb
-ZBMC_REQUIRED_SERVICES="console ipmi redfish"
-ZBMC_DEFAULT_NO_WEB=1
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui console"
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
 
 PIDF="$ZBMC_DIR/zbmc.pid"
@@ -110,9 +109,10 @@ zbmc_console_health() {
   grep -q 'login:' "$CONSOLE_LOG" 2>/dev/null && { echo "serial login prompt observed"; return 0; }
   echo "waiting for serial login prompt"; return 1
 }
-# Management transport, authenticated RMCP+ IPMI, and protected Redfish reach the guest directly.
-# Interactive Web-UI and privileged SSH acceptance remain separate work.
-zbmc_web()         { echo "$ZBMC_NAME: protected Redfish works; interactive Web-UI is not accepted yet"; return 1; }
+# All management services reach the guest directly through its TAP-owned address.
+zbmc_web() {
+  zbmc_webui_health && echo "$ZBMC_NAME: authenticated Web-UI is ready"
+}
 zbmc_ipmi() {
   timeout -s KILL "$((IPMI_T + 6))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
     -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" \
@@ -126,6 +126,32 @@ zbmc_redfish_health() {
   curl -skf --max-time 12 -u "$IPMI_USER:$IPMI_PW" \
     "https://$ZBMC_IP:$WEB_PORT/redfish/v1/Systems" 2>/dev/null | grep -q 'Members'
 }
-zbmc_ssh()         { echo "$ZBMC_NAME: SSH authenticates, but firmware denies shell privilege"; return 1; }
+zbmc_webui_health() {
+  local jar login token uid dashboard rc=1
+  jar=$(mktemp)
+  login=$(curl -skf --max-time 20 -c "$jar" \
+    --data-urlencode "username=$IPMI_USER" --data-urlencode "password=$IPMI_PW" \
+    "https://$ZBMC_IP:$WEB_PORT/api/session" 2>/dev/null) || login=
+  token=$(printf '%s' "$login" | sed -n 's/.*"CSRFToken": "\([^"]*\)".*/\1/p')
+  uid=$(printf '%s' "$login" | sed -n 's/.*"user_id": \([0-9][0-9]*\).*/\1/p')
+  if [ -n "$token" ] && [ -n "$uid" ]; then
+    dashboard=$(curl -skf --max-time 20 -b "$jar" -H "X-CSRFTOKEN: $token" \
+      "https://$ZBMC_IP:$WEB_PORT/api/settings/dashboarduser?user_id=$uid&channel_id=1&user_name=$IPMI_USER" 2>/dev/null) || dashboard=
+    printf '%s' "$dashboard" | grep -q '"privilege": "administrator"' && rc=0
+    curl -sk --max-time 5 -b "$jar" -H "X-CSRFTOKEN: $token" -X DELETE \
+      "https://$ZBMC_IP:$WEB_PORT/api/session" >/dev/null 2>&1 || true
+  fi
+  rm -f "$jar"
+  return "$rc"
+}
+zbmc_ssh() {
+  exec sshpass -p "$SSH_PW" ssh -o ForwardX11=no -o PubkeyAuthentication=no \
+    -o PreferredAuthentications=password -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR \
+    -p "$SSH_PORT" "$SSH_USER@$ZBMC_IP" "$@"
+}
+zbmc_ssh_health() {
+  [ "$(zbmc_ssh 'printf zbmc-asmb787-linux-shell')" = zbmc-asmb787-linux-shell ]
+}
 
 ZBMC_READY_GREP='zbmc: Advantech direct-PHY FTGMAC address'

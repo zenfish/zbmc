@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=451e8b440e64ac30a516d055bca97b51b82aec82312c6f2a27f6b2eb2352eb9d body-sha256=58b26e133cd617f9ba031a47ad5c2e4caa0c76ef4ce2a460f00a6eacb208a095 -->
+<!-- zmd2html:auto source-sha256=637fdcfc3f5793a3820a1ef79a07eda075f74652f387039302b78a85f4eb316d body-sha256=dc69559dfc0ca9dd4d12898ab6c7c477279abee94dcc031038b381c58589a607 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Restore managed IPMI on Advantech ASMB-787</title>
+<title>Complete Advantech ASMB-787 six-service acceptance</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 <style type="text/tailwindcss">
@@ -41,10 +41,31 @@
 <div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
   <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
   <div>
-    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Restore managed IPMI on Advantech ASMB-787</h1>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Complete Advantech ASMB-787 six-service acceptance</h1>
   </div>
 </div>
 
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Reopen acceptance:
+require ICMP, console, IPMI, Redfish, SSH, and authenticated Web
+UI.</label></li>
+<li><label><input type="checkbox" />Trace the SSH post-authentication
+hang to its owning firmware state or shell.</label></li>
+<li><label><input type="checkbox" />Trace the Web UI login/dashboard
+path and distinguish slow response from broken
+authentication.</label></li>
+<li><label><input type="checkbox" />Implement the minimum root-cause
+fixes and six-service health probes.</label></li>
+<li><label><input type="checkbox" />Cold-boot and prove all six services
+through <code>zbmc status -v</code>.</label></li>
+<li><label><input type="checkbox" />Update the HTML-authored GitHub
+page, regenerate its Markdown mirror, push, and verify
+publication.</label></li>
+<li><label><input type="checkbox" />Run the complete verification suite
+and record the review evidence.</label></li>
+</ul>
+<h1 id="restore-managed-ipmi-on-advantech-asmb-787">Restore managed IPMI
+on Advantech ASMB-787</h1>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="" />Recover the interrupted
 session and identify the live BMC and exact failing

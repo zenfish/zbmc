@@ -22,7 +22,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 # --- FIX 1: inject conf-seed + symlink before every IPMIMain launch in ipmistack -------------------
 IPMISTACK="$R/etc/init.d/ipmistack"
-SEED='    mkdir -p /conf /var/tmp\n    [ -f /conf/AMI ] || { cp -a /etc/defconfig/* /conf/ 2>/dev/null; touch /conf/AMI; }\n    [ -L /conf/BMC ] || ln -sfn BMC1/ast2600evb_ami /conf/BMC\n'
+SEED='    mkdir -p /conf /var/tmp\n    [ -f /conf/AMI ] || { cp -a /etc/defconfig/* /conf/ 2>/dev/null; touch /conf/AMI; }\n    [ -L /conf/BMC ] || ln -sfn BMC1/ast2600evb_ami /conf/BMC\n    sed -i "/^sysadmin:/s#/usr/local/bin/defshell#/bin/sh#" /conf/passwd\n'
 perl -0pi -e "s{([ \t]*)(/usr/local/bin/IPMIMain --daemonize --reg-with-procmgr)}{${SEED}\$1\$2}g" "$IPMISTACK"
 
 # --- FIX 2: disable hardware-less IPMI interfaces in the seed IPMI.conf ----------------------------
@@ -42,6 +42,6 @@ rm -f "$IC.bak"
 install -m 0755 "$HERE/direct-network.sh" "$R/etc/init.d/zbmc-direct-network"
 ln -sfn ../init.d/zbmc-direct-network "$R/etc/rcS.d/S41zbmc-direct-network"
 
-echo "[qemu-patch] ipmistack conf-seed+/conf/BMC symlink injected; IPMI.conf: kept LAN/UDS/KCS,"
+echo "[qemu-patch] ipmistack conf-seed+/conf/BMC symlink+sysadmin shell injected; IPMI.conf: kept LAN/UDS/KCS,"
 echo "[qemu-patch] disabled smm/sol/serial/smbus/bt/ipmb, NM_IPMB_BUS=0xFF -> IPMIMain stable"
 echo "[qemu-patch] installed direct-PHY FTGMAC startup before networking"
