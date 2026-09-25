@@ -1,3 +1,27 @@
+# OEM IPMI reference and fleet coverage audit
+
+- [x] Recover the original request and inventory all 11 registered BMCs.
+- [x] Compare target documentation with zipmi catalogs, named dispatch, and registered codecs.
+- [x] Record firmware applicability, conflicting references, and counting limitations in the HTML audit.
+- [ ] Finish the corrected ASMB-787 command-by-command request/response reference.
+- [ ] Complete and verify the corresponding target-specific zipmi support.
+- [x] Validate the audit artifact and documentation links.
+
+## Review
+
+The source-linked report is [OEM IPMI coverage audit](../docs/oem-ipmi-coverage-audit.md).
+No inspected target can be certified as both fully documented for its current firmware and
+completely supported by zipmi. ASMB-787 references contain conflicting privilege/request-length
+interpretations; zipmi's catalog totals also mix naming and documentation counts with implementation
+coverage. The report separates these from registered packet codecs and live verification. Full
+command semantics and missing zipmi support remain outstanding; the audit does not complete them.
+
+Verification: isolated offline imports measured registry names and request/response codec classes.
+The report contains exactly all 11 tracked box descriptors, and every local source link resolves,
+including sibling zipmi links. Both changed documentation pairs are synchronized and whitespace
+checks pass. The repository-wide documentation contract reports 57/58 synchronized pairs; its only
+failure is the pre-existing unsynchronized `tasks/lessons.md`, which this work preserves.
+
 # Complete Advantech ASMB-787 six-service acceptance
 
 - [x] Reopen acceptance: require ICMP, console, IPMI, Redfish, SSH, and authenticated Web UI.
