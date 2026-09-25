@@ -110,6 +110,7 @@ animal's box material.</p>
 <thead>
 <tr>
 <th><code>zbmc</code> name</th>
+<th>BMC SoC / CPU architecture</th>
 <th>QEMU network</th>
 <th>ICMP</th>
 <th>SSH</th>
@@ -124,56 +125,67 @@ animal's box material.</p>
 <tbody>
 <tr>
 <td><strong><a href="boxes/openbmc/index.html">openbmc</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via <code>zbmc openbmc status -v</code>; no warm checkpoint is published.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/nvidia-obmc/">nvidia-obmc</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via <code>zbmc nvidia-obmc status -v</code>; no warm checkpoint is published.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/advantech-asmb787/">advantech-asmb787</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>❌</td>
 <td>Cold ✅; Warm ❌</td><td>TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/idrac10/index.html">idrac10</a></strong></td>
+<td>NPCM845 · Cortex-A35 · AArch64</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>✅</td>
 <td>Cold ✅; Warm ✅</td><td>The image exposes Redfish but no vendor Web-UI.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/megarac-hpe/index.html">megarac-hpe</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>❌</td><td>✅</td><td>⚠️ FLAKY</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold TAP run 2026-09-10 reached READY via <code>zbmc megarac-hpe status -v</code>; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/ieit/">ieit</a></strong></td>
+<td>AST2500 · Cortex-A9 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-24 reached READY for all five required network services in 124 seconds, with console available; <code>sysadmin/admin</code> provides BusyBox Linux while <code>admin/admin</code> retains SMASH/CLP.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-24 reached READY for SSH, IPMI, Redfish, and Web UI in 25m30s; <code>sysadmin/superuser</code> provides a root BusyBox Linux shell, and the final verbose check passed 5/5 network services.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/lenovo-xcc/index.html">lenovo-xcc</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ❌; Warm ✅</td><td>Managed TAP <code>start --warm</code> reached six-service READY on 2026-09-14 in 189s after Lenovo-only serialized probe scheduling. Three live <code>zbmc lenovo-xcc -v</code> checks passed 6/6 while the health watcher was active, and the run history had zero degraded/probe-busy/IPMI-read-failed samples. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x14/">supermicro-x14</a></strong></td>
+<td>AST2600 · Cortex-A7 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via <code>zbmc supermicro-x14 status -v</code>; no warm checkpoint is published.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/supermicro-x10/">supermicro-x10</a></strong></td>
+<td>AST2400 · ARM926EJ-S · ARMv5TEJ</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>None observed in the completed TAP validation run.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/idrac9/index.html">idrac9</a></strong></td>
+<td>NPCM750 · Cortex-A9 · ARMv7</td>
 <td>TAP / direct L2</td><td>✅</td><td>⚠️ FLAKY</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td>
 <td>Cold ✅; Warm ❌</td><td>SSH is intermittent; IPMI authentication fails; warm restore leaves the network unusable.</td>
 </tr>
