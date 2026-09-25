@@ -26,6 +26,8 @@ _zr_expected(){ printf 'time unknown'; }
 _zr_result(){ printf '%s|%s\n' "$1" "$2" >"$tmp/result"; }
 _zr_service_disabled(){ return 1; }
 _zr_service_should_probe(){ [ "$1" = console ]; }
+_probe_group_lock(){ :; }
+_probe_group_unlock(){ :; }
 _probe_console(){
   [ -f "$replacement_file" ] && [ "$(cat "$PIDF" 2>/dev/null)" = "$(cat "$replacement_file")" ] \
     && echo 'ok|replacement console|ready' || echo 'fail||waiting'

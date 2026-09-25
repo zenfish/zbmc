@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=efb5cf84ffb5975ea8cab537cc180d5e118ba01bd6acc630a9a10ba7b431ad22 body-sha256=7a22c23217838c7158c08de9de08c5f119f32ebc0079c8d27cd48cab4271f367 -->
+<!-- html2md:auto source=README.html source-sha256=e3fcf370e0392ce5b2dc3a462dc1da070d73fbcf91da3d96f95a27691b5db509 body-sha256=912c291264e133d24d04a2522b02b2a3ad4038346dbf60e2391c56d7c7b7cc6e -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -99,17 +99,17 @@ Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a
 
 | BMC | Recipe |
 |----|----|
-| OpenBMC | [openbmc/index.md](boxes/openbmc/index.md#extracting-the-filesystem) |
-| NVIDIA OpenBMC | [nvidia-obmc/index.md](boxes/nvidia-obmc/index.md#extracting-the-filesystem) |
-| Advantech ASMB-787 | [advantech-asmb787/index.md](boxes/advantech-asmb787/index.md#extracting-the-filesystem) |
-| Dell iDRAC9 | [idrac9/index.md](boxes/idrac9/index.md#extracting-the-filesystem) |
-| Dell iDRAC10 | [idrac10/index.md](boxes/idrac10/index.md#extracting-the-filesystem) |
-| HPE MegaRAC | [megarac-hpe/index.md](boxes/megarac-hpe/index.md#extracting-the-filesystem) |
-| IEIT / Inspur | [ieit/index.md](boxes/ieit/index.md#extracting-the-filesystem) |
-| Fujitsu iRMC | [irmc-fujitsu/index.md](boxes/irmc-fujitsu/index.md#extracting-the-filesystem) |
-| Lenovo XCC | [lenovo-xcc/index.md](boxes/lenovo-xcc/index.md#extracting-the-filesystem) |
-| Supermicro X10 | [supermicro-x10/index.md](boxes/supermicro-x10/index.md#extracting-the-filesystem) |
-| Supermicro X14 | [supermicro-x14/index.md](boxes/supermicro-x14/index.md#extracting-the-filesystem) |
+| OpenBMC | [openbmc extraction guide](boxes/openbmc/index.md#extracting-the-filesystem) |
+| NVIDIA OpenBMC | [nvidia-obmc extraction guide](boxes/nvidia-obmc/index.md#extracting-the-filesystem) |
+| Advantech ASMB-787 | [advantech-asmb787 extraction guide](boxes/advantech-asmb787/index.md#extracting-the-filesystem) |
+| Dell iDRAC9 | [idrac9 extraction guide](boxes/idrac9/index.md#extracting-the-filesystem) |
+| Dell iDRAC10 | [idrac10 extraction guide](boxes/idrac10/index.md#extracting-the-filesystem) |
+| HPE MegaRAC | [megarac-hpe extraction guide](boxes/megarac-hpe/index.md#extracting-the-filesystem) |
+| IEIT / Inspur | [ieit extraction guide](boxes/ieit/index.md#extracting-the-filesystem) |
+| Fujitsu iRMC | [irmc-fujitsu extraction guide](boxes/irmc-fujitsu/index.md#extracting-the-filesystem) |
+| Lenovo XCC | [lenovo-xcc extraction guide](boxes/lenovo-xcc/index.md#extracting-the-filesystem) |
+| Supermicro X10 | [supermicro-x10 extraction guide](boxes/supermicro-x10/index.md#extracting-the-filesystem) |
+| Supermicro X14 | [supermicro-x14 extraction guide](boxes/supermicro-x14/index.md#extracting-the-filesystem) |
 
 Extraction is read-only and separate from the boot artifact. Partitioned SD/eMMC recipes use `guestfish`; SquashFS, CramFS, and JFFS2 payloads use their matching tools. Packed NOR, kernels, signatures, and GPT metadata remain packed by design.
 

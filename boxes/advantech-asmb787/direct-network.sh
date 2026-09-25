@@ -16,7 +16,8 @@ grep -q '5.4.11-ami' "$proc_root/version" || {
 # The factory firewall explicitly drops IPv4 echo requests. Remove only that
 # rule from the active filter and its persisted copy so later restores agree.
 iptables -D INPUT -p icmp -m icmp --icmp-type 8 -j DROP
-sed -i '/^-A INPUT -p icmp -m icmp --icmp-type 8 -j DROP$/d' "$conf_root/iptables.conf"
+sed -i.bak '/^-A INPUT -p icmp -m icmp --icmp-type 8 -j DROP$/d' "$conf_root/iptables.conf"
+rm -f "$conf_root/iptables.conf.bak"
 
 printf '%s\n' \
     'auto lo' \

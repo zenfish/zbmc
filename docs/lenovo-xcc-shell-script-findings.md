@@ -1,0 +1,1559 @@
+<!-- html2md:auto source=docs/lenovo-xcc-shell-script-findings.html source-sha256=659f12fe841862d4a2890eed4754403cab5cc7f726985a30799b343b7f1c61f3 body-sha256=895295bb305151dd7bf328257f1f81be4a5b033a51b6122de88a08a57584c4f3 -->
+
+## Executive result
+
+### Real hardware control
+
+The scripts reach PHY MDIO, FPGA/CIO objects, I²C/IPMI, BMC physical MMIO through `/dev/mem`, VUART decode, NC-SI, eMMC, RTC, PCH reset, power/NMI, and OEM VGPIO. Separate firmware evidence also exposes a host-facing AST2600 X-DMA engine, disabled in Lenovo's device tree. These are not cosmetic diagnostics.
+
+### Sensitive administration
+
+The corpus contains firmware-bank promotion/recovery, persistent-state erasure, virtual-media mount, arbitrary forwarding, comprehensive FFDC export, certificate/key provisioning, LDAP credentials, SSH/Telnet/SNMP launchers, and debug services.
+
+### Cold boot: clues, not a shell fix
+
+The scripts expose the readiness graph and multiple infinite waits, but they reinforce the known root cause: authenticated services depend on `bmc_app` and hardware peers. None supplies a simple configuration-only bypass.
+
+## What stands out
+
+### Direct buses and memory
+
+`mdio-peek/poke` are legacy helpers for caller-selected registers on each interface's fixed Ethernet PHY; `hub_reset` uses CPU-mediated `/dev/mem` mappings at undocumented physical block 0x40800000; `set_vuart1` rewrites AST2600 registers 0x1e787028/2c; `nm_ipmi`, `test-i2c-slave`, FPGA probes, NC-SI setup, CIO, and OEM VGPIO expose other low-level paths. None of those observations alone proves arbitrary BMC RAM or host RAM access.
+
+### Host reset and firmware recovery
+
+`fpga_reset_pch` toggles DSW_PWROK/RSMRST. `pfr_recovery` writes the FD image, erases SPS, toggles ME_SECURITY_OVERRIDE, and resets PCH. `secure-recovery` verifies a signature before replacing recovery firmware; `fw_promo_rec` moves images among primary, backup, recovery, and pending banks.
+
+### Erasure and factory state
+
+`secure_erase` clears broad persistent trees. `reset-to-defaults` removes provisioning data, certificate/password state, firewall/debug data, may invoke FPGA secure wipe, and reboots. `S_AIM reset` erases AIM state; database scripts can restore or create pristine state.
+
+### Data access and export
+
+FFDC gathers databases, traces, cores, FPGA/CIO/IPMI state, inventory, logs, GPU/PSU/PCIe details, and bank metadata. `push_file` exports by SFTP or TFTP; `ffdc_to_fp_usb` uses front-panel USB. `RunSnooper` captures Redis MONITOR/DB plus auth/session logs.
+
+### Network pivots and remote surfaces
+
+`port_fwd` installs arbitrary DNAT/SNAT. `monterey` bridges HTTP boot to host usb0. Other scripts start forced SSH/22, configurable cleartext Telnet, SNMP, UPnP/SSDP, web/Redfish, a firewall-opened YAAP debug daemon, SFTP, and remote virtual media.
+
+### Credential and certificate hazards
+
+LDAP activation logs local and remote passwords in plaintext. SFTP disables host-key verification and exposes passwords through `sshpass -p`. CSR/modulus helpers use predictable temp files; CSR uses fixed passphrase `password`. Redis passwords are copied into sibling files and sometimes argv.
+
+### Concrete defects worth preserving
+
+`phase3ldap-certs` assigns three CRL DER paths to `DER1`, leaving DER2/DER3 unset. `phase3activate_common` tests stale/unset `RV`. `nginx_restart` evaluates policy-derived values. `S_webauth` has an unconditional exit. `S_usb_configure` never creates its declared readiness marker.
+
+### Deliberate exclusions matter
+
+Despite FFDC breadth, `ffdc_dump` explicitly excludes password, private-key/CSR-like, LDAP-client-password, SNMP, account-shadow, and other sensitive paths. That is evidence the vendor recognized the bundle’s sensitivity boundary; live/debug extensions still deserve careful review.
+
+## Cold-boot implications
+
+**Known chain:** service scripts use `S_COMMON.sh` and `proc_sync` to wait on AIM, PM, the security manager, OSINET, `bmc_app`, and time management. The existing cold-boot investigation shows `bmc_app` never finishes because retimer-proxy and `twr_comm` peers are absent; authenticated services consequently never receive their account/security data plane.
+
+**Additional gates found here:** AIM waits indefinitely for `.immdb_init_done`; Stingray and web gateways have unbounded readiness waits; Redis launchers wait indefinitely for PONG; nginx can wait indefinitely for certificate inputs. `S_bmc_app_manifest_gateway`, by contrast, times out after 40 seconds and succeeds, so it is not the terminal blocker.
+
+**Setup helpers worth retaining:** `imm-nvram`, database backup/restore, phase-2/phase-3 provisioning, firmware recovery/promotion, NC-SI discovery, RTC sync, VUART selection, HTTP boot, and eMMC checks could help seed or repair another system. They do not eliminate the missing-hardware handshake proved in the cold-boot report.
+
+**Unresolved:** many launchers delegate meaning to proprietary binaries. This report labels those boundaries rather than inferring behavior from names.
+
+## MMIO, MDIO, and host DMA: corrected boundary
+
+Binary recovery and the shipped DTB/kernel resolve the earlier ambiguity. `hub_reset.sh`, the Ethernet MDIO helpers, and the AST2600 X-DMA engine are three different mechanisms with different address spaces.
+
+### What `peek`, `poke`, and `memdump` do
+
+`memdump` opens `/dev/mem` and maps physical pages. `peek`/`poke` call equivalent `libhal.so` helpers for byte, halfword, and word loads/stores. These are BMC-CPU accesses, not DMA. The shipped kernel has `CONFIG_STRICT_DEVMEM=y`: ordinary BMC System RAM at 0x81000000–0xbeffffff is rejected, while eligible non-RAM MMIO remains broadly reachable. Host x86 RAM is a separate address space unless a bridge or bus master exposes it.
+
+### `hub_reset.sh` targets an unresolved address
+
+The script dumps exactly 0x1000 bytes because `memdump -l 1000` parses the length as hexadecimal. It then toggles bit 6 of byte 0x408001a3. The access is issued by the BMC ARM CPU through `/dev/mem`, but that fact does not identify the target.
+
+The AST2600 A3 address table assigns SPI1 through 0x3fffffff and SPI2 beginning at 0x50000000, leaving all of 0x40000000–0x4fffffff unassigned. AHBC8C can remap only the boot area and PCIe-root-complex aperture at 0x60000000–0x7fffffff. Lenovo's DTB likewise declares BMC DRAM at 0x81000000, PCIe apertures at 0x60000000 and 0x70000000, the USB vHub at 0x1e6a0000, and X-DMA at 0x1e6e7000; it declares nothing at 0x40800000. Therefore this is neither documented BMC RAM nor a documented AST2600 peripheral/window. It could be stale code, an unmapped access, an undocumented board decode, or a runtime alias/bridge—including one whose far side is host-visible. Static evidence does not decide among them, so earlier claims that it was definitely device MMIO or definitely not host RAM were unsupported.
+
+The path is not merely an orphan script. In `libmod_sysfw.so.0.0.0`, `bios_device::ipmi_usb_reset` consumes one request byte: value 0 asynchronously runs `/bin/hub_reset.sh -d`, value 1 runs `/bin/hub_reset.sh -h`, and other values return completion code 0xc9. The shell script never reads `$1`, so both requests perform the same set-bit, wait, clear-bit cycle. The binary caller performs no visible bridge or address-window setup before launching the script. This proves product integration and suggests stale or incomplete porting, but it still does not identify the hardware decoder or the external IPMI NetFn/command registration.
+
+### What the MDIO scripts actually reach
+
+The XCC 4.30 kernel's `mdio_peek_poke` sysfs attribute was mode 0666. One token selected a register for read; two tokens performed a write followed by unconditional read-back. The PHY address was not caller-controlled: it came from the fixed `phy_addr` assigned to that `xcc_eth.N` instance. Ordinary Clause 22 requests emit only the low five selector bits, so larger values alias registers 0–31. Setting Linux's `MII_ADDR_C45` bit permits encoded Clause 45/MMD access—`bit30 | DEVAD<<16 | register`—on that same fixed PHY. Write values are truncated to 16 bits.
+
+The complete call path is parser → `mdiobus_read/write` → bit-banged MDC/MDIO pins. It cannot address the SoC MAC, descriptor rings, PCI configuration or BAR space, X-DMA registers, BMC RAM, or host RAM. It can still change PHY link, autonegotiation, loopback, diagnostics, power and vendor MMD state. Errors are especially easy to miss: the store handler returned the input byte count even after parse or bus failure, leaving the failure only in read-back text or `dmesg`. XCC 6.92 retains the scripts unchanged but its Linux 6.6.90 kernel contains no `xcc_eth`, `mdio_ops`, or `mdio_peek_poke`; absent an unobserved overlay, these are stale service leftovers and fail on that release.
+
+### A real AST2600 BMC↔host X-DMA engine is present—but disabled
+
+The exact XCC DTB contains `xdma@1e6e7000`, compatible `aspeed,ast2600-xdma`, and selects PCIe device `bmc`. The shipped kernel has `CONFIG_ASPEED_XDMA=y`, and its unstripped image contains the complete probe, mapping, command, reset, and AST2600 descriptor-builder functions. The driver accepts a caller-selected 64-bit host address, length, and direction and can move data host→BMC or BMC→host over PCIe without a target-address allowlist.
+
+Lenovo sets the node to `status = "disabled"` and omits its mandatory `memory-region`, so the normal driver cannot probe and no `/dev/aspeed-xdma` interface is created. Enabling only the status property is insufficient. The same DTB enables endpoint-side and root-complex MCTP-over-PCIe instances with reserved DMA pools, which proves the firmware architecture includes PCIe plumbing but not that the physical host link is currently up or that arbitrary host-memory DMA succeeds.
+
+| Mechanism | Actor and address space | Proved reach |
+|----|----|----|
+| Lenovo `peek/poke/memdump` | BMC ARM CPU issues accesses through `/dev/mem` | Documented BMC MMIO is reachable and ordinary declared BMC RAM is blocked. The special 0x40800000 target is outside every documented AST2600/DT range; its reach remains unknown and a hidden bridge cannot be excluded statically. |
+| Lenovo AST2600 X-DMA | BMC SoC PCIe bus master uses caller-selected 64-bit host address | Engine and driver present; Lenovo DT disables it; live link, host BusMaster, and IOMMU behavior unproved |
+| Dell BCM5709 proof | Host PCIe NIC consumes a forged TX descriptor address and internally loops the resulting frame into a normal RX buffer | Proved read of PID 2257's page at 0x10f34a000, including `SECRET-DO-NOT-READ` and `Z3NDMA01`; a later 1 MiB range at 0x165a61000 also yielded real RAM. IOMMU was off. The later bulk RX-ring regression returned zero-filled chunks but did not invalidate the single-shot proof. |
+| Supermicro AST2400 X-DMA | ASPEED BMC SoC X-DMA engine | The direct architectural analogue to Lenovo's AST2600 block; Ethernet is uninvolved |
+
+### What would settle the two Lenovo questions
+
+For documented X-DMA, the endpoint PCIe link must be up; the BMC endpoint and DMA gates enabled; the engine clock, reset, queue, and reserved BMC buffer configured; host BusMaster granted; and the host IOMMU must permit the submitted address. Highest-value read-only probes are SCU 0x1e6e20c0 bit 8, 0x1e6e20c8 bit 2, PCIe control 0x1e6e2c20 bits 8/12/14, class/revision 0x1e6e2c68, link status 0x1e6ed0c0 bit 5, and X-DMA status/queue registers 0x1e6e7000–0x1e6e7074.
+
+For 0x40800000, static firmware has reached its limit. On real XCC hardware, first capture `/proc/iomem`, PCI resource files, AHBC8C at 0x1e60008c, and kernel/AHB fault logs without changing the target. Then take repeated read-only 0x1000-byte captures with the host off and on and correlate byte 0x1a3 with actual USB state. A reserved host-page marker compared against the BMC capture is the decisive host-memory-alias test. Until those measurements exist, do not write 0x408001a3 merely because the shipped script does: undocumented register reads may clear state and writes may affect an unknown target.
+
+Evidence: XCC DTB SHA-256 `5294f31c7ec783ac490358164d7cb8a91f8101c74eb3fc5b70a4a908fc83608f`; kernel config SHA-256 `f9059be99666e97490ff9b7ca02ce4db11ae4623673e28e2f0466614d1e0faaf`; unstripped kernel SHA-256 `bd66537e21c6c4e4d6679099deb0f32665fd5f44fa60271912ade7c55aeb7ee0`; OpenBMC AST2600 X-DMA binding and ASPEED driver. Dell proof source is commit `27f71aaaf` and `/Volumes/yyy/phd/mobo/NIC/bcm5709/{bcm5709_dma_read.c,bcm5709_dump.c,pagemark.c}`. The May 14 `/Volumes/yyy/phd/bmc/dell/t710-bmc-host-ram-state.html` predates that proof and is historical; `bmc/dell/iommu` is a later July 22 helper explicitly created to disable VT-d for the experiment. `bmc/dell/wpcm450-port/memdump-wpcm.c` is only a read-only mapper for the BMC's own WPCM450 MMIO and is not the host-DMA primitive.
+
+## Deep SMI/SMM follow-up
+
+Static analysis of the XCC 6.92 ARM binaries materially expands the shell evidence. The result is not a generic route into SMRAM: it is a collection of narrowly defined signal, KCS, OEM-IPMI, VGPIO, and datastore paths with different directions and security boundaries.
+
+### Critical terminology correction
+
+Lenovo uses **SMM** for two unrelated things. `KCS-SMM`, the nonce/TWR exchange, UEFI, and CPU SMI refer to x86 **System Management Mode**. `smm_logical_device`, `smmless_logical_device`, PSoC, PSU/node-power control, and `/v2/ibmc/smmless/...` refer to a chassis **System Management Module** or a module-less chassis. The latter is not a bypass or replacement for CPU SMM.
+
+| Path | Direction | Payload / effect | Gate or authorization | What is proved |
+|----|----|----|----|----|
+| Diagnostic NMI | BMC → host | Pulse Diagnostic Interrupt; no data payload | Caller and outer IPMI authorization unknown | `pwrctrl.sh` can request a host NMI with standard Chassis Control data `04`. |
+| RTC-sync SMI | BMC → host | Fixed “sync time” notification | AMD platform flag and FPGA identity check | FPGA bank 15/offset 3 bit 5 is pulsed; no payload, acknowledgement, or selectable handler is shown. |
+| Queued SMI device | BMC → host signal; host queries state | Up to four one-byte request codes; 16-byte state block | Internal event/state machine; external reachability unresolved | The BMC can queue requests, assert/deassert a bound SMI output, apply timeouts, and expose state/control handlers. |
+| KCS-SMM | Host SMM → BMC request; BMC → host response | Whitelisted IPMI request/response, inferred data maximum 237 bytes | 32-byte one-time nonce plus command whitelist in normal initialized state | Authenticated bidirectional request/response exists; unsolicited BMC→SMM payload delivery does not. |
+| MPFA memory-fault route | Bidirectional OEM IPMI records plus BMC → host SMI doorbell | Fault, recovery, PPR, and memory-configuration records | OEM NetFn `3a`/Cmd `cd`; unresolved dispatcher policy | Data moves separately from a one-bit FPGA/GPIO notification. This is not a demonstrated payload-bearing SMRAM channel. |
+| VGPIO / WHEA | IPMI caller → BMC; later BMC datastore write | Configured logical events, SEL/auxiliary logs, 18- or 24-byte WHEA records | Registered OEM command; outer transport privilege unknown | Telemetry can be synthesized for configured mappings. No direct SMI, host-memory write, or downstream host acceptance is proved. |
+| SMMLESS PSoC | BMC ↔ chassis PSoC over I²C | Mode, timeout, reseat/reset, and bounded VPD read/write | OEM NetFn `3a`/Cmd `f5` plus privilege masks | A structured chassis-controller protocol, unrelated to x86 SMM or SMRAM. |
+
+### Authenticated KCS-SMM request path
+
+The BMC obtains a 32-byte object named `secure_nonce` from SMEM type `0x0e`, copies it to mapped address `0x1000f000`, and zeroes the source object. Host UEFI/SMM returns nonce bytes 0–15 through the TWR window at `0x1e789240`—one useful byte per dword—and places bytes 16–31 at the front of a KCS request. `KCSChannelReceiveMsg` compares both halves, rejects mismatches and an all-zero nonce, strips the 16-byte prefix, applies the whitelist, and then queues an ordinary IPMI request. The eight-byte UID source at `0x1e6e25b0` can be copied in the opposite direction into TWR.
+
+The permitted pairs are NetFn `2e` commands `90`/`92`; NetFn `3a` commands `38`, `7d`, `7f`, `c4`, `cd`, and `da`; and NetFn `0a` command `49`. Other commands receive completion code `d5`. `KCSChannelSendMsg` returns the NetFn/LUN, command, response data, and trailer without echoing the nonce. This proves host-SMM→BMC requests and BMC→host responses, not an unsolicited general-purpose BMC→SMM message channel.
+
+**Security edge:** the receive code skips nonce comparison when the permission callback is null and skips filtering when the whitelist callback is null. Both callbacks are normally registered by their state machines, so this is a fail-open implementation property and startup/load-order attack surface—not a demonstrated usable bypass.
+
+### BMC-generated SMI infrastructure
+
+The general `smi_device` binds `smi_out`, `smi_warn`, `smi_source`, `smi_state`, and `smi_mask_port`, maintains a request queue capped at four bytes, and can enable, disable, pulse, and periodically re-arm the SMI source. Directed event `0x1004` queues one request byte and schedules assertion. Its initializer registers OEM NetFn `3a` commands `19`, `1a`, and `1b`; the associated handler bodies expose state, timeout behavior, and enable/disable/period controls. The exact per-command handler mapping and exposure through LAN/Redfish/UI remain unresolved.
+
+`amd_sync_rtc.sh host` is narrower: after the NTP-side marker and FPGA identity check, it writes `(old & 0x9f) | 0x20` and then `old & 0x9f`, pulsing bit 5 and forcing bit 6 low. `libpm.so` invokes this from clock-configuration and explicit sync-RTC events. The script checks no write result, acknowledgement, or response. Its no-argument boot invocation cannot enter the host-pulse branch.
+
+### Memory-fault SMI: data beside the doorbell
+
+`mem_register_logical_device` binds either FPGA signals `SPARE_PCH_FPGA_PGPPA_N`/`...BIT6` or GPIO `BMC_SMI_OUT`. `mpfa_fault_handle()` resets the signal, reads a ten-byte fault record from persistent storage, then asserts the FPGA pair or GPIO output. Separately, OEM NetFn `3a`/Cmd `cd` exchanges MPFA/current-fault, error, recovery, PPR, and memory-configuration records; when the host reports receipt, the BMC clears the SMI route. This is the strongest evidence of “data associated with SMI,” but the record travels through OEM IPMI/storage and the SMI is a one-bit notification. Host SMM consumption still requires the missing BIOS/SMM implementation.
+
+### VGPIO and WHEA are event plumbing, not raw GPIO or proven SMM execution
+
+The normal platform enumeration registers `virtual_gpio_logical_device::vgpio_cmd` at NetFn `2e`/Cmd `92` for OEM IDs `004f4d` and Lenovo `004a66`. The minimum request is the three-byte OEM ID, a 32-bit network-order logical VGPIO address, operation, and event ID. Operations are `00` assert, `01` deassert, `02` query, and `80` AssertWHEA. The address selects a configured node/group/class/subclass/instance object and event mapping; it is not a Linux GPIO number, arbitrary physical pin, MMIO address, or unrestricted write primitive.
+
+`AssertWHEA` first creates an ordinary configured VGPIO/SEL event. A later SEL callback associates it with auxiliary-log state and writes an 18-byte version-2 `GPIO` record to the fixed datastore `whea-data`. A separate filtered CPU-SEL route writes a 24-byte version-1 `IBMC` record. The latter magic is strong IBM/IMM inheritance evidence. Neither path directly pulses SMI, writes host memory, returns an asynchronous host acknowledgement, or proves that host firmware/OS accepts the forged telemetry. A reachable caller could still query logical state, assert/deassert configured events, consume SEL/aux-log capacity, and falsify hardware-error telemetry.
+
+### SMMLESS: chassis PSoC, not CPU SMM
+
+`smmless::generic_cmd` frames length, command, data, and additive checksum for bidirectional I²C exchange with a chassis PSoC. OEM NetFn `3a`/Cmd `f5` controls CT mode, timeout, reseat, reset, and VPD reads/writes bounded to 16 bytes and the first `0x400` bytes. Privilege masks are present, with some virtual-KCS exceptions; external transport exposure remains unproved. The shell test `[ $((PLATFLAGS & MASK_SMMLESS)) ]` is also wrong because string `0` is true, so SMMLESS branches in `S_OSINET.sh` and `ffdc_live_dbg.sh` always run. That bug affects PSoC/network setup and FFDC collection, not x86 SMM.
+
+### What is now proved
+
+- The BMC can assert fixed or queued SMI outputs.
+- Host SMM can send nonce-authenticated, whitelisted IPMI requests over dedicated KCS and receive replies.
+- The BMC and host firmware exchange nonce/UID material through mapped windows.
+- Memory-fault records can accompany an SMI doorbell over a separate OEM-IPMI path.
+- Configured VGPIO events can create SEL, auxiliary-log, and WHEA datastore records.
+
+### Still not proved
+
+- Arbitrary SMI-handler selection or arbitrary SMM code execution.
+- BMC reads/writes of arbitrary host physical memory or SMRAM.
+- An unsolicited general-purpose BMC→SMM payload channel.
+- LAN, Redfish, or web reachability into KCS-SMM.
+- A practical callback-initialization bypass.
+- The host-side consumer of `whea-data` or acceptance of synthesized WHEA records.
+
+### Corrected earlier claims and evidence
+
+- `/dc/ibmc/nonce_flag` does not occur in the analyzed binaries or captured evidence. The proved source is SMEM object `secure_nonce`, type `0x0e`.
+- Descriptor byte `+0x5d` is not a proved “nonce required” flag. Offset `+0x5c` is a POST/state flag; `channel_permission_checker` directly calls `compare_nonce`.
+- `Kcs_SMM_RcvCallback` is a post-receive notification hook, not the KCS payload receiver.
+- `bmc_whea_logical_device::handle_sel_event` writes only version-1 records; the VGPIO callback writes version 2.
+
+Primary evidence is the XCC 6.92 SquashFS SHA-256 `2aaedcb6c5939efabd49ac4da0a8066e17c5c3dea356ad33ad0d9246c4b192c2`. Key library hashes: `fb3a8a29abd5dbcd9a0ece92ed589bf45228f5c78095499eb6aa7208e339ddc6` (`libmod_reset`), `b72294cd8a10699e2cd3827dd1b4aa0a13943c483332af0ceae8ba603cf17485` (`libipmi`), `3559e34d94a0021941361226505a16c6e53e0501ce89e3f155331eeb86ca7800` (`libmod_logging`), and `801802ed7cac9459078ff13b808d84196fe9b1a6c448272ab93dd88addd2d490` (`libmodules`).
+
+## IBM and vendor lineage
+
+### Direct IBM provenance
+
+Five status scripts—BIOS primary/backup and IMM primary/backup/current—carry “Licensed Materials – Property of IBM” and IBM © 2007 language.
+
+### Clear IMM inheritance
+
+Paths and binaries retain `/v2/ibmc`, `imm3`, `immdb_server`, `imm_fodd`, `sshd-immcli`, `imm_www5`, FFDC `imm_dump`, and an `IBM_GENESIS_PLATFORM` branch.
+
+### Other layers
+
+Many management scripts carry Vertiv/Avocent lineage; Lenovo owns newer XCC-specific layers. ISC, socat, miniupnpd, RPM, Tcl, libxslt, Bash-profile, and mysql2sqlite files are recognizable package/upstream material. IMM naming alone is not treated as proof of IBM authorship.
+
+## Complete catalog
+
+Every manifest path appears once. “Possible” cold relevance means startup/provisioning context, not proof that it blocks the observed cold boot.
+
+[Back to top](#summary)
+
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead class="bg-slate-900 text-left text-xs uppercase tracking-wider text-white">
+<tr>
+<th class="px-3 py-3 w-[30%]">Path</th>
+<th class="px-3 py-3">What it does / confidence</th>
+<th class="px-3 py-3 w-44">Interest / lineage</th>
+</tr>
+</thead>
+<tbody>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">1. /usr/bin/isc-config.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts prefix, version, cflags, libs, and BIND-library selectors and prints build/link metadata for BIND 9.11.22. It enables compilation against installed ISC libraries and has no runtime hardware or privileged effect. It depends only on shell text processing; whether it is shipped solely as upstream build residue is UNKNOWN. Copyright is Internet Systems Consortium, not IBM or Lenovo.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">2. /usr/bin/socat-chain.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes three socat addresses and composes two processes through a loopback TCP port to chain TLS, HTTP proxy, or SOCKS transports. It enables flexible tunneling that can bypass simple network topology assumptions, with security determined entirely by supplied verification and proxy options. It depends on socat, shell regex parsing, and caller-provided credentials/certificates; any product-specific caller is UNKNOWN. This is upstream Gerhard Rieger GPL code, not IBM-derived.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">3. /usr/bin/socat-broker.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a passive socat listener and selected socat options, allocates a loopback UDP broadcast port, adds fork, and brokers every client to every other client. It enables ad hoc multi-client plaintext or TLS communication depending on the supplied address and can expose arbitrary listeners if privileged callers use it. It depends on socat and trusts address expressions, certificates, and ports supplied by the caller; XCC use is UNKNOWN. This is upstream Gerhard Rieger GPL code with no IBM provenance.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">4. /usr/bin/socat-mux.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a listener and target, allocates two loopback UDP ports, and starts two socat processes to provide many-to-one and one-to-all multiplexing. It enables sharing a single serial/TCP-style target among clients and can expose that target on arbitrary caller-selected listeners. It depends on socat and caller address expressions; authentication and XCC integration are UNKNOWN. This is upstream Gerhard Rieger GPL code with no IBM provenance.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">5. /usr/sbin/test_usb_nic.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a ping target, records usb0 transmit counters before and after one ping, and reports whether traffic increased. It enables a minimal host-USB NIC path test but does not prove reply receipt, since only TX movement is examined. It depends on /proc/net/dev, ping, and usb0 naming; intended caller and interpretation are UNKNOWN. Vertiv copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">6. /usr/sbin/iphonepair.sh</td>
+<td class="px-3 py-3 text-sm leading-6">For up to 120 seconds, repeatedly invokes idevicepair pair until pairing succeeds or the device is unplugged. It enables establishing an iPhone trust relationship with the BMC and therefore creates persistent pairing credentials outside the script. It depends on libimobiledevice tooling and physical user confirmation; location, lifetime, and cleanup of pairing records are UNKNOWN. Vertiv copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">7. /usr/sbin/do_ns_update.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes action, nsupdate configuration, and status-file path; it kills an existing nsupdate process, performs a TCP dynamic-DNS update, and records pending/success/failure. It enables DNS registration or unregistration and may consume TSIG credentials from the supplied config. It depends on nsupdate and pidof and allows caller-selected status paths; configuration provenance and key protection are UNKNOWN. Vertiv copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">8. /usr/sbin/generate-rndc-key.sh</td>
+<td class="px-3 py-3 text-sm leading-6">When /etc/bind/rndc.key is absent or empty, generates a 512-bit RNDC key from /dev/urandom and sets root:bind ownership with mode 0640. It enables authenticated BIND control and is setup/startup relevant; disclosure permits DNS service administration. It depends on rndc-confgen and correct bind group ownership; rotation policy is UNKNOWN. This is packaging glue with no explicit IBM provenance.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">9. /usr/sbin/ncsi_ch_discovery.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads NCSI platform flags, selects eth0 or eth1, disables IPv6, brings the interface up, runs ncsiapp2 discovery, brings it down, and creates a completion marker. It enables early/setup discovery of the active NCSI channel but temporarily mutates interface state and leaves IPv6 disabled for the chosen interface. It depends on ptables, ncsiapp2, ifconfig, procfs, and startup ordering; state restoration beyond link-down is UNKNOWN. Vertiv copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">10. /usr/sbin/update_property.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes property path, type, and data, deletes a legacy string-typed Redfish UUID property when necessary, and conditionally writes the requested IPMI property. It enables generic mutation of the management property tree and is security-sensitive because path and value are unrestricted in this wrapper. It depends on IPMIProp and trusted upstream validation; authorized paths and callers are UNKNOWN. Vertiv copyright is explicit, while /ac/ibmc and IPMI terminology show IBM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">11. /usr/sbin/send_gratuitous_arp.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes interface and IPv4 address, kills existing arping and duplicate helper processes, waits for the interface RUNNING flag, then sends one or thirty unsolicited ARPs. It enables address announcement after network reconfiguration but broad process matching can terminate unrelated jobs and the wait has no timeout. It depends on ifconfig, arping, IMM_FAMILY, and interface naming; caller synchronization is UNKNOWN. Vertiv copyright and IMM family naming show layered vendor/IBM lineage.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">12. /usr/sbin/osinet_pfw.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes indexed set or delete operations with protocol, interface, ports, destination, address family, and output device, then programs paired TCP/UDP IPv6 forwarding slots through firetool. It enables host, CMM, or LXCA port forwarding and can expose management-adjacent services across usb0. It depends on firetool's indexed rule model and caller validation; several parsed arguments are unused locally and their downstream meaning is UNKNOWN. Vertiv copyright is explicit and CMM terminology reflects IBM blade lineage.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">13. /usr/sbin/test_dhcpc4.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes kill or check plus an interface name, locates its dhclient4 process, and optionally force-kills dhclient and avctifconfig. It enables network-supervisor liveness testing and recovery but can abruptly remove configuration state or kill a falsely matched process. It depends on ps formatting, process naming, and avctifconfig; restart ownership is UNKNOWN. Vertiv copyright is explicit, with Avocent utility lineage.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">14. /usr/lib/tclConfig.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Exports Tcl 8.6.13 ABI, compiler, linker, library, include, thread, and ARM Poky cross-build settings. It enables extension compilation/linking and performs no runtime security decision, though build consumers trust its variables and embedded paths. Yocto-generated vendor metadata, not cold boot; UNKNOWN whether harmless SDK residue or used for on-device builds.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">15. /usr/lib/tclooConfig.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Exports TclOO 1.1.0 version and empty library/include flag variables for package discovery. It enables build-time compatibility checks and has no active control flow or runtime policy. Generated upstream TclOO boilerplate with no setup role; UNKNOWN whether any deployed component sources it.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">16. /usr/lib/xsltConf.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Exports libxslt 1.1.43 library, private-library, include, and module-version flags. It enables compile-time discovery and linking and has no runtime validation or service effect. Standard generated libxslt metadata, not boot provisioning; UNKNOWN why development metadata remains in the firmware image.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">17. /usr/lib/rpm/rpm_macros_provides.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads macro filenames, asks rpm to dump each set, filters internal names, and emits rpm_macro Provides. It enables package metadata generation, but untrusted macro files can exercise RPM expansion behavior despite quoted filenames. Distribution build boilerplate, not setup; UNKNOWN whether rpm execution remains available in production.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">18. /usr/lib/rpm/ocamldeps.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Runs ocamlobjinfo on supplied artifacts, parses interface/implementation CRCs, and emits RPM Provides or Requires. It enables ABI-precise OCaml packaging, but the optional command override and input artifacts belong only in a trusted build environment. Upstream RPM/OCaml boilerplate with no boot role; UNKNOWN why it is present on the runtime image.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">19. /bin/fpga_reset_pch.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Writes FPGA bank 3 offset 6 through values 0x86, 0x82, and 0x83 with delays to assert and release DSW_PWROK/RSMRST. It enables a hard PCH reset and can abruptly terminate host execution or corrupt storage if invoked at the wrong time. It is called from bmc_app and depends on /bin/fpga plus platform-specific register compatibility; the comment admits the local/remote bank mapping needs future verification. No explicit IBM copyright appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">20. /bin/daisy_wa.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Issues a fixed sequence of block CIO writes to daisy_led_ctrl for four PHY ports, programming MMD registers, vendor errata values, LED mode, and autonegotiation. It enables direct PHY configuration and can disrupt management networking if used on the wrong hardware or interrupted. It depends entirely on the CIO object mapping and contains no platform guard; exact PHY model and register semantics beyond comments are UNKNOWN. The script has no copyright marker or explicit IBM vocabulary.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">21. /bin/test-mfpga.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes fpga-x, quick, or full mode and probes a fixed list of retimer/VPD/mux CIO devices, optionally enabling kernel debug and collecting dmesg/HAL logs. It enables main-FPGA/I2C fault isolation but can reset FPGA state with fpga -x and uploads the resulting log via put. It depends on db-tool, cio, fpga, kdebug, printk, and put; put's destination and authentication are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">22. /bin/httpFuseMount.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes mount or unmount plus a URI, parses embedded user/password/host/path fields, mounts it through httpFuse, then attaches IMG or ISO content with extmount. It enables remote virtual-media mounting but places credential-bearing URIs in argv and constructs mount paths from remote input, making upstream validation and process-list exposure important. It depends on /dev/fuse, httpFuse, extmount, mount, and supported URI syntax; transport verification behavior is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">23. /bin/secure-recovery.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Creates a SHA-384 manifest of primary bootloader, kernel, rootfs, FPGA, OTP, and PFR files, converts an external raw signature, verifies it with key immfw, then replaces the recovery bank. It enables authenticated promotion of primary firmware into recovery and can destroy the prior recovery image after successful verification. It depends on signtool, keyverter, fixed file lists, and /.xcc-fw bank layout; key storage, rollback policy, and atomicity are UNKNOWN. Lenovo copyright is explicit and the immfw key name retains IBM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">24. /bin/dump-net-status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes tcp or udp plus an identifier and writes netstat listener/process output to /tmp/netstat_*.$id. It enables lightweight network diagnostics but discloses listening ports and process identifiers to whatever consumes the temporary file. It depends on netstat and trusts the identifier in the output pathname; caller and cleanup policy are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">25. /bin/imm_backup_status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Queries IMM3 current-bank and backup-pending properties and returns active, pending, or inactive status. It is a read-only update-orchestration helper whose exit code likely drives UI or flash-manager decisions. It depends on IPMIProp and /v2/ibmc/dm/fw/imm3; callers are UNKNOWN. The IBM 2007 copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+Direct IBM copyright</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">26. /bin/tamper.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts init, standby, debug, or status and reads/writes the g_sensor_dev CIO object, configuring motion/freefall thresholds and reporting XYZ samples. It enables chassis-tamper sensing and interactive raw sensor diagnostics; misconfiguration can suppress or spuriously trigger physical-security events. It depends on cio_test and IPMIProp /ac/ibmc/tamper_active; sensor model and interrupt consumer are UNKNOWN. Lenovo copyright is explicit and ibmc property naming is IBM-derived.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">27. /bin/edgeactivation.sh</td>
+<td class="px-3 py-3 text-sm leading-6">While /tmp/.lockdownmode exists, waits until ten minutes after boot and invokes register_device every five minutes for at most sixty attempts. It enables low-touch Edge activation and exit from lockdown, creating an external provisioning/security transition. It depends on /bin/register_device, cron-like repeated invocation, uptime, and temporary counters; endpoint, credentials, and trust validation are UNKNOWN. The comments identify XCC and Hodaka but not IBM authorship.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">28. /bin/sync_rtc.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts optional host seconds, source, and offset; reads host time through RTC/eSPI with pseudo-RTC fallback, applies NTP offset policy, updates system/hardware clocks, persists major changes, and emits AIM events. It enables startup and configuration-time clock recovery but can rewrite audit chronology and certificate validity windows if host or offset data is wrong. It depends on rtc, prtc, hwclock, AIM, /pstorage/rtc, and build time; underlying eSPI/NM trust is UNKNOWN. XCC comments show Lenovo platform integration without explicit IBM copyright.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">29. /bin/pfr_flash.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes BIOS image, manifest name, and optional PFR signature name, expands UXZ if needed, strips the first 36 KiB, and extracts requested files from the embedded tar. It prepares PFR update material but does not itself verify or program flash, so security depends on the downstream flash manager. It depends on unzip, dd, tar, and /pstorage/flash/pfr; signature-validation caller behavior is UNKNOWN. Comments identify flash-manager integration but no IBM copyright.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">30. /bin/generate_self_cert.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a service name, waits for hostname/BMC readiness, generates an ECC P-256 or CNSA P-384 private key, and creates a three-year self-signed DER certificate. It enables TLS bootstrap but stores key material under /tmp/gen_self_cert and coordinates through AIM flags, making permissions and consumer copy behavior security-relevant. It depends on wolfssl, S_COMMON.sh, AIM, and gen_addr_info; final key installation and protection are UNKNOWN. Vertiv copyright and Lenovo organizationName reflect layered vendor provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">31. /bin/crashdump.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Acquires a single-instance flock, creates /var/uefi/crashdump, runs /bin/crashdump, and kills it after roughly 1300 seconds. It enables collection of host/BMC crash data and may expose register, memory, or telemetry content in JSON outputs. It depends on flock, /bin/crashdump, and writable UEFI storage; the binary's acquisition mechanism and data sensitivity are UNKNOWN. No explicit IBM header appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">32. /bin/test-mfpga2.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Discovers all FPGA_M I2C objects from db-tool, enables i2c_fpga kernel tracing, probes every object, reads FPGA bank 36 offsets 1 and 8, and uploads a combined log. It enables broad main-FPGA bus enumeration and can expose platform topology and register state, while clearing dmesg during collection. It depends on db-tool, CIO, FPGA, kdebug, and put; the upload endpoint is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">33. /bin/mdio-peek.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes an interface name shaped like <code>ethN</code>, extracts only its fourth character as N, writes a caller-supplied register selector to the legacy world-readable/writable <code>xcc_eth.N/mdio_ops/mdio_peek_poke</code> attribute, and reads back the result. The PHY address is fixed per interface, not caller-selected. Normal Clause 22 selectors alias through their low five bits into registers 0–31; setting bit 30 reaches encoded Clause 45/MMD device/register space on that same PHY. This can expose link, negotiation, diagnostics, power, analog and vendor state, but the traced bit-banged MDC/MDIO path cannot reach MAC MMIO, descriptor rings, PCIe configuration/BARs, X-DMA, BMC RAM, or host RAM. XCC 6.92 ships this XCC 4.30-era script unchanged even though its 6.6.90 kernel lacks the sysfs endpoint, so it is a stale service leftover unless an unobserved overlay restores the old driver. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">34. /bin/imm_primary_status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Queries IMM3 current-bank and primary-pending build ID and returns active, pending, or inactive. It supports firmware update state reporting and performs no direct write. It depends on IPMIProp and /v2/ibmc/dm/fw/imm3; callers are UNKNOWN. The IBM 2007 copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+Direct IBM copyright</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">35. /bin/port_fwd.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts external/internal/destination addresses and ports, enables IPv4 forwarding, and appends INPUT, FORWARD, DNAT, and SNAT rules. It enables a management-side TCP gateway to a host-local service and can expose arbitrary internal endpoints if callable by an untrusted actor. It depends on eth1, ifconfig, iptables, and caller cleanup; it does not tag or remove its rules, so lifecycle ownership is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">36. /bin/lzopcore.sh</td>
+<td class="px-3 py-3 text-sm leading-6">With init, installs itself as the kernel core_pattern pipe; otherwise it compresses stdin with lzop into a caller-supplied /gpx/cores path. It enables automatic persistent crash capture and can export process memory, credentials, and secrets present in cores. It depends on procfs core_pattern, lzop, logger, and init ordering; retention and access controls are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">37. /bin/ffdc_to_fp_usb.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Searches /devtmpfs for front-panel USB storage, mounts candidates noexec, resolves the FFDC symlink, copies the archive, and unmounts. It enables physical exfiltration of support data and assumes the caller has transferred USB ownership from the host to XCC. It depends on the pilot USB topology under /sys, mount utilities, and /gpx/ftphome FFDC links; device-authentication policy is UNKNOWN. IMM dump naming is inherited IBM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">38. /bin/bios_primary_status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads the BIOS pending build ID and reports primary active or pending status. It is a read-only firmware-update helper whose result likely gates UI or flash-manager state transitions. It depends on IPMIProp and /v2/ibmc/dm/fw/bios properties; the direct caller is UNKNOWN. The header is explicitly IBM Copyright 2007.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+Direct IBM copyright</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">39. /bin/secure_erase.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Deletes files across firmware-bank RW areas, whitelist, GPX, CMR, DS, pending banks, and most non-OEM pstorage directories, then calls reset-to-defaults.sh with enhance. It enables broad data sanitization but operates file-by-file without visible overwrite guarantees and passes a spelling that differs from the callee's enhanced token, so final secure-wipe activation is questionable. It depends on find, rm, firmware-bank layout, and reset-to-defaults.sh; actual flash remanence handling is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">40. /bin/fpga_log_collect.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes error-log and rolling-log filenames, runs fpgadump -hex, and appends or rotates the result at about 8 KiB. It enables FPGA RAS collection without modifying FPGA state, although the proprietary dumper may perform bus reads. It depends on fpgadump and caller-supplied names under /var/log; register coverage is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">41. /bin/pwrctrl.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a power-cycle mode and delay, then sends fixed IPMICmd sequences for soft-shutdown, NMI, or immediate power cycle. It enables direct host power disruption and can cause filesystem/data loss when invoked without higher-level coordination. It depends on IPMICmd and numeric OEM command semantics; authorization and caller validation are UNKNOWN. IPMI usage shows inherited IBM management design.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">42. /bin/mysql_backup_restore.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts backup, restore, hotbackup, hotrestore, pristine, integrity-check, recovery, logging, and upgrade operations for /var/lib/mysql. It can delete the full database tree, restore metadata or dumps, recreate corrupt tables, kill mariadbd/immdb_server, and export database diagnostics, so it is both a recovery mechanism and a high-impact data-management surface. It depends on MariaDB utilities, startup markers, /var/keep backups, CIO/IPMI properties, and required database names; transactional consistency of every external caller is UNKNOWN. IMM database/server names show IBM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">43. /bin/vgpio.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a dotted VGPIO address, event ID, assert/deassert/query/WHEA operation, and optional binary auxiliary-data file, encodes them into OEM IPMICmd packets, and chunks payloads at 32 bytes. It enables arbitrary virtual GPIO and WHEA signaling across the management interface, so it can affect host firmware behavior or inject platform events. It depends on IPMICmd, IANA bytes 4D 4F 00, and a proprietary response layout; OEM command authorization and event semantics are UNKNOWN. IPMI/VGPIO design is IBM-derived platform lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">44. /bin/check_emmc.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads eMMC EXT_CSD byte 156 from /dev/mmc0 and checks that the low five bits indicate the expected pSLC partition attributes. It enables an OEM IPMI manufacturing health check and is read-only despite direct device access. It depends on /bin/mmc and is called from bmc_app's manufacturing command; interpretation beyond the documented JEDEC bits is UNKNOWN. XCC and IPMI caller comments show product lineage but not IBM authorship.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">45. /bin/check-abl.sh</td>
+<td class="px-3 py-3 text-sm leading-6">On AMD platforms, checks TWR14 bit 6, invokes set_vuart1.sh with port 0xD00, clears bit 6, and sets bit 7. It enables ABL boot-log routing through a virtual UART and changes firmware handshake state, so it is relevant during early host boot. It depends on rfs.common, PLATFLAGS, twrtool, set_vuart1.sh, and hlog; the ABL consumer protocol is UNKNOWN. Terminology is Lenovo/XCC-era with no direct IBM notice.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">46. /bin/push_file.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes remote address, directory, dump type, size limit, port, address family, protocol, and optional SFTP username/password, then uploads IMM/FFDC/SOL archives by TFTP or SFTP. It enables remote support-data export; TFTP is unauthenticated and SFTP credentials appear in argv and may be logged or exposed in process listings. It depends on rfs.common, sftp-stub.sh, modlla, tzz/tar, and FFDC symlinks; remote host trust and secret erasure are UNKNOWN. Lenovo copyright is explicit and IMM terminology is IBM-derived.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">47. /bin/pfr_recovery.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes flash ID and authentication result, selects trusted or candidate BIOS UPD, extracts the platform FD image and SPS range, programs FD with pfr, erases SPS, toggles PCH reset, asserts ME_SECURITY_OVERRIDE, and runs syncrep_flashimage. It enables full PCH firmware recovery and can brick or weaken the host if images, XML offsets, or GPIO sequencing are wrong. It depends on bmc_app pfr_ld, FPGA/GPIO/PFR tools, ptables capability bits, recovery directories, and CIO status; the unused AUTH_RESULT and external image-authentication guarantees are UNKNOWN. The comments mention legacy ROM recovery but have no explicit IBM notice.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">48. /bin/del_dump_file.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a numeric FFDC type and removes the associated dump_complete marker, clears the FFDC RAM disk, or unmounts it. It enables dump lifecycle reset and can destroy diagnostic evidence, though it does not touch firmware. It depends on rfs.common, the /gpx FFDC layout, and numeric conventions shared with bmc_app; types 1, 2, 3, 8 all map to imm_dump. Lenovo copyright is explicit and IMM naming preserves IBM lineage.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">49. /bin/monitor_hang.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Runs continuously, checks watchdog 1 every 30 seconds, captures dmesg and process/thread state when expiry nears, archives four captures, and pets watchdog 4. It enables pre-reset evidence collection and stabilizes a time-change-sensitive watchdog path, but a hung monitor could affect watchdog servicing. It depends on wdt, tar, procfs, and init supervision; watchdog ownership and reset policy are UNKNOWN. It is daemon/startup relevant with no explicit IBM notice.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">50. /bin/hostlog_stub.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Waits for RTC synchronization, archives prior hidden host-log records under /pstorage, then launches /bin/hostlog. It enables persistent host-event capture and may retain sensitive console or firmware evidence across boots. It depends on /tmp/RTC_SYNC, hostlog, tar, and hiddenlog naming; the binary's inputs and record content are UNKNOWN. No explicit IBM notice appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">51. /bin/reset-to-defaults.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes normal or enhanced mode, removes provisioning, firewall, password-hash, debug, inventory, federation, Wi-Fi, remote-document, and selected system-guard state, preserves a defined set of certificates/keys/settings, sets RTD indicators, and reboots. It enables factory reset and secure-wipe initiation, but the preserved LKM/HTTP-boot material means normal RTD is intentionally not a complete cryptographic erase. It depends on rfs.common, AIM/DS, FPGA secure-wipe capability, database flags, ilma reset reasons, and many persistent layouts; downstream boot-time erasure after marker creation is UNKNOWN. XCC and IMM paths show IBM lineage within Lenovo code.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">52. /bin/wpart_make.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts create, delete, query, status, size, name, type, UUID, and image-path options to build a raw work-partition image with fdisk, loop7, and VFAT or ext2. It enables TDM virtual-media storage creation but can delete caller-selected files and format through a fixed loop device if invoked concurrently or with hostile paths. It depends on dd, fdisk, losetup, mkfs, lsblk, and a 1 MiB partition offset; caller validation and locking are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">53. /bin/ffdc_live_dbg.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Builds a live diagnostic capture using parallel collectors for DMDB, adapters, trace buffers, FPGA, video/KVM, eSPI, PSU, GPU, PCIe, databases, eMMC, alternate banks, and security-related XCC trace nodes. It enables deep runtime observability but exports sensitive operational and database state and can trigger device-side log collection through CIO/IPMI. It depends on a broad proprietary toolchain and platform manifest; semantics of several collectors and trace buffers are UNKNOWN. IMM, IBMU, IPMI, and historical database names show IBM-derived architecture.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">54. /bin/bchart-cap.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes duration and polling interval, raises its priority, runs bootchart, archives selected /proc-derived logs, and writes the archive to stdout. It enables remote performance capture and therefore exports process names, scheduling, disk, and CPU activity when /pstorage/.bmc_util_cap permits it. It depends on bootchart, pgrep, tar, and the debug-enable marker; the caller consuming stdout is UNKNOWN. Its BMC terminology is inherited platform vocabulary without direct IBM notice.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">55. /bin/encapsulation-lite-utility.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts enter/exit mode and an address list, classifies IPv4/IPv6 entries, writes firewall configuration, and invokes firetool for encapsulation-lite policy. It enables restrictive management-network exposure but weak address classification and caller-controlled lists make correct upstream validation security-critical. It depends on AIM state, XCC_FAMILY, xcc_bomber sysfs, firetool, and CMM address properties; full rule expansion is delegated to firetool and therefore UNKNOWN. IMM references show IBM-derived naming.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">56. /bin/get_nvidia_ubb_support_bundle.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Collects NVIDIA GPU debug, event, telemetry, and 2048-byte virtual EEPROM data, compresses them, and creates /tmp/nvidia_ubb_support_bundle.tgz while updating a CIO progress value. It enables vendor support export and can disclose GPU firmware state, telemetry, and EEPROM identity. It depends on get_gpu_debug_data.py, cio virt_eeprom, gzip, tar, and dd; the Python collector's scope is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">57. /bin/nm_ipmi.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts send or receive mode, constructs Node Manager IPMI checksums, writes requests to I2C bus 5 address 0x2c, and parses slave responses. It enables arbitrary NM commands and raw response retrieval, allowing power/thermal policy access depending on supplied net function and command. It depends on the i2c utility and fixed IPMI addresses; permitted command set and caller authorization are UNKNOWN. IPMI Node Manager design reflects IBM-era management architecture without an explicit copyright header.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">58. /bin/sysprofserver.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a certificate path, copies it to /etc/certs/sysprofserver/service.cert, computes the wolfSSL subject hash, and creates the conventional hash.0 symlink. It enables certificate lookup for the system-profile server and can replace its trust material if the caller is compromised. It depends on wolfssl and filesystem permissions; certificate validation and caller authorization are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">59. /bin/amd_set_rtc.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts an IPMI- or NTP-derived time and, on AMD platforms, writes the external RTC through I2C bus 5 address 0xd0 or the plugin_real_time_clock CIO object. It can change system time, hardware clock, and raw RTC registers, so malformed input or wrong platform routing can corrupt time-dependent logs, certificates, and boot decisions. It depends on ptables, i2c or cio_test, bcdtm, hwclock, PLATFORM_NO_REV, and AIM time-source state; exact RTC silicon is UNKNOWN. It is directly boot/POST relevant but has no explicit IBM copyright.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">60. /bin/amd_sync_rtc.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads the AMD external RTC through I2C/CIO, validates it against build time, updates system and hardware clocks, and can pulse FPGA bits to request host time synchronization. This enables BMC-host clock convergence but also exposes low-level RTC and FPGA writes whose failure can distort audit chronology. It depends on ptables, aim_config_get_bool, fpga, i2c or cio_test, bcdtm, and hwclock; the FPGA bit contract is only documented in comments. It is startup/config-change relevant and vendor-specific rather than explicitly IBM-authored.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">61. /bin/test-i2c-slave.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Iterates fixed bays 8, 9, and 11 and asks the proprietary nvme utility for health and controller identity. It enables manufacturing/debug visibility into NVMe devices reached through a platform bus abstraction and is read-only at the script level. It depends on /bin/nvme's nonstandard -b/-p interface; transport path, timeout handling, and exact caller are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">62. /bin/monterey.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Controls an HTTP boot server, rewrites DHCP boot configuration, restarts dhcpd, and installs iptables DNAT/SNAT between eth0 and host usb0. It enables host network boot and arbitrary forwarding to 169.254.95.120, materially expanding network exposure while enabled. It depends on http_server.py, dhcpd, iptables, fixed interface/address assumptions, and caller-supplied port/image values; image authentication is UNKNOWN. Monterey/XCC naming is Lenovo platform provenance rather than explicit IBM copyright.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">63. /bin/mysql_crash_script.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Runs after mariadbd failure, checks restart frequency and recovery markers, then may pristine the database and launch asynchronous hot restore. It enables automatic recovery but can replace live database contents after repeated crashes, making marker integrity and backup freshness critical. It depends on mysql_backup_restore.sh and mysqld_safe output-handling behavior; the direct supervisor contract is inferred but not fully shown. No explicit IBM notice appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">64. /bin/fw-access-control-update-monitor.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Either watches an access-control file with inotifyd or copies state-grid policy into the whitelist/firewall staging area and asks firetool to reload it. It enables immediate management-plane firewall changes and deliberately suppresses blacklist application during encapsulation-lite mode. It depends on AIM, XCC family/CMM sysfs, inotifyd, firetool, and IMM config paths; the file format and firetool enforcement details are UNKNOWN. IMM2 terminology is direct IBM-product lineage evidence.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">65. /bin/flash_errors.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts save, clean, history, adapter_event, or comment operations to preserve flash-manager excerpts and rotate persistent update history. It enables forensic tracking of firmware updates but also deletes old evidence after configured limits and trusts caller-supplied event text. It depends on /tmp/fm.log, /pstorage/flash, chghist_util, and flash-manager transaction IDs; transaction schema is UNKNOWN. No explicit IBM notice appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">66. /bin/ffdc_dump.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes FFDC collection modes and assembles a large offline dump of logs, processes, cores, configuration, databases, firmware state, hardware buses, traces, and platform diagnostics. It enables comprehensive support export and consequently may contain credentials, security logs, inventory, network configuration, database content, and crash memory. It depends on rfs.common and many proprietary collectors, kernel debugfs/sysfs nodes, tar/tzz, MySQL, IPMI, CIO, FPGA, and platform variables; exact content from each external collector is UNKNOWN. Lenovo copyright and extensive IMM paths preserve clear IBM FFDC lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">67. /bin/ac_preload.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Runs during AC/startup flow and stages a nonce, VPD, IPMI prefetch, BBD, UIM, password-encrypt, KEK, SLP, and UEFI scratch files into host shared memory. It also writes TWR registers for memory-test policy, preload readiness, IPMI readiness, and deferred BIOS maintenance, enabling firmware-host handoff of sensitive boot data. It depends on shm_util, sysvpd, cmrspy, vpd_preload, ipmi_preload, twrtool, AIM/platform environment, and /flash, /var/DS, and /pstorage state; shared-memory layout and consumer validation are UNKNOWN. The IMM/IPMI vocabulary shows IBM lineage, while the implementation is XCC-era Lenovo/Vertiv-derived.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">68. /bin/imm-nvram.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Initializes or repairs IMM SEL, private-storage, and SDR NVRAM files under /flash/data0, replacing defaults when sizes, OEM definitions, or SDR data change. It enables boot-time recovery and platform migration but can erase prior private/NVRAM state when the defaults digest changes. It depends on BMC_INI, BMC_SDRDAT, platform defaults, sha384sum, and the flash layout; the binary formats and downstream consumers are UNKNOWN. IMM naming is strong IBM lineage evidence.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Direct
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">69. /bin/FC_unit_test.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes test case 1 or 2, deletes default and persistent feature INIs, restarts pm, and exercises FeatureControl/AIM values. It enables destructive validation of platform feature persistence and can leave feature configuration altered, so it is manufacturing or engineering tooling rather than a harmless query. It depends on pm, aim_config_get_int, FeatureControl, XCC_PLATFORM, and the /flash/data0 configuration layout; the precise feature codenames are placeholders and their product meaning is UNKNOWN. Provenance is Vertiv copyright with XCC-specific integration.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">70. /bin/ocp-ncsi-setup-sh.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts package/channel operations and emits raw NCSI select, deselect, reset, MAC-filter, broadcast-filter, multicast-disable, channel-enable, and TX-enable commands. It enables direct provisioning of an OCP NIC management channel and can sever management connectivity if package/channel inputs are wrong. It depends on ncsiraw, eth0 MAC state, and adapter command support; authentication and arbitration behavior are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">71. /bin/sync_rtc_new.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Implements the same host/eSPI/pseudo-RTC synchronization flow as sync_rtc.sh with absolute tool paths, exported state, stricter boolean handling, and an unset PATH. It enables a more deterministic early-boot clock update while retaining the security impact of trusting host seconds and NTP offsets. It depends on rtc, prtc, hwclock, AIM, build time, and /pstorage/rtc; why both versions coexist and which platforms select this one are UNKNOWN. No explicit IBM copyright appears.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">72. /bin/hub_reset.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Uses BMC-CPU <code>/dev/mem</code> mappings to dump exactly 0x1000 bytes from physical base 0x40800000, then reads byte 0x408001a3 and sets/clears bit 0x40 after five seconds. The script describes a USB-hub disconnect/reconnect, but the entire 0x40000000–0x4fffffff range is unassigned in the AST2600 A3 address table; Lenovo's DTB also declares no device, RAM, PCIe aperture, or reserved region there. This is not the documented USB vHub and the CPU access itself is not DMA, but the far-side target is UNKNOWN: stale code, an unmapped access, undocumented board logic, or a hidden alias/bridge are all still possible. Consequently static analysis neither proves nor excludes host-RAM reach through this address. Reads and especially writes require live correlation because they may fault, clear state, or affect an unknown target. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">73. /bin/test-rfpga.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Enables i2c_fpga debugging and probes fixed remote-FPGA CPU PIROM objects while collecting CIO, db-tool, FPGA-version, and dmesg output. It enables remote FPGA/I2C diagnostics and may disclose processor inventory and kernel fault details. It depends on platform-specific CIO names and lacks cleanup or platform guards; its intended caller is UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">74. /bin/test_addr.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes an IPv6 address and returns 1 when it is present in the usb0 neighbor table, otherwise 0. It enables a small address-conflict or reachability check and performs no mutation. It depends on iproute2 output and usb0 naming; the inverted success convention must be known by its caller, which is UNKNOWN. Vertiv copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">75. /bin/imm_current_status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Queries whether the IMM3 primary bank is current and maps the result to status 1 or 2. It exposes bank selection without changing firmware, but its nonstandard status mapping must match its caller exactly. It depends on IPMIProp and the ibmc property tree; caller semantics are UNKNOWN. The IBM 2007 copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+Direct IBM copyright</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">76. /bin/stop_avct_server.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Creates a reentrancy marker, waits until AIM reports zero KVM and virtual-media sessions, then force-kills avct_server. It enables coordinated remote-console shutdown while avoiding active-session interruption, although SIGKILL prevents graceful cleanup once counts reach zero. It depends on AIM session counters and avct_server; timeout behavior is absent and caller purpose is UNKNOWN. Vertiv copyright reflects Avocent lineage rather than IBM.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">77. /bin/set_vuart1.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a UART port, checks ABL enable state, reads MMIO registers 0x1e787028 and 0x1e78702c, rewrites their decode fields, and records status in /tmp. It enables host boot-log routing but direct peek/poke can misroute I/O or destabilize the LPC/eSPI UART path. It depends on /var/cmr/uefi_debug_trace and a fixed AST register map; supported SoC variants are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">78. /bin/mdio-poke.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes <code>ethN</code>, a register selector, and a value and submits <code>register value</code> to the same legacy sysfs attribute. The kernel parser accepts C-style decimal/hex/octal, truncates the value to 16 bits, writes the fixed per-interface PHY, and then reads the register back unconditionally. Clause 22 reaches registers 0–31 by low-five-bit aliasing; an encoded bit-30 selector reaches Clause 45/MMD registers, which can change link, autonegotiation, loopback, PHY diagnostics, power and vendor-specific settings. It does not provide DMA or access to the MAC, descriptor rings, BMC memory, or host memory. Parse and bus errors are treacherous because the handler still returns the input byte count, so shell redirection appears successful and the failure is visible only in read-back text or <code>dmesg</code>. The endpoint is absent from the audited XCC 6.92 kernel, making this retained script stale there absent an external overlay. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">79. /bin/ncsi_monitor.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Every 30 seconds, checks /tmp/ncsistate, runs ncsiapp2 -r for the enabled channel, then restores the prior state file so failures retry. It enables continuous NCSI channel recovery but can repeatedly reinitialize management networking and intentionally races state updates. It depends on ncsiapp2 and a shared state-file format; package/channel hardware mapping is UNKNOWN. Comments refer to blade/ITE platform inheritance but not IBM copyright.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">80. /bin/mariadb_diag.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Queries MariaDB process and status counters, pushes summaries into the DBDIAG trace buffer, and raises an AAA event when connection counts are high. In recovery mode it can trace state and SIGABRT mariadbd above 250 connections, deliberately generating a core for diagnosis. It depends on mysql, aaautil, tracedump, kernel XCC trace nodes, and local TCP port 57005; trace-buffer consumers are UNKNOWN. No explicit IBM copyright appears, though XCC infrastructure is used.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">81. /bin/fw_promo_rec.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts extract_bldinfo, recover, promo, or trusted operations across primary, backup, pending, and recovery XCC banks. It can mount SquashFS images, copy whole firmware-bank payloads, create pending-bank symlinks, and replace trusted recovery content, so interruption or path confusion can affect bootability. It depends on rfs.common, BOOTPART, loop5, /.xcc-fw topology, and flash-in-progress markers; authenticity checks are not visible here and are UNKNOWN. Lenovo copyright is explicit.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">82. /bin/mini-view.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a destination image path, ensures it points into /tmp, runs mini_screen, and falls back to a shutdown image when the capture is too small. It enables remote-console thumbnail generation and therefore can disclose the host display. It depends on mini_screen, web assets, symlink behavior, and a single-process pgrep check; capture format and authorization are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">83. /bin/del_push_file.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes a numeric dump type and removes the corresponding IMM, FFDC, or SOL push_complete marker. It lets export orchestration retry or forget a transfer and can obscure whether a prior support-bundle upload completed. It depends on the /gpx layout and rfs.common; the caller interpreting marker absence is UNKNOWN. Lenovo copyright is explicit and IMM terminology is inherited IBM lineage.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">84. /bin/util-snapshot.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Raises its priority and prints top CPU consumers, ThreadX scheduler-thread utilization for bmc_app, and the full bmc_app thread map. It enables quick BMC saturation diagnosis and exposes internal thread names and process behavior to its output consumer. It depends on /tmp/bmc_app.threads and top; capture authorization and destination are UNKNOWN. BMC/XCC context is vendor-specific without explicit IBM notice.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">85. /bin/pci_digest.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Runs predefined SQL against dmdb as root with an empty password, hashes system and PCI inventory outputs, and stores the digests under /var/isdm. It enables change detection without retaining plaintext temporary results, but local root database access and inventory contents remain security-relevant. It depends on MySQL socket authentication and two SQL files; digest consumers and trust model are UNKNOWN. dmdb naming is inherited XCC/IMM architecture.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">86. /bin/sha384_dump_file.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Takes IMM or FFDC dump type and runs sha384sum -c against a legacy file named md5checksum. It enables integrity checking of exported support bundles but type 4 contains an inverted existence test, so verification behavior may be defective. It depends on rfs.common and fixed /gpx links; callers and expected failure handling are UNKNOWN. Lenovo copyright is explicit and IMM naming is IBM-derived.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">87. /bin/cmr.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Passes all arguments to /bin/cmr under nice level 10. The wrapper only reduces scheduling priority; the underlying command may access CMR firmware data, but its actual capability is UNKNOWN from this script. It depends entirely on the proprietary /bin/cmr binary and its callers are UNKNOWN. No explicit IBM provenance appears.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">88. /bin/ubb_support_bundle_sftp.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads system serial and machine type from VPD, constructs timestamped encrypted AMD/NVIDIA bundle names, removes plaintext bundles, and stages encrypted files under the download tree. It enables customer support retrieval while reducing plaintext retention, but identifiers in filenames disclose asset identity. It depends on sysvpd and prior encryption jobs producing fixed /tmp names; encryption algorithm, key management, and actual SFTP transfer caller are UNKNOWN. No explicit IBM copyright appears.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">89. /bin/bios_backup_status.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Queries IPMIProp for the BIOS current bank and backup pending build ID, then returns 0 active, 1 inactive, or 2 pending. It exposes firmware-bank state to update orchestration but performs no write itself. It depends on the /tmp/v2/ibmc property namespace and IPMIProp; the unusual top-level return in /bin/sh depends on invocation context. The IBM 2007 copyright and ibmc namespace are explicit lineage evidence.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+Direct IBM copyright</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">90. /sbin/populate-extfs.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Walks a source tree, emits debugfs commands preserving object types and metadata, reconstructs hard links, and writes a caller-selected ext filesystem. It enables firmware image construction, but whitespace-unsafe loops, unquoted paths, eval, and arbitrary device selection make hostile input destructive. Upstream embedded-build style, not runtime boot; UNKNOWN whether shipped or merely copied from the build rootfs.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">91. /sbin/ntpconf_gen.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Parses servers, keys, directories, password, distance, and output options, writes ntp.conf, scopes link-local CMM addresses, and notifies avcttm for ITE blades. It establishes boot-time trusted time, but interpolates caller strings, defaults an autokey password, and can mask loss with a local clock. Vertiv/XCC-family code; UNKNOWN argument validation by the daemon caller.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">92. /sbin/nginx_restart.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads cipher/TLS policy from AIM, checks the PID mentions nginx, rewrites caller-selected configs, and reloads nginx. It applies live XCC TLS policy, but both sed commands use eval with AIM/caller data and compatibility level zero retains TLS 1.0/1.1. Vertiv/AIM provenance; UNKNOWN who controls cipher names/config paths and whether nginx -t runs elsewhere.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">93. /sbin/seclv_gen_testcert.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Uses an eval-based wrapper to generate test CAs, RSA/DSA/ECC keys, MD5/SHA certificates, CRLs, and SSH keys across weak and strong parameter sets. It enables security-level compatibility testing, but intentionally creates obsolete credentials and recursively replaces its test CA tree. Vertiv copyright and Avocent DNs; UNKNOWN why runtime sbin contains it and whether production access is blocked.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">94. /etc/miniupnpd/ip6tables_init.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Sources the shared IPv6 helper, discovers or accepts an external interface, creates or attaches the MINIUPNPD filter chain, and optionally flushes it. It enables IPv6 UPnP forwarding, but caller chain/interface values directly reach privileged ip6tables and rule order matters. Adapted miniupnpd service setup; UNKNOWN whether XCC enables it or validates arguments.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">95. /etc/miniupnpd/miniupnpd_functions.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Locates ip/iptables, parses chain/interface/flush options, derives the default interface, and parses firewall listings into dirty-state flags. It supports all four miniupnpd scripts, but PATH resolution, direct argument interpolation, and text parsing form a root firewall trust boundary. Thomas Bernard license plus Vertiv changes; UNKNOWN the delta and caller PATH hygiene.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">96. /etc/miniupnpd/iptables_init.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Creates or reconnects IPv4 NAT and filter chains on the external interface and optionally flushes them. It enables miniupnpd forwarding, but creation hardcodes MINIUPNPD while later operations use $CHAIN, so custom names become inconsistent, and arguments reach root iptables. Adapted upstream setup; UNKNOWN whether callers override the default chain.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">97. /etc/miniupnpd/ip6tables_removeall.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Flushes, detaches, and deletes the selected IPv6 MINIUPNPD filter chain based on dirty-state probing. It tears down UPnP forwarding, but caller-controlled identifiers can target unintended firewall state and partial cleanup errors are not surfaced. Upstream-style paired teardown; UNKNOWN whether service serialization prevents rule races.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">98. /etc/miniupnpd/iptables_removeall.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Flushes, detaches, and deletes selected IPv4 NAT, mangle, filter, and postrouting chains. It removes miniupnpd forwarding state, but trusted caller names control deletion and it references extra chains absent from the adjacent init script. Upstream-style teardown; UNKNOWN where those chains are created and whether failures are detected.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">99. /etc/def_ssh/sftp-stub.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Derives allowed algorithms, rejects leading hyphens/globs, creates an SFTP batch, and transfers caller files with sshpass credentials. It enables firmware/config movement, but disables host verification, discards known hosts, exposes passwords to process inspection, and uses predictable /tmp files. SSRB/product policy integration; UNKNOWN whether isolation and permissions mitigate MITM and log disclosure.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">100. /etc/def_ssh/crypto_mode.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Maps numeric security/license levels to COMPAT, FIPS, or CNSA SSH/TLS algorithms by querying policy tables. It centralizes cipher, MAC, KEX, host-key, CA, and TLS-suite selection, but substring validation and constructed awk expressions trust parameters and table ownership. Product-specific licensed crypto; UNKNOWN handling of absent mappings or writable tables.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">101. /etc/default/TMP_ENABLE_AGENT.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Sleeps ten seconds, queries the first SNMP community name, and invokes adam_op exec on /etc/default when textual output says not found. It appears to bootstrap missing agent configuration, but pipeline text matching and an opaque directory-level exec hide the privileged action. Vertiv/ADAM provenance and likely temporary boot hook; UNKNOWN exact adam_op semantics and production reachability.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">102. /etc/sysapps_script/S_SNMP_CFG_MGR.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This orchestrator provisions persistent SNMP configuration, starts snmpd with all MIBs and foreground logging, starts imm3_subagent, and selects the real or pseudo configuration manager based on SNMPv3 enablement. It exposes the SNMP management plane and depends on OSINET plus the main readiness graph, so malformed communities/USM settings or daemon failure affect remote monitoring and control. Bind addresses and credentials are in unseen configs and remain unknown; imm3 directly indicates IBM IMM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">103. /etc/sysapps_script/S_SESSION_OP.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper waits for AIM and PM before starting /sbin/session_opd. It likely performs session operations for management consumers, so loss may disrupt login/session lifecycle without an obvious listener in this script. Session stores, authorization boundaries, and fail-open behavior are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">104. /etc/sysapps_script/S_VMEDIA-PM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper waits for avct_server readiness and runs /bin/vmedia_pm -d. It governs remote virtual-media policy, making failure relevant to privileged remote device attachment while avct_server remains available. Protocol, mount/device handling, authentication, and the -d flag are unknown; avct dependency indicates Avocent heritage.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">105. /etc/sysapps_script/S_OSINET.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This large network bootstrap selects platform configs, programs IPv4/IPv6 sysctls, NCSI, DHCPv6, USB interfaces, usbmuxd, firewall entries, and /etc/resolv.conf before running /usr/sbin/osinet in debug mode. It owns the BMC network and USB data planes, so partial failure can expose unintended interfaces, remove name resolution, or block nearly every remote service that waits on OSINET. It touches the AST USB-vhub soft_connect sysfs node on stop; exact daemon listeners and the unconditional debug option's effect are unknown, while IMM progress codes show IBM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">106. /etc/sysapps_script/S_CERTVALID.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM and PM before running /sbin/cert_valid_d and uses forceful termination for stop. It belongs to the certificate-validation control plane, so failure may leave expiry or trust checks stale without directly proving an exposed listener. Validated stores, schedules, and enforcement consequences are unknown because they reside in the daemon.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">107. /etc/sysapps_script/S_web_gateway.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This gate waits indefinitely for /tmp/nginx_web/nginx_web.ready and then logs that web service is available. It provides ordering only, so a failed web launch or missing marker can hang the service forever without diagnostics or timeout. Downstream consumers and recovery behavior are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">108. /etc/sysapps_script/S_FILETRANS.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper runs filetrans_helper with a PID file and, on the first restart, deletes every file under /pstorage/remote_disk before marking XCC startup. It is a file-transfer data plane with destructive cleanup, so misordered restart can erase staged content and a compromised helper may access remotely supplied files. Protocol, listener, path validation, and authentication are unknown because the helper binary is not described.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">109. /etc/sysapps_script/RunYaapService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper unlocks the firewall, enables policy 810, and launches /debug/bin/yaapd, reversing the policy on stop. A daemon deliberately shipped from /debug/bin is a high-interest debug/service plane, and a crash or failed stop could leave the firewall policy enabled. The listening port, authentication model, and meaning of YAAP are unknown because both firewall rules and binary are outside scope.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">110. /etc/sysapps_script/S_CEMGR.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This service waits for AIM and PM, starts /sbin/cemgr, and resets its readiness state on return or stop. It likely manages certificate events for consumers including PAM and OSINET, so failure blocks those dependents through proc_sync or leaves certificate changes unapplied. Its IPC, storage, and validation behavior are unknown; the wrapper carries inherited Emerson-era boot instrumentation.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">111. /etc/sysapps_script/RunPamAuthHandler.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper publishes a 60-second PAM timeout and processing-hash name to Redis, then starts /usr/bin/PamAuthHandler with libtb, libimmdb_client, and libds. It handles a privileged authentication plane for nginx/Redfish and is restarted by the nginx monitor, while restart first asks aaautil to capture PAM diagnostics. Library semantics and credential handling remain unknown, but IMM library naming evidences IBM management-controller lineage beneath the Vertiv wrapper.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">112. /etc/sysapps_script/StingrayZ51/RunNginx.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This Redfish launcher generates nginx configuration from templates and AIM, owns /tmp/nginx/nginx_redfish.sock, starts nginx, then starts PAM, OAuth, time-change, and data-validation helpers. It exposes the Redfish HTTP/TLS data plane through template-selected ports and local Unix-socket consumers; restart and reload paths coordinate readiness flags but can leave helpers mismatched after partial failure. TLS bind/client-auth details remain unknown from the templates, while Lenovo privilege-registry loading and Stingray naming establish Lenovo provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">113. /etc/sysapps_script/StingrayZ51/RunTaskService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script controls TaskService entirely through Redis, enabling status and access on start and clearing &amp;&amp;DBState plus blocking access on stop. It governs asynchronous Redfish task visibility, so stale Redis data can misrepresent task completion or lose recovery state. Task executors, persistence, and authorization are unknown because no process is launched here.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">114. /etc/sysapps_script/StingrayZ51/RunRedisServer.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script launches the Stingray Redis instance from /usr/local/etc/redis/redis.conf, creates the configured socket with parsed permissions, and waits indefinitely for authenticated PONG. Redis is the backing state plane for Redfish resources, sessions, jobs, tasks, and events, so a hang blocks the entire stack and a restart can disrupt all of them. TCP exposure is config-dependent and unknown; requirepass is copied locally and passed via redis-cli -a.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">115. /etc/sysapps_script/StingrayZ51/RunAll.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This top-level Redfish orchestrator starts Redis, resource loading, event/task/job services, RF_Root/RF_Session/RF_Log, nginx, and miniupnpd in a fixed sequence, while persisting the event database and key. It controls the full Redfish, event, session, upload, and discovery data planes; partial startup can leave Redis or plugins available before nginx readiness, and stop uses broad SIGKILL operations. IMM paths and /gpx/iBMU provide IBM lineage, while Stingray/Z51 and Lenovo registry assets show later vendor integration; several omitted schema-loading steps remain unexplained.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">116. /etc/sysapps_script/StingrayZ51/RunOAuthHandler.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This duplicate-location wrapper writes a three-second OAuth timeout and nginx config directory to the Stingray Redis instance before starting /usr/bin/OAuthHandler. It is on the Redfish token-authentication plane and depends on /usr/local/etc/redis/redis.conf rather than the top-level Redis config, making configuration divergence operationally significant. Issuer, key, audience, and fail-closed behavior are unknown; the Vertiv copyright identifies wrapper origin.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">117. /etc/sysapps_script/StingrayZ51/RunSessionService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher starts /usr/bin/SessionService, loads the session-invalidation Lua script into Redis, enables the Redfish SessionService resource, and removes it from the access-block set. It is authentication-critical: process/Redis divergence can expose a service marked enabled without working invalidation, while stop blocks access before killing the process. Token storage, expiry, entropy, and authorization behavior are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">118. /etc/sysapps_script/StingrayZ51/RunResourceLoader.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script requires a running Redis process and invokes /usr/bin/ResourceLoader CREATE over the complete default sdata tree rooted at /redfish. It initializes the Redfish resource/state plane, so failure leaves nginx or plugins operating against an incomplete model. Schema validation, overwrite rules, and trust in packaged data are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">119. /etc/sysapps_script/StingrayZ51/RunJobService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script does not start a process; it toggles JobService state and the shared access-block set in Redis. It controls authorization/availability of the Redfish job plane, so Redis inconsistency can report a misleading state or fail to block access. Actual job execution, persistence, and authorization are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">120. /etc/sysapps_script/StingrayZ51/RunEventService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher seeds /redfish/v1/EventService, starts /usr/bin/EventService, loads five Lua scripts into Redis, flushes Redis database 1, and resets SSE reconnection state. It drives Redfish events and server-sent events, so startup destroys transient DB1 contents and service failure removes notifications while other Redfish resources may remain healthy. Destination validation, subscription encryption, and delivery authentication are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">121. /etc/sysapps_script/StingrayZ51/RunRedisConfParser.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This parser extracts Redis port, Unix socket, socket mode, and requirepass into files beside the socket. Those files coordinate launchers but duplicate the password in plaintext and may inherit permissive directory access, creating a local secret-exposure surface. File ownership and directory permissions are not set here and remain unknown; the configuration belongs to the Stingray Redfish stack.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">122. /etc/sysapps_script/StingrayZ51/RunTimeChangeDetector.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper loads DeleteTTLKeys and ExpireUptime Lua scripts into Redis, then starts /usr/bin/TimeChangeDetector. It protects TTL/session-like state from wall-clock changes, so failure can leave stale or prematurely expired Redfish data after time correction. Trigger source, clock thresholds, and affected key classes are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">123. /etc/sysapps_script/RunSnooper.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This diagnostic tool can run Redis MONITOR, force a background snapshot, and package Redis, nginx, PAM, event, session, certificate, and profiling logs into a tarball. The bundle crosses multiple sensitive data planes and may contain credentials, session material, request details, or management state; it also moves the live dump.rdb into /tmp. Invocation authorization, retention, and export controls are absent and therefore unknown; the implementation is Vertiv-branded.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">124. /etc/sysapps_script/S_nginx_web.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher derives HTTP/HTTPS ports, enable flags, TLS versions, ciphers, DH parameters, and certificates from AIM, templates nginx_web.conf, then starts /usr/sbin/nginx. It exposes the primary browser management plane on configured network and optional USB interfaces, and may generate a self-signed certificate or wait indefinitely for blade certificates. Invalid cert/key pairs are deleted and regeneration can be forced; exact bind addresses, client-auth policy, and application authorization remain in templates and are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">125. /etc/sysapps_script/RunRedisServer.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script parses /etc/redis/redis.conf, materializes port, Unix-socket, permission, and requirepass values beside the socket, then launches /usr/bin/redis-server. It waits without a deadline for PONG in three-second intervals and restarts when live configuration differs, making Redis a blocking dependency for downstream services. Network exposure depends on the unseen configuration; storing the password in a file and passing it via redis-cli -a creates local disclosure risk, while the Vertiv header identifies wrapper provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">126. /etc/sysapps_script/S_APS-PM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper waits for avct_server readiness and runs /bin/aps_pm -d. It is a policy manager attached to the Avocent service plane; failure can leave APS policy unavailable while the server itself remains running. The -d meaning, IPC surface, and authorization model are unknown; avct naming is Avocent/Vertiv provenance.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">127. /etc/sysapps_script/S_CLID.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This service optionally refreshes ADAM namespaces, waits for the complete main-process readiness set, then starts /sbin/clid and updates restore status. It backs the management CLI plane and depends on security, network, BMC, and time services, so any peer readiness failure can delay interactive administration. Transport and login authorization are unknown here; ADAM/AIM and IMM conventions show legacy management-stack provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">128. /etc/sysapps_script/S_PAM_PM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper waits for AIM and CEMGR and starts /sbin/pam_pm in the background. It appears to manage PAM policy, making its failure security-relevant even though the script exposes no network listener. Policy sources, update semantics, and failure mode are unknown; the boot checkpoint remains labeled Emerson.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">129. /etc/sysapps_script/S_imm_fodd.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for the shared main-process gate and starts /bin/imm_fodd. It appears to implement feature-on-demand licensing for the IBM IMM lineage, so failure may disable licensed management capabilities without affecting base boot. License storage, network access, and trust validation are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">130. /etc/sysapps_script/S_MCTPD.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This service waits for bmc_app, inspects platform flags, manages an AMD-specific MCTP bus-owner configuration, and launches /bin/Mctpd; SH7757 systems instead sleep forever. It exposes the management-component transport plane toward platform devices, so failure removes MCTP communication while satisfying no explicit ready state. Transport bindings, device nodes, and message authorization are unknown; BMC/MCTP integration reflects server-management firmware lineage.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">131. /etc/sysapps_script/S_COMMON.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This sourced library defines proc_sync names and wrappers, using readiness value 10, reset value 0, and 120-second waits. Its main-process gate requires PM, seclvd, SM, OSINET, bmc_app, and TM, making it the explicit service-order graph used by many launchers; timeouts are not checked by callers consistently. Names such as avct_server, ipmi_gateway, imm_fodd, and raid_ctrl_server expose IBM/Avocent lineage, while proc_sync implementation semantics remain unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">132. /etc/sysapps_script/S_stingray_gateway.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This gate waits indefinitely until AIM reports stingray_service_ready and then only logs availability. It serializes dependents behind the Redfish Stingray stack, so a failed readiness update can hang the service indefinitely without recovery or timeout. The consumer of this gate is unknown; Stingray is the vendor Redfish implementation name.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">133. /etc/sysapps_script/RunOAuthHandler.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper writes its path, a three-second timeout, and nginx configuration directory to Redis before starting /usr/bin/OAuthHandler. It is an authentication helper on the Redfish data path and depends on the Redis Unix socket parsed from /etc/redis/redis.conf; a stale or unavailable Redis instance prevents correct coordination. Token validation details, accepted issuers, and failure policy are implemented in the binary and remain unknown; the header identifies Vertiv provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">134. /etc/sysapps_script/S_ALERTMGR.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM, ADAM, and OSINET, records Emerson boot checkpoints, then runs /usr/sbin/alertmgr using /tmp/alertmgr.pid. It sits on the outbound alert/notification plane, so dependency failure delays alerts and a stale PID can mis-detect service state. Destinations, protocols, credentials, and retry behavior are unknown because they live outside the script.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">135. /etc/sysapps_script/S_ADAM_SWE.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for ADAM readiness and runs /bin/imm3_adamSWEMgr, with only pid and kill guards. It appears to bridge ADAM software events into the IBM IMM3 management stack, so failure can silently remove state/event synchronization. Interfaces and authorization are unknown because the binary supplies all behavior; imm3 is direct IBM Integrated Management Module provenance.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">136. /etc/sysapps_script/S_bmc_app_manifest_gateway.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This gate waits up to 40 seconds for /tmp/manifest_ready, warns on timeout, and exits success either way. It orders manifest consumers after bmc_app state without enforcing success, so a late or failed manifest can permit downstream startup with incomplete metadata. Manifest contents, producer, and consumer behavior are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">137. /etc/sysapps_script/S_telnetd_app.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script waits for all main services and CLID, then conditionally launches /usr/sbin/telnetd on an AIM-configured port using /bin/emr_login. It exposes a cleartext remote-login plane; the configured session timeout is read but commented out at launch, increasing persistence risk. Login policy and default enablement are unknown, while emr naming and shared AIM stack indicate Emerson/Vertiv heritage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">138. /etc/sysapps_script/S_APS.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher chooses TLS DH parameters from the active web certificate, waits for AIM, SM, and server.crt, then starts /sbin/avct_server -d and polls ten seconds for APS-IPC. avct_server is a central remote-management data plane using persistent avct_server.ini, and failure to expose APS-IPC triggers SIGKILL and withholds readiness from dependent policy managers. Listener ports and protocol authentication are unknown from the script; avct is strong Avocent lineage and the boot markers still say Emerson.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">139. /etc/sysapps_script/S_sshd_app.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper forcibly sets SSH enabled and port 22 in AIM, waits up to 60 seconds for the whitelist config, launches /usr/sbin/sshd-immcli, then holds forever. It exposes an administrative SSH plane regardless of prior enable state, so authentication, ciphers, and allowlists in sshd_config-immcli are security-critical and unknown here. The immcli name is explicit IBM IMM lineage; missing config prevents launch but the wrapper still writes status optimistically.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">140. /etc/sysapps_script/S_SECURLEVEL.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM and PM, records the SECURITY_LEVEL_INIT checkpoint, and runs /sbin/seclvd. The daemon controls the security-level plane and is itself included in the shared main-process gate, so failure can block CLI, discovery, SNMP, and other consumers. Enforcement targets, fail-safe behavior, and IPC are unknown; the checkpoint is explicitly Emerson-derived.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">141. /etc/sysapps_script/S_tm_app.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM, ADAM, and CEMGR before starting /sbin/tm, and stop also kills NTP monitor/requester helpers. It owns management time state, so failure can affect certificates, logs, sessions, and event ordering across the appliance. NTP sources, authentication, and exposed sockets are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">142. /etc/sysapps_script/S_scal_daemon.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This service waits for all main processes, reads the system UUID from VPD, and launches /bin/scal_daemon -d with that UUID and a PID file. It likely participates in scale/discovery integration and therefore handles a stable hardware identifier, but its network plane and consumers are not visible. Listener, authentication, and acronym meaning remain unknown; VPD/AIM usage ties it to the management firmware stack.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">143. /etc/sysapps_script/S_PAM_ARBD.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM and CEMGR, records a PAM arbitration boot checkpoint, and starts /bin/pam_arbd. It is on the authentication decision path, so failure can block or degrade consumers even though no readiness state is published here. Arbitration protocol, fail-open/fail-closed behavior, and IPC permissions are unknown; PAM plus AIM integration is inherited platform code.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">144. /etc/sysapps_script/S_ADAM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This service waits for AIM, creates world-writable /tmp/AB_DM, starts /sbin/AB_DMProc from AB_DMProc.txt, and waits up to 30 seconds for a namespace-ready file before setting ADAM ready. ADAM is a shared configuration/state dependency, so delayed readiness propagates into alerting, SNMP, time management, and watchdog startup. The AB_DM protocol is unknown; Emerson boot-performance labels and Vertiv-era layout indicate inherited platform code.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">145. /etc/sysapps_script/S_SM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This security-manager bootstrap initializes account-lockout and password-age state, constructs certificate trees for web, LDAP, SSO, update, virtual media, and websockets, creates the password database, then runs /sbin/sm -D. It publishes certificate and avctpasswd readiness before full SM readiness, so consumers can proceed in phases; destructive reset erases certificates, account data, and home state. Direct IBM provenance appears in IBM_GENESIS_PLATFORM and genesis password templates, while avct names show Avocent heritage; binary-side authentication behavior remains unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">146. /etc/sysapps_script/S_ipmi_gateway.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This file intentionally stubs the IPMI gateway: start prints XCC_IPMI_GATEWAY_BLACKLISTED and all mutating actions exit successfully without launching a daemon. It therefore removes that IPMI data plane while preserving service-manager compatibility, reducing exposure relative to the historical /sbin/ipmi_gateway. The blacklist rationale and any alternate IPMI endpoint are unknown; XCC and IPMI identify Lenovo/IBM management heritage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">147. /etc/sysapps_script/S_AIM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This core bootstrap builds volatile and persistent AIM directories, waits indefinitely for /tmp/.immdb_init_done, runs /sbin/aim and waitforaim, then publishes AIM readiness and monitors the process. AIM is the configuration authority used by almost every service, so database or readiness failure stalls large portions of the management plane. Reset deletes persistent AIM state, and Emerson boot markers plus IMM database naming expose the inherited vendor stack; AIM's external interface remains unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">148. /etc/sysapps_script/RunMiniUpnpdService.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher derives Redfish identity and interface data, templates up to four miniupnpd configurations, adjusts iptables, and starts /usr/sbin/miniupnpd only after nginx is alive and SSDP is enabled. It advertises SSDP on UDP 1900 across the working interface and optional Ethernet/USB interfaces, while publishing status through Redis whose socket and password are read from temporary metadata files. Failure suppresses discovery rather than Redfish itself; debug actions run miniupnpd in the foreground, and the Vertiv copyright plus XCC-specific AIM/VPD inputs show inherited vendor integration.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">149. /etc/sysapps_script/S_PM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This policy-manager bootstrap initializes AIM security and SNMP defaults, migrates remote-presence settings and UEFI HTTP-boot certificates, then starts /sbin/pm after AIM. It feeds firewall, certificate, LDAP, SNMP, and other management policy planes, so failure can stall dependent services or preserve stale security state. Internal IPC is unknown; Emerson boot tags and AIM conventions show inherited vendor provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">150. /etc/sysapps_script/RunDataValidator.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This SysV-style wrapper starts /usr/bin/DataValidator only when pidof finds no existing instance and uses SIGKILL for stop. The binary is part of the Redfish/nginx data path because RunNginx starts it, so its loss can leave request validation unavailable even while nginx remains up. No ports, inputs, policy, or vendor provenance are visible in the script; those security properties remain unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">151. /etc/sysapps_script/S_discover_daemon.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This script initializes LXCA discovery targets and retry intervals in AIM, waits for all main processes, then runs /bin/discover_daemon -p ... -d. It exposes an infrastructure-discovery data plane involving DNS and Lenovo XClarity Administrator, with default retry and suspend intervals of 120 and 1200 seconds. Discovery protocol, destination validation, and authentication are unknown; LXCA is explicit Lenovo provenance layered on the inherited stack.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">152. /etc/sysapps_script/ipmi_watchdog.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This infinite watchdog runs ipmitool mc info every 15 seconds and, after 15 consecutive failures, sets bmcapp_internal_watchdog_reset and repeatedly kills pl_$XCC_CODENAME. It monitors the internal IPMI/BMC application plane, with an effective first-action threshold near 225 seconds; persistent failure can cause repeated kill/reset pressure every loop. The bit utility target and supervisor recovery behavior are unknown, while IPMI and BMC names are direct IBM-compatible management provenance.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">153. /etc/sysapps_script/S_nginx_monitor.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This persistent watchdog starts web and Redfish nginx, probes the Redfish Unix socket, restarts Redis/backend helpers, respawns RF plugins, and rotates diagnostic logs every 20 seconds after a 30-second delay. It contains a hard-coded USERID:PASSW0RD health-check credential and captures verbose curl output, creating credential and diagnostic-data exposure even though the probe uses a local socket. Restart thresholds can create recovery loops when dependencies remain broken; RF/IMM naming reflects IBM/Lenovo Redfish lineage and plugin internals remain unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">154. /etc/sysapps_script/S_WATCHDOGD.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM, ADAM, CEMGR, and PM before running /bin/watchdogd, optionally with -f when a second argument is supplied. It is a platform watchdog control plane whose failure can remove recovery behavior or, conversely, trigger resets depending on daemon policy. Hardware device nodes, timeout, and -f semantics are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">155. /etc/sysapps_script/S_usb_configure.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This one-shot script discovers two USB NICs through sysfs and renames them to usbg and usb1 according to RF_USB_NET, preserving link state. It changes the USB management data plane and can swap host-facing interfaces; failure leaves names inconsistent with nginx/osinet assumptions. Although /tmp/usb_configured is defined, it is never created, so idempotence and caller retry behavior are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">156. /etc/sysapps_script/S_VKVM_PM.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for AIM and runs /bin/vkvm_pm -d, deleting /dev/mqueue/AIM-MQ35010 on stop. It governs the virtual-KVM plane, so failure affects remote console policy and stale queue cleanup may discard pending state. Video transport, listener, authorization, and debug-mode implications are unknown.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">157. /etc/sysapps_script/sftp_idle_checker.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This periodic helper identifies sshd-immsftp sessions, increments an idle counter when none exist, and after five invocations terminates the daemon and disables SFTP in AIM. It reduces standing SFTP exposure but relies on PID-file/process matching and escalates to SIGKILL, so stale identifiers can produce incorrect shutdown behavior. The scheduler interval, authentication policy, and network port are outside this script and unknown; immsftp is IBM IMM lineage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">158. /etc/sysapps_script/S_AIM_MsgQ.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This wrapper launches /sbin/aimMsgQMonitor -c 6 when absent and otherwise provides ordinary stop/status actions. The process likely monitors AIM message queues, so failure may break asynchronous configuration notifications without stopping AIM itself. Queue identities, permissions, and the meaning of channel 6 are unknown; naming ties it to the inherited AIM platform.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">159. /etc/sysapps_script/S_vpdd.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This launcher waits for the shared main-process gate and starts /bin/vpdd. It likely provides VPD access to management consumers, so failure can remove inventory/identity data without directly taking down the network plane. IPC, device access, and write authorization are unknown; vpdd fits IBM/Lenovo platform-management terminology.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">160. /etc/sysconfig/RunAll.sh</td>
+<td class="px-3 py-3 text-sm leading-6">This thin systemd wrapper starts or stops redis, resource_loader, task, event, job, and nginx in the same listed order. It represents a newer service-manager path for the Redfish stack, but dependency, readiness, and failure propagation are delegated entirely to unseen unit files; stop order is not explicitly reversed here. Unit definitions, instance identity, and whether this path replaces or coexists with Stingray scripts are unknown.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">161. /etc/scripts/ffdc_offline_parser/mysql2sqlite.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Uses AWK transformations to convert MySQL dump schema, inserts, quoting, and engine constructs into SQLite-oriented SQL. It enables offline FFDC inspection, but is a heuristic converter rather than a full SQL parser and may silently mistranslate unusual dumps. Third-party esperlu/dumblob provenance; UNKNOWN Lenovo modifications and validated FFDC coverage.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">162. /etc/profile.d/bash_completion.sh</td>
+<td class="px-3 py-3 text-sm leading-6">For interactive Bash 4.2+, sources a per-user completion file and then system bash-completion. It enables maintenance-shell completion, while expected execution of user-owned shell code makes home-directory integrity the trust boundary for privileged accounts. Standard distribution boilerplate, not provisioning; UNKNOWN whether production XCC shells source it.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">163. /etc/profile.d/gawk.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Defines helpers to restore, prepend, or append AWKPATH and AWKLIBPATH using gawk defaults. It enables interactive module/extension discovery, but attacker-writable prepended directories can make later gawk load unintended code. Standard gawk packaging, not boot setup; UNKNOWN whether privileged XCC workflows invoke these helpers.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">164. /etc/profile.d/debuginfod.sh</td>
+<td class="px-3 py-3 text-sm leading-6">When DEBUGINFOD_URLS is unset, concatenates /etc/debuginfod URL files and exports the server list. It enables later symbol/source retrieval, but a configuration writer can redirect requests and reveal build identifiers even though this fragment makes no network call itself. Distribution boilerplate; UNKNOWN whether clients or outbound networking exist on-device.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">165. /var/www/service/bin/S_webauth.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Defines webauth stop/start helpers but exits unconditionally before exports or its restart loop because webauth was merged into webapp. Executed normally it enables nothing, though retained dead code can confuse audits and sourcing may behave differently. XCC service-evolution artifact; UNKNOWN whether any framework sources rather than executes it.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">166. /var/www/service/bin/S_gunicorn_dev.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Initializes AIM/filesystem state, kills Gunicorn processes, accepts a bind host, and starts one development worker. It enables diagnostic web exposure, but the unquoted bind value can become options and killall affects unrelated instances. XCC debug launcher, not normal boot; UNKNOWN whether production callers can execute it.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">167. /var/www/service/bin/webcprofile_dbg.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Stops a prior profiling instance, sets web Python/library paths, and runs the application under cProfile into /tmp/web.prof. It enables XCC startup-performance analysis, but predictable profile/PID files can race or disclose code paths and timing. Explicit debug tooling, not cold boot; UNKNOWN whether release images restrict it and whether profiles capture secrets.</td>
+<td class="px-3 py-3 text-xs">Medium
+Cold: None shown
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">168. /var/www/service/bin/S_gunicorn.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Initializes AIM backup/restore state, clears upload/download artifacts, waits for ADAM, kills an existing Gunicorn tree, and restarts webapp forever. It brings up the primary XCC web/API service, but broad globs, weak PID identity checks, and force-killing matching Python processes make filesystem and process namespaces trust boundaries. XCC/Avocent boot glue; UNKNOWN execution account and symlink protections.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">169. /lib/secure/scripts/provisioning/phase3activate_common.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Maps service names to certificate directories, compares keys and normalized certificates, honors user-generated markers, and reinstalls changed credentials. It prevents needless replacement while preserving external certificates, but install_phase3_trusted_certificate checks an unassigned RV and eval-based mapping trusts service names. Avocent/XCC certificate layout; UNKNOWN whether stale RV changes only logging or control decisions.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">170. /lib/secure/scripts/provisioning/setCryptoMode.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Parses cryptography_mode, switches basic or NIST security mode, defaults missing XML to basic, and removes MC/CMM installed markers. It applies boot crypto policy and forces certificate reconsideration, but unknown values still invalidate markers and switch failures are ignored. Platform-specific NIST mode; UNKNOWN whether certificate services recover atomically.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">171. /lib/secure/scripts/provisioning/phase2activate_common.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Provides policy tests, AIM/IPMI writes, certificate/key installation, CRL concatenation, CMM-interface discovery, and provisioning.ini updates for all phase-2 consumers. It is the main persistence layer for cold-boot security state, but unquoted paths, debug recording, and unvalidated concatenated CRLs require every caller and staging file to be trusted. XCC-specific AIM, IPMIProp, ds, IMM, and bomber interfaces; UNKNOWN what install_cert validates internally.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">172. /lib/secure/scripts/provisioning/phase2activate_ldap.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Parses local, remote, and search-order LDAP files, writes AIM/IPMI auth state, installs client certs/CRLs, configures DNS/DDNS, and signals changes. It enables the full XCC directory-auth path, but logs local and remote LDAP passwords, stores the local password via a generic string setter, and uses fragile grep/colrm parsing on high-trust files. XCC-specific PAM/ibmc/osinet logic; UNKNOWN where status logs persist and who can read them.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">173. /lib/secure/scripts/provisioning/phase3boot.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Waits for phase 2, initializes certs, imports CMM capabilities, applies DNS/LDAP, copies the bomber AES key, runs pvision, retries forever, and creates lockdown markers after failures. It is the main phase-3 boot/provisioning supervisor, but places key material in /tmp/secure and keeps failure counting process-local. Strong Lenovo/IBM provenance via pvision, bomber, ITE, and CMM; UNKNOWN who erases aeskey.bin and persists failure history.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">174. /lib/secure/scripts/provisioning/checkCertsExternal.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Sources phase3activate_common and returns failure when HTTPS has a .user_generated certificate; CIM and LDAP checks are commented out. It protects an externally managed web identity from provisioning replacement, but its broad name and inverted-looking status can mislead callers. XCC certificate-policy helper, not an independent boot service; UNKNOWN which callers consume its exit convention.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">175. /lib/secure/scripts/provisioning/phase3ldap-remote.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Force-copies ldap-r.conf and applies remote LDAP endpoints, bind credentials, group/AOM policy, SSL, DNS, DDNS, and IPv4/IPv6 resolver state. It enables external LDAP/AD, but one staging file controls authentication and DNS while the shared library logs its password. XCC AIM/ibmc integration; UNKNOWN whether schema validation prevents DNS redirection or malformed values.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">176. /lib/secure/scripts/provisioning/setCRLChecking.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Extracts crl_checking from securityConfigInfo.xml and writes the AIM revocation-check flag, defaulting to false when XML is absent. It controls certificate revocation enforcement during phase-2 setup, but missing or malformed configuration can silently disable checking. XCC AIM policy; UNKNOWN whether another validation layer still enforces CRLs or raises an alert.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">177. /lib/secure/scripts/provisioning/phase3ldap-search.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Copies staged ldap-search.conf over the persistent file, maps one of four local/external search orders into AIM/IPMI, and signals a change. It controls authentication precedence, but the source itself calls the overwrite a kludge and a compromised staging file can redirect fallback behavior. Product-specific ibmc encoding; UNKNOWN whether multiple matching strings trigger multiple helpers.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">178. /lib/secure/scripts/provisioning/activateMinTLS.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Sources phase2activate_common, reads the legacy marker or minimum_tls_version from securityConfigInfo.xml, programs seclvd, and mirrors the result to /v2/ibmc/mintls. This enables boot-time TLS-floor enforcement, but grep-based XML parsing and the final &amp;&amp;/|| chain can propagate unexpected values. XCC-specific provisioning; UNKNOWN whether upstream validation constrains the XML and whether the fallback control flow is intentional.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">179. /lib/secure/scripts/provisioning/phase2activate_main.sh</td>
+<td class="px-3 py-3 text-sm leading-6">After confirming ITE support, sequentially applies LDAP, crypto mode, minimum TLS, certificate-management policy, CRL checking, and LDAP certificates. It is the phase-2 boot security orchestrator, but ignores child failures and exits success, permitting a mixed partially applied state. ITE/ETE and rfs.common-security indicate Lenovo/IBM firmware; UNKNOWN whether an external monitor detects failures.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">180. /lib/secure/scripts/provisioning/getCommonName.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Finds the CMM-facing IPv4 address, reverse-resolves it, falls back to the address or hostname, and writes /tmp/secure/cn.txt. It supplies a certificate CN during setup, making DNS results and predictable-file permissions part of the identity trust boundary. IMM/CMM/bomber interfaces show Lenovo/IBM lineage; UNKNOWN whether /tmp/secure is root-only and PTR names are normalized.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">181. /lib/secure/scripts/provisioning/phase3-mcbasecert.sh</td>
+<td class="px-3 py-3 text-sm leading-6">On ITE systems, installs the provisioned MC key/certificate for the unified server endpoint, copies MC/CMM installed markers, and marks certificates active. It activates the management TLS identity, but trusts marker files as authoritative and can carry stale or partially written state across failures. CMM and legacy split-service comments show XCC lineage; UNKNOWN whether external certificates are always preserved.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">182. /lib/secure/scripts/provisioning/phase2boot.sh</td>
+<td class="px-3 py-3 text-sm leading-6">AAA launches this root-filesystem-stage entry point, which sources rfs.provisioning, creates /tmp/secure, and logs perform_platform_provisioning. It explicitly marks the boundary after which network and TTY access start, so unfinished work is no longer early-secure and may race parallel boot. Product boot glue; UNKNOWN operations remain inside the sourced implementation.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Direct
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">183. /lib/secure/scripts/provisioning/phase3ldap-certs.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Converts staged LDAP client certs and CRLs from PEM to DER, installs trust slots, chooses the external or CMM tc1 anchor, and seeds the CMM marker. It establishes phase-3 LDAP trust, but three declarations overwrite CERT_REVOKE_LIST_DER1, leaving DER2/DER3 undefined and potentially omitting CRLs. Nimitz/CMM provenance; UNKNOWN whether inherited environment variables mask the defect.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">184. /lib/secure/scripts/provisioning/phase3ldap-local.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Force-copies staged ldap-l.conf into secure storage and activates the local address, DN, password, binding, UID, StartTLS, and change signal. It provisions local/CMM authentication, but makes /tmp/secure/phase3 authoritative and inherits plaintext password logging. Nimitz-era XCC code; UNKNOWN how staged-file authenticity is established and whether failed activation can roll back.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">185. /lib/secure/scripts/provisioning/phase2activate_encryption.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Tests policies 100 and 705, then enables remote-presence authentication and media, video, and keyboard encryption through AIM. It establishes remote-console confidentiality during ITE boot, but depends on the non-obvious convention that a policy line ending in =0 means enabled. Avocent remote-presence integration; UNKNOWN whether absent policy entries retain secure defaults.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">186. /lib/secure/scripts/provisioning/setCertMgmtPolicy.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Reads mc_certificate_interfaces, enables or disables user LDAP certificate management, and removes .user_generated markers under /etc/certs when disallowed. It determines whether external credentials survive provisioning, but broad marker deletion and asymmetric missing-XML behavior can leave confusing active state. XCC service layout; UNKNOWN which daemon observes removal and when credentials actually change.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: Possible
+No IBM evidence</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">187. /avct/scripts/csr.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Interpolates caller DN fields into a temporary wolfSSL config, creates an RSA key/CSR, then decrypts the key with fixed passphrase password. It enables certificate enrollment, but predictable /tmp names, newline/config injection, a fixed passphrase, and an unencrypted final key create race and disclosure risks. Vertiv code; UNKNOWN caller sanitization, key-length policy, and output modes.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">188. /avct/scripts/tfaValidateUser.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Compares a presented smart-card certificate with its stored copy, optionally validates a CRL, then verifies the chain with wolfSSL. It enables certificate-based two-factor authentication, but unquoted paths, predictable adjacent temp files, and exact output-string matching create injection, race, and compatibility risks. Vertiv Smart Card/AD logic; UNKNOWN whether certificate directories are immutable and wolfSSL output is stable.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">189. /avct/scripts/validatesignedcert.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Writes RSA key and certificate moduli to fixed /tmp files, diffs them, and accepts an empty diff as a match. It verifies key correspondence before import, but leaves predictable sensitive files behind and does not validate chain, dates, purpose, or signature policy. Vertiv enrollment helper; UNKNOWN whether a later layer performs full validation.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">190. /avct/scripts/copyfile.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Accepts two paths, invokes cp, and returns success without checking cp's status. It exposes a generic AVCT file-copy primitive, delegating confinement, overwrite policy, ownership, and modes entirely to its caller. Vertiv proprietary boilerplate; UNKNOWN which privileged API invokes it and whether outer validation prevents arbitrary paths.</td>
+<td class="px-3 py-3 text-xs">Routine
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+<tr class="align-top border-t border-slate-200">
+<td class="px-3 py-3 font-mono text-xs text-slate-800">191. /avct/scripts/rmdir.sh</td>
+<td class="px-3 py-3 text-sm leading-6">Checks only for one argument and executes rm -rf on that caller-selected path. It exposes AVCT cleanup, but has no allowlist, canonicalization, mount protection, or guard against root-like targets, so safety exists only outside the script. Vertiv proprietary wrapper; UNKNOWN which API supplies paths and whether a sandbox makes dangerous targets impossible.</td>
+<td class="px-3 py-3 text-xs">High
+Cold: None shown
+IMM/management lineage</td>
+</tr>
+</tbody>
+</table>
+
+## Method, provenance, and sources
+
+The manifest contains 191 requested paths and the recovered archive contains the same 191 normalized paths. Archive: `work/lenovo-xcc/shell-script-audit/scripts.tar.gz`; SHA-256 `35c631100b4b6b12a534bbfa8626fc143f15d52f42b2e7cdea58910dc0195425`. The extracted scripts were reviewed statically; invoked proprietary binaries were not decompiled for this pass.
+
+Interest labels are triage, not exploitability ratings. “Sensitive” means the script can reach valuable state or a consequential control surface. “Unresolved” means evidence stops at an external binary/configuration/caller or ambiguous shell logic.
+
+- [Lenovo XCC introduction](https://pubs.lenovo.com/xcc/dw1lm_c_ch1_introduction) — XCC follows IMM2 and consolidates service processor, Super I/O, video, and remote presence.
+- [Lenovo IMM control commands](https://pubs.lenovo.com/xcc/dw1lm_c_immcontrolcommands) — current XCC documentation retains IMM terminology.
+- [Lenovo Press TCP/IP ports](https://lenovopress.lenovo.com/tips0511-tcpp-ports-xcc-cmm-imm2-management-processors) — service/port correlation for XCC, CMM, and IMM2.
+- [Local cold-vs-warm boot report](lenovo-xcc-cold-boot.md) — tested readiness chain and missing-hardware root cause.

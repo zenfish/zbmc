@@ -312,3 +312,15 @@ No state-changing power, reset, NMI, SMI, policy, inhibit, scheduling, watchdog,
 The disposable run used the same pinned kernel, DTB, initramfs, 64 MiB flash image, and SD rootfs as the working instance. Its sole material service difference was omitting `irmc_no_redfish`; QEMU drives remained in snapshot mode and the working `10.250.0.42` instance was untouched. `FTS_RedfishTaskMngr` started first, followed by the unmodified `FTS_RedfishService`. The service created `/var/tmp/RedfishServer.sock` and remained alive for minutes: PID 2113 had six threads, its main thread waited in `epoll_wait()`, and two `RedfishInitThre` workers waited in `poll_schedule_timeout`.
 
 At guest uptime 804.782 seconds, service thread PID 2116 faulted at virtual address `0x10`. The kernel identifies the PC as `fwinfo2_read+0x9c/0x238 [helper]` and records the complete read path from `sys_read` through `proc_reg_read`; the fatal exception then panicked the guest. This proves the delayed `FwInfo2` attribution under the single-FMC topology and also explains why a short health check can falsely suggest that restored Redfish is stable. The complete retained console is `work/irmc-redfish-repro/console.log`, SHA-256 `9ae9ca9cf9030388ed1a4a8ba863c6b0a586ab6da6a766fde5dbd612a6d0d1f4`. The disposable QEMU process exited after the panic and `ztap-rf0`, `ztap-rf1`, and `ztap-rf2` were removed.
+
+# Run the full post-Redfish regression suite
+
+- [x] Run every repository shell test on the supported x86_64 Linux host with the pinned Renode and Pandoc runtimes.
+- [x] Fix failures exposed by the complete run and restart the suite from the beginning.
+- [x] Recheck the retained Fujitsu VM's IPMI, Redfish, Web UI, resource completion, and static network evidence.
+
+## Review
+
+All `tests/*.sh` passed from a clean, isolated checkout on Debby. The run used the repository-pinned Renode 1.16.1 runtime and Pandoc 3.7.0.2. It exposed and corrected three unrelated stale test assumptions: BSD/GNU `sed -i` portability in the Advantech network helper, missing no-op probe-lock hooks in the isolated QEMU reroll fixture, and Lenovo's obsolete `BROKEN` warm-start expectation after matched TAP checkpoints became supported. The documentation contract also now has all 57 generated pairs and the canonical HTML README links to canonical HTML box pages.
+
+The retained Fujitsu acceptance VM remains live at `10.250.0.143`. Authenticated IPMI returns manufacturer `10368` and product `0x0666`; the Web UI and Redfish ServiceRoot return HTTP 200; ServiceRoot reports Redfish 1.15.0; unauthenticated Managers returns 401; authenticated Managers returns the expected 403 `PasswordChangeRequired`. Its log still proves `274/274` and `DM initialized and responsive`. The retained all-boot DHCPv4/v6 capture is a 24-byte empty pcap with SHA-256 `704e5e5b3234433c01fcfd1b20a306e77e985038120492dc53965c3edd38a4ea`.

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=265288f07e0b014f0d3c5b257ed95e7e4ec300395cd0d5afbe071a15f3cdd102 body-sha256=2ca4ef8fe61684a64104db9d92b99b16e5b856775b2d9b0fc3a12ac2f53e0008 -->
+<!-- zmd2html:auto source-sha256=e3c7c16d20de58f05e11a44dd28cd6c57c4388d68ab711094aa58f12a946d4c9 body-sha256=1d59b71e2045b4911b5b66b5325f1e4f5ba12a1cad084c538c6adb185d573746 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fix GitHub contract workflow</title>
@@ -907,6 +907,37 @@ Redfish is stable. The complete retained console is
 The disposable QEMU process exited after the panic and
 <code>ztap-rf0</code>, <code>ztap-rf1</code>, and <code>ztap-rf2</code>
 were removed.</p>
+<h1 id="run-the-full-post-redfish-regression-suite">Run the full
+post-Redfish regression suite</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Run every repository
+shell test on the supported x86_64 Linux host with the pinned Renode and
+Pandoc runtimes.</label></li>
+<li><label><input type="checkbox" checked="" />Fix failures exposed by
+the complete run and restart the suite from the beginning.</label></li>
+<li><label><input type="checkbox" checked="" />Recheck the retained
+Fujitsu VM's IPMI, Redfish, Web UI, resource completion, and static
+network evidence.</label></li>
+</ul>
+<h2 id="review-20">Review</h2>
+<p>All <code>tests/*.sh</code> passed from a clean, isolated checkout on
+Debby. The run used the repository-pinned Renode 1.16.1 runtime and
+Pandoc 3.7.0.2. It exposed and corrected three unrelated stale test
+assumptions: BSD/GNU <code>sed -i</code> portability in the Advantech
+network helper, missing no-op probe-lock hooks in the isolated QEMU
+reroll fixture, and Lenovo's obsolete <code>BROKEN</code> warm-start
+expectation after matched TAP checkpoints became supported. The
+documentation contract also now has all 57 generated pairs and the
+canonical HTML README links to canonical HTML box pages.</p>
+<p>The retained Fujitsu acceptance VM remains live at
+<code>10.250.0.143</code>. Authenticated IPMI returns manufacturer
+<code>10368</code> and product <code>0x0666</code>; the Web UI and
+Redfish ServiceRoot return HTTP 200; ServiceRoot reports Redfish 1.15.0;
+unauthenticated Managers returns 401; authenticated Managers returns the
+expected 403 <code>PasswordChangeRequired</code>. Its log still proves
+<code>274/274</code> and <code>DM initialized and responsive</code>. The
+retained all-boot DHCPv4/v6 capture is a 24-byte empty pcap with SHA-256
+<code>704e5e5b3234433c01fcfd1b20a306e77e985038120492dc53965c3edd38a4ea</code>.</p>
 </div>
 </body>
 </html>
