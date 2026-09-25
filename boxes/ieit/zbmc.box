@@ -7,7 +7,7 @@
 # their vendor daemons may log failures but are outside the management-service contract.
 ZBMC_NAME=ieit
 ZBMC_NETWORK_MODE=tap
-ZBMC_DESC="IEIT/Inspur NF5468M6 MegaRAC/AST2500 - SMASH/CLP, IPMI, Redfish, and vendor Web-UI"
+ZBMC_DESC="IEIT/Inspur NF5468M6 MegaRAC/AST2500 - Linux SSH, SMASH/CLP, IPMI, Redfish, and vendor Web-UI"
 
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
@@ -23,16 +23,16 @@ ZBMC_QEMU_MACHINE=ast2500-evb
 ZBMC_TAP=ztap-ieit
 ZBMC_MAC=52:54:00:fa:00:41
 ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
-ZBMC_REQUIRED_SERVICES="ipmi redfish webui"
+ZBMC_REQUIRED_SERVICES="ssh ipmi redfish webui"
 ZBMC_STABILITY_SECONDS=10
 ZBMC_READY_DEADLINE=300
 ZBMC_PROBE_AFTER_BOOTSTRAP=1
 ZBMC_EXPECTED_FIRMWARE=3
-ZBMC_TIMING_PROFILE=management-no-clp
+ZBMC_TIMING_PROFILE=management-with-ssh
 ZBMC_EXPECTED_BOOTSTRAP=90
 ZBMC_EXPECTED_READY=110
 
-SSH_USER=admin
+SSH_USER=sysadmin
 SSH_PW=admin
 SSH_PORT=22
 ZBMC_SSH_PROBE_TIMEOUT=15
@@ -86,10 +86,10 @@ zbmc_clp() {
     local opts=(-T -o ForwardX11=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
                 -o ConnectTimeout=8 -o LogLevel=ERROR -p "$SSH_PORT")
     if [ "$#" -eq 0 ]; then
-        exec sshpass -p "$SSH_PW" ssh "${opts[@]}" "$SSH_USER@$ZBMC_IP"
+        exec sshpass -p admin ssh "${opts[@]}" "admin@$ZBMC_IP"
     fi
     local output rc
-    output=$(sshpass -p "$SSH_PW" ssh "${opts[@]}" "$SSH_USER@$ZBMC_IP" "$@" 2>&1)
+    output=$(sshpass -p admin ssh "${opts[@]}" "admin@$ZBMC_IP" "$@" 2>&1)
     rc=$?
     if [ "$*" = 'echo up' ] && [ "$rc" = 0 ] && grep -q '/smashclp>' <<<"$output"; then
         echo up
@@ -100,8 +100,13 @@ zbmc_clp() {
 }
 
 zbmc_ssh() {
-    echo "IEIT SSH exposes SMASH/CLP, not a Unix shell; use: zbmc ieit clp" >&2
-    return 2
+    local opts=(-o ForwardX11=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+                -o ConnectTimeout=8 -o LogLevel=ERROR -p "$SSH_PORT")
+    exec sshpass -p "$SSH_PW" ssh "${opts[@]}" "$SSH_USER@$ZBMC_IP" "$@"
+}
+
+zbmc_ssh_health() {
+    [ "$(zbmc_ssh 'printf zbmc-ieit-linux-shell')" = zbmc-ieit-linux-shell ]
 }
 
 zbmc_ipmi() {

@@ -26,6 +26,20 @@ find "$ROOT/zbmc-seed/conf" -type f -exec chmod 0644 {} +
 find "$ROOT/zbmc-seed/conf" -type f \
     \( -name '*key*' -o -name '*.pem' -o -name '*.p12' \) -exec chmod 0600 {} +
 
+# Preserve admin's vendor SMASH/CLP login while enabling the existing local
+# sysadmin account as the lab-only Linux SSH account.
+sed 's#^\(sysadmin:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\)[^:]*$#\1/bin/sh#' \
+    "$ROOT/zbmc-seed/conf/passwd" >"$ROOT/zbmc-seed/conf/passwd.zbmc"
+mv "$ROOT/zbmc-seed/conf/passwd.zbmc" "$ROOT/zbmc-seed/conf/passwd"
+sed 's#^sysadmin:[^:]*:#sysadmin:$6$zbmc$e8RRaRJYIBckhkS.8cl3x12b7ePUnamIBAw8OwghrAubNKkSBU5sbbTHxm.0kTl7WR8.45jfJz9JqsUK0GL9v1:#' \
+    "$ROOT/zbmc-seed/conf/shadow" >"$ROOT/zbmc-seed/conf/shadow.zbmc"
+mv "$ROOT/zbmc-seed/conf/shadow.zbmc" "$ROOT/zbmc-seed/conf/shadow"
+sed '/^DenyUsers[[:space:]][[:space:]]*sysadmin[[:space:]]*$/d' \
+    "$ROOT/zbmc-seed/conf/ssh_server_config" \
+    >"$ROOT/zbmc-seed/conf/ssh_server_config.zbmc"
+mv "$ROOT/zbmc-seed/conf/ssh_server_config.zbmc" \
+    "$ROOT/zbmc-seed/conf/ssh_server_config"
+
 mv "$ROOT/etc/init.d/mountall.sh" "$ROOT/etc/init.d/mountall.vendor.sh"
 install -m 0755 "$HERE/rootfs-overlay/zbmc-runtime.sh" "$ROOT/etc/init.d/zbmc-runtime.sh"
 install -m 0755 "$HERE/rootfs-overlay/mountall-wrapper.sh" "$ROOT/etc/init.d/mountall.sh"
@@ -94,6 +108,11 @@ for link in \
 done
 grep -q 'zbmc-runtime.sh' "$VERIFY/etc/init.d/mountall.sh"
 test -f "$VERIFY/zbmc-seed/conf/BMC1/wolfpass/IPMI.conf"
+grep -q '^sysadmin:x:0:0:sysadmin:/root:/bin/sh$' \
+    "$VERIFY/zbmc-seed/conf/passwd"
+grep -q '^sysadmin:\$6\$zbmc\$' "$VERIFY/zbmc-seed/conf/shadow"
+! grep -q '^DenyUsers[[:space:]]\+sysadmin' \
+    "$VERIFY/zbmc-seed/conf/ssh_server_config"
 grep -q '^auto eth1$' "$VERIFY/zbmc-seed/conf/interfaces"
 test -f "$VERIFY/usr/local/www/index.html"
 test -f "$VERIFY/usr/local/www/source.min.js"

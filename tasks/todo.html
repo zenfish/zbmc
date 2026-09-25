@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=e3c7c16d20de58f05e11a44dd28cd6c57c4388d68ab711094aa58f12a946d4c9 body-sha256=1d59b71e2045b4911b5b66b5325f1e4f5ba12a1cad084c538c6adb185d573746 -->
+<!-- zmd2html:auto source-sha256=94dc8200ec848b2687ecfa07bbb6d4bbbae98c560d19b7d8cbc9657dd3772236 body-sha256=ca9e831db03a39831042fb329d802da7bfb5c0367762abfd346c5577d64b68f5 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fix GitHub contract workflow</title>
+<title>Restore IEIT Linux SSH while preserving vendor CLP</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 <style type="text/tailwindcss">
@@ -41,10 +41,55 @@
 <div class="-mx-6 md:-mx-8 -mt-10 mb-7 px-6 md:px-8 py-5 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 rounded-t-lg flex items-center gap-3">
   <i class="fa-solid fa-file-lines text-2xl md:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.75)]"></i>
   <div>
-    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Fix GitHub contract workflow</h1>
+    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Restore IEIT Linux SSH while preserving vendor CLP</h1>
   </div>
 </div>
 
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Recover the old
+authenticated SSH/SMASH evidence and readiness timings.</label></li>
+<li><label><input type="checkbox" checked="" />Trace sshd, PAM/NSS,
+account shells, and first-boot host-key generation.</label></li>
+<li><label><input type="checkbox" checked="" />Preserve
+<code>admin/admin</code> as the vendor SMASH/CLP login.</label></li>
+<li><label><input type="checkbox" checked="" />Enable the existing
+<code>sysadmin</code> account as the Linux SSH login.</label></li>
+<li><label><input type="checkbox" checked="" />Cold-build and prove
+remote commands, interactive shell, CLP, IPMI, Redfish, and Web
+UI.</label></li>
+<li><label><input type="checkbox" checked="" />Document, run the focused
+and full tests, commit, and push.</label></li>
+</ul>
+<h2 id="review">Review</h2>
+<p>Old evidence and a fresh baseline cold boot prove that the preserved
+OpenSSH service accepts <code>admin/admin</code> and launches the vendor
+<code>/usr/local/bin/smashclp</code>; the fresh scripted session reached
+the <code>/smashclp&gt;</code> prompt, ran <code>help</code>, and exited
+cleanly. Static analysis traced <code>admin</code> through the IPMI
+NSS/PAM path and found the separate local UID-0 <code>sysadmin</code>
+account blocked by both <code>DenyUsers sysadmin</code> and its
+console-selecting <code>defshell</code>.</p>
+<p>The rebuilt configuration leaves <code>admin</code> and SMASH
+unchanged, changes only <code>sysadmin</code> to <code>/bin/sh</code>,
+gives it the standard lab password, and removes the sshd deny rule. The
+box's SSH health probe executes a remote command and requires an exact
+marker, while <code>zbmc ieit clp</code> continues to use the vendor
+account.</p>
+<p>Disposable Debby run
+<code>20260925T041721Z-00eb58d3-f570-437d-b666-60a716edfabe</code>
+cold-built the image and reached READY for all five required network
+services at <code>10.250.0.41</code> in 124 seconds, with the console
+available. Remote-command and forced-PTY sessions both returned
+<code>uid=0(sysadmin)</code>, <code>/bin/sh</code>, and the requested
+markers; the separate <code>admin</code> session reached
+<code>/smashclp&gt;</code>, ran <code>help</code>, and exited.
+Authenticated IPMI returned product <code>0x0202</code>, Redfish
+reported version 1.8.0, and the Web UI returned HTTP 200. The stopped
+run is preserved under
+<code>/home/zen/src/oob/zbmc/work/ieit/runs/</code> on Debby. The
+focused checks and the complete Linux <code>tests/run</code> suite pass,
+including all 57 documentation pairs.</p>
+<h1 id="fix-github-contract-workflow">Fix GitHub contract workflow</h1>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="" />Inspect the original and
 follow-up GitHub Actions logs.</label></li>
@@ -61,7 +106,7 @@ generated-file, and multiple-file selection.</label></li>
 <li><label><input type="checkbox" checked="" />Verify focused and full
 contract suites and inspect the final diff.</label></li>
 </ul>
-<h2 id="review">Review</h2>
+<h2 id="review-1">Review</h2>
 <p>The iLO5 firmware-unpacking CI test failed because Airbus's iLO5
 decryption scripts import <code>Crypto.Cipher.AES</code>, while the
 clean runner lacked that Python namespace. Two follow-up runs proved
@@ -92,7 +137,7 @@ Markdown operator documentation.</label></li>
 <li><label><input type="checkbox" checked="" />Cold-boot and verify the
 60-second stability hold on Debby.</label></li>
 </ul>
-<h2 id="review-1">Review</h2>
+<h2 id="review-2">Review</h2>
 <p>The Lenovo XCC runtime preserves the vendor kernel and root
 filesystem, adds the minimum platform emulation required for the
 FPGA/eMMC startup path, and declares only the reproduced vendor WebUI.
@@ -107,7 +152,7 @@ AST2600 watchdog remains modeled. The cold readiness deadline is 60
 minutes. The focused runtime test, full repository suite, and all
 documentation pairs pass.</p>
 <h1 id="ilo5-svcsilo-bring-up">iLO5 svcsILO bring-up</h1>
-<h2 id="review-2">Review</h2>
+<h2 id="review-3">Review</h2>
 <p>The live Debby run in
 <code>work/ilo5-debby-attempt-139/renode.log</code> proved the tracked
 <code>gxp_dev.py</code> fix is on-path and changes behavior in the
@@ -137,7 +182,7 @@ zBMC.</label></li>
 <li><label><input type="checkbox" checked="" />Create a TAP-native
 checkpoint and validate the warm restore through zBMC.</label></li>
 </ul>
-<h2 id="review-3">Review</h2>
+<h2 id="review-4">Review</h2>
 <p>Cold run
 <code>20260910T212003Z-12971c7d-88e8-4f8c-a19f-b87aa4a6a6ce</code>
 reached READY for ICMP, SSH, authenticated IPMI <code>mc info</code>,
@@ -163,7 +208,7 @@ recipes, including packed-only and format caveats.</label></li>
 <li><label><input type="checkbox" checked="" />Add index pages for boxes
 that previously had no operator page.</label></li>
 </ul>
-<h2 id="review-4">Review</h2>
+<h2 id="review-5">Review</h2>
 <p>All eleven BMCs now have an extraction recipe. Local SquashFS probes
 passed for OpenBMC, NVIDIA OpenBMC, Supermicro X14, iDRAC9, and iDRAC10
 at the documented offsets. The recipes leave boot artifacts unchanged;
@@ -180,7 +225,7 @@ every mountable filesystem from raw or qcow2 images.</label></li>
 Fujitsu discovery-only page text with the runnable
 extractor.</label></li>
 </ul>
-<h2 id="review-5">Review</h2>
+<h2 id="review-6">Review</h2>
 <p>The remaining partition-image cases now have an actionable command.
 The extractor is read-only, refuses to overwrite an existing output
 tree, and leaves unknown/swap/boot metadata packed. It requires
@@ -197,7 +242,7 @@ Web UI, both configuration copies, and DRE JFFS2.</label></li>
 <li><label><input type="checkbox" checked="" />Document both MegaRAC
 configuration JFFS2 copies and the X14 initramfs.</label></li>
 </ul>
-<h2 id="review-6">Review</h2>
+<h2 id="review-7">Review</h2>
 <p>The per-box recipes now cover every filesystem region identified by
 the checked-in build and boot recipes. Partition images use the new
 read-only discovery extractor; embedded regions use their recorded
@@ -217,7 +262,7 @@ report with every manifest path represented exactly once.</label></li>
 <li><label><input type="checkbox" checked="" />Verify HTML parsing,
 catalog coverage, and repository whitespace.</label></li>
 </ul>
-<h2 id="review-7">Review</h2>
+<h2 id="review-8">Review</h2>
 <p>The recovered archive contains exactly the 191 requested paths and
 has SHA-256
 <code>35c631100b4b6b12a534bbfa8626fc143f15d52f42b2e7cdea58910dc0195425</code>.
@@ -267,7 +312,7 @@ Tailwind HTML reports.</label></li>
 structure, evidence claims, repository checks, and commit the
 result.</label></li>
 </ul>
-<h2 id="review-8">Review</h2>
+<h2 id="review-9">Review</h2>
 <p>Static analysis of the XCC 6.92 SquashFS now separates seven
 mechanisms that earlier shell-only evidence blurred together: diagnostic
 NMI, fixed RTC-sync SMI, the queued SMI device, nonce-authenticated
@@ -335,7 +380,7 @@ durable Lenovo reports.</label></li>
 <li><label><input type="checkbox" checked="" />Stamp, validate, and
 commit the report update.</label></li>
 </ul>
-<h2 id="review-9">Review</h2>
+<h2 id="review-10">Review</h2>
 <p><code>hub_reset.sh</code> is CPU-mediated BMC MMIO, not DMA, and
 0x40800000 remains an unidentified vendor block. The actual Lenovo
 host-DMA candidate is the AST2600 X-DMA engine at 0x1e6e7000. Lenovo
@@ -398,7 +443,7 @@ boot.</label></li>
 assets, HTTP redirect, SSH, Redfish session creation, and RMCP+
 IPMI.</label></li>
 </ul>
-<h2 id="review-10">Review</h2>
+<h2 id="review-11">Review</h2>
 <p>The exact HD build completed under macOS/QEMU 11.0.0 and the firmware
 reached runlevel 3, serial login, <code>IPMIMain</code>, and
 <code>FTS_WebServer</code>. The published launcher is not turnkey: it
@@ -469,7 +514,7 @@ HTTPS.</label></li>
 <li><label><input type="checkbox" checked="" />Update operator
 documentation and commit the verified fix.</label></li>
 </ul>
-<h2 id="review-11">Review</h2>
+<h2 id="review-12">Review</h2>
 <p>The cold-boot hook runs immediately before <code>IPMIMain</code>. It
 creates the two observed default INIs only when absent, enables only
 management <code>eth0</code>, enables dynamic LAN support, and removes
@@ -512,7 +557,7 @@ command runner for BMC-originated ICMP tests.</label></li>
 evidence under <code>/home/zen/xcc-shell-audit-20260922/</code> and the
 managed run log.</label></li>
 </ul>
-<h2 id="review-12">Review</h2>
+<h2 id="review-13">Review</h2>
 <p>The existing zBMC status probe reports the live iRMC run READY with
 ICMP, authenticated RMCP+ IPMI, and HTTP 200 HTTPS responses from Debby.
 The retained serial command runner then submitted one marked command
@@ -549,7 +594,7 @@ logfile-mode regression coverage.</label></li>
 <li><label><input type="checkbox" checked="" />Validate both directions
 against the live Fujitsu iRMC.</label></li>
 </ul>
-<h2 id="review-13">Review</h2>
+<h2 id="review-14">Review</h2>
 <p><code>tools/zbmc-connectivity</code> now provides <code>probe</code>,
 <code>serve</code>, and <code>guest-command</code> operations without
 embedding credentials. <code>tools/zbmc-serial-capture</code> sends a
@@ -587,7 +632,7 @@ without overclaiming.</label></li>
 <li><label><input type="checkbox" checked="" />Publish and verify a
 durable Tailwind HTML report and generated Markdown pair.</label></li>
 </ul>
-<h2 id="review-14">Review</h2>
+<h2 id="review-15">Review</h2>
 <p>The first retained run proves that <code>IPMIMain</code> existed by
 guest uptime 51.852 seconds, unanswered Open Session probes continued
 through elapsed 218.807 seconds, and the first RMCP+ Open Session
@@ -665,7 +710,7 @@ survival past delayed LAN restart.</label></li>
 report, stamp/sync artifacts, run focused checks, and
 commit.</label></li>
 </ul>
-<h2 id="review-15">Review</h2>
+<h2 id="review-16">Review</h2>
 <p>The version-21 derived initramfs configures Fujitsu LAN object 0
 before <code>IPMIMain</code> starts: static IPv4
 <code>10.250.0.143/8</code>, gateway <code>10.0.0.1</code>, IPv4
@@ -707,7 +752,7 @@ evidence.</label></li>
 register the new immutable ownership capture, and run focused
 verification.</label></li>
 </ul>
-<h2 id="review-16">Review</h2>
+<h2 id="review-17">Review</h2>
 <p>The valid EABI5 trace covers the tail of entry 162 through entry 170.
 For entry 163 it records 40 reads of
 <code>MemoryMetrics_def.json</code>, 40 generated
@@ -769,7 +814,7 @@ in the report.</label></li>
 pair, verify the focused runtime/docs checks, and commit the
 correction.</label></li>
 </ul>
-<h2 id="review-17">Review</h2>
+<h2 id="review-18">Review</h2>
 <p>The report now traces every retained Device ID, chassis, channel,
 LAN, user, and SEL response field to the selected runtime handler, the
 exact expression or copy offset, and its constant, file, mutable object,
@@ -811,7 +856,7 @@ issuing state-changing commands.</label></li>
 durable power-first OEM command matrix with evidence paths, hashes, and
 explicit unknowns.</label></li>
 </ul>
-<h2 id="review-18">Review</h2>
+<h2 id="review-19">Review</h2>
 <p>The power-first report at
 <code>boxes/irmc-fujitsu/oem-power-map.html</code> covers all 160
 recovered Fujitsu table records (148 active, 135 distinct wire
@@ -882,7 +927,7 @@ interfaces.</label></li>
 overview with the delayed failure timing and exact read/backtrace
 path.</label></li>
 </ul>
-<h2 id="review-19">Review</h2>
+<h2 id="review-20">Review</h2>
 <p>The disposable run used the same pinned kernel, DTB, initramfs, 64
 MiB flash image, and SD rootfs as the working instance. Its sole
 material service difference was omitting <code>irmc_no_redfish</code>;
@@ -919,7 +964,7 @@ the complete run and restart the suite from the beginning.</label></li>
 Fujitsu VM's IPMI, Redfish, Web UI, resource completion, and static
 network evidence.</label></li>
 </ul>
-<h2 id="review-20">Review</h2>
+<h2 id="review-21">Review</h2>
 <p>All <code>tests/*.sh</code> passed from a clean, isolated checkout on
 Debby. The run used the repository-pinned Renode 1.16.1 runtime and
 Pandoc 3.7.0.2. It exposed and corrected three unrelated stale test

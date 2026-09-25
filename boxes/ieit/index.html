@@ -9,10 +9,31 @@
 <body class="bg-slate-100 text-slate-800">
 <main class="max-w-5xl mx-auto bg-white p-8 my-6 shadow-lg rounded-lg">
 <h1 class="text-3xl font-bold mb-3">IEIT / Inspur</h1>
-<p class="mb-5">The AST2500 runtime exposes IPMI, Redfish, and the vendor Web UI. Its optional SSH
-transport runs SMASH/CLP, not a Unix shell. See the
-<a class="text-blue-700 underline" href="../../README.html#copying-files-into-a-bmc">shared file-transfer guide</a>
-for boxes with an established live Linux shell.</p>
+<p class="mb-5">The AST2500 runtime exposes Linux SSH, the vendor SMASH/CLP console, IPMI,
+Redfish, and the vendor Web UI. The build keeps the original OpenSSH daemon and separates its two
+roles: <code>sysadmin/admin</code> enters BusyBox Linux, while <code>admin/admin</code> retains the
+vendor SMASH/CLP management interface.</p>
+<h2 class="text-xl font-semibold mt-6 mb-2">SSH and SMASH/CLP</h2>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc ieit ssh
+sudo ./tools/zbmc ieit ssh 'id; uname -a'
+sudo ./tools/zbmc ieit clp</code></pre>
+<p class="mt-3">These commands use the same preserved port-22 OpenSSH service but different
+accounts. The firmware synthesizes <code>admin</code> through its IPMI NSS/PAM modules and launches
+<code>/usr/local/bin/smashclp</code>. The local UID-0 <code>sysadmin</code> account originally used
+<code>/usr/local/bin/defshell</code> and was explicitly blocked by <code>DenyUsers sysadmin</code>.
+The rebuilt lab image changes only that local account to <code>/bin/sh</code>, assigns the standard
+lab password, and removes its deny rule. It does not replace sshd, PAM, NSS, or SMASH.</p>
+<p class="mt-3">The health check runs a command through the Linux account and requires the exact
+marker <code>zbmc-ieit-linux-shell</code>. A TCP banner or successful SMASH prompt is not accepted as
+proof of a Linux shell.</p>
+<h3 class="text-lg font-semibold mt-5 mb-2">Why old runs called SSH unreliable</h3>
+<p>The original image contains no host keys. <code>/etc/init.d/ssh-main</code> backgrounds key
+generation, and the vendor script generates both RSA and DSA keys before starting sshd. Retained
+Debby runs reached authenticated SMASH at 134 and 282 seconds; other runs timed out waiting for SSH
+after IPMI, Redfish, and the Web UI were already ready. Commit <code>3cc7498</code> consequently
+removed SSH from required readiness and renamed it CLP. That was a readiness classification, not
+evidence that OpenSSH was absent. The current health contract restores SSH only after testing an
+actual remote Linux command.</p>
 <h2 id="copying-files" class="text-xl font-semibold mt-6 mb-2">Copying files into the cold image</h2>
 <p>For this box, insert your file during the existing rootfs build. This is a local customization of
 the build recipe; dropping files beside the firmware does not insert them automatically.</p>
@@ -32,11 +53,10 @@ existing 35 MiB ramdisk-size check. Verify the published CramFS after rebuilding
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>verify_dir=$(mktemp -d)
 fakeroot -- fsck.cramfs --extract="$verify_dir" work/ieit/service-rootfs.cramfs
 cksum boxes/ieit/my-tool "$verify_dir/usr/local/bin/my-tool"</code></pre>
-<p class="mt-3">This installs <code>/usr/local/bin/my-tool</code> in the cold image; it does not execute
-it or create a shell. To run it automatically, you would also need an intentional startup-hook change.
-The serial socket is available through <code>sudo ./tools/zbmc ieit console</code>, but a usable Linux
-login there has not been established. Keep the executable and build edit locally so they can be
-reapplied; the original pinned vendor download should remain unchanged.</p>
+<p class="mt-3">This installs <code>/usr/local/bin/my-tool</code> in the cold image. After rebuilding,
+run it through <code>sudo ./tools/zbmc ieit ssh /usr/local/bin/my-tool</code>. To run it automatically,
+you would still need an intentional startup-hook change. The serial socket remains available through
+<code>sudo ./tools/zbmc ieit console</code>. Keep the original pinned vendor download unchanged.</p>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
 <p>The build publishes a CramFS service root. Extract it under <code>work/ieit/fs</code> and preserve its metadata with <code>fakeroot</code>:</p>
 <pre><code>mkdir -p work/ieit/fs

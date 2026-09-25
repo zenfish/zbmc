@@ -1,8 +1,22 @@
-<!-- html2md:auto source=boxes/ieit/index.html source-sha256=b73ab4303f4eaec8f5d5cec90b69cc06729d561b5341f8332d0683f676ff3c73 body-sha256=1ff33b1d5b222d4e93837d0b72d14bd28422182a7e9e0ddef0815f1c4d9bb8e4 -->
+<!-- html2md:auto source=boxes/ieit/index.html source-sha256=f9fab7e6523672914967fd27b16aa59d1bf5dc9878bb421d8a7d423e2cf5f208 body-sha256=b83a49f79767167c1f98d747925b27dea6ab18fd2a924106db655fa1821d567d -->
 
 # IEIT / Inspur
 
-The AST2500 runtime exposes IPMI, Redfish, and the vendor Web UI. Its optional SSH transport runs SMASH/CLP, not a Unix shell. See the [shared file-transfer guide](../../README.md#copying-files-into-a-bmc) for boxes with an established live Linux shell.
+The AST2500 runtime exposes Linux SSH, the vendor SMASH/CLP console, IPMI, Redfish, and the vendor Web UI. The build keeps the original OpenSSH daemon and separates its two roles: `sysadmin/admin` enters BusyBox Linux, while `admin/admin` retains the vendor SMASH/CLP management interface.
+
+## SSH and SMASH/CLP
+
+    sudo ./tools/zbmc ieit ssh
+    sudo ./tools/zbmc ieit ssh 'id; uname -a'
+    sudo ./tools/zbmc ieit clp
+
+These commands use the same preserved port-22 OpenSSH service but different accounts. The firmware synthesizes `admin` through its IPMI NSS/PAM modules and launches `/usr/local/bin/smashclp`. The local UID-0 `sysadmin` account originally used `/usr/local/bin/defshell` and was explicitly blocked by `DenyUsers sysadmin`. The rebuilt lab image changes only that local account to `/bin/sh`, assigns the standard lab password, and removes its deny rule. It does not replace sshd, PAM, NSS, or SMASH.
+
+The health check runs a command through the Linux account and requires the exact marker `zbmc-ieit-linux-shell`. A TCP banner or successful SMASH prompt is not accepted as proof of a Linux shell.
+
+### Why old runs called SSH unreliable
+
+The original image contains no host keys. `/etc/init.d/ssh-main` backgrounds key generation, and the vendor script generates both RSA and DSA keys before starting sshd. Retained Debby runs reached authenticated SMASH at 134 and 282 seconds; other runs timed out waiting for SSH after IPMI, Redfish, and the Web UI were already ready. Commit `3cc7498` consequently removed SSH from required readiness and renamed it CLP. That was a readiness classification, not evidence that OpenSSH was absent. The current health contract restores SSH only after testing an actual remote Linux command.
 
 ## Copying files into the cold image
 
@@ -27,7 +41,7 @@ The builder runs under `fakeroot` to preserve firmware metadata, rebuilds CramFS
     fakeroot -- fsck.cramfs --extract="$verify_dir" work/ieit/service-rootfs.cramfs
     cksum boxes/ieit/my-tool "$verify_dir/usr/local/bin/my-tool"
 
-This installs `/usr/local/bin/my-tool` in the cold image; it does not execute it or create a shell. To run it automatically, you would also need an intentional startup-hook change. The serial socket is available through `sudo ./tools/zbmc ieit console`, but a usable Linux login there has not been established. Keep the executable and build edit locally so they can be reapplied; the original pinned vendor download should remain unchanged.
+This installs `/usr/local/bin/my-tool` in the cold image. After rebuilding, run it through `sudo ./tools/zbmc ieit ssh /usr/local/bin/my-tool`. To run it automatically, you would still need an intentional startup-hook change. The serial socket remains available through `sudo ./tools/zbmc ieit console`. Keep the original pinned vendor download unchanged.
 
 ## Extracting the filesystem
 

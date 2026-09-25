@@ -149,8 +149,8 @@ animal's box material.</p>
 </tr>
 <tr>
 <td><strong><a href="boxes/ieit/">ieit</a></strong></td>
-<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
-<td>Cold ✅; Warm ❌</td><td>The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract.</td>
+<td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-24 reached READY for all five required network services in 124 seconds, with console available; <code>sysadmin/admin</code> provides BusyBox Linux while <code>admin/admin</code> retains SMASH/CLP.</td>
 </tr>
 <tr>
 <td><strong><a href="boxes/irmc-fujitsu/index.html">irmc-fujitsu</a></strong></td>
@@ -235,7 +235,7 @@ guest interface that box actually exposes. A host-side file in
 <code>work/&lt;box&gt;/</code> is not automatically visible inside the guest;
 there is no generic <code>zbmc push</code> command. Use <code>/tmp</code> for
 uploads and verify a checksum before executing:</p>
-<pre><code># Linux-shell boxes: openbmc, nvidia-obmc, idrac9, idrac10, supermicro-x14
+<pre><code># Linux-shell boxes: openbmc, nvidia-obmc, idrac9, idrac10, ieit, supermicro-x14
 box=openbmc
 sudo ./tools/zbmc "$box" start       # omit if already running
 ./tools/zbmc "$box" ssh -T 'cat &gt; /tmp/my-tool' &lt; ./my-tool
@@ -255,8 +255,7 @@ from the guest using <code>wget http://10.0.2.2:8765/my-tool</code>.
 iRMC uses <code>192.168.2.2</code>; Advantech has no usable external
 network. X10 prefers paced base64 chunks over its serial console because
 its SSH wrapper consumes stdin for commands and larger network transfers
-can destabilize the old guest driver. IEIT SSH is SMASH/CLP rather than a
-Unix shell; Lenovo XCC has no established arbitrary-file transfer path.
+can destabilize the old guest driver. Lenovo XCC has no established arbitrary-file transfer path.
 MegaRAC's injected SSH requires the explicit isolated-lab opt-in; its
 <code>shell</code> verb starts a separate no-network VM.</p>
 <p>Uploads to <code>/tmp</code> and writable QEMU overlays are disposable and

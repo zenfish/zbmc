@@ -1,3 +1,34 @@
+# Restore IEIT Linux SSH while preserving vendor CLP
+
+- [x] Recover the old authenticated SSH/SMASH evidence and readiness timings.
+- [x] Trace sshd, PAM/NSS, account shells, and first-boot host-key generation.
+- [x] Preserve `admin/admin` as the vendor SMASH/CLP login.
+- [x] Enable the existing `sysadmin` account as the Linux SSH login.
+- [x] Cold-build and prove remote commands, interactive shell, CLP, IPMI, Redfish, and Web UI.
+- [x] Document, run the focused and full tests, commit, and push.
+
+## Review
+
+Old evidence and a fresh baseline cold boot prove that the preserved OpenSSH service accepts
+`admin/admin` and launches the vendor `/usr/local/bin/smashclp`; the fresh scripted session reached
+the `/smashclp>` prompt, ran `help`, and exited cleanly. Static analysis traced `admin` through the
+IPMI NSS/PAM path and found the separate local UID-0 `sysadmin` account blocked by both
+`DenyUsers sysadmin` and its console-selecting `defshell`.
+
+The rebuilt configuration leaves `admin` and SMASH unchanged, changes only `sysadmin` to `/bin/sh`,
+gives it the standard lab password, and removes the sshd deny rule. The box's SSH health probe
+executes a remote command and requires an exact marker, while `zbmc ieit clp` continues to use the
+vendor account.
+
+Disposable Debby run `20260925T041721Z-00eb58d3-f570-437d-b666-60a716edfabe` cold-built the image
+and reached READY for all five required network services at `10.250.0.41` in 124 seconds, with the
+console available. Remote-command and forced-PTY sessions both returned `uid=0(sysadmin)`, `/bin/sh`,
+and the requested markers; the separate `admin` session
+reached `/smashclp>`, ran `help`, and exited. Authenticated IPMI returned product `0x0202`, Redfish
+reported version 1.8.0, and the Web UI returned HTTP 200. The stopped run is preserved under
+`/home/zen/src/oob/zbmc/work/ieit/runs/` on Debby. The focused checks and the complete Linux
+`tests/run` suite pass, including all 57 documentation pairs.
+
 # Fix GitHub contract workflow
 
 - [x] Inspect the original and follow-up GitHub Actions logs.

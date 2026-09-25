@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=e3fcf370e0392ce5b2dc3a462dc1da070d73fbcf91da3d96f95a27691b5db509 body-sha256=912c291264e133d24d04a2522b02b2a3ad4038346dbf60e2391c56d7c7b7cc6e -->
+<!-- html2md:auto source=README.html source-sha256=56f3e9aae48eeaf641d80338113d884d08dc733b39692c9afeb937aa47a5bc80 body-sha256=7fc9cacc8e908979c464de8eaf6a480341e30fc6a1b4a606719701d2ba2c6977 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 
@@ -31,7 +31,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[advantech-asmb787](boxes/advantech-asmb787/)** | TAP / direct L2 | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | Cold ✅; Warm ❌ | TAP and the Web-UI answer; SSH grants no usable shell, IPMI authentication fails, Redfish is only a service root, and console PAM login fails. |
 | **[idrac10](boxes/idrac10/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
-| **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | The SSH endpoint is a management command shell, not a Unix shell, and is not in the current contract. |
+| **[ieit](boxes/ieit/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-24 reached READY for all five required network services in 124 seconds, with console available; `sysadmin/admin` provides BusyBox Linux while `admin/admin` retains SMASH/CLP. |
 | **[irmc-fujitsu](boxes/irmc-fujitsu/index.md)** | TAP / direct L2 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-23 returned authenticated Fujitsu RMCP+ `mc info` and HTTP 200 from the iRMC S6 Webserver; Redfish remains disabled because its helper crashes under the reduced QEMU topology. |
 | **[lenovo-xcc](boxes/lenovo-xcc/index.md)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ❌; Warm ✅ | Managed TAP `start --warm` reached six-service READY on 2026-09-14 in 189s after Lenovo-only serialized probe scheduling. Three live `zbmc lenovo-xcc -v` checks passed 6/6 while the health watcher was active, and the run history had zero degraded/probe-busy/IPMI-read-failed samples. The matched checkpoint is installed privately on Debby, not published (disk/RAM contain account state); pre-TAP checkpoints are rejected. Cold readiness still fails: only ICMP and Console passed its one-hour window. |
 | **[supermicro-x14](boxes/supermicro-x14/)** | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc supermicro-x14 status -v`; no warm checkpoint is published. |
@@ -79,7 +79,7 @@ Every fetched artifact is SHA-256 verified. `firmware/download-fw.sh` reports wh
 
 Copy a script, executable, or data file into a running BMC through the guest interface that box actually exposes. A host-side file in `work/<box>/` is not automatically visible inside the guest; there is no generic `zbmc push` command. Use `/tmp` for uploads and verify a checksum before executing:
 
-    # Linux-shell boxes: openbmc, nvidia-obmc, idrac9, idrac10, supermicro-x14
+    # Linux-shell boxes: openbmc, nvidia-obmc, idrac9, idrac10, ieit, supermicro-x14
     box=openbmc
     sudo ./tools/zbmc "$box" start       # omit if already running
     ./tools/zbmc "$box" ssh -T 'cat > /tmp/my-tool' < ./my-tool
@@ -89,7 +89,7 @@ Copy a script, executable, or data file into a running BMC through the guest int
 
 The input redirection supplies bytes from the host; the quoted command runs inside the BMC. `-T` preserves binary stdin. This uses SSH and guest `cat`, so it does not require SFTP or guest `scp`. Build executables for the guest architecture and ABI; check with `uname -m` and `file`. iDRAC10 is AArch64; the other current images are 32-bit ARM, with X10 requiring ARMv5-compatible code.
 
-For a Linux console with guest networking, serve a file from the host with `python3 -m http.server 8765 --bind 127.0.0.1` and fetch it from the guest using `wget http://10.0.2.2:8765/my-tool`. iRMC uses `192.168.2.2`; Advantech has no usable external network. X10 prefers paced base64 chunks over its serial console because its SSH wrapper consumes stdin for commands and larger network transfers can destabilize the old guest driver. IEIT SSH is SMASH/CLP rather than a Unix shell; Lenovo XCC has no established arbitrary-file transfer path. MegaRAC's injected SSH requires the explicit isolated-lab opt-in; its `shell` verb starts a separate no-network VM.
+For a Linux console with guest networking, serve a file from the host with `python3 -m http.server 8765 --bind 127.0.0.1` and fetch it from the guest using `wget http://10.0.2.2:8765/my-tool`. iRMC uses `192.168.2.2`; Advantech has no usable external network. X10 prefers paced base64 chunks over its serial console because its SSH wrapper consumes stdin for commands and larger network transfers can destabilize the old guest driver. Lenovo XCC has no established arbitrary-file transfer path. MegaRAC's injected SSH requires the explicit isolated-lab opt-in; its `shell` verb starts a separate no-network VM.
 
 Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a fresh cold boot; a warm checkpoint restores its captured state. For repeatable experiments, replay the transfer after startup. To bake a file into a cold image, use that box's existing build/repack recipe and keep custom images separate from pinned vendor inputs.
 
