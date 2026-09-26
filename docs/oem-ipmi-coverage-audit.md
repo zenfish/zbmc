@@ -1,4 +1,4 @@
-<!-- html2md:auto source=docs/oem-ipmi-coverage-audit.html source-sha256=36d086ea55ae0aff6afb4719318a890e8df55e40910e7106314703aa6e815b8a body-sha256=3a3e806eed08cf0406349ae4e79cf52aeb2d3901d22d43200152377ff2dc2d85 -->
+<!-- html2md:auto source=docs/oem-ipmi-coverage-audit.html source-sha256=c3a7c739340f521b4890fc305f48f712439c017c9a8f90ef09639e83e87c316f body-sha256=5b0a7338c8d9a65d5cb0d764a90ce6cbaec1f6c960e3ab96e13affcd38ea544e -->
 
 # OEM IPMI documentation and zipmi coverage audit
 
@@ -6,7 +6,7 @@
 
 **No inspected target has evidence sufficient to certify both a fully documented current-firmware OEM surface and complete zipmi support.** Several targets have substantial references. “No complete repository catalog located” does not mean no documentation exists elsewhere.
 
-Audited revisions: zbmc `d814fc8badca4116f089cbc9b772df3c95df5ef2`; zipmi `436cd000dc4973f4606deae79a51d9897b880265`. zipmi was clean. Existing unrelated zbmc lesson changes and browser artifacts were excluded.
+Audited revisions: zbmc `3c035c6`; zipmi `f21301d`. Existing unrelated zbmc browser artifacts were excluded.
 
 ## Completeness criteria
 
@@ -18,7 +18,7 @@ For zipmi, distinguish a descriptive catalog, name-to-opcode dispatch with calle
 
 | BMC | Full OEM documentation? | zipmi documentation and implementation | Missing proof |
 |----|----|----|----|
-| Advantech ASMB-787 | No. [Existing audit](../boxes/advantech-asmb787/index.md): 186 registered vendor pairs; 107 mapped in the earlier corpus, 79 unmapped, approximately ten with focused framing analysis. | [A dispatch catalog exists](../../zipmi/docs/advantech_ASMB787-command-table.md); no native Advantech module. Shared MegaRAC/YAFU metadata does not establish exact ASMB coverage. | Resolve contradictory field interpretation, document every request/response, reconcile the firmware command set against zipmi. |
+| Advantech ASMB-787 | Evidence-bound inventory complete; full payload semantics incomplete. The [firmware-bound reference](../../zipmi/docs/advantech_ASMB787-command-reference.md) covers all 187 declared remote rows with explicit knowns, unknowns, and activation strata. | Complete named raw dispatch catalog: [187-row source CSV](../../zipmi/zipmi/data/sources/advantech-asmb787-oem-dispatch.csv) and [native module](../../zipmi/zipmi/scapy_ipmi/oem/advantech_asmb787.py). Structured request/response codecs and full payload schemas remain incomplete. | Recover handler-level payload fields and completion behavior where possible; prove plugin runtime-map population and exact-image behavior. |
 | Dell iDRAC9 | Partial. [Comparison reference](../boxes/idrac10/idrac9-vs-idrac10-oem-diff.md) covers three libraries and 276 catalog entries, normalized to 240 capabilities; other libraries were outside that pass. | [7.20.30.50 module](../../zipmi/zipmi/scapy_ipmi/oem/idrac9.py): 276 descriptive rows, 271 dispatch rows, 100 registry names. CLI lists 632 entries, 276 with request/response documentation fields. Zero registered OEM codec pairs. | Whole-firmware denominator; unresolved schemas; exact-image behavior and codec coverage. |
 | Dell iDRAC10 | Extensive but incomplete. [446-entry reference](../boxes/idrac10/idrac10-oem-reference.md) retains undetermined wire IDs and response fields; [dispatch tables](../boxes/idrac10/idrac10-dispatch-tables.md) add evidence. | [1.30.10.50 module](../../zipmi/zipmi/scapy_ipmi/oem/idrac10.py): 446 descriptive rows, 383 dispatch rows, 340 registry names; CLI 443 entries with request/response fields. Zero registered OEM codec pairs. | Resolve unknown fields, distinguish grouped entries from unique commands, and verify target-specific behavior. |
 | IEIT | Not established. No complete OEM catalog located in repository; [box reference](../boxes/ieit/index.md) documents operation. | [Inspur module](../../zipmi/zipmi/scapy_ipmi/oem/inspur.py) has one upstream OpenBMC command and no codecs. | No evidence that this provider matches the IEIT image. Brand similarity cannot establish compatibility. |
@@ -30,19 +30,21 @@ For zipmi, distinguish a descriptive catalog, name-to-opcode dispatch with calle
 | Supermicro X10 | No complete OEM IPMI catalog located in repository. [Runtime reference](../boxes/supermicro-x10/README.md)'s Redfish extensions are not an OEM IPMI inventory. | [Legacy Supermicro module](../../zipmi/zipmi/scapy_ipmi/oem/supermicro.py) is X11-derived: 477 CLI entries, seven top-level registry names, zero codecs, no request/response fields in those CLI entries. | X10 firmware applicability and schemas. X11 support cannot be relabeled as X10 verification. |
 | Supermicro X14 | No complete target-specific catalog located in zbmc; [reproduction reference](../boxes/supermicro-x14/REPRODUCE.md) covers runtime. | [01.01.06.07 module](../../zipmi/zipmi/scapy_ipmi/oem/supermicro_x14.py): 39 selector-aware entries, 46 registry names, zero codecs; unresolved registrations acknowledged. | Close registration gaps, specify payloads, and match the pinned firmware version. |
 
-## ASMB-787: reference reconciliation still required
+## ASMB-787: corrected evidence boundary
 
-The earlier audit counted 85 core entries plus 94 plugin entries across 37 modules, plus seven platform entries, yielding 186 vendor pairs. It separately excluded three SMM-local records pending transport proof. This audit inherits those counts from checked-in evidence; it did not rerun firmware extraction. Static registration also does not prove every command is reachable over LAN in every runtime state.
+The corrected count is 187 declared remote vendor rows: 85 core commands, 95 plugin commands across 37 modules, and seven platform commands. The first 180 use NetFn `0x32`; the platform library contributes five NetFn `0x30` and two NetFn `0x3a` commands. Three additional NetFn `0x2e` SMM-local records remain outside that denominator pending transport proof, for 190 compiled records in all.
 
-The older zipmi catalog advertises 369 handlers across 50 tables, including standard commands. Its stated layout places request length at offset +1 and privilege at +8; the later AMI protocol reference places privilege at +1 and request length at +8. The old table consequently contains supposed privileges outside the normal IPMI level range. Its privilege and request-length columns must not be treated as verified. The 369 total is not an alternative denominator for 186 vendor pairs.
+The 85 core and seven platform rows are statically registered. Of the 95 plugin rows, 85 are feature-enabled or eligible, but runtime map population was not directly proved. Ten plugin rows are feature-absent and remain unproved: Media `0xca`, `0xcb`, `0xd7`, `0xd8`, `0xd9`, and `0xdc`; PLDM `0xd5` and `0xd6`; and Remote KVM `0xc0` and `0xc1`. Static declaration and feature eligibility do not prove LAN reachability in every runtime state.
 
-The later reference is `/Volumes/yyy/phd/bmc/AMI/yafu/protocol.html`, section 3. It also includes client-library material from multiple platforms; inclusion there does not prove ASMB-787 server support. Neither conflicting reference constitutes the finished command-by-command specification requested.
+The older zipmi catalog advertises 369 handlers across 50 tables, including standard commands. Reanalysis confirms the dispatch record stores privilege at byte offset `+1` and request length at byte offset `+8`; the older catalog labeled those two fields in reverse. Its affected columns must be corrected before use. The 369 total uses a different scope and is not an alternative denominator for the 187 remote vendor rows.
 
-**Remaining deliverable:** the corrected, firmware-bound ASMB-787 command reference with complete semantics and corresponding supported zipmi behavior. This audit completes the evidence comparison; it does not complete that implementation or resolve unknown protocol fields.
+The later reference is `/Volumes/yyy/phd/bmc/AMI/yafu/protocol.html`, section 3. It also includes client-library material from multiple platforms; inclusion there does not prove ASMB-787 server support.
+
+**Completed deliverable:** the corrected, firmware-bound [187-row command reference](../../zipmi/docs/advantech_ASMB787-command-reference.md), generated source CSV, and target-specific native module provide named raw dispatch with explicit known and unknown fields. This is complete catalog support, not a claim that unknown payload semantics, structured codecs, plugin runtime-map population, or live exact-image behavior have been proved.
 
 ## What zipmi's counts establish
 
-The README says 1,725 OEM commands. At the audited revision, `oem_command_totals()` returns 1,767 known and 1,695 named across 16 CLI vendor keys. These are not 1,767 fully specified, tested commands. Descriptive rows, dispatch records, selector-aware entries, fallback names, and CLI entries use different counting units.
+The README previously said 1,725 OEM commands. With the native ASMB-787 catalog, `oem_command_totals()` returns 1,954 known and 1,882 named across 17 CLI vendor keys. These are not 1,954 fully specified, tested commands. Descriptive rows, dispatch records, selector-aware entries, fallback names, and CLI entries use different counting units.
 
 [The registry](../../zipmi/zipmi/scapy_ipmi/oem/_registry.py) synthesizes pair-only fallback names for selector keys and stores names separately from payload classes. [Named CLI dispatch](../../zipmi/zipmi/cli/oem_cmds.py) prepends selectors to caller-supplied bytes and uses raw transport. All inspected CLI listings had empty live-verification fields; this means that field supplies no evidence, not that no historical testing exists elsewhere.
 
@@ -50,6 +52,7 @@ Fresh isolated imports produced these counts. Isolation matters because the regi
 
 | Module | Registered names | Payload pairs | Request classes | Response classes |
 |----|----|----|----|----|
+| advantech-asmb787 | 187 | 0 | 0 | 0 |
 | dell | 204 | 2 | 2 | 1 |
 | idrac9 | 100 | 0 | 0 | 0 |
 | idrac10 | 340 | 0 | 0 | 0 |

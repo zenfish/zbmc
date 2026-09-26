@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=507edcd725f815a17e3a62ddecd22ea87a2da8af480a7071446d964b7c15089b body-sha256=76a960d0cd54b938c27c2102e924aebca85afb098056d555d8109984b3b0c464 -->
+<!-- zmd2html:auto source-sha256=81fc38aabd84db8ced8f7f15fb60a612afd0cee85238cc101b3f11e27ef58397 body-sha256=b3911fb54ce169825c583393207ae28d8fc512b6c2884724fee241498aa88a40 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>OEM IPMI reference and fleet coverage audit</title>
@@ -54,10 +54,10 @@ codecs.</label></li>
 <li><label><input type="checkbox" checked="" />Record firmware
 applicability, conflicting references, and counting limitations in the
 HTML audit.</label></li>
-<li><label><input type="checkbox" />Finish the corrected ASMB-787
-command-by-command request/response reference.</label></li>
-<li><label><input type="checkbox" />Complete and verify the
-corresponding target-specific zipmi support.</label></li>
+<li><label><input type="checkbox" checked="" />Finish the corrected
+ASMB-787 command-by-command evidence reference.</label></li>
+<li><label><input type="checkbox" checked="" />Complete and verify the
+target-specific zipmi named raw dispatch catalog.</label></li>
 <li><label><input type="checkbox" checked="" />Validate the audit
 artifact and documentation links.</label></li>
 </ul>
@@ -65,20 +65,23 @@ artifact and documentation links.</label></li>
 <p>The source-linked report is <a
 href="../docs/oem-ipmi-coverage-audit.html">OEM IPMI coverage audit</a>.
 No inspected target can be certified as both fully documented for its
-current firmware and completely supported by zipmi. ASMB-787 references
-contain conflicting privilege/request-length interpretations; zipmi's
-catalog totals also mix naming and documentation counts with
-implementation coverage. The report separates these from registered
-packet codecs and live verification. Full command semantics and missing
-zipmi support remain outstanding; the audit does not complete them.</p>
+current firmware and completely supported by zipmi. Reanalysis corrected
+the ASMB-787 denominator to 187 declared remote vendor rows (85 core, 95
+plugin, seven platform) and confirmed privilege at record offset
+<code>+1</code> and request length at <code>+8</code>; the older catalog
+had labeled those fields in reverse. The finished reference separates 92
+statically registered core/platform rows, 85 feature-enabled or eligible
+plugin rows whose runtime map population was not directly proved, and
+ten feature-absent plugin rows. zipmi now provides a native 187-command
+named raw dispatch catalog. Full payload schemas, structured codecs,
+plugin runtime-map population, and live exact-image behavior remain
+explicitly incomplete.</p>
 <p>Verification: isolated offline imports measured registry names and
 request/response codec classes. The report contains exactly all 11
 tracked box descriptors, and every local source link resolves, including
-sibling zipmi links. Both changed documentation pairs are synchronized
-and whitespace checks pass. The repository-wide documentation contract
-reports 57/58 synchronized pairs; its only failure is the pre-existing
-unsynchronized <code>tasks/lessons.md</code>, which this work
-preserves.</p>
+sibling zipmi links. The changed documentation pairs and the existing
+<code>tasks/lessons.md</code> source are regenerated and synchronized;
+targeted documentation and whitespace checks pass.</p>
 <h1 id="complete-advantech-asmb-787-six-service-acceptance">Complete
 Advantech ASMB-787 six-service acceptance</h1>
 <ul class="task-list">
@@ -123,17 +126,20 @@ reached
 672 seconds. Follow-up proof returned <code>uid=0(sysadmin)</code> for
 non-PTY SSH, forced-PTY SSH, and the serial console; OEM query NetFn
 <code>0x32</code>, Cmd <code>0x90</code> returned <code>01</code>.</p>
-<p>The OEM documentation audit found 186 statically registered vendor
-commands: 179 unique NetFn <code>0x32</code> entries (85 core plus 94
+<p>The corrected OEM documentation audit found 187 declared remote
+vendor rows: 180 unique NetFn <code>0x32</code> entries (85 core plus 95
 across 37 loadable AMI modules), five NetFn <code>0x30</code> platform
 commands, and two NetFn <code>0x3a</code> platform commands. Existing
-material documents the YAFU block and selected sensitive handlers;
-107/186 remotely dispatched pairs are mapped, 79/186 are unmapped, and
-only about ten have focused request/response framing analysis. Complete
-semantics and runtime reachability are not documented for the surface as
-a whole. Three additional NetFn <code>0x2e</code> SMM-local PDK records
-remain outside the remotely dispatched count pending transport
-proof.</p>
+material documents the YAFU block and selected sensitive handlers. The
+completed evidence reference now covers every row: 92 core/platform rows
+are statically registered; 85 plugin rows are feature-enabled or
+eligible without direct proof of runtime map population; and ten Media,
+PLDM, and Remote KVM plugin rows are feature-absent and remain unproved.
+Three additional NetFn <code>0x2e</code> SMM-local PDK records remain
+outside the remote denominator pending transport proof. zipmi exposes
+all 187 remote rows through its target-specific named raw dispatch
+catalog while preserving unknown payload fields and the absence of
+structured codecs.</p>
 <p>The focused Advantech lifecycle test, all 57 documentation pairs,
 documentation link contract, sync-docs CLI test, and
 <code>git diff --check</code> pass. The aggregate local suite passed
@@ -144,8 +150,9 @@ Renode 1.16.1. Every test after the UMAC boundary passed locally.</p>
 <p>GitHub publication was verified through GitHub's read-only API after
 pushing <code>main</code>: the published README rendering contained the
 exact six-service READY string, the published Advantech page contained
-the 186-command audit and 107/186 coverage statement, and the remote
-<code>main</code> SHA matched the local commit.</p>
+the then-current OEM audit, and the remote <code>main</code> SHA matched
+the local commit. The command count and field labels were subsequently
+corrected in the OEM audit work above.</p>
 <h1 id="restore-managed-ipmi-on-advantech-asmb-787">Restore managed IPMI
 on Advantech ASMB-787</h1>
 <ul class="task-list">

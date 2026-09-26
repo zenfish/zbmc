@@ -3,24 +3,26 @@
 - [x] Recover the original request and inventory all 11 registered BMCs.
 - [x] Compare target documentation with zipmi catalogs, named dispatch, and registered codecs.
 - [x] Record firmware applicability, conflicting references, and counting limitations in the HTML audit.
-- [ ] Finish the corrected ASMB-787 command-by-command request/response reference.
-- [ ] Complete and verify the corresponding target-specific zipmi support.
+- [x] Finish the corrected ASMB-787 command-by-command evidence reference.
+- [x] Complete and verify the target-specific zipmi named raw dispatch catalog.
 - [x] Validate the audit artifact and documentation links.
 
 ## Review
 
 The source-linked report is [OEM IPMI coverage audit](../docs/oem-ipmi-coverage-audit.md).
 No inspected target can be certified as both fully documented for its current firmware and
-completely supported by zipmi. ASMB-787 references contain conflicting privilege/request-length
-interpretations; zipmi's catalog totals also mix naming and documentation counts with implementation
-coverage. The report separates these from registered packet codecs and live verification. Full
-command semantics and missing zipmi support remain outstanding; the audit does not complete them.
+completely supported by zipmi. Reanalysis corrected the ASMB-787 denominator to 187 declared remote
+vendor rows (85 core, 95 plugin, seven platform) and confirmed privilege at record offset `+1` and
+request length at `+8`; the older catalog had labeled those fields in reverse. The finished reference
+separates 92 statically registered core/platform rows, 85 feature-enabled or eligible plugin rows
+whose runtime map population was not directly proved, and ten feature-absent plugin rows. zipmi now
+provides a native 187-command named raw dispatch catalog. Full payload schemas, structured codecs,
+plugin runtime-map population, and live exact-image behavior remain explicitly incomplete.
 
 Verification: isolated offline imports measured registry names and request/response codec classes.
 The report contains exactly all 11 tracked box descriptors, and every local source link resolves,
-including sibling zipmi links. Both changed documentation pairs are synchronized and whitespace
-checks pass. The repository-wide documentation contract reports 57/58 synchronized pairs; its only
-failure is the pre-existing unsynchronized `tasks/lessons.md`, which this work preserves.
+including sibling zipmi links. The changed documentation pairs and the existing `tasks/lessons.md`
+source are regenerated and synchronized; targeted documentation and whitespace checks pass.
 
 # Complete Advantech ASMB-787 six-service acceptance
 
@@ -50,13 +52,15 @@ Debby cold run `20260925T214443Z-ce946490-918d-40af-83be-b2957f51c753` reached
 `uid=0(sysadmin)` for non-PTY SSH, forced-PTY SSH, and the serial console; OEM query NetFn `0x32`, Cmd
 `0x90` returned `01`.
 
-The OEM documentation audit found 186 statically registered vendor commands: 179 unique NetFn `0x32`
-entries (85 core plus 94 across 37 loadable AMI modules), five NetFn `0x30` platform commands, and two
+The corrected OEM documentation audit found 187 declared remote vendor rows: 180 unique NetFn `0x32`
+entries (85 core plus 95 across 37 loadable AMI modules), five NetFn `0x30` platform commands, and two
 NetFn `0x3a` platform commands. Existing material documents the YAFU block and selected sensitive
-handlers; 107/186 remotely dispatched pairs are mapped, 79/186 are unmapped, and only about ten have
-focused request/response framing analysis. Complete semantics and runtime reachability are not
-documented for the surface as a whole. Three additional NetFn `0x2e` SMM-local PDK records remain
-outside the remotely dispatched count pending transport proof.
+handlers. The completed evidence reference now covers every row: 92 core/platform rows are statically
+registered; 85 plugin rows are feature-enabled or eligible without direct proof of runtime map
+population; and ten Media, PLDM, and Remote KVM plugin rows are feature-absent and remain unproved.
+Three additional NetFn `0x2e` SMM-local PDK records remain outside the remote denominator pending
+transport proof. zipmi exposes all 187 remote rows through its target-specific named raw dispatch
+catalog while preserving unknown payload fields and the absence of structured codecs.
 
 The focused Advantech lifecycle test, all 57 documentation pairs, documentation link contract,
 sync-docs CLI test, and `git diff --check` pass. The aggregate local suite passed through
@@ -66,8 +70,8 @@ UMAC boundary passed locally.
 
 GitHub publication was verified through GitHub's read-only API after pushing `main`: the published
 README rendering contained the exact six-service READY string, the published Advantech page contained
-the 186-command audit and 107/186 coverage statement, and the remote `main` SHA matched the local
-commit.
+the then-current OEM audit, and the remote `main` SHA matched the local commit. The command count and
+field labels were subsequently corrected in the OEM audit work above.
 
 # Restore managed IPMI on Advantech ASMB-787
 

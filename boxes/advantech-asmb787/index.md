@@ -34,22 +34,25 @@ dashboard data, and logs out. The serial console also executed a marked command 
 
 ## OEM IPMI documentation coverage
 
-**No: full command semantics are not yet documented.** A static audit of this exact firmware recovered
-186 vendor dispatch entries: 85 built into `libipmimsghndlr.so.13.22.0`, 94 from 37 loadable
-`libipmiamioem*.so` modules, and seven platform entries from `libipmipdkcmds.so.6.0.0`. The first 179
-are unique NetFn `0x32` commands; the platform library adds five NetFn `0x30` commands and two NetFn
-`0x3a` commands. The message-handler binary has SHA-256
+The [firmware-bound command reference](../../../zipmi/docs/advantech_ASMB787-command-reference.html)
+catalogs all 187 declared remote vendor rows with opcode, handler, module, privilege, request-length
+constraint, interface mask, activation evidence, and explicit payload unknowns. The corresponding
+zipmi native module exposes all 187 through named raw dispatch. Full payload semantics and structured
+request/response codecs remain incomplete where the available binaries do not establish them.
+
+The 187 rows comprise 85 core commands from `libipmimsghndlr.so.13.22.0`, 95 plugin commands from 37
+`libipmiamioem*.so` modules, and seven platform commands from `libipmipdkcmds.so.6.0.0`. The 85 core
+and seven platform rows are statically registered. Of the 95 plugin rows, 85 are feature-enabled or
+eligible, but runtime map population was not directly observed; ten are feature-absent and remain
+unproved: Media commands `0xca`, `0xcb`, `0xd7`, `0xd8`, `0xd9`, and `0xdc`; PLDM commands `0xd5` and
+`0xd6`; and Remote KVM commands `0xc0` and `0xc1`.
+
+The first 180 rows use NetFn `0x32`; the platform library adds five NetFn `0x30` commands and two
+NetFn `0x3a` commands. The message-handler binary has SHA-256
 `23e5b17be7125d100db9effea1772a57ee8ecd45da0569a5a331b8eb8d627539`.
 
-The dispatch tables establish the opcode, minimum privilege, fixed or variable request length, module,
-and handler name. Existing YAFU research documents the firmware-update block and selected
-security-sensitive handlers, but only 107 of the 186 remotely dispatched NetFn/command pairs are
-mapped anywhere in the current corpus; 79 are unmapped, and only about ten have focused request and
-response framing analysis. Most mapped entries still lack selector definitions, full field layouts,
-completion-code behavior, side effects, channel restrictions, or runtime feature gates.
-
 Three additional NetFn `0x2e` SMM-local records exist in the PDK library, bringing the compiled total
-to 189. They remain outside the 186-command remotely dispatched count until their transport exposure
+to 190. They remain outside the 187-row remote vendor count until their transport exposure
 is proved. The existing material also mixes in client wrappers and optional HPE/Quanta handlers that
 this server image does not dispatch, so client-library presence is not evidence of ASMB-787 server
 reachability. Do not treat the current material as a safe command catalog, and do not probe setters,
