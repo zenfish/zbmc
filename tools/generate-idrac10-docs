@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Generate the firmware-bound iDRAC10 OEM IPMI reference."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import html
+import json
+import re
+import subprocess
+from collections import Counter
+from pathlib import Path
+
+
+def esc(value) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def length(value) -> str:
+    if isinstance(value, int):
+        return str(value)
+    if not isinstance(value, dict):
+        return "unknown"
+    low, high = value.get("min"), value.get("max")
+    if low == high and low is not None:
+        return str(low)
+    return f"{low if low is not None else '?'}..{high if high is not None else '?'}"
+
+
+def fields(items: list[dict]) -> str:
+    if not items:
+        return '<span class="text-slate-400">none / opaque</span>'
+    parts = []
+    for field in items:
+        name = field.get("name", f"offset {field.get('offset', '?')}")
+        kind = field.get("kind") or field.get("encoding") or field.get("type") or "bytes"
+        size = field.get("length") or field.get("size")
+        const = field.get("constant")
+        suffix = f" × {size}" if size not in (None, 1) else ""
+        if const is not None:
+            suffix += f" = {const:#x}" if isinstance(const, int) else f" = {const}"
+        description = field.get("description") or field.get("encoding", "")
+        parts.append(f"<li><code>{esc(name)}</code>: {esc(kind)}{esc(suffix)}"
+                     f"{' — ' + esc(description) if description else ''}</li>")
+    return '<ul class="list-disc pl-5 space-y-1">' + "".join(parts) + "</ul>"
+
+
+def codes(value) -> str:
+    if not isinstance(value, list):
+        return esc(value)
+    return "<br>".join(
+        f"<code>{esc(item.get('code', '?'))}</code> {esc(item.get('meaning', ''))}"
+        for item in value
+    )
+
+
+def compact(value) -> str:
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, separators=(",", ":"), sort_keys=True)
+
+
+def render(catalog: dict, live: dict, title: str, evidence_sha: str,
+           artifact_marker: str = "") -> str:
+    commands = catalog["commands"]
+    effects = Counter(c.get("effect", "unknown") for c in commands)
+    pairs = {(c["netfn"], c["cmd"]) for c in commands}
+    request_codecs = sum(bool(c.get("requestCodec", c.get("codecState") == "verified"))
+                         for c in commands)
+    response_codecs = sum(bool(c.get("responseCodec", c.get("codecState") == "verified"))
+                          for c in commands)
+    fresh = {row["name"]: row for row in live["results"]}
+    colors = {
+        "safe": "bg-emerald-100 text-emerald-900",
+        "mutates": "bg-amber-100 text-amber-900",
+        "security-sensitive": "bg-rose-100 text-rose-900",
+        "destructive": "bg-red-700 text-white",
+        "unknown": "bg-slate-200 text-slate-900",
+    }
+    rows = []
+    for index, command in enumerate(commands, 1):
+        selector = command.get("subcmd") or "—"
+        selector_offset = command.get("selectorOffset")
+        identity = f"{command['netfn']}/{command['cmd']}"
+        if selector != "—":
+            identity += f" / {selector} @ byte {selector_offset if selector_offset is not None else '?'}"
+        effect = command.get("effect", "unknown")
+        request_codec = bool(command.get("requestCodec", command.get("codecState") == "verified"))
+        response_codec = bool(command.get("responseCodec", command.get("codecState") == "verified"))
+        live_row = fresh.get(command["name"])
+        if live_row:
+            result = live_row.get("result") or live_row.get("rawFollowup") or {}
+            live_text = (f"fresh run: CC <code>0x{result.get('cc', 255):02x}</code>; "
+                         f"response <code>{esc(result.get('data') or '(empty)')}</code>")
+        elif command.get("live"):
+            live_text = "historical: " + esc(compact(command["live"]))
+        else:
+            live_text = '<span class="text-slate-400">not live-executed</span>'
+        evidence = command.get("evidence")
+        rows.append(f"""
+<tr class="border-b border-slate-200 align-top" data-row="{esc(command['name'].lower())} {esc(identity.lower())} {esc(command.get('lib','').lower())} {esc(effect)}">
+ <td class="p-2 text-xs text-slate-500">{index}</td>
+ <td class="p-2 font-mono text-xs whitespace-nowrap">{esc(identity)}</td>
+ <td class="p-2 min-w-64"><strong class="font-mono text-sm">{esc(command['name'])}</strong><br><span class="text-xs text-slate-500">{esc(command.get('lib',''))} · {esc(command.get('priv',''))}</span><p class="mt-2 text-sm">{esc(command.get('purpose',''))}</p></td>
+ <td class="p-2 min-w-96 text-xs"><strong>Length:</strong> {esc(length(command.get('requestLength')))} bytes<br><strong>Summary:</strong> {esc(command.get('request',''))}<details class="mt-2"><summary>Fields</summary>{fields(command.get('requestFields', []))}</details></td>
+ <td class="p-2 min-w-96 text-xs"><strong>Length incl. CC:</strong> {esc(length(command.get('responseLengthIncludingCc')))} bytes<br><strong>Summary:</strong> {esc(command.get('response',''))}<details class="mt-2"><summary>Fields</summary>{fields(command.get('responseFields', []))}</details></td>
+ <td class="p-2 min-w-80 text-xs"><span class="inline-block rounded px-2 py-1 font-semibold {colors.get(effect, colors['unknown'])}">{esc(effect)}</span><p class="mt-2"><strong>Side effects:</strong> {esc(command.get('sideEffects',''))}</p><details class="mt-2"><summary>Completion codes</summary>{codes(command.get('completionCodes'))}</details><details class="mt-2"><summary>Activation / channel / privilege</summary><pre>{esc(json.dumps(command.get('activation'), indent=2, sort_keys=True))}</pre></details></td>
+ <td class="p-2 min-w-72 text-xs"><strong>Codec:</strong> request {'yes' if request_codec else 'no'}, response {'yes' if response_codec else 'no'} ({esc(command.get('codecState','raw-exact'))})<p class="mt-2">{live_text}</p><details class="mt-2"><summary>Evidence</summary><pre>{esc(json.dumps(evidence, indent=2, sort_keys=True))}</pre></details></td>
+</tr>""")
+    effect_summary = " · ".join(f"{key} {effects[key]}" for key in
+                                ("safe", "mutates", "security-sensitive", "destructive", "unknown"))
+    marker = f"\n{artifact_marker}" if artifact_marker else ""
+    return f"""<!doctype html>{marker}
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{esc(title)}</title><script src="https://cdn.tailwindcss.com"></script>
+<style>body{{font-family:ui-sans-serif,system-ui,sans-serif}} code,pre{{overflow-wrap:anywhere;white-space:pre-wrap}} summary{{cursor:pointer;color:#1d4ed8}} th{{position:sticky;top:0;z-index:1}}</style></head>
+<body class="bg-slate-100 text-slate-900"><main class="mx-auto max-w-[1900px] bg-white p-5 md:p-10">
+<h1 class="text-3xl font-bold">{esc(title)}</h1>
+<p class="mt-3">Firmware-bound reference for Dell YP95X iDRAC10 1.30.10.50 A00 (internal 1.30.10.50.11943). DUP SHA-256 <code>372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9</code>; rootfs SHA-256 <code>6296648530890a3d8a12b78b730c8bcb78c023d119be41db14733f7ec370eb2f</code>.</p>
+<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+ <div class="rounded bg-blue-50 p-4"><strong class="text-2xl">{len(commands)}</strong> operation identities</div>
+ <div class="rounded bg-blue-50 p-4"><strong class="text-2xl">{len(pairs)}</strong> Dell-relevant top-level pairs</div>
+ <div class="rounded bg-emerald-50 p-4"><strong class="text-2xl">{request_codecs}</strong> request codecs</div>
+ <div class="rounded bg-emerald-50 p-4"><strong class="text-2xl">{response_codecs}</strong> response codecs</div>
+ <div class="rounded bg-amber-50 p-4"><strong class="text-2xl">{live['summary']['cc00']} + {live['summary']['targetCc']}</strong> fresh safe live results</div>
+</div>
+<p class="mt-4 text-sm"><strong>Safety totals:</strong> {esc(effect_summary)}. The 69 unknown operations terminate at explicitly documented opaque helper/SCBMC boundaries and remain safety-gated; “unknown” is not treated as supported-safe.</p>
+<section class="mt-6 rounded border border-amber-300 bg-amber-50 p-4"><h2 class="font-bold">Denominator and activation model</h2><p>429 physical dispatch rows collapse to 383 unique (NetFn, command, handler) triples and 346 apparent pairs. Five are OSA inner-only routes behind outer <code>0x2e/0xcc</code>; the Dell-relevant remote denominator is 255 top-level pairs. Selector expansion yields the {len(commands)} identities below. Fifteen DCMI routes require <code>/flash/data0/BMC_Data/dcmi</code> to contain ASCII <code>1</code>; 45 alternate/proxy DCMI-library registrations are always loaded. OSA inner privilege bytes are not re-enforced by the outer handler: the destructive OSA reset route is effectively admitted at Callback privilege.</p></section>
+<section class="mt-6 rounded border border-blue-300 bg-blue-50 p-4"><h2 class="font-bold">Live evidence</h2><p>zBMC run <code>{esc(live['zbmcRunId'])}</code>, zipmi commit <code>{esc(live['zipmiCommit'])}</code>, evidence SHA-256 <code>{evidence_sha}</code>. The strict allowlist selected only safe operations whose exact request length equals the auto-prefix length: 13 zero-byte requests. Eleven returned CC00; blade slot ID returned CCFF with data <code>00</code>; server power consumption returned CCC1. No transport failure occurred. Historical sweep observations are retained per record but lack equivalent request/run provenance.</p></section>
+<label class="mt-8 block font-semibold" for="filter">Filter operations</label><input id="filter" class="mt-2 w-full rounded border border-slate-300 p-3" placeholder="name, NetFn/cmd, library, or effect">
+<div class="mt-4 overflow-auto" role="region" aria-label="iDRAC10 OEM IPMI operations" tabindex="0"><table class="w-full border-collapse text-left"><thead class="bg-slate-200 text-xs"><tr><th class="p-2">#</th><th class="p-2">Wire identity</th><th class="p-2">Operation</th><th class="p-2">Request</th><th class="p-2">Response</th><th class="p-2">Safety / activation / CC</th><th class="p-2">zipmi / evidence / live</th></tr></thead><tbody id="rows">{''.join(rows)}</tbody></table></div>
+<script>const f=document.getElementById('filter');f.addEventListener('input',()=>{{const q=f.value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.hidden=!r.dataset.row.includes(q))}});</script>
+</main></body></html>"""
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zipmi-root", type=Path, default=root.parent / "zipmi")
+    args = parser.parse_args()
+    catalog = json.loads((args.zipmi_root / "zipmi/data/sources/idrac10-commands.json").read_text())
+    live_path = root / "boxes/idrac10/evidence/20260926T050202Z-safe-live.json"
+    live_bytes = live_path.read_bytes()
+    live = json.loads(live_bytes)
+    evidence_sha = hashlib.sha256(live_bytes).hexdigest()
+    outputs = {
+        root / "boxes/idrac10/idrac10-oem-reference.html": "iDRAC10 OEM IPMI command reference",
+        root / "boxes/idrac10/idrac10-ipmi-commands.html": "iDRAC10 OEM IPMI command table",
+    }
+    for path, title in outputs.items():
+        current = path.read_text() if path.exists() else ""
+        match = re.search(r"<!-- z-artifact: [0-9a-f-]+ generated -->", current[:512])
+        path.write_text(render(catalog, live, title, evidence_sha,
+                               match.group(0) if match else ""))
+
+    subprocess.run(
+        [str(root / "tools/sync-docs"), "--write", *(str(path) for path in outputs)],
+        cwd=root,
+        check=True,
+    )
+    standalone = root / "boxes/idrac10/idrac10-oem-reference.standalone.html"
+    current = standalone.read_text() if standalone.exists() else ""
+    match = re.search(r"<!-- z-artifact: [0-9a-f-]+ generated -->", current[:512])
+    subprocess.run(
+        [str(root / "tools/zmd2html"), "-i", "--force", "-o", str(standalone),
+         str(root / "boxes/idrac10/idrac10-oem-reference.md")],
+        cwd=root,
+        check=True,
+    )
+    if match:
+        content = standalone.read_text()
+        first, rest = content.split("\n", 1)
+        standalone.write_text(f"{first}\n{match.group(0)}\n{rest}")
+    print(f"generated 3 documents from {catalog['count']} operations")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

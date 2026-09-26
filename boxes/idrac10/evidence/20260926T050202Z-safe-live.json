@@ -1,0 +1,273 @@
+{
+  "schema": "zipmi.idrac10-safe-live.v1",
+  "target": "Dell YP95X iDRAC10 1.30.10.50 A00",
+  "host": "10.250.0.31",
+  "zbmcRunId": "20260926T050202Z-c410ded2-1f95-43eb-99ad-6583f942e598",
+  "zipmiCommit": "f9168fad18545460b40ccb253606c3b0c916b954",
+  "completedUtc": "2026-09-26T05:05:13.000000+00:00",
+  "selection": "effect=safe and exact request length equals auto-prefix length",
+  "count": 13,
+  "results": [
+    {
+      "startedUtc": "2026-09-26T05:04:06.007884+00:00",
+      "name": "CmdOEMGetChassisCapabilities",
+      "netfn": 0,
+      "cmd": 0,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 0,
+        "cmd": 0,
+        "name": "CmdOEMGetChassisCapabilities",
+        "cc": 0,
+        "data": "012020202020",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  CmdOEMGetChassisCapabilities  (NetFn 0x00 cmd 0x00)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:07.298623+00:00",
+      "name": "DellCmdGetChassisStatus",
+      "netfn": 0,
+      "cmd": 1,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 0,
+        "cmd": 1,
+        "name": "DellCmdGetChassisStatus",
+        "cc": 0,
+        "data": "010000",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdGetChassisStatus  (NetFn 0x00 cmd 0x01)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:08.636231+00:00",
+      "name": "CmdGetDeviceID",
+      "netfn": 6,
+      "cmd": 1,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 6,
+        "cmd": 1,
+        "name": "CmdGetDeviceID",
+        "cc": 0,
+        "data": "2081010a027fa20200000100030000",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  CmdGetDeviceID  (NetFn 0x06 cmd 0x01)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:09.921197+00:00",
+      "name": "CmdOEMGetSelfTestResults",
+      "netfn": 6,
+      "cmd": 4,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 6,
+        "cmd": 4,
+        "name": "CmdOEMGetSelfTestResults",
+        "cc": 0,
+        "data": "0000",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  CmdOEMGetSelfTestResults  (NetFn 0x06 cmd 0x04)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:11.213390+00:00",
+      "name": "DellCmdGetBladeSlotId",
+      "netfn": 48,
+      "cmd": 24,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 1,
+      "result": null,
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdGetBladeSlotId  (NetFn 0x30 cmd 0x18)\n[error] completion code: Unspecified",
+      "rawFollowup": {
+        "cc": 255,
+        "data": "00",
+        "observedUtc": "2026-09-26T05:05:12.922815+00:00",
+        "method": "zipmi Session.send_raw"
+      }
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:12.517651+00:00",
+      "name": "DellQueryChassisIdentifyStatus",
+      "netfn": 48,
+      "cmd": 50,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 50,
+        "name": "DellQueryChassisIdentifyStatus",
+        "cc": 0,
+        "data": "00",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellQueryChassisIdentifyStatus  (NetFn 0x30 cmd 0x32)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:13.924471+00:00",
+      "name": "DellQueryGetCPLDRevision",
+      "netfn": 48,
+      "cmd": 51,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 51,
+        "name": "DellQueryGetCPLDRevision",
+        "cc": 0,
+        "data": "000000",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellQueryGetCPLDRevision  (NetFn 0x30 cmd 0x33)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:15.251724+00:00",
+      "name": "DellCmdServerPwrConsumption",
+      "netfn": 48,
+      "cmd": 143,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 1,
+      "result": null,
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdServerPwrConsumption  (NetFn 0x30 cmd 0x8f)\n[error] completion code: Invalid command\n# Hint: this BMC doesn't implement idrac10 0x30/0x8f \u2014 wrong vendor or BMC generation? Confirm with `mc info` (and `zipmi oem` to list vendors).",
+      "rawFollowup": {
+        "cc": 193,
+        "data": "",
+        "observedUtc": "2026-09-26T05:05:12.922868+00:00",
+        "method": "zipmi Session.send_raw"
+      }
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:16.571336+00:00",
+      "name": "DellCmdGetLastPostCode",
+      "netfn": 48,
+      "cmd": 153,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 153,
+        "name": "DellCmdGetLastPostCode",
+        "cc": 0,
+        "data": "0017556e7265636f676e697a656420506f737420436f64652e",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdGetLastPostCode  (NetFn 0x30 cmd 0x99)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:17.844142+00:00",
+      "name": "DellCmdGetPowerCycleInterval",
+      "netfn": 48,
+      "cmd": 155,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 155,
+        "name": "DellCmdGetPowerCycleInterval",
+        "cc": 0,
+        "data": "05",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdGetPowerCycleInterval  (NetFn 0x30 cmd 0x9b)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:19.117937+00:00",
+      "name": "CmdGetSoftLockStatus",
+      "netfn": 48,
+      "cmd": 160,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 160,
+        "name": "CmdGetSoftLockStatus",
+        "cc": 0,
+        "data": "00",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  CmdGetSoftLockStatus  (NetFn 0x30 cmd 0xa0)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:20.406550+00:00",
+      "name": "DellCmdIMCFeatureSupport",
+      "netfn": 48,
+      "cmd": 189,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 189,
+        "name": "DellCmdIMCFeatureSupport",
+        "cc": 0,
+        "data": "ffea00004000",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdIMCFeatureSupport  (NetFn 0x30 cmd 0xbd)"
+    },
+    {
+      "startedUtc": "2026-09-26T05:04:21.651388+00:00",
+      "name": "DellCmdSmaMbxFlag",
+      "netfn": 48,
+      "cmd": 250,
+      "requestHex": "",
+      "effect": "safe",
+      "requestLength": 0,
+      "returnCode": 0,
+      "result": {
+        "vendor": "idrac10",
+        "netfn": 48,
+        "cmd": 250,
+        "name": "DellCmdSmaMbxFlag",
+        "cc": 0,
+        "data": "d5",
+        "ascii": null
+      },
+      "stderr": "[info]  auto-selected cipher suite 17 (BMC's strongest offered; default is 3)\n[info]  DellCmdSmaMbxFlag  (NetFn 0x30 cmd 0xfa)"
+    }
+  ],
+  "summary": {
+    "cc00": 11,
+    "targetCc": 2,
+    "transportFailures": 0
+  }
+}
