@@ -162,7 +162,7 @@ The unrelated `.playwright-mcp/` directory remains untracked and untouched.
 - [ ] Trace 26 partial SCCI leaves and relevant standard/group overrides; separate wire contract from physical backend and runtime reachability (28 decoded, 8 partial; 24 standard/group records audited).
 - [x] Regenerate HTML and zipmi data from the improved evidence, preserving safety gates and explicit unresolved boundaries; no newly justified fixed codecs in this batch.
 - [x] Run source/hash/count checks, focused and full tests, package-install verification, and safe live checks where a request is proved read-only (prior 22 safe probes retained; no new safe probe was necessary).
-- [ ] Commit and push only zBMC and zipmi; leave unrelated files untouched.
+- [x] Commit and push only zBMC and zipmi; leave unrelated files untouched.
 
 ### Review
 
@@ -183,6 +183,9 @@ pairs parse/check; zipmi's full suite passes 2,358 tests and its 0.6.1 wheel
 contains the regenerated 232-operation catalog. The global documentation
 contract still reports unrelated stale/conflicting pairs in Lenovo, Redfish,
 the OEM audit, GETTING-STARTED, and IEIT; the three pairs touched here sync.
+This bounded decode milestone was pushed as zBMC `ea4fbcc` and zipmi `355a8cb`.
+The unrelated `.playwright-mcp/` directory
+remains untracked and untouched.
 Full decoding remains open: delegated helpers, platform gates, and mutable state
 must not be promoted merely from a named registration or caller wrapper.
 

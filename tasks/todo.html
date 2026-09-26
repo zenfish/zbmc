@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7ab85d70197928c8d3e2da9c2b163c2415fdb60e6bdf4c94e7d66822bbe3fb34 body-sha256=91e3ea405ac6311f9757b75b36a49d8ce2ef77b6666b44773aeddc8c734f0fa8 -->
+<!-- zmd2html:auto source-sha256=0207d657ab7ea053f540b2ddcf97a4ad79299ee0e56d587b8f6ab1f63a0d8336 body-sha256=510a2fceda51b7297b4913e83f7a2b36144f6f2a70af2e813e8cc0579a97bfd7 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -306,8 +306,8 @@ batch.</label></li>
 checks, focused and full tests, package-install verification, and safe
 live checks where a request is proved read-only (prior 22 safe probes
 retained; no new safe probe was necessary).</label></li>
-<li><label><input type="checkbox" />Commit and push only zBMC and zipmi;
-leave unrelated files untouched.</label></li>
+<li><label><input type="checkbox" checked="" />Commit and push only zBMC
+and zipmi; leave unrelated files untouched.</label></li>
 </ul>
 <h3 id="review-1">Review</h3>
 <p>In progress. Baseline: 228 selector leaves = 61 decoded, 163 partial,
@@ -329,9 +329,12 @@ documentation pairs parse/check; zipmi's full suite passes 2,358 tests
 and its 0.6.1 wheel contains the regenerated 232-operation catalog. The
 global documentation contract still reports unrelated stale/conflicting
 pairs in Lenovo, Redfish, the OEM audit, GETTING-STARTED, and IEIT; the
-three pairs touched here sync. Full decoding remains open: delegated
-helpers, platform gates, and mutable state must not be promoted merely
-from a named registration or caller wrapper.</p>
+three pairs touched here sync. This bounded decode milestone was pushed
+as zBMC <code>ea4fbcc</code> and zipmi <code>355a8cb</code>. The
+unrelated <code>.playwright-mcp/</code> directory remains untracked and
+untouched. Full decoding remains open: delegated helpers, platform
+gates, and mutable state must not be promoted merely from a named
+registration or caller wrapper.</p>
 <h1 id="oem-ipmi-reference-and-fleet-coverage-audit">OEM IPMI reference
 and fleet coverage audit</h1>
 <ul class="task-list">
