@@ -8,7 +8,11 @@ The AST2500 runtime exposes Linux SSH, the vendor SMASH/CLP console, IPMI, Redfi
 
     sudo ./tools/zbmc ieit ssh
     sudo ./tools/zbmc ieit ssh 'id; uname -a'
-    sudo ./tools/zbmc ieit clp
+    sudo ./tools/zbmc ieit smash-clp
+
+The selected address follows `zbmc`'s normal priority: per-box override, pool, then `zhosts.txt`.
+The IEIT build embeds that address in the guest image. After changing address configuration, run
+`zbmc ieit build` before starting the box; startup reports a mismatched image address.
 
 These commands use the same preserved port-22 OpenSSH service but different accounts. The firmware synthesizes `admin` through its IPMI NSS/PAM modules and launches `/usr/local/bin/smashclp`. The local UID-0 `sysadmin` account originally used `/usr/local/bin/defshell` and was explicitly blocked by `DenyUsers sysadmin`. The rebuilt lab image changes only that local account to `/bin/sh`, assigns the standard lab password, and removes its deny rule. It does not replace sshd, PAM, NSS, or SMASH.
 

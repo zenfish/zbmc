@@ -7,6 +7,7 @@ export PATH
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WD="${1:-${WD:-$ROOT/work/ieit}}"
+ZBMC_IP="${ZBMC_IP:-$(awk '$1 == "ieit" { print $2; exit }' "$ROOT/zhosts.txt")}"
 SOURCE="$ROOT/firmware/BMC_Whitley_7.26.05_Standard_IEY_20260707.ima"
 SOURCE_SHA256=b7915aa4be2661d47d78cca6265dc11d8d06c23cc199e0ff80a2adc3ccd7c7d1
 RAMDISK_OFFSET=$((0x18b0000))
@@ -61,7 +62,7 @@ test -f "$STAGE/web-ui/index.html"
 printf '[3/6] rebuilding metadata-preserving service CramFS\n'
 fakeroot -- bash "$HERE/build-rootfs.sh" \
     "$STAGE/original-rootfs.cramfs" "$STAGE/image1-conf" "$STAGE/web-ui" \
-    "$STAGE/service" "$STAGE/service-rootfs.cramfs"
+    "$STAGE/service" "$STAGE/service-rootfs.cramfs" "$ZBMC_IP"
 
 printf '[4/6] wrapping rebuilt CramFS as a deterministic U-Boot ramdisk\n'
 SOURCE_DATE_EPOCH=1783391527 mkimage \
@@ -88,6 +89,7 @@ install -m 0644 "$STAGE/service-rootfs.cramfs" "$WD/service-rootfs.cramfs"
 install -m 0644 "$STAGE/service-ramdisk.uimage" "$WD/service-ramdisk.uimage"
 {
     printf 'source=%s\nsource_sha256=%s\n' "$SOURCE" "$SOURCE_SHA256"
+    printf 'guest_ip=%s\n' "$ZBMC_IP"
     printf 'config=offset=0x%x size=0x%x\n' "$CONF_OFFSET" "$CONF_SIZE"
     printf 'ramdisk=offset=0x%x size=0x%x\n' "$RAMDISK_OFFSET" "$RAMDISK_SIZE"
     printf 'kernel=offset=0x%x size=0x%x\n' "$KERNEL_OFFSET" "$KERNEL_SIZE"

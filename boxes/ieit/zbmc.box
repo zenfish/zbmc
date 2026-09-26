@@ -68,7 +68,11 @@ zbmc_boot() {
     [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
     printf '%s\n' "$qp"
 }
-zbmc_running() { pgrep -f "ast2500-evb.*ifname=$ZBMC_TAP" | head -1; }
+zbmc_running() {
+    local pid
+    pid=$(pgrep -f "ast2500-evb.*ifname=$ZBMC_TAP" | head -1)
+    [ -n "$pid" ] && echo "$pid"
+}
 
 zbmc_build() { bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
 zbmc_ready() {
@@ -79,14 +83,25 @@ zbmc_ready() {
             return 1
         }
     done
+    if ! grep -Fxq "guest_ip=$ZBMC_IP" "$ZBMC_DIR/build-provenance.txt"; then
+        echo "IEIT image address differs from selected $ZBMC_IP - run: zbmc ieit build"
+        return 1
+    fi
     echo "ready (cold boot; preserved vendor services with reconstructed runtime environment)"
 }
 
 zbmc_clp() {
+    if ! zbmc_running >/dev/null 2>&1; then
+        echo "zbmc: ieit is down at $ZBMC_IP - start it: zbmc ieit start" >&2
+        return 1
+    fi
     local opts=(-T -o ForwardX11=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
                 -o ConnectTimeout=8 -o LogLevel=ERROR -p "$SSH_PORT")
     if [ "$#" -eq 0 ]; then
-        exec sshpass -p admin ssh "${opts[@]}" "admin@$ZBMC_IP"
+        sshpass -p admin ssh "${opts[@]}" "admin@$ZBMC_IP"
+        local rc=$?
+        [ "$rc" -eq 0 ] || echo "zbmc: IEIT SMASH CLP at $ZBMC_IP failed; check: zbmc ieit status -v" >&2
+        return "$rc"
     fi
     local output rc
     output=$(sshpass -p admin ssh "${opts[@]}" "admin@$ZBMC_IP" "$@" 2>&1)
@@ -96,6 +111,7 @@ zbmc_clp() {
         return 0
     fi
     printf '%s\n' "$output"
+    [ "$rc" -eq 0 ] || echo "zbmc: IEIT SMASH CLP at $ZBMC_IP failed; check: zbmc ieit status -v" >&2
     return "$rc"
 }
 

@@ -16,7 +16,11 @@ vendor SMASH/CLP management interface.</p>
 <h2 class="text-xl font-semibold mt-6 mb-2">SSH and SMASH/CLP</h2>
 <pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto"><code>sudo ./tools/zbmc ieit ssh
 sudo ./tools/zbmc ieit ssh 'id; uname -a'
-sudo ./tools/zbmc ieit clp</code></pre>
+sudo ./tools/zbmc ieit smash-clp</code></pre>
+<p class="mt-3">The selected address follows <code>zbmc</code>'s normal priority: per-box
+override, pool, then <code>zhosts.txt</code>. The IEIT build embeds that address in the guest image.
+After changing address configuration, run <code>zbmc ieit build</code> before starting the box;
+startup reports a mismatched image address.</p>
 <p class="mt-3">These commands use the same preserved port-22 OpenSSH service but different
 accounts. The firmware synthesizes <code>admin</code> through its IPMI NSS/PAM modules and launches
 <code>/usr/local/bin/smashclp</code>. The local UID-0 <code>sysadmin</code> account originally used

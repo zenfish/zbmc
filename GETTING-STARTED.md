@@ -165,7 +165,7 @@ The current measured acceptance boundary is in the README fleet table. Important
 - `megarac-hpe` accepts retained IPMI only. Cold boot is nondeterministic and automatically rerolls an
   attempt when the vendor `IPMIMain` process hits its known startup race. The published 8m07s result
   was total wall time for four attempts: three crashed and the fourth succeeded.
-- `ieit` accepts IPMI, Redfish, and the vendor Web-UI. Its optional `zbmc ieit clp` endpoint is
+- `ieit` accepts IPMI, Redfish, and the vendor Web-UI. Its optional `zbmc ieit smash-clp` endpoint is
   SMASH/CLP over SSH transport, not a Unix shell, and is not part of cold-boot readiness.
 - `idrac9` must cold-boot. Its USB network does not survive warm migration.
 - `idrac10` cold-boots by default. Its build downloads a hash-pinned matched checkpoint from

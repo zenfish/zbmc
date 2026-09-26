@@ -6,6 +6,7 @@ CONF_SOURCE=${2:?configuration tree required}
 WEB_SOURCE=${3:?Web-UI tree required}
 STAGE=${4:?staging directory required}
 OUTPUT_CRAMFS=${5:?output CramFS required}
+GUEST_IP=${6:?guest IPv4 address required}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$STAGE/rootfs
 VERIFY=$STAGE/verify
@@ -43,7 +44,8 @@ mv "$ROOT/zbmc-seed/conf/ssh_server_config.zbmc" \
 mv "$ROOT/etc/init.d/mountall.sh" "$ROOT/etc/init.d/mountall.vendor.sh"
 install -m 0755 "$HERE/rootfs-overlay/zbmc-runtime.sh" "$ROOT/etc/init.d/zbmc-runtime.sh"
 install -m 0755 "$HERE/rootfs-overlay/mountall-wrapper.sh" "$ROOT/etc/init.d/mountall.sh"
-install -m 0644 "$HERE/rootfs-overlay/interfaces" "$ROOT/zbmc-seed/conf/interfaces"
+sed "s/^    address .*/    address $GUEST_IP/" "$HERE/rootfs-overlay/interfaces" \
+    >"$ROOT/zbmc-seed/conf/interfaces"
 mv "$ROOT/etc/init.d/ncsicfg.sh" "$ROOT/etc/init.d/ncsicfg.vendor.sh"
 install -m 0755 "$HERE/rootfs-overlay/ncsicfg-wrapper.sh" "$ROOT/etc/init.d/ncsicfg.sh"
 mv "$ROOT/etc/init.d/phycfg.sh" "$ROOT/etc/init.d/phycfg.vendor.sh"
@@ -108,6 +110,7 @@ for link in \
 done
 grep -q 'zbmc-runtime.sh' "$VERIFY/etc/init.d/mountall.sh"
 test -f "$VERIFY/zbmc-seed/conf/BMC1/wolfpass/IPMI.conf"
+grep -Fxq "    address $GUEST_IP" "$VERIFY/zbmc-seed/conf/interfaces"
 grep -q '^sysadmin:x:0:0:sysadmin:/root:/bin/sh$' \
     "$VERIFY/zbmc-seed/conf/passwd"
 grep -q '^sysadmin:\$6\$zbmc\$' "$VERIFY/zbmc-seed/conf/shadow"

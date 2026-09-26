@@ -36,7 +36,7 @@ grep -Fq 'WEB_OFFSET=$((0x37c0000))' "$box/build.sh"
 grep -Fq -- "--exclude './Java'" "$box/build-rootfs.sh"
 grep -Fq 'mount_tmpfs /conf' "$box/rootfs-overlay/zbmc-runtime.sh"
 grep -Fq 'auto eth1' "$box/rootfs-overlay/interfaces"
-grep -Fq 'address 10.250.0.41' "$box/rootfs-overlay/interfaces"
+grep -Fq 'address 10.0.6.67' "$box/rootfs-overlay/interfaces"
 grep -Fq 'ifconfig eth1 hw ether "$MAC"' "$box/rootfs-overlay/ncsicfg-wrapper.sh"
 grep -Fq 'ifconfig eth1 hw ether "$MAC"' "$box/rootfs-overlay/phycfg-wrapper.sh"
 grep -Fq 'board EEPROM and host complex are not modeled' \
@@ -131,9 +131,10 @@ MOCK_FIXTURE="$fixture" \
 MOCK_PACKED="$packed" \
 PATH="$mock_bin:$PATH" \
     "$box/build-rootfs.sh" "$tmp/original.cramfs" "$conf" "$web" \
-        "$stage" "$tmp/service-rootfs.cramfs" >/dev/null
+        "$stage" "$tmp/service-rootfs.cramfs" 198.51.100.41 >/dev/null
 
 result="$stage/verify"
+grep -Fxq '    address 198.51.100.41' "$result/zbmc-seed/conf/interfaces"
 grep -Fxq 'vendor diagnostic' \
     "$result/etc/init.d/commerDiagnoseServer.vendor.sh"
 grep -Fq 'CommerDiagnose disabled' \
@@ -161,6 +162,22 @@ test ! -e "$result/usr/local/www/Java"
 grep -Fxq 'sysadmin:x:0:0:sysadmin:/root:/bin/sh' "$result/zbmc-seed/conf/passwd"
 grep -q '^sysadmin:\$6\$zbmc\$' "$result/zbmc-seed/conf/shadow"
 ! grep -q '^DenyUsers[[:space:]]\+sysadmin' "$result/zbmc-seed/conf/ssh_server_config"
+
+ready="$tmp/ready"
+mkdir -p "$ready"
+touch "$ready"/{ieit-runtime.ima,kernel.uimage,service-ramdisk.uimage}
+printf 'guest_ip=10.250.0.41\n' >"$ready/build-provenance.txt"
+check_ready() {
+    ZBMC_SOURCE_ONLY=1 ZBMC_DIR="$ready" bash -c \
+        '. "$1/tools/zbmc"; . "$1/boxes/ieit/zbmc.box"; zbmc_ready' _ "$repo"
+}
+if check_ready >"$tmp/ready-result"; then
+    echo 'IEIT accepted an image with the wrong guest address' >&2
+    exit 1
+fi
+grep -Fq 'image address differs from selected 10.0.6.67' "$tmp/ready-result"
+printf 'guest_ip=10.0.6.67\n' >"$ready/build-provenance.txt"
+check_ready | grep -Fq 'ready (cold boot'
 
 grep -Fq -- '-M ast2500-evb,fmc-model=mx66l51235f,bmc-console=uart5' "$box/boot.sh"
 grep -Fq -- 'loader,file=$WD/kernel.uimage,addr=0x83000000' "$box/boot.sh"
