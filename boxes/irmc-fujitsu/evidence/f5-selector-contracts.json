@@ -160,22 +160,25 @@
     },
     "34": {
       "target_va": "0x0001d104",
-      "status": "partial",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280034",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly one fan/sensor selector at offset4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none"
       },
-      "effect": "clears fan-controller stored values",
+      "effect": "clears stored values for mapped fan via fcClearStoredValues",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 helper success",
+        "0xc4 helper nonzero",
+        "0xc9 unmapped fan index 0xff",
+        "0xc7 unless total length exactly 5"
       ],
       "evidence": {
         "entry_va": "0x0001d104",
@@ -192,7 +195,7 @@
           "fcClearStoredValues"
         ]
       },
-      "notes": "Clear stored fan-controller values for selected fan"
+      "notes": "0x1d104-0x1d130 proves exact length, fan-index guard, helper and completion mapping."
     },
     "35": {
       "target_va": "0x0001d0c4",
@@ -200,18 +203,20 @@
       "request": {
         "prefix_hex": "80280035",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 3 bytes after selector; byte6 is status index 0..15; if signed byte5 is negative, reads status; otherwise byte7 is set value (except total length 9 rejected)"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "read branch returns one status byte; write branch no body"
       },
-      "effect": "undetermined from entry block",
+      "effect": "read branch calls utGetHostSystemStatus; write branch calls utSetHostSystemStatus",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 if total length <=6 or write branch total length ==9",
+        "0xc9 status index >15 or helper-rejected write",
+        "0x00 on successful read/write"
       ],
       "evidence": {
         "entry_va": "0x0001d0c4",
@@ -226,7 +231,7 @@
           "utSetHostSystemStatus"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1d0c4-0x1d100 and 0x20930-0x2093c prove read/write split, index bound, helper calls and response."
     },
     "40": {
       "target_va": "0x0001c44c",
@@ -304,18 +309,19 @@
       "request": {
         "prefix_hex": "80280042",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=7. Bytes 4, 5, 6 are passed as the three signal identifiers to GetComponentStatusSignalRead. Optional byte 7 supplies mode bits 0-1; mode is zero for exactly 7 bytes."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "GetComponentStatusSignalRead result: response offsets 4-6 are returned bytes at stack +437..439; byte at +439 is also the count for data copied from stack +440 into response offset 7. Response body length is 2 when mode bit 0 is clear, otherwise 3 + returned count. Underlying signal encoding and count bounds remain unproved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "reads component-status signals through GetComponentStatusSignalRead",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 when request length <7",
+        "helper completion byte is propagated; 0xcb and 0x01 receive special response handling"
       ],
       "evidence": {
         "entry_va": "0x0001c2d8",
@@ -329,9 +335,12 @@
         "direct_calls_in_linear_entry_region": [
           "GetComponentStatusSignalRead",
           "memcpy"
+        ],
+        "traced_paths": [
+          "0x1c2d8-0x1c37c: length guard, byte extraction, GetComponentStatusSignalRead call, mode and result packing"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "43": {
       "target_va": "0x0001c148",
@@ -442,18 +451,21 @@
       "request": {
         "prefix_hex": "80280048",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "one-byte sensor selector at offset4; total length 5 reads sensor value; length >5 uses byte5 to force/update sensor state (byte4 high bit rejected)"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "read mode: one sensor-state byte; write mode: none"
       },
-      "effect": "undetermined from entry block",
+      "effect": "read/force memory-module sensor state; write path updates shared sensor field +0x8f20 and calls asUpdateSensorStatus",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 on observed success path",
+        "0xc7 if total length <=4",
+        "0xc9 write-mode selector bit7 set",
+        "backend read errors vary"
       ],
       "evidence": {
         "entry_va": "0x0001c7a8",
@@ -470,7 +482,7 @@
           "PutMemoryPermdatSem"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1c7a8-0x1c82c, 0x1f8e8-0x1f924, 0x20cfc-0x20d14 prove read/write split, shared-state mutation and status flow; do not live-probe write mode."
     },
     "49": {
       "target_va": "0x0001c7a8",
@@ -478,18 +490,21 @@
       "request": {
         "prefix_hex": "80280049",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "one-byte sensor selector at offset4; total length 5 reads sensor value; length >5 uses byte5 to force/update sensor state (byte4 high bit rejected)"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "read mode: one sensor-state byte; write mode: none"
       },
-      "effect": "undetermined from entry block",
+      "effect": "read/force memory-module sensor state; write path updates shared sensor field +0x8fa0 and calls asUpdateSensorStatus",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 on observed success path",
+        "0xc7 if total length <=4",
+        "0xc9 write-mode selector bit7 set",
+        "backend read errors vary"
       ],
       "evidence": {
         "entry_va": "0x0001c7a8",
@@ -506,7 +521,7 @@
           "PutMemoryPermdatSem"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1c7a8-0x1c82c, 0x1f8e8-0x1f924, 0x20cfc-0x20d14 prove read/write split, shared-state mutation and status flow; do not live-probe write mode."
     },
     "50": {
       "target_va": "0x0001db8c",
@@ -790,18 +805,21 @@
       "request": {
         "prefix_hex": "80280070",
         "length_check_at_entry": "cmp\tr6, #9",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=10. Bytes 4-5 are little-endian SEL record ID; byte 6 must be 0x02 when the linked global flag at +0x70 is zero; bytes 7-8 are a little-endian field and byte 9 is another field. Later decoding path remains unresolved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "Uses GetSelRecordFromId and a subsequent SEL-error decoder. Exact variable response layout is not yet proved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "reads/decodes a SEL record; no mutation proved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <10",
+        "0xd5 for rejected byte-6 mode under the zero global flag",
+        "0xc9 if SEL record ID is not found",
+        "other backend codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001caf0",
@@ -814,9 +832,12 @@
         ],
         "direct_calls_in_linear_entry_region": [
           "GetSelRecordFromId"
+        ],
+        "traced_paths": [
+          "0x1caf0-0x1cb8c: input parse, mode guard, GetSelRecordFromId and branch"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "71": {
       "target_va": "0x0001ca64",
@@ -824,18 +845,20 @@
       "request": {
         "prefix_hex": "80280071",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=5. Byte 4 is the text-cache entry selector."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "Calls istTextCacheRead(selector, 0, response+7, 50, output-struct, -1). On success response offsets 4-5 contain little-endian total text length, offset 6 chunk length, and offset 7+ returned text bytes; body length = 3 + chunk length. Exact cache namespace and content are backend-defined."
       },
-      "effect": "undetermined from entry block",
+      "effect": "reads cached text and calls istTextCacheDelete(selector,-1) when reported total text length is zero; therefore not a pure read",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <5",
+        "0xcb when istTextCacheRead returns zero",
+        "0x00 on helper success"
       ],
       "evidence": {
         "entry_va": "0x0001ca64",
@@ -849,9 +872,12 @@
         "direct_calls_in_linear_entry_region": [
           "istTextCacheRead",
           "istTextCacheDelete"
+        ],
+        "traced_paths": [
+          "0x1ca64-0x1caec: istTextCacheRead result packing and conditional istTextCacheDelete"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "72": {
       "target_va": "0x0001c9a4",
@@ -859,18 +885,22 @@
       "request": {
         "prefix_hex": "80280072",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=7. Byte 4 must equal 0x02 when linked global flag at +0x70 is zero; bytes 5-6 are little-endian SEL record ID."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "On success offsets 4-7 hold little-endian decoded error code, offset 8 CSS severity, offset 9 decoded selector/type byte, and offset 10+ variable backend text. Text length expression remains unresolved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "reads a SEL record and decodes its error via GetSelRecordFromId and istGetErrorCodeFromSEL",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <7",
+        "0xd5 for rejected byte-4 mode under zero global flag",
+        "0xc9 when SEL ID not found",
+        "0xcb on decoder failure",
+        "0x00 on success"
       ],
       "evidence": {
         "entry_va": "0x0001c9a4",
@@ -883,9 +913,13 @@
         ],
         "direct_calls_in_linear_entry_region": [
           "GetSelRecordFromId"
+        ],
+        "traced_paths": [
+          "0x1c9a4-0x1ca60: input and SEL lookup",
+          "0x20828-0x20878: decoded error packing"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "73": {
       "target_va": "0x0001c878",
@@ -959,18 +993,21 @@
       "request": {
         "prefix_hex": "80280075",
         "length_check_at_entry": "cmp\tr6, #21",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=22. Bytes 4-17 are copied as a 14-byte SEL record; byte 18 is event-format selector 0..4; bytes 19-20 are a little-endian field; byte 21 is an additional field. The exact meanings of the latter fields remain backend-defined."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "istDecodeEvent produces CSS severity at offset 4, a little-endian field at offsets 5-6, little-endian decoded-text length at offsets 7-8, and variable decoded event text beginning at offset 11. Offset 10 is initialized to zero; offset 9 is the low byte of text length. Text length >50 branches to separate error handling; full returned-length arithmetic is unresolved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "decodes supplied event data using istDecodeEvent; no persistent mutation proved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <22",
+        "0xc9 for event-format byte >4",
+        "0xcb when istDecodeEvent returns zero",
+        "other length/error paths unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001bf24",
@@ -983,9 +1020,13 @@
         ],
         "direct_calls_in_linear_entry_region": [
           "memcpy"
+        ],
+        "traced_paths": [
+          "0x1bf24-0x1bf94: parse and format range guard",
+          "0x1fb5c-0x1fc18: istDecodeEvent, buildCssSeverity, response packing and istTextBufRelease"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "80": {
       "target_va": "0x0001be1c",
@@ -1061,18 +1102,20 @@
       "request": {
         "prefix_hex": "80280082",
         "length_check_at_entry": "not established at entry",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "none read by entry; shared minimum total length 4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "21 bytes produced by iELgetInfo"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none; reads iEL metadata",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 backend success",
+        "0xcb backend failure",
+        "0xc7 shared outer short request"
       ],
       "evidence": {
         "entry_va": "0x0001bdbc",
@@ -1087,7 +1130,7 @@
           "iELgetInfo"
         ]
       },
-      "notes": "Read iEL information"
+      "notes": "0x1bdbc-0x1bddc proves 21-byte backend output buffer, 25-byte total response and CB failure code; field meanings remain backend-defined."
     },
     "84": {
       "target_va": "0x0001bd28",
@@ -1130,18 +1173,21 @@
       "request": {
         "prefix_hex": "80280085",
         "length_check_at_entry": "cmp\tr6, #11",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=12. Bytes 4-5, 6-7 and 8-9 are three little-endian 16-bit fields; bytes 10 and 11 are single-byte fields; bytes 12+ are a variable event payload. The exact field meanings and backend limits remain unresolved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "On iELAddEntry success returns little-endian created entry ID in response offsets 4-5; error response contains no proved data body."
       },
-      "effect": "adds iEL event",
+      "effect": "adds an iEL entry through iELAddEntry (persistent event-log mutation)",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <12 or backend return 11",
+        "0xc4 for backend return 2",
+        "other iELAddEntry failures map through another shared error path",
+        "0x00 on success"
       ],
       "evidence": {
         "entry_va": "0x0001bc60",
@@ -1156,9 +1202,13 @@
           "memset",
           "memcpy",
           "iELAddEntry"
+        ],
+        "traced_paths": [
+          "0x1bc60-0x1bd24: parse, iELAddEntry call and returned ID",
+          "0x1e97c-0x1e998: backend error-code routing"
         ]
       },
-      "notes": "Add iEL entry"
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "86": {
       "target_va": "0x0001d074",
@@ -1166,18 +1216,21 @@
       "request": {
         "prefix_hex": "80280086",
         "length_check_at_entry": "cmp\tr6, #17",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=18. Bytes 4-17 are copied as a 14-byte SEL record and supplied to iELAddEntryFromSelData."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "On helper success returns little-endian created iEL entry ID at response offsets 4-5; backend failure packing is shared with selector 85."
       },
-      "effect": "adds iEL event from SEL",
+      "effect": "adds an iEL entry derived from SEL data (persistent event-log mutation)",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <18; backend return 11 shares the 85 error path",
+        "0xc4 for backend return 2 via shared path",
+        "other helper failures unresolved",
+        "0x00 on success"
       ],
       "evidence": {
         "entry_va": "0x0001d074",
@@ -1191,9 +1244,13 @@
         "direct_calls_in_linear_entry_region": [
           "memcpy",
           "iELAddEntryFromSelData"
+        ],
+        "traced_paths": [
+          "0x1d074-0x1d0c0: 14-byte SEL copy and iELAddEntryFromSelData",
+          "0x1bd08-0x1bd24: shared returned-ID packing"
         ]
       },
-      "notes": "Add iEL entry from SEL data"
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "87": {
       "target_va": "0x0001d038",
@@ -1201,18 +1258,20 @@
       "request": {
         "prefix_hex": "80280087",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=5. Byte 4=0x80 invokes clear-all. Byte 4=0x00 requires total length >=7 and uses bytes 5-6 as a little-endian entry ID for clear-one. Other byte-4 values route to utLogUserInfoiEL then return an error."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "No data body proved; completion-only reply on clear helper result."
       },
-      "effect": "undetermined from entry block",
+      "effect": "DESTRUCTIVE: byte 4=0x80 calls iELclearAllEntries; byte 4=0 calls iELclearEntry for one ID. Other modes invoke utLogUserInfoiEL before returning 0xce.",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for length <5, or mode 0 with length <7",
+        "0x00 when selected clear helper returns zero",
+        "0xce on helper failure and for other mode values"
       ],
       "evidence": {
         "entry_va": "0x0001d038",
@@ -1225,9 +1284,14 @@
         ],
         "direct_calls_in_linear_entry_region": [
           "utLogUserInfoiEL"
+        ],
+        "traced_paths": [
+          "0x1d038-0x1d070: mode and length branches",
+          "0x20898-0x208c8: iELclearAllEntries and iELclearEntry call paths",
+          "0x1cf40: error completion"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "89": {
       "target_va": "0x0001cf48",
@@ -1299,22 +1363,25 @@
     },
     "00": {
       "target_va": "0x0001d51c",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "80280000",
         "length_check_at_entry": "not established at entry",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total length 9 or 11; little-endian 32-bit address at offsets4-7, byte8 count <=64; 11-byte form adds control bytes at offsets9-10"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "up to count bytes read from validated address on one branch; exact alternate control modes unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "reads mapped BMC memory on the traced branch; no write proved there",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 on unsupported length",
+        "0xce on invalid count/control combination",
+        "0xc9 invalid address on traced branch",
+        "other modes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001d51c",
@@ -1327,26 +1394,30 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1d51c-0x1d548, 0x1f410-0x1f580, 0x1f93c-0x1f9b0 prove lengths, address/count fields, range checks and direct byte dereference. Unsafe to live-probe arbitrary addresses."
     },
     "07": {
       "target_va": "0x0001d5e4",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "80280007",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "nested selector byte at offset4 (observed 01,02,03,04,07); selector-specific tail"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "nested-selector-specific; selector 02 returns one configuration byte from 0x2140"
       },
-      "effect": "undetermined from entry block",
+      "effect": "nested flash/dual-image operations; selector 01 writes configuration space 0x2140, selector 03/04/07 delegate flash/dual-image helpers",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc1 if prerequisite shared flag !=1",
+        "0xc7 selector-specific length mismatch",
+        "0xff configuration read failure",
+        "0xd5 card in active flash mode",
+        "other nested codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001d5e4",
@@ -1359,7 +1430,15 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1d5e4-0x1d628 maps inner table; 0x1e0a0-0x1e0ec reads config 0x2140; 0x1e0f0-0x1e164 writes it; 0x1e370-0x1e3dc calls AMIDualImageSupport.",
+      "nested_dispatch": {
+        "01": "0x0001e0f0 exact length 6; WriteConfigurationSpace(0x2140, one byte)",
+        "02": "0x0001e0a0 exact length 5; ReadConfigurationSpace(0x2140, one byte)",
+        "03": "0x0001e068 exact length 6; flash mode/configuration write",
+        "04": "0x0001e370 AMIDualImageSupport",
+        "05-06": "0x00021464 explicit rejection",
+        "07": "0x0001e370 AMIDualImageSupport"
+      }
     },
     "08": {
       "target_va": "0x0001d3e8",
@@ -1432,22 +1511,25 @@
     },
     "0b": {
       "target_va": "0x0001d54c",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028000b",
         "length_check_at_entry": "not established at entry",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "nested flash selector at offset4; five-byte form with 0x80 starts BIOS TFTP flash, six-byte form has additional flash-control flags"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "branch-specific; backend-generated status"
       },
-      "effect": "undetermined from entry block",
+      "effect": "can start BIOS/TFTP firmware update or modify flash override state",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc1 if prerequisite shared flag !=1",
+        "0xc7 unsupported length",
+        "0xcc invalid branch parameters",
+        "backend-dependent codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001d54c",
@@ -1460,7 +1542,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1d54c-0x1d590; 0x201e8-0x20230 calls tflashSetOverride then startBiosFlashTftp for 0x80; 0x205d0-0x20624 calls FlashOverHTI for six-byte branch. Do not live-probe."
     },
     "0c": {
       "target_va": "0x0001d62c",
@@ -1605,18 +1687,20 @@
       "request": {
         "prefix_hex": "8028002c",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total length 4 or 5 clears all sensor-force and power-history-force overrides; longer requests accept nested ASCII F/I modes"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "no body on clear/reset-injection branch; other nested mode responses unresolved"
       },
-      "effect": "clears force overrides",
+      "effect": "length<=5 clears all sensor and power-history force overrides; nested IR branch calls ResetSensorInject",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 on clear branch",
+        "0xc9 invalid nested mode",
+        "other nested codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001d2d0",
@@ -1632,7 +1716,7 @@
           "clearAllPowerHistoryForce"
         ]
       },
-      "notes": "Clear all forced sensor readings and forced power-history values"
+      "notes": "0x1d2d0-0x1d2e8, 0x1e70c-0x1e750 prove global clear and nested FI/IR dispatch. Both paths mutate force state; no live probe."
     },
     "2d": {
       "target_va": "0x0001d898",
@@ -1673,18 +1757,19 @@
       "request": {
         "prefix_hex": "8028002e",
         "length_check_at_entry": "cmp\tr6, #8",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 5 bytes after selector: bytes4-5 arguments, little-endian output cap at6-7, byte8 mode, data at9+ (length total-9)"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "backend-generated bytes and length constrained by channel maximum"
       },
-      "effect": "undetermined from entry block",
+      "effect": "delegates raw test command to bmcTestCmdMain; side effects backend-dependent",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "backend return used directly as completion code",
+        "0xc7 if total length <=8"
       ],
       "evidence": {
         "entry_va": "0x0001c0cc",
@@ -1701,7 +1786,7 @@
           "bmcTestCmdMain"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1c0cc-0x1c144 proves channel cap, byte offsets and backend delegation. No live probe."
     },
     "2f": {
       "target_va": "0x0001d274",
@@ -1947,18 +2032,20 @@
       "request": {
         "prefix_hex": "8028005a",
         "length_check_at_entry": "cmp\tr6, #7",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 4 bytes after selector: argument bytes at offsets4-5, requested read count at6, write data at7+ (write length=total-7)"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "on success exactly requested read-count bytes from peciMWR output"
       },
-      "effect": "undetermined from entry block",
+      "effect": "performs PECI multi-write/read transaction via peciMWR",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 backend success",
+        "0x44 backend nonzero",
+        "0xc7 if total length <=7"
       ],
       "evidence": {
         "entry_va": "0x0001d290",
@@ -1973,7 +2060,7 @@
           "peciMWR"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1d290-0x1d2cc proves argument positions, write length, response size and backend status. Hardware side effects depend on PECI target; no live probe."
     },
     "5c": {
       "target_va": "0x0001d83c",
@@ -2084,18 +2171,22 @@
       "request": {
         "prefix_hex": "8028008a",
         "length_check_at_entry": "cmp\tr6, #8",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length >=9. Bytes 4-7 are four backend fields. Bytes 8+ are treated as a NUL-terminated string after the handler writes a NUL at the request buffer's end, then measures strlen(request+8). Exact field meanings and string encoding are not proved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "Completion-only response; no returned data body proved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "writes/sends an iEL socket event via iELwriteSocketEvent (externally visible event side effect)",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 for request length <9",
+        "0xc9 when helper returns 11",
+        "0xcb when helper returns 14",
+        "0x00 when helper returns zero",
+        "0xce for other helper returns"
       ],
       "evidence": {
         "entry_va": "0x0001ceac",
@@ -2109,9 +2200,12 @@
         "direct_calls_in_linear_entry_region": [
           "strlen",
           "iELwriteSocketEvent"
+        ],
+        "traced_paths": [
+          "0x1ceac-0x1cf44: forced string terminator, strlen, iELwriteSocketEvent call and return mapping"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "8b": {
       "target_va": "0x0001da70",
@@ -2188,18 +2282,20 @@
       "request": {
         "prefix_hex": "8028008d",
         "length_check_at_entry": "sub\tr2, r6, #8 (followed by comparison; inspect entry)",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "total request length must be 8 or 9. Byte 5 chooses operation. Mode 0 uses byte 7, optionally byte 8 as a high byte, as a little-endian NVMe index. Mode 1 passes fields to InterfaceControl; its exact protocol remains unresolved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "For mode 0, successful getNvmeData returns 45 body bytes (total reply length 49): data drawn from backend offsets +39, +40..41, +44..63 (20 bytes), +12..27 (16 bytes), +36..38 (3 bytes), with some additional packing. Mode-1 response is unresolved."
       },
-      "effect": "undetermined from entry block",
+      "effect": "mode 0 reads NVMe data; mode 1 invokes InterfaceControl and may mutate interface state, exact effect unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 unless request length is 8 or 9; other mode errors unresolved",
+        "0xcb on getNvmeData failure",
+        "0x00 on mode-0 success"
       ],
       "evidence": {
         "entry_va": "0x0001d900",
@@ -2213,9 +2309,13 @@
         "direct_calls_in_linear_entry_region": [
           "getNvmeData",
           "memcpy"
+        ],
+        "traced_paths": [
+          "0x1d900-0x1d9b0: length, mode dispatch and getNvmeData",
+          "0x1e86c-0x1e8c4: mode-0 response packing"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "8e": {
       "target_va": "0x0001bbe8",
@@ -2353,22 +2453,24 @@
     },
     "a4": {
       "target_va": "0x0001ba60",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "802800a4",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "nested selector byte at offset4 (01..28 hex); selector-specific tail"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "nested-selector-specific; not decoded uniformly"
       },
-      "effect": "undetermined from entry block",
+      "effect": "40-way nested controller including comm-register flags, logs, FRU, bonding, interface and snapshot actions",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 outer length <=4",
+        "0xc9 invalid nested selector or explicit stub",
+        "selector-specific codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001ba60",
@@ -2381,21 +2483,279 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1ba60-0x1bb18 is 40-entry jump table; targets in nested_dispatch are linked VAs. Entry calls are evidence of reachable code, not complete nested wire contracts.",
+      "nested_dispatch": [
+        {
+          "inner_selector": "0x01",
+          "target_va": "0x0002152c",
+          "entry_behavior": "read comm bit 0x100"
+        },
+        {
+          "inner_selector": "0x02",
+          "target_va": "0x00021510",
+          "entry_behavior": "reset comm bit 0x100"
+        },
+        {
+          "inner_selector": "0x03",
+          "target_va": "0x00020920",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x04",
+          "target_va": "0x00020920",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x05",
+          "target_va": "0x0002159c",
+          "entry_behavior": "read comm bit 0x80 / SD status"
+        },
+        {
+          "inner_selector": "0x06",
+          "target_va": "0x00021580",
+          "entry_behavior": "reset comm bit 0x80"
+        },
+        {
+          "inner_selector": "0x07",
+          "target_va": "0x00021564",
+          "entry_behavior": "read comm bit 0x40"
+        },
+        {
+          "inner_selector": "0x08",
+          "target_va": "0x00021548",
+          "entry_behavior": "reset comm bit 0x40"
+        },
+        {
+          "inner_selector": "0x09",
+          "target_va": "0x000216f0",
+          "entry_behavior": "set ASRR disable"
+        },
+        {
+          "inner_selector": "0x0a",
+          "target_va": "0x000216d4",
+          "entry_behavior": "clear ASRR disable"
+        },
+        {
+          "inner_selector": "0x0b",
+          "target_va": "0x000216b8",
+          "entry_behavior": "read ASRR disable"
+        },
+        {
+          "inner_selector": "0x0c",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x0d",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x0e",
+          "target_va": "0x0002169c",
+          "entry_behavior": "read modular LAN port"
+        },
+        {
+          "inner_selector": "0x0f",
+          "target_va": "0x00021680",
+          "entry_behavior": "read low-noise mode"
+        },
+        {
+          "inner_selector": "0x10",
+          "target_va": "0x0002163c",
+          "entry_behavior": "GPIO function lookup"
+        },
+        {
+          "inner_selector": "0x11",
+          "target_va": "0x00021628",
+          "entry_behavior": "LVP device status"
+        },
+        {
+          "inner_selector": "0x12",
+          "target_va": "0x000215b8",
+          "entry_behavior": "SD-card status"
+        },
+        {
+          "inner_selector": "0x13",
+          "target_va": "0x00021a88",
+          "entry_behavior": "start debug-log export"
+        },
+        {
+          "inner_selector": "0x14",
+          "target_va": "0x00021a6c",
+          "entry_behavior": "read debug-log export status"
+        },
+        {
+          "inner_selector": "0x15",
+          "target_va": "0x00021a44",
+          "entry_behavior": "delete debug-log archive"
+        },
+        {
+          "inner_selector": "0x16",
+          "target_va": "0x00021a04",
+          "entry_behavior": "I2C bus number"
+        },
+        {
+          "inner_selector": "0x17",
+          "target_va": "0x000219e4",
+          "entry_behavior": "get LAN link status"
+        },
+        {
+          "inner_selector": "0x18",
+          "target_va": "0x000219c4",
+          "entry_behavior": "initialize LAN link status"
+        },
+        {
+          "inner_selector": "0x19",
+          "target_va": "0x000219a0",
+          "entry_behavior": "read SGPIO input"
+        },
+        {
+          "inner_selector": "0x1a",
+          "target_va": "0x0002191c",
+          "entry_behavior": "read memory architecture"
+        },
+        {
+          "inner_selector": "0x1b",
+          "target_va": "0x000218f8",
+          "entry_behavior": "read feature enable"
+        },
+        {
+          "inner_selector": "0x1c",
+          "target_va": "0x000218e0",
+          "entry_behavior": "file state probe"
+        },
+        {
+          "inner_selector": "0x1d",
+          "target_va": "0x000218bc",
+          "entry_behavior": "file state probe"
+        },
+        {
+          "inner_selector": "0x1e",
+          "target_va": "0x0002189c",
+          "entry_behavior": "update FRU from CSV"
+        },
+        {
+          "inner_selector": "0x1f",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x20",
+          "target_va": "0x000217d0",
+          "entry_behavior": "interface control"
+        },
+        {
+          "inner_selector": "0x21",
+          "target_va": "0x0002179c",
+          "entry_behavior": "get system configuration"
+        },
+        {
+          "inner_selector": "0x22",
+          "target_va": "0x00021750",
+          "entry_behavior": "get bonding active slave"
+        },
+        {
+          "inner_selector": "0x23",
+          "target_va": "0x0002170c",
+          "entry_behavior": "change bonding active slave"
+        },
+        {
+          "inner_selector": "0x24",
+          "target_va": "0x00021830",
+          "entry_behavior": "get bonding linked slaves"
+        },
+        {
+          "inner_selector": "0x25",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x26",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x27",
+          "target_va": "0x0001ef60",
+          "entry_behavior": "explicit C9 stub"
+        },
+        {
+          "inner_selector": "0x28",
+          "target_va": "0x000221b4",
+          "entry_behavior": "snapshot invocation"
+        }
+      ],
+      "nested_contracts": {
+        "0x01/0x05/0x07": {
+          "request": "inner selector only (total length >=5); tests communication-register bit 0x100 / 0x80 / 0x40 respectively",
+          "response": "one byte: 06 if bit set, 00 if clear",
+          "effect": "none; reads communication-register bit",
+          "evidence": "0x2152c-0x21544, 0x2159c-0x215b4, 0x21564-0x2157c, 0x20a34-0x20a3c, 0x20cd0-0x20cd8"
+        },
+        "0x02/0x06/0x08": {
+          "request": "inner selector only (total length >=5); resets communication-register bit 0x100 / 0x80 / 0x40 respectively",
+          "response": "none",
+          "effect": "calls onResetCommunicationReg; helper return ignored",
+          "evidence": "0x21510-0x21528, 0x21580-0x21598, 0x21548-0x21560"
+        },
+        "0x09/0x0a": {
+          "request": "inner selector only (total length >=5)",
+          "response": "none",
+          "effect": "calls onModifyASRR_DisableFlag(1) / onModifyASRR_DisableFlag(0), helper return ignored",
+          "evidence": "0x216f0-0x21708 and 0x216d4-0x216ec"
+        },
+        "0x0b": {
+          "request": "inner selector only (total length >=5)",
+          "response": "one byte: 06 if onGetASRR_DisableFlag nonzero, else 00",
+          "effect": "none; reads ASRR disable flag",
+          "evidence": "0x216b8-0x216d0, 0x20a34-0x20a3c, 0x20cd0-0x20cd8"
+        },
+        "0x13": {
+          "request": "inner selector only (total length >=5)",
+          "response": "one byte: 01 if start_fts_log_export returns zero, else 00",
+          "effect": "starts debug-log export",
+          "evidence": "0x21a88-0x21aac"
+        },
+        "0x14": {
+          "request": "inner selector only (total length >=5)",
+          "response": "one byte from get_fts_log_export_status",
+          "effect": "none; reads export status",
+          "evidence": "0x21a6c-0x21a84"
+        },
+        "0x15": {
+          "request": "inner selector only (total length >=5)",
+          "response": "one byte: 00 on nonzero delete_debug_log_archive return, 01 on zero return",
+          "effect": "deletes debug-log archive",
+          "evidence": "0x21a44-0x21a68 and 0x20ccc-0x20cd8"
+        },
+        "0x1e": {
+          "request": "inner selector only (total length >=5)",
+          "response": "one byte: utUpdateFruFromCsv return",
+          "effect": "updates FRU from CSV",
+          "evidence": "0x2189c-0x218b8"
+        },
+        "0x28": {
+          "request": "one branch byte at offset5: 01 immediate, 02 delayed (total length >=6)",
+          "response": "no body; backend return used as completion code",
+          "effect": "invokes snapshot immediately or with delay",
+          "evidence": "0x221b4-0x221dc and 0x222d8-0x222e4"
+        }
+      }
     },
     "a5": {
       "target_va": "0x0001ba3c",
-      "status": "partial",
+      "status": "decoded",
       "request": {
         "prefix_hex": "802800a5",
         "length_check_at_entry": "cmp\tr6, #12",
-        "payload": "at least 13 bytes after selector; bytes4-12 must spell 'Reset POH' for side effect; little-endian 32-bit value at 13-16"
+        "payload": "bytes4-12 must spell 'Reset POH' for side effect; total length 13-16 selects fixed reset value, length >=17 supplies little-endian 32-bit value at 13-16"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
         "body": "none on observed paths"
       },
-      "effect": "for matching magic and value <0x800000, calls WrBBRegPOH with transformed value; other paths appear no-op success",
+      "effect": "matching magic with total length 13-16 calls WrBBRegPOH(0x02800000); length >=17 and value <0x800000 calls WrBBRegPOH((value | 0x800000) * 5); nonmatching magic is no-op success",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
@@ -2414,7 +2774,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "0x1ba3c-0x1ba5c, 0x1faa0-0x1fb38, and 0x22378-0x223a8 prove magic, value bound and persistent-register write. Unsafe to live-probe."
+      "notes": "0x1ba3c-0x1ba5c, 0x1faa0-0x1fb38, 0x22378-0x223a8, and 0x223c4-0x223f8 prove magic, both length branches, value bound and persistent-register write. Unsafe to live-probe."
     },
     "a8": {
       "target_va": "0x0001b65c",
@@ -2764,22 +3124,23 @@
     },
     "b6": {
       "target_va": "0x0001ba1c",
-      "status": "partial",
+      "status": "decoded",
       "request": {
         "prefix_hex": "802800b6",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly one CSS test-mode byte at offset4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none"
       },
-      "effect": "sets CSS test mode",
+      "effect": "calls SetCssTest with requested byte",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 after helper return (return ignored)",
+        "0xc7 unless total length exactly 5"
       ],
       "evidence": {
         "entry_va": "0x0001ba1c",
@@ -2794,7 +3155,7 @@
           "SetCssTest"
         ]
       },
-      "notes": "Set CSS test mode"
+      "notes": "0x1ba1c-0x1ba38 proves exact length, helper argument, ignored return and empty success body."
     },
     "de": {
       "target_va": "0x0001b9c4",
@@ -2802,18 +3163,21 @@
       "request": {
         "prefix_hex": "802800de",
         "length_check_at_entry": "cmp\tr6, #7",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least four bytes after selector; offsets4-7 must equal 43 4c 52 aa ('CLR' + 0xaa); extra bytes ignored in traced branch"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none"
       },
-      "effect": "undetermined from entry block",
+      "effect": "calls ConfigurationSpaceStatus mode 4 with fixed configuration pointer; precise backend mutation unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 backend returns zero",
+        "0xff backend nonzero",
+        "0xcc bad magic",
+        "0xc7 if total length <=7"
       ],
       "evidence": {
         "entry_va": "0x0001b9c4",
@@ -2828,7 +3192,7 @@
           "ConfigurationSpaceStatus"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1b9c4-0x1ba18 proves magic and mode-4 ConfigurationSpaceStatus call. Configuration/status side effect may be persistent; do not live-probe."
     },
     "df": {
       "target_va": "0x0001b77c",
@@ -2870,18 +3234,21 @@
       "request": {
         "prefix_hex": "802800e0",
         "length_check_at_entry": "cmp\tr6, #7",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least four bytes after selector; offsets4-6 must equal 43 4c 52 ('CLR'); offset7 accepts 00, aa or bb; extra bytes ignored"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "one byte from ConfigurationSpaceStatus mode 5 on observed return path"
       },
-      "effect": "undetermined from entry block",
+      "effect": "calls ConfigurationSpaceStatus mode 1/2/3 based on magic byte, emits an event and may unlink a state file on backend success",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xcc bad magic",
+        "0xc7 if total length <=7",
+        "0xff initial ConfigurationSpaceStatus failure",
+        "other backend codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001b6d4",
@@ -2896,7 +3263,7 @@
           "ConfigurationSpaceStatus"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1b6d4-0x1b778, 0x21f00-0x21f14 and 0x220c0-0x220e0 prove magic, mode dispatch, event/unlink and status query. Do not live-probe."
     },
     "e1": {
       "target_va": "0x0001b8f8",
@@ -3334,18 +3701,21 @@
       "request": {
         "prefix_hex": "802800fc",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 2 bytes after selector; byte4 must 01, byte5 must 01, total length exactly 7 on connection-test branch; byte6 passed to ldapTestConnectionReq"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "one byte filled by ldapTestConnectionReq on success"
       },
-      "effect": "undetermined from entry block",
+      "effect": "initiates LDAP test connection (network side effect)",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc1 byte4 !=01",
+        "0xcc byte5 !=01",
+        "0xc7 unless total length exactly 7 on test branch",
+        "backend return used directly as completion code"
       ],
       "evidence": {
         "entry_va": "0x0001b41c",
@@ -3360,7 +3730,7 @@
           "fts_debugout_oemcmds"
         ]
       },
-      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+      "notes": "0x1b41c-0x1b430 and 0x1f7d8-0x1f804 prove nested guards, exact length, LDAP call and output pointer."
     },
     "fd": {
       "target_va": "0x0001b3b8",

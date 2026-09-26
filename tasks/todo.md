@@ -153,6 +153,39 @@ wire-contract decoding and live applicability proof, not a missing dispatch deno
 Remote `main` tips were verified after push: zipmi `2f33c11` and zBMC `f03dd63`.
 The unrelated `.playwright-mcp/` directory remains untracked and untouched.
 
+## Decode remaining Fujitsu iRMC S6 OEM wire contracts
+
+- [x] Reconfirm the pinned firmware corpus, existing status counts, and exact unresolved selectors/handlers; retain an explicit denominator.
+- [ ] Trace F1 BIOS selector leaves to terminal handlers and encode proved request fields, response layout, effects, and completion paths (43 decoded, 50 partial).
+- [ ] Trace F5 BMC selector leaves, prioritizing four unknown targets and high-impact partials; do not use unsafe live probes (24 decoded, 75 partial, none wholly unknown).
+- [ ] Trace 27 partial C0/D0 handlers through delegated helpers and activation gates (91 direct, 13 partial).
+- [ ] Trace 26 partial SCCI leaves and relevant standard/group overrides; separate wire contract from physical backend and runtime reachability (28 decoded, 8 partial; 24 standard/group records audited).
+- [x] Regenerate HTML and zipmi data from the improved evidence, preserving safety gates and explicit unresolved boundaries; no newly justified fixed codecs in this batch.
+- [x] Run source/hash/count checks, focused and full tests, package-install verification, and safe live checks where a request is proved read-only (prior 22 safe probes retained; no new safe probe was necessary).
+- [ ] Commit and push only zBMC and zipmi; leave unrelated files untouched.
+
+### Review
+
+In progress. Baseline: 228 selector leaves = 61 decoded, 163 partial, 4 unknown;
+104 C0/D0 handlers = 77 direct, 27 partial. The pinned static pass now has
+95 decoded, 133 partial, 0 wholly unknown selector leaves and 91 direct / 13 partial
+C0/D0 handlers. F1 is 43/50, F5 24/75, and other SCCI/blade 28/8 decoded/partial.
+The four formerly unknown F5 leaves have identified dispatch and high-risk effects,
+not complete backend semantics. E0/04 was reclassified from a misleading read-only
+NVRAM comparison to a maintenance multiplexer with FRU restore and IDPROM writes.
+The 2c/02 group-52 Redfish credential path was also corrected: any second byte
+reaches the handler, while non-A5 values clear a bootstrap flag before user creation.
+Standard 06/45 can bypass normal Set User Name validation after a config write.
+No unsafe live command was sent. The generated zBMC and zipmi HTML and zipmi source
+catalog now carry these statuses dynamically; zipmi version is 0.6.1.
+The zBMC generated reference, five evidence JSON files, and scoped documentation
+pairs parse/check; zipmi's full suite passes 2,358 tests and its 0.6.1 wheel
+contains the regenerated 232-operation catalog. The global documentation
+contract still reports unrelated stale/conflicting pairs in Lenovo, Redfish,
+the OEM audit, GETTING-STARTED, and IEIT; the three pairs touched here sync.
+Full decoding remains open: delegated helpers, platform gates, and mutable state
+must not be promoted merely from a named registration or caller wrapper.
+
 # OEM IPMI reference and fleet coverage audit
 
 - [x] Recover the original request and inventory all 11 registered BMCs.

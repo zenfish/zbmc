@@ -265,15 +265,15 @@
       "name": "Write system GUID to configuration space",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 20,
+        "payload": "16-byte system GUID at bytes 4..19"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "exact length 20 at 0x110e0; Set_BMCInfo_BMCSharedMem_SystemGUID at 0x11104 and WriteConfigurationSpace at 0x1111c; helper-error/success terminal branches remain unproven",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -414,15 +414,15 @@
       "name": "Uncorrectable-memory active state",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 8 checked, but one branch reads byte 8 and thus needs at least 9",
+        "payload": "byte 4 controls read/write branch; subsequent bytes include uncorrectable-memory active state fields"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mixed/read-or-mutate",
+      "guard": "length >7 at 0x11634 admits eight-byte request; non-high-bit branch reads request[8] at 0x1166c without a nine-byte guard, then can update indexed BMC state at 0x11680. High-bit branch returns C9 at 0x14218. Remaining mcGetUncorrMemActive/mcSetUncorrMemActive paths and response are unresolved; no live probe",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -442,23 +442,24 @@
       "candidate_call_trace_truncated": false
     },
     "18": {
-      "status": "partial",
-      "name": null,
+      "status": "decoded",
+      "name": "Read indexed BMC slot-record fields",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 5",
+        "payload": "byte 4 is a seven-bit slot index; trailing bytes ignored"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 11,
+        "payload": "two little-endian 16-bit fields from indexed record offsets +2/+4, one byte at +6, then little-endian 16-bit field from parallel indexed table"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "request length >4 and index high bit clear at 0x1137c-0x1138c; record presence byte at 0x113a0 must be nonzero, else CB; seven response bytes at 0x113b8-0x11400, CC00 length 11 at 0x113dc",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "CB for high-bit index or absent indexed record"
       ],
       "evidence_va": "0x0001137c",
       "entry_guard_instructions": [
@@ -531,23 +532,24 @@
       "candidate_call_trace_truncated": false
     },
     "1b": {
-      "status": "partial",
+      "status": "decoded",
       "name": "BIOS feature info get/set",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "subcommand 0: at least 9; subcommand 1: at least 5",
+        "payload": "subcommand 0 sets little-endian 32-bit BIOS feature flags at bytes 5..8; subcommand 1 reads current flags"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 8,
+        "payload": "current little-endian 32-bit BIOS feature flags for both subcommands"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mixed/read-or-mutate",
+      "guard": "subcommand switch at 0x1100c-0x1101c; setter requires length greater than 8 and calls utSetBiosFeatureInfo at 0x145d0; both paths call utGetBiosFeatureInfo at 0x11020 and return length 8; other subcommands return C9 at 0x13c94",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for unsupported subcommand"
       ],
       "evidence_va": "0x00011004",
       "entry_guard_instructions": [
@@ -561,23 +563,24 @@
       "candidate_call_trace_truncated": false
     },
     "1c": {
-      "status": "partial",
-      "name": null,
+      "status": "decoded",
+      "name": "Validate bounded BIOS subrecord request (no-op)",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 2*(byte 5 + 1), with at least 6 bytes overall",
+        "payload": "byte 4 must be 0..7; byte 5 must be 0..32; remaining bytes are ignored by this leaf"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read/compute",
+      "guard": "0x11048-0x1107c only validates length and two request bytes, then jumps directly to shared four-byte CC00 epilogue; invalid byte range returns C9 at 0x11ce0, insufficient length returns C7",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for out-of-range byte 4 or byte 5"
       ],
       "evidence_va": "0x00011048",
       "entry_guard_instructions": [
@@ -624,23 +627,24 @@
       "candidate_call_trace_truncated": false
     },
     "1e": {
-      "status": "partial",
+      "status": "decoded",
       "name": "BSPBR boot status get/set",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 5",
+        "payload": "byte 4 selects 0/1: get BSPBR boot status of bank 0/1; 2/3: set bank 0/1 status to zero; trailing bytes ignored"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "5 for get (0/1), 4 for set (2/3)",
+        "payload": "get returns one byte from getBSPBRBootStatus; set returns none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mixed/read-or-mutate",
+      "guard": "selector byte shifted right one at 0x10fd0; get path 0x14594-0x145a8 calls getBSPBRBootStatus(bank); set path 0x10fe0-0x10ff0 calls setBSPBRBootStatus(bank, 0); values 4..255 return C9 at 0x13208. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a stores bank 0/1 status at object+0x90b2/+0x90b3 (set helper 0xa9e70, get helper 0xaa790)",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for byte-4 values 4..255"
       ],
       "evidence_va": "0x00010fc4",
       "entry_guard_instructions": [
@@ -1320,19 +1324,19 @@
       "candidate_call_trace_truncated": true
     },
     "3c": {
-      "status": "partial",
-      "name": "Remove BIOS-side file",
+      "status": "decoded",
+      "name": "Delete all 40 persisted PPRData records",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 4,
         "payload": "none"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
       "effect": "mutating",
-      "guard": "exact length 4 at 0x11c34; loop at 0x11c5c-0x11c7c builds and unlinks 40 BIOS-side file paths; return payload/status still path-dependent",
+      "guard": "exact length 4 at 0x11c34; loop at 0x11c5c-0x11c7c builds and unlinks /conf/fts/nvram/PPRData00..39 (format literal at 0x119cc) without checking unlink return; initialized response-extra length zero at 0x10a28 and success response length 4 via 0x11cb4-0x11cbc",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1355,15 +1359,15 @@
       "name": "Write configuration space",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 20,
+        "payload": "16 configuration-space bytes at bytes 4..19"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "exact length 20 at 0x11e38; WriteConfigurationSpace at 0x11e64; both helper-result branches converge on C7 epilogue at 0x10eb8, so a mutating attempt can report error; retained partial pending full helper semantics",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1380,23 +1384,26 @@
       "candidate_call_trace_truncated": false
     },
     "43": {
-      "status": "partial",
-      "name": "Read configuration space",
+      "status": "decoded",
+      "name": "Read configuration-space presence marker",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 6,
+        "payload": "byte 4 must equal 1 and byte 5 must equal 0"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 6,
+        "payload": "constant byte 1, then 0xff if the first configuration-space byte equals 6 or 0x00 otherwise"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "exact length 6 at 0x11cc4; subcommand and zero byte at 0x11cd4/0x14c9c; ReadConfigurationSpace(section 0x1a00) at 0x14cd0; success marker/status response at 0x14cdc-0x14d00, helper failure CB at 0x15bf0",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 if byte 4 is not 1",
+        "CC if byte 5 is not 0",
+        "CB if ReadConfigurationSpace fails"
       ],
       "evidence_va": "0x00011cc0",
       "entry_guard_instructions": [
@@ -1411,23 +1418,25 @@
       "candidate_call_trace_truncated": false
     },
     "44": {
-      "status": "partial",
-      "name": null,
+      "status": "decoded",
+      "name": "Read/write seven BIOS configuration-mirror bytes",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "5 for read, 12 for write",
+        "payload": "byte 4 must be zero; write carries seven bytes at bytes 5..11"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "11 for read, 4 for write",
+        "payload": "read returns seven bytes from BMC object offsets 0xa46d..0xa473; write returns none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mixed/read-or-mutate",
+      "guard": "length range 5..12 and byte-4 zero checks at 0x11ce8-0x11d0c; read copies seven object bytes at 0x14ee0-0x14f2c; write stores seven request bytes at 0x14e90-0x14edc; lengths 6..11 return C7",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 when byte 4 is nonzero",
+        "C7 for lengths 6..11"
       ],
       "evidence_va": "0x00011ce8",
       "entry_guard_instructions": [
@@ -1443,15 +1452,15 @@
       "name": "Read PCIe AIC metadata and status",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 6,
+        "payload": "byte 5 selects the PCIe AIC; byte 4 is not consumed in the traced branch"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "exact length 6 at 0x11d20; reads AIC status, bifurcation, form factor, short name, and connectivity helpers; variable string response and unavailable-AIC branch remain unresolved",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1477,15 +1486,15 @@
       "name": "Read configuration space",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "valid caller must send at least 5 bytes; firmware does not enforce this",
+        "payload": "byte 4 used as a subselector after configuration-space read"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "ReadConfigurationSpace first called at 0x11e24 and again at 0x13610; request[4] read unconditionally at 0x11e20 despite shared minimum of four bytes. Nested subselector and variable response remain unresolved; do not treat four-byte request as safe",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1899,23 +1908,25 @@
       "candidate_call_trace_truncated": true
     },
     "63": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Read SMBIOS structure data",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 8,
+        "payload": "byte 4 must equal 1; byte 5 is SMBIOS structure type; bytes 6..7 are little-endian offset"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "7+N, where helper returns N in 0..50",
+        "payload": "remaining-byte count (zero at end), reserved zero, returned-byte count N, then N SMBIOS bytes"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "exact length 8 at 0x12054; subcommand 1 gate at 0x1206c; smbiosGetStructData(type, offset, response+7, 0x32, length-out) at 0x151ac-0x151cc; negative helper result CB at 0x14e58; success response length 7+N at 0x151d8-0x15204",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "CC if byte 4 is not 1",
+        "CB if SMBIOS helper returns negative"
       ],
       "evidence_va": "0x00012054",
       "entry_guard_instructions": [
@@ -1928,23 +1939,24 @@
       "candidate_call_trace_truncated": false
     },
     "64": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Start BIOS PFR flash",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 5,
+        "payload": "byte 4 selects flash-thread action 0 or 1"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating/asynchronous",
+      "guard": "exact length 5 at 0x126b4; value 0 writes SEL entry and calls startBiosPfrFlashthd(4) at 0x14bb8-0x14be0; value 1 calls startBiosPfrFlashthd(0x0e) at 0x126d0-0x126dc; both return CC00 length 4 without checking helper result; other values return C9 at 0x13c94. Pinned libfts_util.so.1.30.73 helper 0x76710 checks PFR capability then calls detached pthread_create; failure is not reflected in IPMI completion",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for byte-4 values other than 0 or 1"
       ],
       "evidence_va": "0x000126a8",
       "entry_guard_instructions": [
@@ -1990,19 +2002,19 @@
       "candidate_call_trace_truncated": false
     },
     "66": {
-      "status": "partial",
-      "name": "Set default boot order Redfish action",
+      "status": "decoded",
+      "name": "Consume Redfish set-default-boot-order action marker",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 4,
+        "payload": "none"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 5,
+        "payload": "one byte: 1 if the marker existed (unlink attempted), 0 otherwise"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating/conditional",
+      "guard": "exact length 4 at 0x12144; helper call 0x12154, byte response at 0x1215c, length 5 via 0x11cb4. In pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a, checkSetDefaultBootOrderRfAction at 0x5bd44 uses __xstat then unlinks /conf/redfish/bios/BPFJ_BiosSetDefaultBootOrder at 0x5bd84; unlink result is ignored",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -2052,23 +2064,24 @@
       "candidate_call_trace_truncated": false
     },
     "68": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Start BIOS PFR flash",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 5,
+        "payload": "byte 4 selects flash-thread action 0 or 1"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating/asynchronous",
+      "guard": "exact length 5 at 0x12870; value 0 calls startBiosPfrFlashthd(0x0d) at 0x14940, value 1 calls startBiosPfrFlashthd(0x0f) at 0x14924, both return CC00 length 4 without checking helper result; other values return C9 at 0x12894. Pinned libfts_util.so.1.30.73 helper 0x76710 checks PFR capability then calls detached pthread_create; a failed/no-PFR start is not reflected in IPMI completion",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for byte-4 values other than 0 or 1"
       ],
       "evidence_va": "0x00012870",
       "entry_guard_instructions": [
@@ -2114,15 +2127,15 @@
       "name": "Set CPU S3M state",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 5",
+        "payload": "all bytes from offset 4 onward passed intact to ftsCpuS3mSet with length (request length - 4)"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "length exactly 4 rejected C7 at 0x12438-0x1245c; ftsCpuS3mSet(request+4, len-4) at 0x12ff8-0x13004; zero helper result returns CC00 length 4, nonzero result is returned as completion; helper's 684-byte state-change contract remains unresolved",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -2145,15 +2158,15 @@
       "name": "Get CPU S3M state",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 4,
+        "payload": "none"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "exact length 4 at 0x12018; ftsCpuS3mGet(response+4, length-out) at 0x13444-0x1345c; helper failure returns C7 at 0x12040; success length is 4 plus helper-provided value, whose maximum and field layout remain unresolved",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -2210,19 +2223,22 @@
       "name": "Set server boot option",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 6",
+        "payload": "bytes 4 and 5 passed as the first two arguments to setServerBootOptionEx; trailing bytes ignored by wrapper"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "r6>5 at 0x125f8; helper setServerBootOptionEx called at 0x13910 with request bytes 4/5 and utIsBiosRequest-derived context, return zero yields CC00 length 4 at 0x12d24; helper error 0x0b maps C9, 0x13 maps D5, all others C0. Internal helper side effects and error conditions remain unresolved",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C9 for helper result 0x0b",
+        "D5 for helper result 0x13",
+        "C0 for other nonzero helper results"
       ],
       "evidence_va": "0x000125ec",
       "entry_guard_instructions": [
@@ -2237,19 +2253,19 @@
       "candidate_call_trace_truncated": false
     },
     "d2": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get server boot option",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 4,
+        "payload": "none"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 5,
+        "payload": "one server-boot-option byte"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "no extra input read; getServerBootOption at 0x12618, response byte at 0x12624, CC00 length 5 via 0x125e4. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a reads object+0x909c under lock at 0xa9e48",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -2271,19 +2287,21 @@
       "name": "Write VIOM flag",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "at least 5",
+        "payload": "byte 4 is VIOM flag value 0 or 1; trailing bytes ignored by wrapper"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "VIOM feature gate at 0x12318 returns C1 when disabled; request length >4 at 0x12330; byte 4 restricted to 0/1 at 0x13eac; viomWriteViomFlag(value, context) at 0x13ec0; zero helper result yields CC00 length 4 at 0x12d24, nonzero helper result is returned as completion. Helper's deeper persistent effects remain unresolved",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector or VIOM disabled",
+        "C9 for byte-4 values above 1",
+        "helper's nonzero completion code is passed through"
       ],
       "evidence_va": "0x00012314",
       "entry_guard_instructions": [
@@ -2299,23 +2317,24 @@
       "candidate_call_trace_truncated": false
     },
     "d4": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Read VIOM flag",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 4,
+        "payload": "none"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 7,
+        "payload": "three VIOM flag/status bytes from viomReadViomFlag"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "VIOM feature gate at 0x12348 returns C1 when disabled; no extra request bytes read; viomReadViomFlag(response+4, context) at 0x1236c, zero result returns CC00 length 7 at 0x12380-0x12390, nonzero result returned as completion. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a helper 0x69144 reads configuration, power-restore policy, and host state; configuration read failure returns D5",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector or VIOM disabled",
+        "D5 for configuration-read failure"
       ],
       "evidence_va": "0x00012344",
       "entry_guard_instructions": [
@@ -2903,12 +2922,12 @@
       "name": "Generate patterned response of caller-requested length",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": "valid caller must send at least 5 bytes; firmware does not enforce this",
+        "payload": "byte 4 requests N output bytes (0..255)"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "4+N (up to 259), subject to unchecked output capacity",
+        "payload": "N bytes: each byte is 0xf0 OR its zero-based index, truncated to eight bits"
       },
       "effect": "read/compute",
       "guard": "no selector-specific length guard before request[4] at 0x1125c; response length is 4+request[4] and bytes follow a pattern; static short-request and response-capacity concerns, not exercised live",
