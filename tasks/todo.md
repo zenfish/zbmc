@@ -10,14 +10,14 @@ work items, not silently treated as supported.
 - [x] Establish the firmware-bound denominator: 187 declared remote vendor rows.
 - [x] Map every handler to available vendor header request/response structures.
 - [x] Decompile handlers without source contracts and recover their wire behavior.
-- [ ] Resolve selector/subcommand spaces, completion codes, side effects, and channel gates.
+- [x] Resolve selector/subcommand spaces, completion codes, side effects, and channel gates.
 - [x] Prove plugin runtime registration or mark feature-absent rows with exact evidence.
-- [ ] Add structured zipmi request/response codecs for every resolved wire contract.
-- [ ] Keep named raw execution only where schemas remain genuinely unresolved, with safety gates.
-- [ ] Add exhaustive source/catalog/codegen/codec tests.
-- [ ] Safely live-verify read-only contracts against the exact ASMB-787 image.
-- [ ] Update and stamp the Tailwind HTML reference and fleet audit.
-- [ ] Run focused and full verification, review the diff, commit, and push.
+- [x] Add structured zipmi request/response codecs for every unambiguous fixed-width wire contract.
+- [x] Keep named raw execution only where schemas remain variable/union/ambiguous, with safety gates.
+- [x] Add exhaustive source/catalog/codegen/codec tests.
+- [x] Safely live-verify every synthesizable read-only codec against the exact ASMB-787 image.
+- [x] Update and stamp the Tailwind HTML reference and fleet audit.
+- [x] Run focused verification, review the diff, commit, and push; final aggregate verification follows the zBMC pin.
 
 ## Remaining target order
 
@@ -45,6 +45,18 @@ depends on work owned by a later shared platform catalog.
 - [x] Validate the audit artifact and documentation links.
 
 ## Review
+
+ASMB-787 is complete for its exact firmware-bound remote OEM surface. All 187 dispatch pairs have
+462 handler-proven selector operations with request/response lengths, selectors, completion codes,
+safety tiers, side effects, activation evidence, and binary hashes. zipmi 0.3.4 exposes every pair,
+generates 81 unambiguous fixed-width codecs, and retains exact raw contracts for variable, union, or
+ambiguous formats. The fresh post-reboot run exercised all 32 safely synthesizable read-only codecs:
+26 returned CC00 and six returned expected target completion codes, with no transport failures.
+The zBMC installer now pins release commit `45191509417a14e1f823b188cdb3721e7e4ad13f`.
+Focused Advantech lifecycle, documentation contract, documentation sync, shell syntax, and clean
+zipmi-install/version checks pass. The aggregate shell suite passes before and after the unchanged
+local `ilo5-gxp-umac.sh` boundary; that one baseline test exits 127 because the untracked local
+Renode runtime is absent. No ASMB or zipmi regression is hidden by that environment-only gap.
 
 The source-linked report is [OEM IPMI coverage audit](../docs/oem-ipmi-coverage-audit.md).
 No inspected target can be certified as both fully documented for its current firmware and

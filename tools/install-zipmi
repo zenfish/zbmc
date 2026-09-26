@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${ZBMC_ZIPMI_VENV:-$ROOT/work/deps/zipmi}"
-COMMIT=5f6e10c7e2fc2a5f83547170e218c9721628e406
+COMMIT=45191509417a14e1f823b188cdb3721e7e4ad13f
 MARKER="$VENV/.zbmc-zipmi-commit"
 
 if [ -x "$VENV/bin/python" ] && [ "$(cat "$MARKER" 2>/dev/null || true)" = "$COMMIT" ] &&
