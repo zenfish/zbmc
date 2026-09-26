@@ -97,6 +97,19 @@ the firmware: 29 returned CC00 and three returned expected target codes CE, D5, 
 operation was executed. Remote-channel policy remains explicitly unknown for 224 identities; this
 is a documented firmware evidence boundary, not a missing zipmi route.
 
+## Review — Lenovo XCC authorization follow-up
+
+The isolated XCC 6.92 audit used a separate ReadOnly, IPMI-only account capped at User privilege
+and compared 27 exact requests against the Administrator account. All 27 final requests completed
+without transport errors. Twelve OSA routes reached their inner handlers as User, including a
+successful read of an inner Admin route. Static analysis of `libipmi.so` proves that the outer
+`2e/cc` row is User and `CmdOSAOEMCmdHandler` never reads the inner privilege byte.
+A single exact factory-reset request from that User account returned CC00 and success status 00
+on the `snapshot=on` guest; the VM was stopped and restored from its immutable checkpoint.
+The full HTML report and three JSON evidence files live under `boxes/lenovo-xcc/`.
+The earlier 224-unknown count describes catalog metadata before this targeted live audit, not
+the tested routes. Physical-device applicability and other firmware versions remain untested.
+
 ## Remaining target order
 
 1. Fujitsu iRMC

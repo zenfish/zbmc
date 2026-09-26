@@ -1,0 +1,26 @@
+{
+    "schema": "zbmc.lenovo-xcc.low-privilege-impact.v1",
+    "generated": "2026-09-26T19:58:04.188310+00:00",
+    "operation": "Reset XCC to Default",
+    "netfn": 46,
+    "cmd": 204,
+    "request": "5e2b000a01ff000000",
+    "isolation": "QEMU sd2 snapshot=on over immutable matched checkpoint",
+    "attempts": [
+        {
+            "activation": 1,
+            "result": "success"
+        }
+    ],
+    "requestedPrivilege": 2,
+    "grantedPrivilege": 2,
+    "adminGateControl": {
+        "netfn": 58,
+        "cmd": 199,
+        "completionCode": 212,
+        "response": ""
+    },
+    "requestSent": true,
+    "completionCode": 0,
+    "response": "5e2b000a0100"
+}

@@ -1,0 +1,285 @@
+{
+    "schema": "zbmc.lenovo-xcc.oem-authorization-audit.v1",
+    "generated": "2026-09-26T19:44:07.211320+00:00",
+    "host": "10.250.0.45",
+    "user": "lenovaudit",
+    "requestedPrivilege": 2,
+    "grantedPrivilege": 2,
+    "cipherSuite": 17,
+    "activationErrors": [
+        "attempt 1: RAKP4: status 0x02",
+        "attempt 2: RAKP4: status 0x02"
+    ],
+    "results": [
+        {
+            "name": "firmware-version",
+            "netfn": 58,
+            "cmd": 0,
+            "request": "",
+            "completionCode": 0,
+            "response": "0692",
+            "guard": "safe baseline",
+            "elapsedMs": 406
+        },
+        {
+            "name": "native-nm-get",
+            "netfn": 58,
+            "cmd": 199,
+            "request": "",
+            "completionCode": 212,
+            "response": "",
+            "guard": "Admin baseline",
+            "elapsedMs": 128
+        },
+        {
+            "name": "osa-get-bmc-address",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000642",
+            "completionCode": 0,
+            "response": "5e2b00064220",
+            "guard": "safe inner-Admin route",
+            "elapsedMs": 217
+        },
+        {
+            "name": "osa-reset-default-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000a01",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before reset body",
+            "elapsedMs": 114
+        },
+        {
+            "name": "osa-graceful-reset-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000643",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before reset body",
+            "elapsedMs": 338
+        },
+        {
+            "name": "osa-set-guid-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000640",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before GUID body",
+            "elapsedMs": 241
+        },
+        {
+            "name": "osa-set-bmc-address-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000641",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before address body",
+            "elapsedMs": 77
+        },
+        {
+            "name": "osa-power-manager-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000646",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before control body",
+            "elapsedMs": 160
+        },
+        {
+            "name": "osa-power-limit-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000649",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before power-limit body",
+            "elapsedMs": 155
+        },
+        {
+            "name": "osa-sensor-test-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000440",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before test body",
+            "elapsedMs": 161
+        },
+        {
+            "name": "osa-nic-teaming-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000c01",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before network body",
+            "elapsedMs": 196
+        },
+        {
+            "name": "osa-ipv6-set-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000c09",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before network body",
+            "elapsedMs": 360
+        },
+        {
+            "name": "osa-shared-lom-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b000c07",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before LOM body",
+            "elapsedMs": 223
+        },
+        {
+            "name": "osa-memory-check-short",
+            "netfn": 46,
+            "cmd": 204,
+            "request": "5e2b001000",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before control body",
+            "elapsedMs": 108
+        },
+        {
+            "name": "nmi-reset-short",
+            "netfn": 58,
+            "cmd": 56,
+            "request": "",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before NMI/reset body",
+            "elapsedMs": 483
+        },
+        {
+            "name": "i2c-master-short",
+            "netfn": 58,
+            "cmd": 148,
+            "request": "",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before bus/address body",
+            "elapsedMs": 66
+        },
+        {
+            "name": "i2c-test-short",
+            "netfn": 58,
+            "cmd": 9,
+            "request": "ff",
+            "completionCode": 199,
+            "response": "",
+            "guard": "malformed bus-test body",
+            "elapsedMs": 260
+        },
+        {
+            "name": "pcie-i2c-short",
+            "netfn": 58,
+            "cmd": 43,
+            "request": "ff00",
+            "completionCode": 199,
+            "response": "",
+            "guard": "short before bus transaction",
+            "elapsedMs": 54
+        },
+        {
+            "name": "datastore-open-short",
+            "netfn": 46,
+            "cmd": 144,
+            "request": "664a0001",
+            "completionCode": 201,
+            "response": "",
+            "guard": "short before datastore body",
+            "elapsedMs": 74
+        },
+        {
+            "name": "datastore-write-short",
+            "netfn": 46,
+            "cmd": 144,
+            "request": "664a0003",
+            "completionCode": 201,
+            "response": "",
+            "guard": "short before datastore body",
+            "elapsedMs": 154
+        },
+        {
+            "name": "tklm-short",
+            "netfn": 46,
+            "cmd": 151,
+            "request": "664a00",
+            "completionCode": 199,
+            "response": "",
+            "guard": "below TKLM minimum length",
+            "elapsedMs": 395
+        },
+        {
+            "name": "vpd-write-short",
+            "netfn": 58,
+            "cmd": 12,
+            "request": "",
+            "completionCode": 199,
+            "response": "",
+            "guard": "below VPD minimum length",
+            "elapsedMs": 122
+        },
+        {
+            "name": "syncrep-op-short",
+            "netfn": 58,
+            "cmd": 89,
+            "request": "",
+            "completionCode": 199,
+            "response": "",
+            "guard": "below replication minimum length",
+            "elapsedMs": 223
+        },
+        {
+            "name": "syncrep-init-short",
+            "netfn": 58,
+            "cmd": 90,
+            "request": "",
+            "completionCode": 199,
+            "response": "",
+            "guard": "below replication minimum length",
+            "elapsedMs": 168
+        },
+        {
+            "name": "bmu-credential-get-lan",
+            "netfn": 58,
+            "cmd": 123,
+            "request": "",
+            "completionCode": 213,
+            "response": "",
+            "guard": "channel-gate check",
+            "elapsedMs": 262
+        },
+        {
+            "name": "physical-presence-config-lan",
+            "netfn": 58,
+            "cmd": 124,
+            "request": "",
+            "completionCode": 193,
+            "response": "",
+            "guard": "channel-gate check",
+            "elapsedMs": 111
+        },
+        {
+            "name": "physical-presence-state-lan",
+            "netfn": 58,
+            "cmd": 125,
+            "request": "",
+            "completionCode": 193,
+            "response": "",
+            "guard": "channel-gate check",
+            "elapsedMs": 80
+        }
+    ]
+}

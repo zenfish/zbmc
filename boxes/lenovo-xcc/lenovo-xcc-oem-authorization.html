@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lenovo XCC 6.92 OEM IPMI authorization audit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100">
+<main class="mx-auto max-w-5xl px-5 py-12">
+  <p class="font-mono text-sm uppercase tracking-widest text-amber-300">Lenovo XCC 6.92 · Newyork-pass1</p>
+  <h1 class="mt-3 text-4xl font-bold">OEM IPMI authorization audit</h1>
+  <p class="mt-5 text-slate-300">The exact firmware admits several control commands at IPMI User privilege. A separate ReadOnly, IPMI-only account negotiated User privilege over RMCP+ cipher 17, reached sensitive command handlers, and successfully reset XCC configuration to defaults. This is a demonstrated authorization weakness in the emulated XCC 6.92 image; physical-hardware applicability is untested.</p>
+
+  <section class="mt-8 rounded border border-rose-500/60 bg-rose-950/30 p-5">
+    <h2 class="text-2xl font-semibold">Primary finding: OSA inner privilege is ignored</h2>
+    <p class="mt-3">The outer <code>2e/cc</code> dispatch row in <code>libipmi.so</code> requires privilege <code>02</code> (User). The 27-row OSA inner table carries a privilege byte, including <code>04</code> (Administrator) on sensitive leaves. <code>CmdOSAOEMCmdHandler</code> checks each row's key and length and calls its function pointer; it never reads that inner privilege byte. The examined sensitive leaves contain no later privilege check.</p>
+    <p class="mt-3">Live proof: the User account received a successful response from the inner Admin “Get BMC Slave Address” route (<code>2e/cc 5e2b000642</code> → <code>CC00 5e2b00064220</code>). Eleven other inner routes, including reset-to-default, graceful reset, GUID, BMC address, power, network, sensor, and memory controls, returned the handler's <code>C7</code> length error to deliberately incomplete requests. A genuine Admin-gated command, <code>3a/c7</code>, returned <code>D4</code> to the same User account and succeeded as Administrator.</p>
+    <p class="mt-3 text-rose-200">Impact proof: on a disposable warm restore, the same ReadOnly User account sent exactly one valid reset request, <code>2e/cc 5e2b000a01ff000000</code>. XCC returned <code>CC00 5e2b000a0100</code>; the final status byte is success. The proper Admin-gated <code>3a/c7</code> control still returned <code>D4</code> in that session. No request retransmission was enabled. The VM was then stopped and restarted from its immutable checkpoint.</p>
+  </section>
+
+  <section class="mt-8">
+    <h2 class="text-2xl font-semibold">Other User-level surfaces</h2>
+    <div class="mt-4 overflow-x-auto"><table class="w-full border-collapse text-left text-sm">
+      <thead class="bg-slate-800"><tr><th class="p-3">Command</th><th class="p-3">Observed User result</th><th class="p-3">Impact supported by static analysis</th></tr></thead>
+      <tbody class="divide-y divide-slate-800">
+        <tr><td class="p-3 font-mono">3a/94</td><td class="p-3">Empty request → C7</td><td class="p-3">Arbitrary I²C bus/address write-read after a 3–34-byte length check; no internal authorization.</td></tr>
+        <tr><td class="p-3 font-mono">3a/38</td><td class="p-3">Empty request → C7</td><td class="p-3">Host NMI and optional reset/power cycle; no internal authorization.</td></tr>
+        <tr><td class="p-3 font-mono">2e/90, 2e/97</td><td class="p-3">Short datastore bodies → C9; short TKLM body → C7</td><td class="p-3">Datastore and key-lifecycle handlers are reachable; subordinate operations were not executed.</td></tr>
+        <tr><td class="p-3 font-mono">3a/0c, 3a/59, 3a/5a</td><td class="p-3">Empty requests → C7</td><td class="p-3">VPD write and replication handlers are reachable; exact impact needs bounded payload review.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="mt-4 text-slate-300">Static-only priorities: <code>2e/81</code> firmware method invocation, <code>2e/96</code> eMMC sanitization, and <code>3a/6e</code> PFR EC reset/update all have User-level registration and no discovered secondary authorization. No harmless body has yet been established for these, so they were not probed. Recovery <code>3a/da</code> is an important exception: it explicitly requires the UEFI interface and returns <code>D5</code> on other interfaces.</p>
+  </section>
+
+  <section class="mt-8 rounded border border-slate-700 p-5">
+    <h2 class="text-2xl font-semibold">Method and boundaries</h2>
+    <ul class="mt-3 list-disc space-y-2 pl-6 text-slate-300">
+      <li>Target: XCC 6.92 Newyork-pass1; rootfs SHA-256 <code class="break-all">2aaedcb6c5939efabd49ac4da0a8066e17c5c3dea356ad33ad0d9246c4b192c2</code>; <code>libipmi.so</code> SHA-256 <code class="break-all">b72294cd8a10699e2cd3827dd1b4aa0a13943c483332af0ceae8ba603cf17485</code>.</li>
+      <li>A temporary ReadOnly, IPMI-only account was created in the disposable QEMU guest. It authenticated with requested User privilege <code>2</code>; a request for Operator privilege was denied. The existing administrator account was tested separately at privilege <code>4</code>.</li>
+      <li>Both accounts received 27 identical exact requests. The final runs have zero transport errors. All state-changing probes carried bodies too short to reach their effect paths. User and Admin returned matching handler errors for every such tested route.</li>
+      <li>User <code>3a/7b</code> returned <code>D5</code> on LAN, and physical-presence getters <code>3a/7c</code> and <code>3a/7d</code> returned <code>C1</code>; these are not evidence of general LAN reachability for those handlers.</li>
+      <li>QEMU's active eMMC drive used <code>snapshot=on</code> over a matched, immutable warm checkpoint. An earlier impact attempt did not send a reset request: RMCP+ Open Session timed out and QEMU was found down, with no cause in the inspected logs. The checkpoint was restored; the later single valid User-level reset succeeded. The VM was stopped and restarted from the matched checkpoint afterward.</li>
+    </ul>
+    <p class="mt-4">Exact machine-readable results: <a class="text-cyan-300 underline" href="evidence/20260926T-user-authorization.json">User account</a>, <a class="text-cyan-300 underline" href="evidence/20260926T-admin-authorization.json">Administrator account</a>, and <a class="text-cyan-300 underline" href="evidence/20260926T-user-factory-reset.json">single factory-reset impact request</a>. Reproducible guarded probe matrix: <a class="text-cyan-300 underline" href="audit-oem-authorization.py">audit-oem-authorization.py</a>. Full catalog: <a class="text-cyan-300 underline" href="lenovo-xcc-oem-reference.html">XCC OEM reference</a>.</p>
+  </section>
+</main>
+</body>
+</html>
