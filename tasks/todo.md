@@ -19,18 +19,34 @@ work items, not silently treated as supported.
 - [x] Update and stamp the Tailwind HTML reference and fleet audit.
 - [x] Run focused verification, review the diff, commit, and push; final aggregate verification follows the zBMC pin.
 
+## Target 2 — Dell iDRAC10
+
+- [ ] Pin the exact 1.30.10.50 firmware artifacts, module hashes, and provenance UUIDs.
+- [ ] Reconcile the 446 operation catalog, 383 dispatch triples, 346 unique dispatch pairs, and
+      445-row historical live sweep into one explicit denominator model.
+- [ ] Resolve or explicitly retire the single operation whose NetFn/Cmd remains undetermined.
+- [ ] Prove handler activation, transport/channel reachability, privilege, and in-band-only gates.
+- [ ] Recover every selector/subcommand, request/response layout, completion code, side effect, and
+      safety tier, retaining bounded unknown helper payloads without guessing.
+- [ ] Add vendor-scoped zipmi exact-operation contracts and structured codecs for every unambiguous
+      fixed-width layout; preserve safety-gated named raw execution for variable/union formats.
+- [ ] Import historical live evidence with exact identity matching, then safely revalidate every
+      synthesizable read-only contract against the pinned image.
+- [ ] Update the Tailwind HTML reference, fleet audit, PhD area landing/bibliography/tools, and stamps.
+- [ ] Run source/codegen/codec/CLI tests, full unit and baseline-diff verification, release/version
+      proof, zBMC pin/install proof, review, commit, and push.
+
 ## Remaining target order
 
-1. Dell iDRAC10
-2. Lenovo XCC
-3. Fujitsu iRMC
-4. Dell iDRAC9
-5. HPE MegaRAC / XD670
-6. Supermicro X14
-7. NVIDIA OpenBMC
-8. Supermicro X10
-9. IEIT
-10. OpenBMC baseline
+1. Lenovo XCC
+2. Fujitsu iRMC
+3. Dell iDRAC9
+4. HPE MegaRAC / XD670
+5. Supermicro X14
+6. NVIDIA OpenBMC
+7. Supermicro X10
+8. IEIT
+9. OpenBMC baseline
 
 The order favors bounded firmware inventories first; it may change only when evidence shows a target
 depends on work owned by a later shared platform catalog.

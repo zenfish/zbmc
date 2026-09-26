@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=d7a6f9c09ffa215b4cd32ef33da9ea78441ffb7a0eecae5e8f8433915d023b17 body-sha256=2897bf859af85ed6610eec782a62e74e462f3c097e9fb17ffa3fa1060fc351bd -->
+<!-- zmd2html:auto source-sha256=f3fd21c967f14157142108405be941f097a1ebb37b76896d35ae04cb2ed391ff body-sha256=332362d50dda93f1d0e1df674db7bab3e90ac4bcc4e61952e074102879245173 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -82,9 +82,37 @@ Tailwind HTML reference and fleet audit.</label></li>
 review the diff, commit, and push; final aggregate verification follows
 the zBMC pin.</label></li>
 </ul>
+<h2 id="target-2--dell-idrac10">Target 2 — Dell iDRAC10</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" />Pin the exact 1.30.10.50 firmware
+artifacts, module hashes, and provenance UUIDs.</label></li>
+<li><label><input type="checkbox" />Reconcile the 446 operation catalog,
+383 dispatch triples, 346 unique dispatch pairs, and 445-row historical
+live sweep into one explicit denominator model.</label></li>
+<li><label><input type="checkbox" />Resolve or explicitly retire the
+single operation whose NetFn/Cmd remains undetermined.</label></li>
+<li><label><input type="checkbox" />Prove handler activation,
+transport/channel reachability, privilege, and in-band-only
+gates.</label></li>
+<li><label><input type="checkbox" />Recover every selector/subcommand,
+request/response layout, completion code, side effect, and safety tier,
+retaining bounded unknown helper payloads without guessing.</label></li>
+<li><label><input type="checkbox" />Add vendor-scoped zipmi
+exact-operation contracts and structured codecs for every unambiguous
+fixed-width layout; preserve safety-gated named raw execution for
+variable/union formats.</label></li>
+<li><label><input type="checkbox" />Import historical live evidence with
+exact identity matching, then safely revalidate every synthesizable
+read-only contract against the pinned image.</label></li>
+<li><label><input type="checkbox" />Update the Tailwind HTML reference,
+fleet audit, PhD area landing/bibliography/tools, and
+stamps.</label></li>
+<li><label><input type="checkbox" />Run source/codegen/codec/CLI tests,
+full unit and baseline-diff verification, release/version proof, zBMC
+pin/install proof, review, commit, and push.</label></li>
+</ul>
 <h2 id="remaining-target-order">Remaining target order</h2>
 <ol type="1">
-<li>Dell iDRAC10</li>
 <li>Lenovo XCC</li>
 <li>Fujitsu iRMC</li>
 <li>Dell iDRAC9</li>
