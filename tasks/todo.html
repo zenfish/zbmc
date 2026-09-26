@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=4695e9dbec854d88f7912aadca0a5997790027e3a9edde2dd3827c9ad866ec53 body-sha256=442d962e44d059f25e8dc271b3dc03b7de4fb492a4f9765f0e271466dc9f97da -->
+<!-- zmd2html:auto source-sha256=9bc911e62a836178ea8a853a9276a2bdfdcef0903fa0948c9a7611e7e1cefdf2 body-sha256=25dee653ee51d8804a58a59976ebb2dbeda238dce2c09373a571078a3b703283 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -138,9 +138,69 @@ installer pin. The pushed installer was streamed to isolated Debby venv
 <code>zipmi.__version__</code>, package metadata, and
 <code>zipmi -V</code> all reported 0.4.0, and its marker recorded the
 exact release commit.</p>
+<h2 id="target-3--lenovo-xcc">Target 3 — Lenovo XCC</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Pin the exact XCC 6.92
+Newyork-pass1 firmware, filesystem, dispatch-library hashes, and durable
+provenance UUIDs.</label></li>
+<li><label><input type="checkbox" checked="" />Reconcile C++
+registrations, legacy admission rows, group-extension prefixes, aliases,
+and selector expansions into one explicit remote command
+denominator.</label></li>
+<li><label><input type="checkbox" checked="" />Account for module
+activation, transport/channel evidence, privilege enforcement, and every
+known in-band/system-interface restriction; retain unproved remote
+policy explicitly.</label></li>
+<li><label><input type="checkbox" checked="" />Recover every
+selector/subcommand, request/response layout, length, endianness,
+completion code, side effect, and safety tier; preserve bounded opaque
+delegates without guessing.</label></li>
+<li><label><input type="checkbox" checked="" />Extend zipmi's Lenovo
+catalog to exact-operation contracts, fail-closed named execution, and
+structured codecs for every unambiguous fixed-width request or
+response.</label></li>
+<li><label><input type="checkbox" checked="" />Add exhaustive
+source/catalog/codegen/codec/CLI tests and retain exact-prefix identity
+for commands sharing a NetFn/command pair.</label></li>
+<li><label><input type="checkbox" checked="" />Import existing live
+evidence with exact identity matching, then safely revalidate every
+mechanically synthesizable read-only contract against the pinned XCC
+image on Debby.</label></li>
+<li><label><input type="checkbox" checked="" />Publish and stamp the
+Tailwind Lenovo OEM reference, correct the fleet audit, and update the
+Lenovo PhD landing/bibliography/tools pages.</label></li>
+<li><label><input type="checkbox" checked="" />Run focused and full
+baseline-diff verification, review the result, version/release zipmi,
+update the zBMC pin, prove an isolated Debby install, commit, and
+push.</label></li>
+</ul>
+<h2 id="review--lenovo-xcc">Review — Lenovo XCC</h2>
+<p>The closed XCC 6.92 Newyork-pass1 denominator is 225 exact command
+identities / 210 NetFn-command pairs across 192 C++ registration
+occurrences, 175 legacy admissions, and five OEM rows in the 134-entry
+core table. The rootfs is artifact
+<code>7c5a00bf-e31e-5c7e-8a91-0f93c30ce5f9</code> (SHA-256
+<code>2aaedcb6c5939efabd49ac4da0a8066e17c5c3dea356ad33ad0d9246c4b192c2</code>);
+<code>libipmi.so</code> is artifact
+<code>3eecaf45-6ee5-515d-8e48-a77d5099869d</code> (SHA-256
+<code>b72294cd8a10699e2cd3827dd1b4aa0a13943c483332af0ceae8ba603cf17485</code>).
+The original release archive-to-rootfs hash chain is unavailable and
+remains an explicit provenance gap.</p>
+<p>zipmi 0.5.0 exposes all identities through 307 named CLI entries,
+overlays 107 exact operation contracts with 66 request and 60 response
+codecs, and fails closed for every unsafe, mixed, unknown-effect, or
+unbounded-schema request. Variable subordinate hardware/update/security
+payloads remain exact raw contracts rather than speculative types. The
+full 2,354-test suite passes and the wheel builds. Debby run
+<code>20260926T180101Z-a368af09-d224-4a10-b6f6-74c5e3d2490d</code>
+reached READY after 382 seconds and an 83-second stable interval. All 32
+mechanically synthesizable safe reads reached the firmware: 29 returned
+CC00 and three returned expected target codes CE, D5, and CC. No unsafe
+operation was executed. Remote-channel policy remains explicitly unknown
+for 224 identities; this is a documented firmware evidence boundary, not
+a missing zipmi route.</p>
 <h2 id="remaining-target-order">Remaining target order</h2>
 <ol type="1">
-<li>Lenovo XCC</li>
 <li>Fujitsu iRMC</li>
 <li>Dell iDRAC9</li>
 <li>HPE MegaRAC / XD670</li>

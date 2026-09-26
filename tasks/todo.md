@@ -56,17 +56,57 @@ CC00 and two returned target completion codes, with no transport failure. Releas
 streamed to isolated Debby venv `/home/zen/zipmi-0.4.0-proof.3zHo1x/venv`; `zipmi.__version__`,
 package metadata, and `zipmi -V` all reported 0.4.0, and its marker recorded the exact release commit.
 
+## Target 3 — Lenovo XCC
+
+- [x] Pin the exact XCC 6.92 Newyork-pass1 firmware, filesystem, dispatch-library hashes, and
+      durable provenance UUIDs.
+- [x] Reconcile C++ registrations, legacy admission rows, group-extension prefixes, aliases, and
+      selector expansions into one explicit remote command denominator.
+- [x] Account for module activation, transport/channel evidence, privilege enforcement, and every
+      known in-band/system-interface restriction; retain unproved remote policy explicitly.
+- [x] Recover every selector/subcommand, request/response layout, length, endianness, completion
+      code, side effect, and safety tier; preserve bounded opaque delegates without guessing.
+- [x] Extend zipmi's Lenovo catalog to exact-operation contracts, fail-closed named execution, and
+      structured codecs for every unambiguous fixed-width request or response.
+- [x] Add exhaustive source/catalog/codegen/codec/CLI tests and retain exact-prefix identity for
+      commands sharing a NetFn/command pair.
+- [x] Import existing live evidence with exact identity matching, then safely revalidate every
+      mechanically synthesizable read-only contract against the pinned XCC image on Debby.
+- [x] Publish and stamp the Tailwind Lenovo OEM reference, correct the fleet audit, and update the
+      Lenovo PhD landing/bibliography/tools pages.
+- [x] Run focused and full baseline-diff verification, review the result, version/release zipmi,
+      update the zBMC pin, prove an isolated Debby install, commit, and push.
+
+## Review — Lenovo XCC
+
+The closed XCC 6.92 Newyork-pass1 denominator is 225 exact command identities / 210 NetFn-command
+pairs across 192 C++ registration occurrences, 175 legacy admissions, and five OEM rows in the
+134-entry core table. The rootfs is artifact `7c5a00bf-e31e-5c7e-8a91-0f93c30ce5f9` (SHA-256
+`2aaedcb6c5939efabd49ac4da0a8066e17c5c3dea356ad33ad0d9246c4b192c2`); `libipmi.so` is artifact
+`3eecaf45-6ee5-515d-8e48-a77d5099869d` (SHA-256
+`b72294cd8a10699e2cd3827dd1b4aa0a13943c483332af0ceae8ba603cf17485`). The original release
+archive-to-rootfs hash chain is unavailable and remains an explicit provenance gap.
+
+zipmi 0.5.0 exposes all identities through 307 named CLI entries, overlays 107 exact operation
+contracts with 66 request and 60 response codecs, and fails closed for every unsafe, mixed,
+unknown-effect, or unbounded-schema request. Variable subordinate hardware/update/security payloads
+remain exact raw contracts rather than speculative types. The full 2,354-test suite passes and the
+wheel builds. Debby run `20260926T180101Z-a368af09-d224-4a10-b6f6-74c5e3d2490d` reached READY after
+382 seconds and an 83-second stable interval. All 32 mechanically synthesizable safe reads reached
+the firmware: 29 returned CC00 and three returned expected target codes CE, D5, and CC. No unsafe
+operation was executed. Remote-channel policy remains explicitly unknown for 224 identities; this
+is a documented firmware evidence boundary, not a missing zipmi route.
+
 ## Remaining target order
 
-1. Lenovo XCC
-2. Fujitsu iRMC
-3. Dell iDRAC9
-4. HPE MegaRAC / XD670
-5. Supermicro X14
-6. NVIDIA OpenBMC
-7. Supermicro X10
-8. IEIT
-9. OpenBMC baseline
+1. Fujitsu iRMC
+2. Dell iDRAC9
+3. HPE MegaRAC / XD670
+4. Supermicro X14
+5. NVIDIA OpenBMC
+6. Supermicro X10
+7. IEIT
+8. OpenBMC baseline
 
 The order favors bounded firmware inventories first; it may change only when evidence shows a target
 depends on work owned by a later shared platform catalog.

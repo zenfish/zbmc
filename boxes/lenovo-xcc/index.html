@@ -12,6 +12,11 @@
     <h1 class="mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-7xl">Lenovo XClarity Controller</h1>
     <p class="mt-6 max-w-3xl text-xl leading-8 text-stone-300">A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.</p>
 
+    <section class="mt-8 border border-violet-500/40 bg-violet-950/30 p-6">
+      <h2 class="text-2xl font-bold">Complete XCC 6.92 OEM IPMI reference</h2>
+      <p class="mt-3 leading-7 text-stone-300">The <a class="text-violet-300 underline" href="lenovo-xcc-oem-reference.html">firmware-bound OEM reference</a> reconciles all three active dispatch surfaces into 225 exact command identities / 210 NetFn-command pairs. It documents every recovered operation, explicitly bounds opaque variable payloads, and records 107 promoted operation contracts used by zipmi. Unsafe, mixed, and schema-unbounded commands remain fail-closed unless the operator supplies <code>--unsafe</code>.</p>
+    </section>
+
     <p class="mt-6 rounded border border-amber-500/40 bg-amber-950/30 p-4">13 September status: <a class="text-emerald-300 underline" href="#managed-warm-20260913">normal managed warm startup reached six-service READY in 3m37s</a>, but subsequent IPMI checks remain intermittent. Debby's private default now selects the matched TAP runtime. <a class="text-amber-300 underline" href="#13-september-cold-verification-failed">Cold verification failed its one-hour startup window</a>. Full reliable recovery is not complete.</p>
     <section id="ipmi-probe-mystery-20260914" class="mt-10 border border-emerald-500/40 bg-emerald-950/30 p-6">
       <h2 class="text-2xl font-bold">14 September: IPMI probe mystery resolved</h2>
