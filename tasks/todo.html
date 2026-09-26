@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=f3fd21c967f14157142108405be941f097a1ebb37b76896d35ae04cb2ed391ff body-sha256=332362d50dda93f1d0e1df674db7bab3e90ac4bcc4e61952e074102879245173 -->
+<!-- zmd2html:auto source-sha256=4695e9dbec854d88f7912aadca0a5997790027e3a9edde2dd3827c9ad866ec53 body-sha256=442d962e44d059f25e8dc271b3dc03b7de4fb492a4f9765f0e271466dc9f97da -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -84,33 +84,60 @@ the zBMC pin.</label></li>
 </ul>
 <h2 id="target-2--dell-idrac10">Target 2 — Dell iDRAC10</h2>
 <ul class="task-list">
-<li><label><input type="checkbox" />Pin the exact 1.30.10.50 firmware
-artifacts, module hashes, and provenance UUIDs.</label></li>
-<li><label><input type="checkbox" />Reconcile the 446 operation catalog,
-383 dispatch triples, 346 unique dispatch pairs, and 445-row historical
-live sweep into one explicit denominator model.</label></li>
-<li><label><input type="checkbox" />Resolve or explicitly retire the
-single operation whose NetFn/Cmd remains undetermined.</label></li>
-<li><label><input type="checkbox" />Prove handler activation,
+<li><label><input type="checkbox" checked="" />Pin the exact 1.30.10.50
+firmware artifacts, module hashes, and provenance UUIDs.</label></li>
+<li><label><input type="checkbox" checked="" />Reconcile the prior
+operation catalog, 383 dispatch triples, 346 apparent dispatch pairs,
+and 445-row historical live sweep into one explicit denominator
+model.</label></li>
+<li><label><input type="checkbox" checked="" />Resolve the formerly
+undetermined operation as NetFn 0x06 / command 0x33.</label></li>
+<li><label><input type="checkbox" checked="" />Prove handler activation,
 transport/channel reachability, privilege, and in-band-only
 gates.</label></li>
-<li><label><input type="checkbox" />Recover every selector/subcommand,
-request/response layout, completion code, side effect, and safety tier,
-retaining bounded unknown helper payloads without guessing.</label></li>
-<li><label><input type="checkbox" />Add vendor-scoped zipmi
+<li><label><input type="checkbox" checked="" />Recover every
+selector/subcommand, request/response layout, completion code, side
+effect, and safety tier, retaining bounded unknown helper payloads
+without guessing.</label></li>
+<li><label><input type="checkbox" checked="" />Add vendor-scoped zipmi
 exact-operation contracts and structured codecs for every unambiguous
 fixed-width layout; preserve safety-gated named raw execution for
 variable/union formats.</label></li>
-<li><label><input type="checkbox" />Import historical live evidence with
-exact identity matching, then safely revalidate every synthesizable
-read-only contract against the pinned image.</label></li>
-<li><label><input type="checkbox" />Update the Tailwind HTML reference,
-fleet audit, PhD area landing/bibliography/tools, and
+<li><label><input type="checkbox" checked="" />Import historical live
+evidence with exact identity matching, then safely revalidate every
+synthesizable read-only contract against the pinned image.</label></li>
+<li><label><input type="checkbox" checked="" />Update the Tailwind HTML
+reference, fleet audit, PhD area landing/bibliography/tools, and
 stamps.</label></li>
-<li><label><input type="checkbox" />Run source/codegen/codec/CLI tests,
-full unit and baseline-diff verification, release/version proof, zBMC
-pin/install proof, review, commit, and push.</label></li>
+<li><label><input type="checkbox" checked="" />Run
+source/codegen/codec/CLI tests, full unit and baseline-diff
+verification, release/version proof, zBMC pin/install proof, review,
+commit, and push.</label></li>
 </ul>
+<h2 id="review--dell-idrac10">Review — Dell iDRAC10</h2>
+<p>Dell YP95X 1.30.10.50-A00 is registered as immutable artifact
+<code>50be7104-c060-5e24-b3d8-f8db4fdbbb13</code> (SHA-256
+<code>372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9</code>).
+The exact rootfs and dispatch-library hashes are pinned in the command
+source; Dell bibliography/tools docs are stamped in PhD commits
+<code>f3258e62341b90f9ddd65d030f7f184a7fe8a27e</code> and
+<code>16d19898dd825bfc7c4545be324832cba3475c17</code>.</p>
+<p>The final denominator is 429 physical dispatch rows, 383 unique
+netfn/command/handler triples, 346 apparent pairs, 255 Dell-relevant
+remote top-level pairs, and 581 selector-expanded operation identities.
+Every record has evidence. The 69 remaining opaque helper/SCBMC
+contracts are bounded unknowns and remain unsafe; they are not missing
+denominator entries. zipmi 0.4.0 exposes all 581 operations with
+contract-gated named execution, 20 exact request codecs, and 130 exact
+response codecs. The fresh Debby run exercised all 13 strictly
+synthesizable zero-body safe reads: 11 returned CC00 and two returned
+target completion codes, with no transport failure. Release commit
+<code>6dede85cc33ca5f9a035915b05e21df4c6c2e872</code> is the zBMC
+installer pin. The pushed installer was streamed to isolated Debby venv
+<code>/home/zen/zipmi-0.4.0-proof.3zHo1x/venv</code>;
+<code>zipmi.__version__</code>, package metadata, and
+<code>zipmi -V</code> all reported 0.4.0, and its marker recorded the
+exact release commit.</p>
 <h2 id="remaining-target-order">Remaining target order</h2>
 <ol type="1">
 <li>Lenovo XCC</li>
@@ -153,34 +180,27 @@ exposes every pair, generates 81 unambiguous fixed-width codecs, and
 retains exact raw contracts for variable, union, or ambiguous formats.
 The fresh post-reboot run exercised all 32 safely synthesizable
 read-only codecs: 26 returned CC00 and six returned expected target
-completion codes, with no transport failures. The zBMC installer now
-pins release commit
-<code>45191509417a14e1f823b188cdb3721e7e4ad13f</code>. The committed
-installer was streamed to an isolated Debby venv (leaving its dirty
-Lenovo worktree untouched); both <code>zipmi.__version__</code> and
-package metadata reported <code>0.3.4</code>. Focused Advantech
-lifecycle, documentation contract, documentation sync, shell syntax, and
-clean zipmi-install/version checks pass. The aggregate shell suite
-passes before and after the unchanged local
+completion codes, with no transport failures. The ASMB completion proof
+used release commit
+<code>45191509417a14e1f823b188cdb3721e7e4ad13f</code>; the installer has
+since advanced to the iDRAC10-complete zipmi 0.4.0 release. Focused
+Advantech lifecycle, documentation contract, documentation sync, shell
+syntax, and clean zipmi-install/version checks pass. The aggregate shell
+suite passes before and after the unchanged local
 <code>ilo5-gxp-umac.sh</code> boundary; that one baseline test exits 127
 because the untracked local Renode runtime is absent. No ASMB or zipmi
 regression is hidden by that environment-only gap.</p>
 <p>The source-linked report is <a
 href="../docs/oem-ipmi-coverage-audit.html">OEM IPMI coverage audit</a>.
-No inspected target can be certified as both fully documented for its
-current firmware and completely supported by zipmi. Reanalysis corrected
-the ASMB-787 denominator to 187 declared remote vendor rows (85 core, 95
-plugin, seven platform) and confirmed privilege at record offset
-<code>+1</code> and request length at <code>+8</code>; the older catalog
-had labeled those fields in reverse. The finished reference separates 92
-statically registered core/platform rows, 93 plugin rows whose exact
-feature-token and loader/table-merge chain is proved, and two PLDM rows
-skipped because the exact feature token is absent. zipmi provides a
-native 187-command named raw catalog. Exact handler decompilation
-currently adds 68 selector-level operations across 30 pairs, 46
-generated fixed-width codecs, and read-only live evidence from a
-six-service READY exact-image run. Contracts/codecs for the remaining
-157 top-level pairs are still in progress.</p>
+ASMB-787 and iDRAC10 are now certified for their pinned firmware images
+as fully denominator-accounted, documented, and covered by native zipmi
+named execution. The ASMB reference covers 187 declared remote pairs and
+462 selector-expanded operations with 81 fixed-width codecs. The iDRAC10
+reference covers 255 Dell-relevant remote pairs and 581
+selector-expanded operations with 20 request and 130 response codecs.
+Remaining raw-exact entries on both targets are explicit variable,
+union, delegated, or bounded-opaque contracts—not uncounted
+commands.</p>
 <p>Verification: isolated offline imports measured registry names and
 request/response codec classes. The report contains exactly all 11
 tracked box descriptors, and every local source link resolves, including
