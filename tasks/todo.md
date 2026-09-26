@@ -131,7 +131,7 @@ depends on work owned by a later shared platform catalog.
 - [x] Record per-operation wire layout, privilege, side effect, completion behavior, and static/live evidence in a firmware-bound HTML reference.
 - [x] Add every supported identity to zipmi, with fixed codecs only where proved, exact raw execution otherwise, and fail-closed safety gating.
 - [x] Validate generated tables, command lookup, documentation links, tests, and strictly safe live probes against the restored iRMC guest.
-- [ ] Commit and push only the Fujitsu changes in zBMC and zipmi; preserve unrelated worktree changes.
+- [x] Commit and push only the Fujitsu changes in zBMC and zipmi; preserve unrelated worktree changes.
 
 ### Review
 
@@ -149,6 +149,8 @@ statically reviewed safe reads; 2e/e0 selector 00 returned CC01. All completed t
 No state-changing Fujitsu OEM probe was sent. zipmi's 2,358 tests passed and its 0.6.0
 wheel contains both pinned Fujitsu data artifacts. The outstanding work is full leaf
 wire-contract decoding and live applicability proof, not a missing dispatch denominator.
+Remote `main` tips were verified after push: zipmi `2f33c11` and zBMC `f03dd63`.
+The unrelated `.playwright-mcp/` directory remains untracked and untouched.
 
 # OEM IPMI reference and fleet coverage audit
 
