@@ -12,13 +12,13 @@
     "total": 104,
     "c0": {
       "active": 58,
-      "direct": 47,
-      "partial": 11
+      "direct": 52,
+      "partial": 6
     },
     "d0": {
       "active": 46,
-      "direct": 24,
-      "partial": 22
+      "direct": 25,
+      "partial": 21
     }
   },
   "limitations": [
@@ -56,6 +56,16 @@
       "netfn": "0x30",
       "command": "0x56",
       "finding": "Boot-option setter writes two bytes without a local request-length check and returns CC00 despite backend write failure, blade gated."
+    },
+    {
+      "netfn": "0x34",
+      "command": "0x2c",
+      "finding": "Any request longer than one byte causes an unconditional 20-byte memcpy from request+1, so a two-byte request can read beyond its supplied payload; mode-zero reads also reset throttling averages."
+    },
+    {
+      "netfn": "0x30",
+      "command": "0x69",
+      "finding": "ASRR setter interprets bitmask-selected offsets through byte 11 without comprehensive request-length checks; earlier fields can be committed before a later validation or backend error."
     }
   ],
   "handlers": [
@@ -446,12 +456,12 @@
       "handler": "getPowerCappingCounter",
       "ghidraAddress": "0x0003c818",
       "contractStatus": "partial",
-      "request": "empty reuses mode; nonempty sets mode; >1 copies 20 bytes regardless supplied length",
-      "response": "mode 0 counters; other modes page saved 20 bytes",
-      "effect": "stateful Node Manager counter/averaging reset; exact paged schema partial",
+      "request": "empty reuses stored mode; nonempty byte 0 sets stored mode; if length >1, blindly copies 20 bytes from request+1 to runtime state regardless of actual length",
+      "response": "mode 0: 7 bytes [cc,prior NM flag,00,counter_a_le16,counter_b_le16]; other modes: 3 bytes [cc,saved_page_byte,mode], with saved-page cursor advancing up to 20",
+      "effect": "mode 0 clears prior NM flag, starts CPU-throttling averaging interval and conditionally resets runtime counters; other modes page a saved 20-byte runtime array",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
       "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
+        "Semantic meaning of the 20-byte runtime page is not established; request length >1 can cause out-of-bounds read."
       ],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003c818"
     },
@@ -514,14 +524,12 @@
       "command": "0x46",
       "handler": "getSetUserAssetTag",
       "ghidraAddress": "0x0003b618",
-      "contractStatus": "partial",
-      "request": "paged get/set protocol; high bit of byte 0 selects get",
-      "response": "get: [cc,total,data]; set: [cc,written]",
-      "effect": "read/write asset tag config ID 0x210; exact page/commit flags partially decoded",
+      "contractStatus": "direct",
+      "request": "get: exactly 2 bytes [0x80|page_size(0..20),page_index(low nibble)]; set: 3..22 bytes [page_size(1..20),page_index(low nibble)|commit(bit7),data(1..page_size bytes)]; offset=page_size*page_index, max config size 40",
+      "response": "get: [cc,total_length,data(0..page_size bytes)]; set: [cc,bytes_written]; errors: C7 bad length, C9 invalid page/offset, CB config backend failure, C1 non-blade",
+      "effect": "get reads config ID 0x210; set stages data in 40-byte runtime buffer, clears it on page index 0, and writes config ID 0x210 when byte 1 bit7 is set",
       "activation": "Registered Admin; explicitly gated by utIsBladeSystem(), so C1 on rack where non-blade.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003b618"
     },
     {
@@ -1135,14 +1143,12 @@
       "command": "0x51",
       "handler": "getHostSystemStatus",
       "ghidraAddress": "0x0003925c",
-      "contractStatus": "partial",
-      "request": "unknown selector/layout",
-      "response": "host status and cached LED/power fields",
-      "effect": "read host status; field layout not fully mapped",
+      "contractStatus": "direct",
+      "request": "ignored; handler has no local request-length check",
+      "response": "6 bytes [cc,status,00,00,00,00] on blade; status 04 if LED mode 0 and host off, 00 if LED mode 0 and host on, 02 for LED modes 1/3/4, 03 for modes 2/5/6/7/8; C1 non-blade, CE unknown LED mode",
+      "effect": "read host power and message-LED mode as a single status byte",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003925c"
     },
     {
@@ -1151,12 +1157,12 @@
       "handler": "getCpuInfo",
       "ghidraAddress": "0x000395b4",
       "contractStatus": "partial",
-      "request": "selector-based, at least selector byte",
-      "response": "selector-specific CPU information",
-      "effect": "read CPU status/name/manufacturer; selector 1 delegated; full schema unresolved",
+      "request": "selector 1 delegated; selectors 2/3/4/5 require exactly [selector,cpu_index], with index <8 locally enforced for 3/4/5; selector 2 passes index to HAL",
+      "response": "selector 2: 27 bytes [cc,status,cpu_count,4-byte config,10-byte sensor designator,10-byte manufacturer] on HAL success; selectors 3/4: variable CPU name string chunks; selector 5: 5 bytes [cc,component_status,00,00,00]; C7 length, C9 selector/index, C0 unavailable cache",
+      "effect": "read CPU status, model/name chunks, manufacturer and component signal; selector 1 jumps to separate function pointer",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
       "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
+        "Selector 1 delegated target, variable CPU name chunk semantics and some selector-2 status flags remain unresolved."
       ],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x000395b4"
     },
@@ -1166,12 +1172,12 @@
       "handler": "getMemoryInfo",
       "ghidraAddress": "0x00039734",
       "contractStatus": "partial",
-      "request": "slot index plus optional selector",
-      "response": "selector-specific memory data",
-      "effect": "read DIMM information; full field mapping unresolved",
+      "request": "exactly [slot_index] for base view, or [slot_index,00/01]; index must be below HAL memory-slot count",
+      "response": "base/selector 00: 29 bytes [cc,slot_count,DIMM metadata bytes(2..13),10-byte lightpath designator/space pad at 14..23,4 config bytes at 24..27,health at 28]; selector 01: 3 bytes [cc,SPD-derived module type bytes]; C7 wrong length, C9 invalid slot, C0 cache unavailable",
+      "effect": "read DIMM status/type/capacity, enable/disable settings, lightpath designator, health, and SPD module type",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
       "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
+        "Base-view bytes 2..28 mix HAL and config fields; their complete vendor semantic labels are not all established."
       ],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x00039734"
     },
@@ -1259,12 +1265,12 @@
       "handler": "getAssrConfig",
       "ghidraAddress": "0x00039fc0",
       "contractStatus": "partial",
-      "request": "unknown compound shape",
-      "response": "watchdog/restart/power policy fields",
-      "effect": "read compound ASRR policy; exact all-field layout unresolved",
+      "request": "ignored; handler has no local request-length check",
+      "response": "12 bytes [cc,watchdog_behavior(0/1/3),00,power_restore_policy_shifted,watchdog_bucket_le16,config_0x30_byte,config_0x32_le16,00,00,watchdog_minutes_byte] on success; CE backend failure, C7 timer above platform cap",
+      "effect": "read configuration IDs 0x74,0x41,0x30,0x32 and runtime power-restore policy; bucket maps timer intervals 0..7",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
       "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
+        "Semantic labels for configuration IDs 0x30 and 0x32 and platform-specific timer cap remain unresolved."
       ],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x00039fc0"
     },
@@ -1274,12 +1280,12 @@
       "handler": "setAssrConfig",
       "ghidraAddress": "0x0003a1e8",
       "contractStatus": "partial",
-      "request": "compound ASRR policy fields",
+      "request": "bitmask byte 0: bit7 writes watchdog behavior from byte1 (0/1/3), bit5 sets power-restore policy from byte3 (0/1/2), bit4 sets watchdog timer from bytes4-5 bucket or byte11 minutes when length>=12, bit3 writes config ID 0x30 from byte6&7, bit2 writes config ID 0x32 from bytes7-8; handler lacks comprehensive length check",
       "response": "[cc]",
-      "effect": "set watchdog/restart/power restore settings; exact all-field constraints unresolved",
+      "effect": "writes config IDs 0x74,0x41,0x30,0x32 and power-restore policy in mask order; partial writes can occur before a later validation/backend error",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
       "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
+        "Semantic labels for config IDs 0x30/0x32 and exact platform timer cap remain unresolved; no full request-length validation is visible."
       ],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003a1e8"
     },
@@ -1368,14 +1374,12 @@
       "command": "0x87",
       "handler": "getPowerFull",
       "ghidraAddress": "0x0003a6f4",
-      "contractStatus": "partial",
+      "contractStatus": "direct",
       "request": "ignored",
-      "response": "14-byte PowerFull structure",
-      "effect": "read blade type and power budget; some internal fields unresolved",
+      "response": "14 bytes [cc,blade_type,power_consumption_be32,pci_present,memory_slot_count,pci_card_count,mezzanine_card_count,power_budget_be32]; C1 on non-blade",
+      "effect": "read blade type, actual or fallback power consumption, peripheral counts, and calculated/dummy power budget",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003a6f4"
     },
     {
@@ -1383,14 +1387,12 @@
       "command": "0x96",
       "handler": "getFanControlInfo",
       "ghidraAddress": "0x0003a928",
-      "contractStatus": "partial",
+      "contractStatus": "direct",
       "request": "ignored",
-      "response": "variable fan sensor references",
-      "effect": "stateful call counter and SDR lookup; detailed field map unresolved",
+      "response": "first five calls return [C0]; sixth call returns [00,06,sensor_0,00,00,sensor_1,00,00] when both sensor lookups succeed, else [CB]; CE if feature disabled",
+      "effect": "increments an internal call counter, resets it on sixth call, then resolves two fan sensor numbers via SDR lookup",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003a928"
     },
     {
@@ -1398,14 +1400,12 @@
       "command": "0xa3",
       "handler": "getBladeSelEntry",
       "ghidraAddress": "0x0003aa40",
-      "contractStatus": "partial",
-      "request": "request includes SEL record ID at offsets 2–3",
-      "response": "19 bytes on success",
-      "effect": "read blade SEL record; remaining selectors unchecked",
+      "contractStatus": "direct",
+      "request": "bytes 2–3 are SEL record ID little-endian; bytes 0–1 ignored; no local request-length check",
+      "response": "19 bytes [00,next_record_id_le16,16-byte SEL record] on success; [CB] if no record, [C1] non-blade",
+      "effect": "read blade SEL record by ID using standard 16-byte SEL record backend",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003aa40"
     },
     {
@@ -1413,14 +1413,12 @@
       "command": "0xaa",
       "handler": "getPeripheralEventStatus",
       "ghidraAddress": "0x0003cc0c",
-      "contractStatus": "partial",
-      "request": "[selector]",
-      "response": "[cc,peripheral status]",
-      "effect": "read I/O blade presence/sensor status; field semantics partly unresolved",
+      "contractStatus": "direct",
+      "request": "exactly 1 byte; only selector 00 accepted",
+      "response": "6 bytes [cc,status,00,00,00,00]; selector!=0 gives [D5,01,00,00,00,00]; host off status 04; host on status 00/01/02/03/05 based on I/O blade presence and sensor state; C7 wrong length",
+      "effect": "read I/O blade presence and peripheral-event sensor state",
       "activation": "Registered Admin privilege, channel mask 0xaaaa; runtime gate or backend support may vary.",
-      "unknowns": [
-        "Full leaf/backend schema or field meaning is not established by this wrapper audit."
-      ],
+      "unknowns": [],
       "evidence": "boxes/irmc-fujitsu/evidence/irmc-s6-command-tables.tsv; libipmipdkcmds.so.1.53.20 SHA-256 35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804; Ghidra 0x0003cc0c"
     },
     {

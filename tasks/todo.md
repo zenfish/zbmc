@@ -138,12 +138,13 @@ depends on work owned by a later shared platform catalog.
 The pinned table has 148 active rows, 135 NetFn/Cmd pairs, and 138 LUN-aware identities;
 ten `2e` handlers add 228 selector candidates (F1 93, F5 99, other SCCI 36).
 The firmware HTML reference records every recovered registration and candidate, plus 104
-C0/D0 handler audits and 24 standard/group override audits. F1/F5 target maps are closed,
-but many leaf payload/response contracts remain partial or unknown; names are not a claim of
+C0/D0 handler audits and 24 standard/group override audits. A follow-up static pass promoted
+six F1, six F5, and six C0/D0 handlers to direct contracts. F1/F5 target maps are closed;
+of 228 selector leaves, 61 are decoded, 163 partial, and four unknown. Names are not a claim of
 complete structured support. zipmi 0.6.0 exposes 367 named entries, 22 exact four-byte
 read requests without `--unsafe`, and guarded raw execution for the other LAN-runnable names.
 Three LUN-3 FRU routes and two group-52 host-interface leaves are cataloged but not
-LAN-runnable. A fresh six-service-ready Debby run
+LAN-runnable. A fresh required-service READY Debby run (4/4; SSH is not configured)
 `20260926T200725Z-7ecec0c7-f88e-4945-b3b2-2fe97bcb9e3a` returned CC00 on 21 of 22
 statically reviewed safe reads; 2e/e0 selector 00 returned CC01. All completed transport.
 No state-changing Fujitsu OEM probe was sent. zipmi's 2,358 tests passed and its 0.6.0

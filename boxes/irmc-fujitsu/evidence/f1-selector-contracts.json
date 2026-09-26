@@ -14,23 +14,24 @@
   "dispatch_candidates": 93,
   "selector_contracts": {
     "06": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Set BIOS slot/state byte",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 5,
-        "payload": null
+        "payload": "one state byte, written to BIOS object+0x765"
       },
       "response": {
         "success_total_bytes": 4,
-        "payload": null
+        "payload": "none"
       },
       "effect": "mutating",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "guard": "exact length 5 at 0x11440; one-byte write at 0x1146c; branch returns completion code 01 when the selected slot bit is clear, otherwise zero-byte payload via shared epilogue",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "01 when the selected slot bit is clear"
       ],
       "evidence_va": "0x00011440",
       "entry_guard_instructions": [
@@ -41,19 +42,19 @@
       "candidate_call_trace_truncated": false
     },
     "07": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get BIOS slot/state bytes",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 4,
-        "payload": null
+        "payload": "none"
       },
       "response": {
         "success_total_bytes": 6,
-        "payload": null
+        "payload": "low nibble of BIOS object+0x765, followed by slot/state flag byte"
       },
       "effect": "read",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "guard": "exact length 4 at 0x1185c; response bytes written at 0x11880-0x11884; success length 6 at 0x11878",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -117,19 +118,19 @@
       "candidate_call_trace_truncated": true
     },
     "09": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get BIOS state byte at object+0x766",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 4,
-        "payload": null
+        "payload": "none"
       },
       "response": {
         "success_total_bytes": 5,
-        "payload": null
+        "payload": "BIOS object byte at offset 0x766"
       },
       "effect": "read",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "guard": "exact length 4 at 0x1181c; one-byte response write at 0x11834; success length 5 at 0x11828",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -144,19 +145,19 @@
       "candidate_call_trace_truncated": false
     },
     "0a": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Set BIOS state byte at object+0x767 and notify",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 5,
-        "payload": null
+        "payload": "one BIOS state/POST-code byte, written to object+0x767"
       },
       "response": {
         "success_total_bytes": 4,
-        "payload": null
+        "payload": "none"
       },
       "effect": "mutating",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "guard": "exact length 5 at 0x116f4; object write at 0x1170c; notification helper at 0x11714, conditional extra notification for value 0x4a at 0x15e44; success length 4 at 0x11744",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -175,19 +176,19 @@
       "candidate_call_trace_truncated": false
     },
     "0b": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get BIOS state byte at object+0x767",
       "request": {
         "shared_minimum_total_bytes": 4,
         "selector_specific_length": 4,
-        "payload": null
+        "payload": "none"
       },
       "response": {
         "success_total_bytes": 5,
-        "payload": null
+        "payload": "BIOS object byte at offset 0x767"
       },
       "effect": "read",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "guard": "exact length 4 at 0x1183c; one-byte response write at 0x11854; success length 5 at 0x11848",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1323,15 +1324,15 @@
       "name": "Remove BIOS-side file",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 4,
+        "payload": "none"
       },
       "response": {
         "success_total_bytes": null,
         "payload": null
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "mutating",
+      "guard": "exact length 4 at 0x11c34; loop at 0x11c5c-0x11c7c builds and unlinks 40 BIOS-side file paths; return payload/status still path-dependent",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1535,23 +1536,24 @@
       "candidate_call_trace_truncated": false
     },
     "51": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get PMB object event status",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": null,
-        "payload": null
+        "selector_specific_length": 6,
+        "payload": "PMB object type and instance bytes"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 7,
+        "payload": "one status byte followed by little-endian 16-bit event-status flags"
       },
-      "effect": "unknown",
-      "guard": "first ARM instructions only; not a complete path proof",
+      "effect": "read",
+      "guard": "exact length 6 at 0x11fb4; pmbGetObjectEventStatus helper at 0x11fec; 3 response bytes at 0x14e30-0x14e50; helper failure returns CB",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "CB on helper failure"
       ],
       "evidence_va": "0x00011fb0",
       "entry_guard_instructions": [

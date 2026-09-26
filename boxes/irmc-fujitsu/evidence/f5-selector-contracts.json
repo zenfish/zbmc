@@ -405,22 +405,23 @@
     },
     "46": {
       "target_va": "0x0001c830",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "80280046",
         "length_check_at_entry": "cmp\tr6, #10",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 7 bytes after selector (total length >10); event fields at offsets 4-10 and possibly following bytes"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "on event decode, severity byte and length-prefixed text; exact alternate paths unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none proved; passes event to istDecodeEvent for text/severity decoding",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 if total length <=10",
+        "backend-dependent codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001c830",
@@ -433,7 +434,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1c830-0x1c874 and 0x1ee74-0x1ef24 prove minimum length, event decode call, and text response construction."
     },
     "48": {
       "target_va": "0x0001c7a8",
@@ -509,22 +510,23 @@
     },
     "50": {
       "target_va": "0x0001db8c",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280050",
         "length_check_at_entry": "not established at entry",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "none; shared minimum total length 4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "three bytes: when shared flag==1, [shared byte3, 01, shared byte4]; otherwise [00,00,00]"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none; reads shared BMC state",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 success",
+        "0xc7 if total length <=3"
       ],
       "evidence": {
         "entry_va": "0x0001db8c",
@@ -537,7 +539,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1db8c-0x1dbbc proves all three response bytes and shared-flag condition."
     },
     "51": {
       "target_va": "0x0001dc00",
@@ -575,22 +577,24 @@
     },
     "52": {
       "target_va": "0x0001da4c",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "80280052",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 2 bytes after selector; byte4 must equal configured bus token; byte5 is read length; bytes6+ are I2C write data"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "I2C read data written via backend output pointer; exact length unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "performs I2C write/read against configured bus/device via I2cMasterWriteRead",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 I2C backend success",
+        "0x44 token mismatch or I2C backend failure",
+        "0xc7 if total length <=5"
       ],
       "evidence": {
         "entry_va": "0x0001da4c",
@@ -603,7 +607,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1da4c-0x1da6c and 0x1f67c-0x1f710 prove token guard, I2C call, write length (total-6), read length byte and status mapping; do not live-probe."
     },
     "53": {
       "target_va": "0x0001dd54",
@@ -885,22 +889,23 @@
     },
     "73": {
       "target_va": "0x0001c878",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "80280073",
         "length_check_at_entry": "cmp\tr6, #13",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 10 bytes after selector (total length >13); includes 32-bit event identifier at offsets4-7, additional fields through offset13"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "text-cache/error-code text; exact framing and branches unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none proved; calls istGetTextCacheReqId and istGetTextFromErrorcode",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 if total length <=13",
+        "backend-dependent codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001c878",
@@ -913,26 +918,27 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1c878-0x1c9a0 proves length gate, assembled event fields and text-cache/error-code calls."
     },
     "74": {
       "target_va": "0x0001de40",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280074",
         "length_check_at_entry": "not established at entry",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "none; shared minimum total length 4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "seven bytes: 03 followed by three little-endian 16-bit values loaded from shared structure offsets 0, 8, 16"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none; reads shared structure",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 success",
+        "0xc7 if total length <=3"
       ],
       "evidence": {
         "entry_va": "0x0001de40",
@@ -945,7 +951,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1de40-0x1de90 proves fixed seven-byte body and no request-tail read."
     },
     "75": {
       "target_va": "0x0001bf24",
@@ -1018,22 +1024,23 @@
     },
     "81": {
       "target_va": "0x0001bde0",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280081",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least one mask byte at offset4; extra bytes ignored by this branch"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "two bytes: first = mask & shared[0x9051]; second = mask & shared[0x9051] & shared[0x9050]"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none; reads shared TPM-related status mask",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 success",
+        "0xc7 if total length <=4"
       ],
       "evidence": {
         "entry_va": "0x0001bde0",
@@ -1046,7 +1053,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1bde0-0x1be18 proves mask operation and two-byte response."
     },
     "82": {
       "target_va": "0x0001bdbc",
@@ -1629,22 +1636,23 @@
     },
     "2d": {
       "target_va": "0x0001d898",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028002d",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "two modes: total length <=5 clears bit0 across 32-byte shared array; longer requests enter another subdispatch"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none in clear mode; longer-mode response unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "clear mode mutates 32 shared-state bytes by clearing bit 0",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 clear-mode success",
+        "longer-mode codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001d898",
@@ -1657,7 +1665,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1d898-0x1d8c0 and 0x1c070-0x1c074 prove 32-byte clear and zero-body success; >5 branch remains unresolved. Unsafe to live-probe."
     },
     "2e": {
       "target_va": "0x0001c0cc",
@@ -1768,22 +1776,24 @@
     },
     "4b": {
       "target_va": "0x0001c078",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028004b",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "one-byte slot index 0..7 at offset4; with total length 6, byte5 is written to shared slot field +0x29; length5 enters read path"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "length5 read path returns one byte or checks UDS session; full fallback unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "length6 marks shared slot flag +0x2d and writes value at +0x29",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 invalid length",
+        "0xc9 slot index >7",
+        "read-path status unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001c078",
@@ -1796,26 +1806,28 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1c078-0x1c0c8 and 0x20be0-0x20c34 prove slot bounds and write path; read fallback not fully traced."
     },
     "4c": {
       "target_va": "0x0001c020",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028004c",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "one-byte slot index 0..7 at offset4; with total length 6, byte5 is written to shared slot field +0x2a; length5 enters read path"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "length5 read path unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "length6 marks shared slot flag +0x2d and writes value at +0x2a",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 invalid length",
+        "0xc9 slot index >7",
+        "read-path status unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001c020",
@@ -1828,7 +1840,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1c020-0x1c074 proves slot bounds and write path; 0x20940 read branch remains unresolved."
     },
     "4d": {
       "target_va": "0x0001c010",
@@ -1864,22 +1876,23 @@
     },
     "4e": {
       "target_va": "0x0001bf98",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028004e",
         "length_check_at_entry": "cmp\tr6, #11",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "16-bit little-endian index at offsets4-5; values <0x180 follow direct branch, >=0x180 an unresolved alternate; total length6 enters read path, length11 writes five bytes from offsets6-10"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "read-path value unresolved; write-path no body"
       },
-      "effect": "undetermined from entry block",
+      "effect": "length11 writes five bytes into shared indexed table (or alternate branch for index>0x7f)",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 invalid request length",
+        "indexed read/write codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001bf98",
@@ -1892,26 +1905,28 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1bf98-0x1c00c proves index bound, length cases and five-byte write path; 0x20588 and 0x208cc alternate paths unresolved."
     },
     "4f": {
       "target_va": "0x0001dbc0",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "8028004f",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 3 bytes after selector; byte4 must equal 01, further fields at offsets5-6 consumed by SDR path"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "response begins with 01; remainder from SDR/backend unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none proved; traverses SDR via GetNextSdr",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 if total length <=6",
+        "0xca if byte4 !=01",
+        "backend-dependent codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001dbc0",
@@ -1924,7 +1939,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1dbc0-0x1dbfc and 0x1fd74-0x1fdb8 prove length/subselector gate and SDR call; rest unresolved."
     },
     "5a": {
       "target_va": "0x0001d290",
@@ -2370,22 +2385,23 @@
     },
     "a5": {
       "target_va": "0x0001ba3c",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "802800a5",
         "length_check_at_entry": "cmp\tr6, #12",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "at least 13 bytes after selector; bytes4-12 must spell 'Reset POH' for side effect; little-endian 32-bit value at 13-16"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none on observed paths"
       },
-      "effect": "undetermined from entry block",
+      "effect": "for matching magic and value <0x800000, calls WrBBRegPOH with transformed value; other paths appear no-op success",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 on observed paths",
+        "0xc7 if total length <=12"
       ],
       "evidence": {
         "entry_va": "0x0001ba3c",
@@ -2398,7 +2414,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1ba3c-0x1ba5c, 0x1faa0-0x1fb38, and 0x22378-0x223a8 prove magic, value bound and persistent-register write. Unsafe to live-probe."
     },
     "a8": {
       "target_va": "0x0001b65c",
@@ -2470,22 +2486,24 @@
     },
     "aa": {
       "target_va": "0x0001b840",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "802800aa",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly two bytes: byte4 must be 01; byte5 must be 00 or 01"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none"
       },
-      "effect": "undetermined from entry block",
+      "effect": "calls haSetLocalMonitorStatus(1) for byte5=00, or haSetLocalMonitorStatus(0) for byte5=01",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 accepted request",
+        "0xcc invalid payload",
+        "0xc7 unless total length exactly 6"
       ],
       "evidence": {
         "entry_va": "0x0001b840",
@@ -2498,26 +2516,29 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b840-0x1b85c, 0x1ef30-0x1ef5c, 0x1fb3c-0x1fb58 and 0x2090c-0x2091c prove both state-changing branches."
     },
     "ab": {
       "target_va": "0x0001b7f4",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "802800ab",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "byte4=01, byte5=01, byte6=data length <=200, followed by that many data bytes; total length exactly 7+data length"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "backend-generated response"
       },
-      "effect": "undetermined from entry block",
+      "effect": "passes data into OEM_FTS_BiosCmds after RC-init and SD-card checks; downstream side effects unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 malformed length/count",
+        "0xc9 invalid inner selector",
+        "0xd3 SD-card unavailable",
+        "other backend codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001b7f4",
@@ -2530,7 +2551,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b7f4-0x1b838 and 0x21cdc-0x21d2c prove framing, RC/SD-card guards and BIOS delegate. Unsafe to live-probe."
     },
     "b0": {
       "target_va": "0x0001b7d8",
@@ -2708,22 +2729,25 @@
     },
     "b5": {
       "target_va": "0x0001b5ac",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "802800b5",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "none; exact total length 4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "four bytes: low-level register values 3, 4, 5 and 6"
       },
-      "effect": "undetermined from entry block",
+      "effect": "none; reads LVP registers",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 success",
+        "0xcb register read failure",
+        "0xd3 unsupported device type",
+        "0xc7 unless total length exactly 4"
       ],
       "evidence": {
         "entry_va": "0x0001b5ac",
@@ -2736,7 +2760,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b5ac-0x1b5c0, 0x1f7b4-0x1f7d8, 0x1e8e8-0x1e958 prove device gate, four reads and status."
     },
     "b6": {
       "target_va": "0x0001ba1c",
@@ -2958,22 +2982,24 @@
     },
     "e3": {
       "target_va": "0x0001b97c",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "802800e3",
         "length_check_at_entry": "cmp\tr6, #13",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly nine bytes after selector (total length 13); byte4 must equal 01; three little-endian 16-bit fields begin at offsets5,7,9"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "backend-generated configuration-space response"
       },
-      "effect": "undetermined from entry block",
+      "effect": "configuration-space read/enum path; exact backend effect unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc1 if byte4 !=01",
+        "0xc7 unless total length exactly 13",
+        "backend-dependent codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001b97c",
@@ -2986,7 +3012,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b97c-0x1b99c, 0x206b0-0x20770 prove length/subselector guard and enumConfigSpaceValues delegation."
     },
     "ef": {
       "target_va": "0x0001b5ec",
@@ -3203,22 +3229,24 @@
     },
     "f8": {
       "target_va": "0x0001b4a4",
-      "status": "unknown",
+      "status": "decoded",
       "request": {
         "prefix_hex": "802800f8",
         "length_check_at_entry": "cmp\tr6, #5",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly one nonzero user ID at offset4"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "none"
       },
-      "effect": "undetermined from entry block",
+      "effect": "deletes selected BMC user ID via utDeleteUserID",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0x00 backend success",
+        "0xcc user ID zero or backend failure",
+        "0xc7 unless total length exactly 5"
       ],
       "evidence": {
         "entry_va": "0x0001b4a4",
@@ -3231,7 +3259,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b4a4-0x1b4bc and 0x20328-0x20338 prove exact length, nonzero guard, delete call and status. Do not live-probe."
     },
     "f9": {
       "target_va": "0x0001b470",
@@ -3269,22 +3297,24 @@
     },
     "fa": {
       "target_va": "0x0001b460",
-      "status": "unknown",
+      "status": "partial",
       "request": {
         "prefix_hex": "802800fa",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "selector-specific; not fully resolved"
+        "payload": "exactly two bytes after selector (total length 6); byte4 is nested selector 01/02/03, byte5 nested argument"
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "not fully resolved"
+        "body": "branch-specific; unresolved"
       },
-      "effect": "undetermined from entry block",
+      "effect": "nested selector dispatch may change BMC state; leaf effects unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 via shared length rejection; selector-specific codes unresolved"
+        "0xc7 unless total length exactly 6",
+        "0xc9 unsupported nested selector",
+        "nested branch codes unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001b460",
@@ -3296,7 +3326,7 @@
         ],
         "direct_calls_in_linear_entry_region": []
       },
-      "notes": "Entry target confirmed; downstream contract unresolved."
+      "notes": "0x1b460-0x1b46c and 0x1e99c-0x1e9d4 prove length and three-way nested dispatch."
     },
     "fc": {
       "target_va": "0x0001b41c",
