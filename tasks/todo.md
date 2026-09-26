@@ -156,8 +156,8 @@ The unrelated `.playwright-mcp/` directory remains untracked and untouched.
 ## Decode remaining Fujitsu iRMC S6 OEM wire contracts
 
 - [x] Reconfirm the pinned firmware corpus, existing status counts, and exact unresolved selectors/handlers; retain an explicit denominator.
-- [ ] Trace F1 BIOS selector leaves to terminal handlers and encode proved request fields, response layout, effects, and completion paths (43 decoded, 50 partial).
-- [ ] Trace F5 BMC selector leaves, prioritizing four unknown targets and high-impact partials; do not use unsafe live probes (24 decoded, 75 partial, none wholly unknown).
+- [ ] Trace F1 BIOS selector leaves to terminal handlers and encode proved request fields, response layout, effects, and completion paths (48 decoded, 45 partial).
+- [ ] Trace F5 BMC selector leaves, prioritizing high-impact partials; do not use unsafe live probes (26 decoded, 73 partial, none wholly unknown).
 - [ ] Trace 27 partial C0/D0 handlers through delegated helpers and activation gates (91 direct, 13 partial).
 - [ ] Trace 26 partial SCCI leaves and relevant standard/group overrides; separate wire contract from physical backend and runtime reachability (28 decoded, 8 partial; 24 standard/group records audited).
 - [x] Regenerate HTML and zipmi data from the improved evidence, preserving safety gates and explicit unresolved boundaries; no newly justified fixed codecs in this batch.
@@ -167,9 +167,9 @@ The unrelated `.playwright-mcp/` directory remains untracked and untouched.
 ### Review
 
 In progress. Baseline: 228 selector leaves = 61 decoded, 163 partial, 4 unknown;
-104 C0/D0 handlers = 77 direct, 27 partial. The pinned static pass now has
+104 C0/D0 handlers = 77 direct, 27 partial. The first pinned static pass reached
 95 decoded, 133 partial, 0 wholly unknown selector leaves and 91 direct / 13 partial
-C0/D0 handlers. F1 is 43/50, F5 24/75, and other SCCI/blade 28/8 decoded/partial.
+C0/D0 handlers. F1 was 43/50, F5 24/75, and other SCCI/blade 28/8 decoded/partial.
 The four formerly unknown F5 leaves have identified dispatch and high-risk effects,
 not complete backend semantics. E0/04 was reclassified from a misleading read-only
 NVRAM comparison to a maintenance multiplexer with FRU restore and IDPROM writes.
@@ -186,8 +186,21 @@ the OEM audit, GETTING-STARTED, and IEIT; the three pairs touched here sync.
 This bounded decode milestone was pushed as zBMC `ea4fbcc` and zipmi `355a8cb`.
 The unrelated `.playwright-mcp/` directory
 remains untracked and untouched.
-Full decoding remains open: delegated helpers, platform gates, and mutable state
-must not be promoted merely from a named registration or caller wrapper.
+The second static pass traced providers in the full extracted rootfs. It resolves
+102 decoded / 126 partial outer leaves (F1 48/45, F5 26/73, SCCI 28/8) and
+40 F5/A4 nested dispatch entries, all 50 E0/04 maintenance case labels (32
+mutating, seven branch-read, 11 with unresolved effects), and 92 binary-backed
+backup/restore parameter records (ID-0 marker plus 91 parameter IDs). These are
+separate nested/parameter spaces, not extra outer selector leaves or proof of
+complete backend behavior. F5/71 cache consumption, F5/87 event-log clearing,
+F1 GUID/config setters, SCCI history reads, blade interface-state actions, and
+panel text were deepened; a second-opinion review corrected the panel-text C9
+condition. The zBMC HTML now includes filterable tables for the nested and
+parameter spaces. zipmi's next version is 0.6.2; its source pin and public
+reference include those evidence tables. Full decoding remains open: delegated
+helpers, platform gates, sensitive backup redaction, and mutable state must not
+be promoted merely from a named registration or caller wrapper. No unsafe live
+command was sent.
 
 # OEM IPMI reference and fleet coverage audit
 

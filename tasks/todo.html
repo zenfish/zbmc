@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=0207d657ab7ea053f540b2ddcf97a4ad79299ee0e56d587b8f6ab1f63a0d8336 body-sha256=510a2fceda51b7297b4913e83f7a2b36144f6f2a70af2e813e8cc0579a97bfd7 -->
+<!-- zmd2html:auto source-sha256=77bf1af33c71e2b6282d8b4fc25a003d758c5de626dfeac1afd27fd117dc6cc7 body-sha256=2caf958c7d7eede0f35ca3f63c9a9b917ceddd05bbeb2cd44e99835517464c44 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -286,11 +286,10 @@ firmware corpus, existing status counts, and exact unresolved
 selectors/handlers; retain an explicit denominator.</label></li>
 <li><label><input type="checkbox" />Trace F1 BIOS selector leaves to
 terminal handlers and encode proved request fields, response layout,
-effects, and completion paths (43 decoded, 50 partial).</label></li>
+effects, and completion paths (48 decoded, 45 partial).</label></li>
 <li><label><input type="checkbox" />Trace F5 BMC selector leaves,
-prioritizing four unknown targets and high-impact partials; do not use
-unsafe live probes (24 decoded, 75 partial, none wholly
-unknown).</label></li>
+prioritizing high-impact partials; do not use unsafe live probes (26
+decoded, 73 partial, none wholly unknown).</label></li>
 <li><label><input type="checkbox" />Trace 27 partial C0/D0 handlers
 through delegated helpers and activation gates (91 direct, 13
 partial).</label></li>
@@ -311,14 +310,14 @@ and zipmi; leave unrelated files untouched.</label></li>
 </ul>
 <h3 id="review-1">Review</h3>
 <p>In progress. Baseline: 228 selector leaves = 61 decoded, 163 partial,
-4 unknown; 104 C0/D0 handlers = 77 direct, 27 partial. The pinned static
-pass now has 95 decoded, 133 partial, 0 wholly unknown selector leaves
-and 91 direct / 13 partial C0/D0 handlers. F1 is 43/50, F5 24/75, and
-other SCCI/blade 28/8 decoded/partial. The four formerly unknown F5
-leaves have identified dispatch and high-risk effects, not complete
-backend semantics. E0/04 was reclassified from a misleading read-only
-NVRAM comparison to a maintenance multiplexer with FRU restore and
-IDPROM writes. The 2c/02 group-52 Redfish credential path was also
+4 unknown; 104 C0/D0 handlers = 77 direct, 27 partial. The first pinned
+static pass reached 95 decoded, 133 partial, 0 wholly unknown selector
+leaves and 91 direct / 13 partial C0/D0 handlers. F1 was 43/50, F5
+24/75, and other SCCI/blade 28/8 decoded/partial. The four formerly
+unknown F5 leaves have identified dispatch and high-risk effects, not
+complete backend semantics. E0/04 was reclassified from a misleading
+read-only NVRAM comparison to a maintenance multiplexer with FRU restore
+and IDPROM writes. The 2c/02 group-52 Redfish credential path was also
 corrected: any second byte reaches the handler, while non-A5 values
 clear a bootstrap flag before user creation. Standard 06/45 can bypass
 normal Set User Name validation after a config write. No unsafe live
@@ -332,9 +331,23 @@ pairs in Lenovo, Redfish, the OEM audit, GETTING-STARTED, and IEIT; the
 three pairs touched here sync. This bounded decode milestone was pushed
 as zBMC <code>ea4fbcc</code> and zipmi <code>355a8cb</code>. The
 unrelated <code>.playwright-mcp/</code> directory remains untracked and
-untouched. Full decoding remains open: delegated helpers, platform
-gates, and mutable state must not be promoted merely from a named
-registration or caller wrapper.</p>
+untouched. The second static pass traced providers in the full extracted
+rootfs. It resolves 102 decoded / 126 partial outer leaves (F1 48/45, F5
+26/73, SCCI 28/8) and 40 F5/A4 nested dispatch entries, all 50 E0/04
+maintenance case labels (32 mutating, seven branch-read, 11 with
+unresolved effects), and 92 binary-backed backup/restore parameter
+records (ID-0 marker plus 91 parameter IDs). These are separate
+nested/parameter spaces, not extra outer selector leaves or proof of
+complete backend behavior. F5/71 cache consumption, F5/87 event-log
+clearing, F1 GUID/config setters, SCCI history reads, blade
+interface-state actions, and panel text were deepened; a second-opinion
+review corrected the panel-text C9 condition. The zBMC HTML now includes
+filterable tables for the nested and parameter spaces. zipmi's next
+version is 0.6.2; its source pin and public reference include those
+evidence tables. Full decoding remains open: delegated helpers, platform
+gates, sensitive backup redaction, and mutable state must not be
+promoted merely from a named registration or caller wrapper. No unsafe
+live command was sent.</p>
 <h1 id="oem-ipmi-reference-and-fleet-coverage-audit">OEM IPMI reference
 and fleet coverage audit</h1>
 <ul class="task-list">

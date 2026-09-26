@@ -805,7 +805,7 @@
       "request": {
         "prefix_hex": "80280070",
         "length_check_at_entry": "cmp\tr6, #9",
-        "payload": "total request length >=10. Bytes 4-5 are little-endian SEL record ID; byte 6 must be 0x02 when the linked global flag at +0x70 is zero; bytes 7-8 are a little-endian field and byte 9 is another field. Later decoding path remains unresolved."
+        "payload": "total request length >=10. Bytes 4-5 are little-endian SEL record ID; byte 6 must be 0x02 when the linked global flag at +0x70 is zero; bytes 7-8 are a little-endian field and byte 9 is another field. GetSelRecordFromId constructs a 6-byte GetSELEntry request with reservation 0, this record ID, and offset 0xff00; on success it obtains a 16-byte SEL record and next-record ID. The later error-decoding fields remain unresolved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
@@ -834,31 +834,32 @@
           "GetSelRecordFromId"
         ],
         "traced_paths": [
-          "0x1caf0-0x1cb8c: input parse, mode guard, GetSelRecordFromId and branch"
+          "0x1caf0-0x1cb8c: input parse, mode guard, GetSelRecordFromId and branch",
+          "libfts_util.so.1.30.73 0x8c04c-0x8c0d8: GetSelRecordFromId zeroes 16-byte output, calls GetSELEntry, checks response completion, extracts next-record ID and copies 16 record bytes"
         ]
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Direct handler and available companion-library paths traced in pinned 02.63S image. Status remains partial: later decoder or callback semantics are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "71": {
       "target_va": "0x0001ca64",
-      "status": "partial",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280071",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "total request length >=5. Byte 4 is the text-cache entry selector."
+        "payload": "total request length >=5. Byte 4 is the one-byte text-cache entry ID. Additional request bytes are ignored by this handler."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "Calls istTextCacheRead(selector, 0, response+7, 50, output-struct, -1). On success response offsets 4-5 contain little-endian total text length, offset 6 chunk length, and offset 7+ returned text bytes; body length = 3 + chunk length. Exact cache namespace and content are backend-defined."
+        "body": "After istTextCacheRead copies up to 50 bytes from the entry's current cursor, response offsets 4-5 contain little-endian bytes remaining (not total text length), offset 6 is copied chunk length, and offsets 7+ are the chunk bytes. Body length is 3 + copied chunk length."
       },
-      "effect": "reads cached text and calls istTextCacheDelete(selector,-1) when reported total text length is zero; therefore not a pure read",
+      "effect": "stateful text-cache read: advances the cache entry's read cursor and refreshes its access timestamp; if no bytes remain after a nonempty chunk, calls istTextCacheDelete(entry ID,-1) to unlink that entry",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 for request length <5",
-        "0xcb when istTextCacheRead returns zero",
-        "0x00 on helper success"
+        "0xc7 for total request length <5",
+        "0xcb when cache entry is absent/exhausted, mutex lock fails, or istTextCacheRead otherwise copies zero bytes",
+        "0x00 when at least one byte is copied"
       ],
       "evidence": {
         "entry_va": "0x0001ca64",
@@ -874,10 +875,16 @@
           "istTextCacheDelete"
         ],
         "traced_paths": [
-          "0x1ca64-0x1caec: istTextCacheRead result packing and conditional istTextCacheDelete"
-        ]
+          "0x1ca64-0x1caec: istTextCacheRead result packing and conditional istTextCacheDelete",
+          "libfts_SELText.so.1.12.9 0x29b64-0x29ba8: istTextCacheRead acquires mutex then enters internal reader",
+          "libfts_SELText.so.1.12.9 0x28b4c-0x28c20: lookup by entry ID, copy min(remaining,50), advance cursor, output remaining count, refresh timestamp and unlock",
+          "libfts_SELText.so.1.12.9 0x29ba8-0x29c4c: istTextCacheDelete unlinks matching cache entry under mutex"
+        ],
+        "provider_sha256": {
+          "libfts_SELText.so.1.12.9": "de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a"
+        }
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Complete observed wire contract for pinned iRMC S6 02.63S. The response length field is remaining bytes after this chunk, correcting the earlier 'total length' interpretation. Provider libfts_SELText.so.1.12.9 SHA-256 de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a. Cache entry content itself is application-dependent."
     },
     "72": {
       "target_va": "0x0001c9a4",
@@ -885,7 +892,7 @@
       "request": {
         "prefix_hex": "80280072",
         "length_check_at_entry": "cmp\tr6, #6",
-        "payload": "total request length >=7. Byte 4 must equal 0x02 when linked global flag at +0x70 is zero; bytes 5-6 are little-endian SEL record ID."
+        "payload": "total request length >=7. Byte 4 must equal 0x02 when linked global flag at +0x70 is zero; bytes 5-6 are little-endian SEL record ID. GetSelRecordFromId constructs a 6-byte GetSELEntry request with reservation 0, this ID, and offset 0xff00; on success it obtains the next-record ID and 16-byte SEL record."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
@@ -916,10 +923,11 @@
         ],
         "traced_paths": [
           "0x1c9a4-0x1ca60: input and SEL lookup",
-          "0x20828-0x20878: decoded error packing"
+          "0x20828-0x20878: decoded error packing",
+          "libfts_util.so.1.30.73 0x8c04c-0x8c0d8: GetSelRecordFromId requests and copies the 16-byte SEL record"
         ]
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Direct handler and available companion-library paths traced in pinned 02.63S image. Status remains partial: later decoder or callback semantics are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "73": {
       "target_va": "0x0001c878",
@@ -927,19 +935,21 @@
       "request": {
         "prefix_hex": "80280073",
         "length_check_at_entry": "cmp\tr6, #13",
-        "payload": "at least 10 bytes after selector (total length >13); includes 32-bit event identifier at offsets4-7, additional fields through offset13"
+        "payload": "total request length >=14. Bytes 4-7 are a little-endian 32-bit error/event identifier; bytes 8-9 form a little-endian 16-bit field; byte 10 is a type/mode field (0x02 is specially gated by linked global flag); bytes 11-12 form another little-endian 16-bit field; byte 13 is an additional field. Exact parameter semantics still depend on the text-generator backend."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "text-cache/error-code text; exact framing and branches unresolved"
+        "body": "A cache-hit branch reads up to 50 text bytes using istTextCacheRead and responds with two-byte length at offsets 4-5, chunk length at offset 6, and chunk bytes at offset 7+; it deletes the cache entry when exhausted. Miss branch generates text via istGetTextFromErrorcode; its wire packing and other branches remain unresolved."
       },
-      "effect": "none proved; calls istGetTextCacheReqId and istGetTextFromErrorcode",
+      "effect": "looks up cached generated error text, refreshes cache entry timestamp and may consume/delete it; cache miss invokes text generation from error-code metadata",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
         "0xc7 if total length <=13",
-        "backend-dependent codes unresolved"
+        "0xd5 when byte 10==0x02 and linked global flag rejects that mode",
+        "0xcb when cache read or text generation fails on traced paths",
+        "other branch-specific results unresolved"
       ],
       "evidence": {
         "entry_va": "0x0001c878",
@@ -950,9 +960,16 @@
           "0x1c884: mov\tr2, #0",
           "0x1c888: sub\tr0, lr, #2"
         ],
-        "direct_calls_in_linear_entry_region": []
+        "direct_calls_in_linear_entry_region": [],
+        "traced_paths": [
+          "libfts_SELText.so.1.12.9 0x29a34-0x29b64: istGetTextCacheReqId compares cache key components, returns entry ID and text length",
+          "libfts_SELText.so.1.12.9 0x2af9c-0x2b188: istGetTextFromErrorcode searches metadata, creates localized text buffer and returns length"
+        ],
+        "provider_sha256": {
+          "libfts_SELText.so.1.12.9": "de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a"
+        }
       },
-      "notes": "0x1c878-0x1c9a0 proves length gate, assembled event fields and text-cache/error-code calls."
+      "notes": "0x1c878-0x1c9a0 parses request and attempts cache lookup/text generation; 0x1f884-0x1f8e4 reads cached chunk; 0x20f28-0x20f34 deletes exhausted cache entry. Provider libfts_SELText.so.1.12.9 SHA-256 de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a; `istGetTextCacheReqId` 0x29a34-0x29b64 searches cache keys and refreshes timestamp, while `istGetTextFromErrorcode` 0x2af9c-0x2b188 searches metadata and allocates generated text. Remaining miss-branch packing is not fully traced."
     },
     "74": {
       "target_va": "0x0001de40",
@@ -1173,21 +1190,21 @@
       "request": {
         "prefix_hex": "80280085",
         "length_check_at_entry": "cmp\tr6, #11",
-        "payload": "total request length >=12. Bytes 4-5, 6-7 and 8-9 are three little-endian 16-bit fields; bytes 10 and 11 are single-byte fields; bytes 12+ are a variable event payload. The exact field meanings and backend limits remain unresolved."
+        "payload": "total request length >=12. Bytes 4-5 supply a 16-bit field to iELAddEntry arg1; bytes 6-7 supply a signed 16-bit value whose low byte becomes arg0; bytes 8-9 initialize the in/out 16-bit entry-ID slot. Bytes 10 and 11 are flag bytes; bytes 12+ are the event payload and its byte count is arg2. Exact semantic names of the 16-bit fields are not proved."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
         "body": "On iELAddEntry success returns little-endian created entry ID in response offsets 4-5; error response contains no proved data body."
       },
-      "effect": "adds an iEL entry through iELAddEntry (persistent event-log mutation)",
+    "effect": "persistent iEL add request: iELAddEntry validates the in/out pointer and requires a payload pointer only when payload length is nonzero, builds a timestamped IPC message, sends it to the iEL daemon with sigwrap_msgsnd, waits for iELgetResponse, and returns the daemon-created entry ID on success; failure can occur before storage",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 for request length <12 or backend return 11",
-        "0xc4 for backend return 2",
-        "other iELAddEntry failures map through another shared error path",
-        "0x00 on success"
+      "0xc7 for request length <12 or iELAddEntry return 11 (null output pointer, or null payload pointer with nonzero payload length)",
+        "0xc4 for iELAddEntry return 2 (allocation failure)",
+        "other daemon/IPC return values use shared backend error mapping, not yet fully resolved",
+        "0x00 with two-byte entry ID after daemon acknowledgement"
       ],
       "evidence": {
         "entry_va": "0x0001bc60",
@@ -1205,10 +1222,15 @@
         ],
         "traced_paths": [
           "0x1bc60-0x1bd24: parse, iELAddEntry call and returned ID",
-          "0x1e97c-0x1e998: backend error-code routing"
-        ]
+          "0x1e97c-0x1e998: backend error-code routing",
+          "libfts_SELText.so.1.12.9 0x2ea14-0x2ea58: iELAddEntry argument validation and generic add-entry dispatch",
+          "libfts_SELText.so.1.12.9 0x2d3cc-0x2d59c: timestamped IPC message construction, send, response, entry ID and notification"
+        ],
+        "provider_sha256": {
+          "libfts_SELText.so.1.12.9": "de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a"
+        }
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Full rootfs provider libfts_SELText.so.1.12.9 SHA-256 de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a. Backend daemon storage implementation is not in this function; status remains partial."
     },
     "86": {
       "target_va": "0x0001d074",
@@ -1216,21 +1238,21 @@
       "request": {
         "prefix_hex": "80280086",
         "length_check_at_entry": "cmp\tr6, #17",
-        "payload": "total request length >=18. Bytes 4-17 are copied as a 14-byte SEL record and supplied to iELAddEntryFromSelData."
+        "payload": "total request length >=18. Bytes 4-17 are a 14-byte SEL record; iELAddEntryFromSelData first derives an error code using istGetErrorCodeOnlyFromSEL, chooses an event-data layout according to record byte 2, and passes the normalized payload to the same timestamped IPC add-entry path as selector 85."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
         "body": "On helper success returns little-endian created iEL entry ID at response offsets 4-5; backend failure packing is shared with selector 85."
       },
-      "effect": "adds an iEL entry derived from SEL data (persistent event-log mutation)",
+      "effect": "persistent iEL add request derived from supplied SEL record; the provider decodes the SEL error, sends a timestamped IPC message to the iEL daemon, waits for acknowledgement and returns the created entry ID on success",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 for request length <18; backend return 11 shares the 85 error path",
-        "0xc4 for backend return 2 via shared path",
-        "other helper failures unresolved",
-        "0x00 on success"
+        "0xc7 for request length <18; backend return 11 for missing required output/session data uses shared error path",
+        "0xc4 for backend return 2 (allocation failure)",
+        "backend return 14 if SEL error code cannot be derived; other daemon errors use shared backend mapping",
+        "0x00 with two-byte entry ID after daemon acknowledgement"
       ],
       "evidence": {
         "entry_va": "0x0001d074",
@@ -1247,31 +1269,36 @@
         ],
         "traced_paths": [
           "0x1d074-0x1d0c0: 14-byte SEL copy and iELAddEntryFromSelData",
-          "0x1bd08-0x1bd24: shared returned-ID packing"
-        ]
+          "0x1bd08-0x1bd24: shared returned-ID packing",
+          "libfts_SELText.so.1.12.9 0x2ea5c-0x2eb58: iELAddEntryFromSelData derives SEL error and normalizes 14-byte record into 9/10/14-byte event data",
+          "libfts_SELText.so.1.12.9 0x2d3cc-0x2d59c: shared timestamped IPC add-entry path"
+        ],
+        "provider_sha256": {
+          "libfts_SELText.so.1.12.9": "de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a"
+        }
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Full rootfs provider libfts_SELText.so.1.12.9 SHA-256 de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a. Exact SEL error-code semantics and daemon storage remain unresolved; status remains partial."
     },
     "87": {
       "target_va": "0x0001d038",
-      "status": "partial",
+      "status": "decoded",
       "request": {
         "prefix_hex": "80280087",
         "length_check_at_entry": "cmp\tr6, #4",
-        "payload": "total request length >=5. Byte 4=0x80 invokes clear-all. Byte 4=0x00 requires total length >=7 and uses bytes 5-6 as a little-endian entry ID for clear-one. Other byte-4 values route to utLogUserInfoiEL then return an error."
+        "payload": "total request length >=5. Byte 4=0x80 invokes clear-all with any length >=5. Byte 4=0x00 requires total length >=7 and treats bytes 5-6 as little-endian entry ID for clear-one. Other byte-4 values are invalid, but call utLogUserInfoiEL(0xc7,session) before returning 0xce."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "No data body proved; completion-only reply on clear helper result."
+        "body": "Completion-only response (no data body)."
       },
-      "effect": "DESTRUCTIVE: byte 4=0x80 calls iELclearAllEntries; byte 4=0 calls iELclearEntry for one ID. Other modes invoke utLogUserInfoiEL before returning 0xce.",
+      "effect": "byte 4=0x80 sends an iEL clear-all IPC message (opcode 4), waits for the daemon response and sends a notification on success. Byte 4=0x00 calls iELclearEntry, but this provider's implementation is a stub returning 12, so individual deletion is not performed in this firmware. Invalid modes log user info.",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 for length <5, or mode 0 with length <7",
-        "0x00 when selected clear helper returns zero",
-        "0xce on helper failure and for other mode values"
+        "0xc7 for total length <5 or byte 4=0 with total length <7",
+        "0x00 for clear-all only when the daemon acknowledges success",
+        "0xce for clear-one (provider always returns 12), clear-all IPC/daemon failure, or invalid byte-4 mode"
       ],
       "evidence": {
         "entry_va": "0x0001d038",
@@ -1288,10 +1315,15 @@
         "traced_paths": [
           "0x1d038-0x1d070: mode and length branches",
           "0x20898-0x208c8: iELclearAllEntries and iELclearEntry call paths",
-          "0x1cf40: error completion"
-        ]
+          "0x1cf40: error completion",
+          "libfts_SELText.so.1.12.9 0x2e914-0x2ea14: iELclearAllEntries sends opcode-4 message, waits for response, notifies and returns daemon status; send/response failure returns 10/9",
+          "libfts_SELText.so.1.12.9 0x2eb58-0x2eb60: iELclearEntry is an unconditional return-12 stub"
+        ],
+        "provider_sha256": {
+          "libfts_SELText.so.1.12.9": "de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a"
+        }
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Complete observed wire decision tree for pinned iRMC S6 02.63S, including a nonfunctional clear-one backend. Provider: libfts_SELText.so.1.12.9 SHA-256 de512eca45aebc7b8761f1f8f757551c90b46b854f80a1271e8d406cd14ebf8a. Do not live-probe clear-all: it is destructive."
     },
     "89": {
       "target_va": "0x0001cf48",
@@ -1428,9 +1460,13 @@
           "0x1d5f0: bne\t1b990 <OEM_FTS_BmcCmds@@Base+0xb10>",
           "0x1d5f4: cmp\tr6, #4"
         ],
-        "direct_calls_in_linear_entry_region": []
+        "direct_calls_in_linear_entry_region": [],
+        "traced_paths": [
+          "libfts_nvram.so.1.13.32 0x48d5c-0x48d84: ReadConfigurationSpace wrapper invokes ReadConfigurationSpaceExt with a one-unit argument",
+          "libfts_nvram.so.1.13.32 0x49350-0x49378: WriteConfigurationSpace wrapper invokes WriteConfigurationSpaceExt with a one-unit argument"
+        ]
       },
-      "notes": "0x1d5e4-0x1d628 maps inner table; 0x1e0a0-0x1e0ec reads config 0x2140; 0x1e0f0-0x1e164 writes it; 0x1e370-0x1e3dc calls AMIDualImageSupport.",
+      "notes": "0x1d5e4-0x1d628 maps inner table; 0x1e0a0-0x1e0ec reads config 0x2140; 0x1e0f0-0x1e164 writes it; 0x1e370-0x1e3dc calls AMIDualImageSupport. In pinned libfts_nvram.so.1.13.32, ReadConfigurationSpace 0x48d5c-0x48d84 and WriteConfigurationSpace 0x49350-0x49378 forward to corresponding Ext functions with count=1 and mode=0. AMIDualImageSupport remains an unresolved import in the extracted libraries; the outer command stays partial.",
       "nested_dispatch": {
         "01": "0x0001e0f0 exact length 6; WriteConfigurationSpace(0x2140, one byte)",
         "02": "0x0001e0a0 exact length 5; ReadConfigurationSpace(0x2140, one byte)",
@@ -1515,21 +1551,23 @@
       "request": {
         "prefix_hex": "8028000b",
         "length_check_at_entry": "not established at entry",
-        "payload": "nested flash selector at offset4; five-byte form with 0x80 starts BIOS TFTP flash, six-byte form has additional flash-control flags"
+        "payload": "If prerequisite shared flag is 1: exact total length 5 chooses byte-4 flash selector; byte4=0x80 initiates BIOS TFTP flash, while other byte-4 values 0x00..0x05 or 0xff can queue ordinary TFTP firmware update (other values rejected by StartTFTPFWUpdate). Exact total length 6 reads byte4 and flags byte5; byte4=0x81 takes examineFlashParameter; otherwise byte5 bit4 must be set, then low bits feed FlashOverHTI. Other lengths reject."
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "branch-specific; backend-generated status"
+        "body": "Completion-only immediate reply. The success reply acknowledges scheduling/starting update work, not completed flashing; backend status/progress is separate."
       },
-      "effect": "can start BIOS/TFTP firmware update or modify flash override state",
+      "effect": "HIGH RISK: length-5 non-0x80 path reads configured TFTP server/file, sets firmware configuration and enqueues firmware upload via PostPendTask; length-5 0x80 path reads BIOS TFTP settings and creates detached pthTftpBiosFlash worker; length-6 HTI path prepares flash area, creates detached iRMCFWVerifyFlashThread_HTI worker, and can verify and start image flashing. tflashSetOverride updates per-selector shared override state.",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
         "0xc1 if prerequisite shared flag !=1",
-        "0xc7 unsupported length",
-        "0xcc invalid branch parameters",
-        "backend-dependent codes unresolved"
+        "0xc7 unsupported total length",
+        "0xcc invalid flash selector in StartTFTPFWUpdate; 0xd1 when card is in active flash mode",
+        "0xff on TFTP config or InformFlasher failure; BIOS-TFTP thread/allocation failure can return 0xff",
+        "0x40 InformFlasher failure in FlashOverHTI; 0xd5 PrepareFlashArea failure; 0xcb missing HTI staging file; 0xd1 card in flash mode",
+        "0x00 means immediate scheduling/launch accepted, not flash completed; additional branch-specific errors remain"
       ],
       "evidence": {
         "entry_va": "0x0001d54c",
@@ -1540,9 +1578,16 @@
           "0x1d558: bne\t1b990 <OEM_FTS_BmcCmds@@Base+0xb10>",
           "0x1d55c: mov\tr1, #0"
         ],
-        "direct_calls_in_linear_entry_region": []
+        "direct_calls_in_linear_entry_region": [],
+        "traced_paths": [
+          "0x22b28-0x22d88: StartTFTPFWUpdate local helper and queueing paths",
+          "0x230d4-0x233ac: startBiosFlashTftp local helper creates detached BIOS TFTP worker",
+          "0x1ac10-0x1ae80: FlashOverHTI local helper creates HTI verification/flash worker",
+          "0x186c8-0x189cc: iRMCFWVerifyFlashThread_HTI moves staged image, verifies it, starts flashing and polls progress",
+          "libfts_util.so.1.30.73 0x48a74-0x48a90: tflashSetOverride stores shared override slot"
+        ]
       },
-      "notes": "0x1d54c-0x1d590; 0x201e8-0x20230 calls tflashSetOverride then startBiosFlashTftp for 0x80; 0x205d0-0x20624 calls FlashOverHTI for six-byte branch. Do not live-probe."
+      "notes": "Pinned libipmipdkcmds.so.1.53.20: 0x1d54c-0x1d590 routes lengths; 0x201e8-0x20230 selects BIOS TFTP or ordinary TFTP; 0x205d0-0x20624 sends six-byte branch to FlashOverHTI; 0x221e8-0x221f8 handles 0x81 examination. StartTFTPFWUpdate 0x22b28-0x22d88 validates selector, reads two 64-byte configuration fields, setFirmwareConfig, InformFlasher, SetPendStatus and PostPendTask. startBiosFlashTftp 0x230d4-0x233ac reads BIOS TFTP parameters, sets flash status and creates a detached pthTftpBiosFlash thread (provider unresolved). FlashOverHTI 0x1ac10-0x1ae80 checks flash mode, informs flasher, prepares area and creates detached iRMCFWVerifyFlashThread_HTI. Worker 0x186c8-0x189cc executes a move of staged rom.ima, calls VerifyFirmwareImage and StartImageFlash, and polls progress. Do not live-probe."
     },
     "0c": {
       "target_va": "0x0001d62c",
@@ -2286,16 +2331,16 @@
       },
       "response": {
         "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
-        "body": "For mode 0, successful getNvmeData returns 45 body bytes (total reply length 49): data drawn from backend offsets +39, +40..41, +44..63 (20 bytes), +12..27 (16 bytes), +36..38 (3 bytes), with some additional packing. Mode-1 response is unresolved."
+        "body": "Mode 0 succeeds with exactly 45 body bytes (total reply length 49): offset 4 = backend struct byte +39; offsets 5-7 = zero; offsets 8-9 = backend little-endian field +40; offsets 10-29 = 20 bytes from +44; offsets 30-45 = 16 bytes from +12; offsets 46-48 = bytes +36..38. Mode 1 uses InterfaceControl(0x80000002,0x80000000) to acquire a callback, calls it with operation 2 and an 8-byte argument structure containing the NVMe index, and on success returns 3 callback output bytes at offsets 4-6; callback and InterfaceControl failure return 0xcb. Callback semantics remain unresolved."
       },
-      "effect": "mode 0 reads NVMe data; mode 1 invokes InterfaceControl and may mutate interface state, exact effect unresolved",
+      "effect": "mode 0 reads NVMe monitor state through getNvmeData/getNvmeMonitorData; mode 1 queries an InterfaceControl callback but terminal semantics and possible side effects are unresolved",
       "guards": [
         "shared outer Admin (4) privilege"
       ],
       "completion_codes": [
-        "0xc7 unless request length is 8 or 9; other mode errors unresolved",
-        "0xcb on getNvmeData failure",
-        "0x00 on mode-0 success"
+      "0xc7 unless request length is 8 or 9; 0xc1 when byte 5 is not 0/1",
+        "0xcb when mode-0 getNvmeData fails or mode-1 InterfaceControl/callback fails",
+        "0x00 on mode-0 or mode-1 success"
       ],
       "evidence": {
         "entry_va": "0x0001d900",
@@ -2312,10 +2357,11 @@
         ],
         "traced_paths": [
           "0x1d900-0x1d9b0: length, mode dispatch and getNvmeData",
-          "0x1e86c-0x1e8c4: mode-0 response packing"
+          "0x1e86c-0x1e8c4: mode-0 response packing",
+          "libfts_util.so.1.30.73 0x77bec-0x77c84: getNvmeMonitorData checks initialized linked-list monitor, searches NVMe index, requires byte +11==1, returns 0 and data pointer or 1/2/3 failure; 0x77c84-0x77d38: getNvmeData wraps it in mutex"
         ]
       },
-      "notes": "Direct handler paths traced in pinned 02.63S image. Status remains partial because backend semantics or all branches are not fully resolved; do not construct a runnable codec from this record alone."
+      "notes": "Direct handler and available companion-library paths traced in pinned 02.63S image. Status remains partial: later decoder or callback semantics are not fully resolved; do not construct a runnable codec from this record alone."
     },
     "8e": {
       "target_va": "0x0001bbe8",

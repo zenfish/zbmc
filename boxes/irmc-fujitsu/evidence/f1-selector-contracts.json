@@ -261,7 +261,7 @@
       "candidate_call_trace_truncated": false
     },
     "11": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Write system GUID to configuration space",
       "request": {
         "shared_minimum_total_bytes": 4,
@@ -269,15 +269,16 @@
         "payload": "16-byte system GUID at bytes 4..19"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": 4,
+        "payload": "none"
       },
       "effect": "mutating",
-      "guard": "exact length 20 at 0x110e0; Set_BMCInfo_BMCSharedMem_SystemGUID at 0x11104 and WriteConfigurationSpace at 0x1111c; helper-error/success terminal branches remain unproven",
+      "guard": "exact length 20 at 0x110e0; Set_BMCInfo_BMCSharedMem_SystemGUID copies request bytes 4..19 into shared-memory GUID slot at 0x11104, before WriteConfigurationSpace(variable 0x2031, mode 1, 16 bytes) at 0x1111c. Pinned libipmi_helper.so.13.1.0 SHA256 10b4d70c9251b09b3f46cefdb13fe2c66ac6bbd02b7939fe18d4d614b04eebc1 helper 0x38cf4 proves 16-byte copy; pinned libfts_nvram.so.1.13.32 SHA256 80999ed34c85e1a06bd1678b9e031409e029fb0827549f7644b910b793ed13f5 WriteConfigurationSpace 0x49350 delegates to variable backend 0x48f00. Nonzero backend status maps FF at 0x11128; zero status with 16 bytes written returns CC00 length 4 at 0x14d04; short write maps FF. Shared-memory GUID is changed even if persistent write fails",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "FF for backend failure or fewer than 16 bytes written"
       ],
       "evidence_va": "0x000110e0",
       "entry_guard_instructions": [
@@ -1355,7 +1356,7 @@
       "candidate_call_trace_truncated": false
     },
     "40": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Write configuration space",
       "request": {
         "shared_minimum_total_bytes": 4,
@@ -1364,10 +1365,10 @@
       },
       "response": {
         "success_total_bytes": null,
-        "payload": null
+        "payload": "none; no CC00 branch in this leaf"
       },
       "effect": "mutating",
-      "guard": "exact length 20 at 0x11e38; WriteConfigurationSpace at 0x11e64; both helper-result branches converge on C7 epilogue at 0x10eb8, so a mutating attempt can report error; retained partial pending full helper semantics",
+      "guard": "exact length 20 at 0x11e38; WriteConfigurationSpace(variable 0x2031, mode 0, 16 bytes) at 0x11e64 delegates through pinned libfts_nvram.so.1.13.32 SHA256 80999ed34c85e1a06bd1678b9e031409e029fb0827549f7644b910b793ed13f5 to get_variable_by_value_id/set_variable_value in WriteConfigurationSpaceExt 0x48f00. Both helper-result paths at 0x11e6c/0x11e80 converge on C7 epilogue 0x10eb8: the write may occur, but IPMI always reports C7",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -1456,15 +1457,16 @@
         "payload": "byte 5 selects the PCIe AIC; byte 4 is not consumed in the traced branch"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "8+name length in normal path; upper bound unproved",
+        "payload": "connectivity byte, form-factor byte, bifurcation byte, name length byte, then name bytes (?Unknown? fallback)"
       },
       "effect": "read",
-      "guard": "exact length 6 at 0x11d20; reads AIC status, bifurcation, form factor, short name, and connectivity helpers; variable string response and unavailable-AIC branch remain unresolved",
+      "guard": "exact length 6 at 0x11d20; pcieAss_getStatus FF returns C0 at 0x1553c, otherwise AIC helpers fill response at 0x11d44-0x11db4; response length 8+strlen(name) at 0x11d9c-0x11dcd. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a pcieAss_getAICshortName at 0x72284 copies up to 32 bytes without guaranteed NUL when full; caller's strlen can then scan past the local buffer. Keep partial: response capacity/termination unproved; no live probe",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "C0 if PCIe AIC status is unavailable (0xff)"
       ],
       "evidence_va": "0x00011d20",
       "entry_guard_instructions": [
@@ -2123,23 +2125,27 @@
       "candidate_call_trace_truncated": false
     },
     "6a": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Set CPU S3M state",
       "request": {
         "shared_minimum_total_bytes": 4,
-        "selector_specific_length": "at least 5",
-        "payload": "all bytes from offset 4 onward passed intact to ftsCpuS3mSet with length (request length - 4)"
+        "selector_specific_length": "5+9*N bytes, N=1..8 (14..77 total)",
+        "payload": "version byte 0, followed by N records of slot index 0..7 and two little-endian 32-bit values"
       },
       "response": {
         "success_total_bytes": 4,
         "payload": "none"
       },
       "effect": "mutating",
-      "guard": "length exactly 4 rejected C7 at 0x12438-0x1245c; ftsCpuS3mSet(request+4, len-4) at 0x12ff8-0x13004; zero helper result returns CC00 length 4, nonzero result is returned as completion; helper's 684-byte state-change contract remains unresolved",
+      "guard": "wrapper passes request+4 and len-4 to ftsCpuS3mSet at 0x12ff8-0x13004 and returns its completion code. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a helper 0xb88c8 checks version 0, count 1..8, 9-byte records and index <=7 at 0xb88cc-0xb8994; it first updates in-memory slots, then writes /conf/fts/CpuCfrInfo.ini (literal 0xb8b40); later failure may leave prior in-memory slot changes",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
-        "C1 for unsupported selector"
+        "C1 for unsupported selector",
+        "CC for nonzero version byte",
+        "C7 for invalid total length/record count",
+        "C9 for slot index above 7",
+        "C4 for file-open/write/close failure"
       ],
       "evidence_va": "0x00012428",
       "entry_guard_instructions": [
@@ -2154,7 +2160,7 @@
       "candidate_call_trace_truncated": false
     },
     "6b": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Get CPU S3M state",
       "request": {
         "shared_minimum_total_bytes": 4,
@@ -2162,11 +2168,11 @@
         "payload": "none"
       },
       "response": {
-        "success_total_bytes": null,
-        "payload": null
+        "success_total_bytes": "5+9*N, N=0..8 (5..77 total)",
+        "payload": "version byte 0, followed by each present slot index 0..7 and two little-endian 32-bit values"
       },
       "effect": "read",
-      "guard": "exact length 4 at 0x12018; ftsCpuS3mGet(response+4, length-out) at 0x13444-0x1345c; helper failure returns C7 at 0x12040; success length is 4 plus helper-provided value, whose maximum and field layout remain unresolved",
+      "guard": "exact length 4 at 0x12018; ftsCpuS3mGet(response+4, length-out) at 0x13444-0x1345c; any helper failure maps to C7 at 0x12040. Pinned libfts_util.so.1.30.73 helper 0xb8b74 reads /conf/fts/CpuCfrInfo.ini (literal 0xb8d98), requires version 0, serializes up to eight present 9-byte records at 0xb8c70-0xb8cf4, and returns length 1+9*N",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
@@ -2283,7 +2289,7 @@
       "candidate_call_trace_truncated": false
     },
     "d3": {
-      "status": "partial",
+      "status": "decoded",
       "name": "Write VIOM flag",
       "request": {
         "shared_minimum_total_bytes": 4,
@@ -2295,13 +2301,14 @@
         "payload": "none"
       },
       "effect": "mutating",
-      "guard": "VIOM feature gate at 0x12318 returns C1 when disabled; request length >4 at 0x12330; byte 4 restricted to 0/1 at 0x13eac; viomWriteViomFlag(value, context) at 0x13ec0; zero helper result yields CC00 length 4 at 0x12d24, nonzero helper result is returned as completion. Helper's deeper persistent effects remain unresolved",
+      "guard": "VIOM feature gate at 0x12318 returns C1 when disabled; request length >4 at 0x12330; byte 4 restricted to 0/1 at 0x13eac; viomWriteViomFlag(value, context) at 0x13ec0. Pinned libfts_util.so.1.30.73 SHA256 2ec3621e7d62b028cb78765ceae94f4cbb3dfe03f4ca1e6a658162ebf63d836a helper 0x69c00 requires VIOM state byte+6 nonzero (else D5), conditionally clears in-memory VIOM state and inventory, calls setServerBootOption and NetSendSnmpOemViomStatusTrap when setting value 0 from enabled state, and writes configuration-space variables 0x2044 (intermediate) and 0x2042 (final). Intermediate side-effect/helper results are ignored; final WriteConfigurationSpace failure maps FF, zero result returns CC00 length 4",
       "completion_codes": [
         "C7 for request shorter than four bytes",
         "CC for wrong Fujitsu IANA",
         "C1 for unsupported selector or VIOM disabled",
         "C9 for byte-4 values above 1",
-        "helper's nonzero completion code is passed through"
+        "D5 if VIOM state is unavailable",
+        "FF if final configuration-space write fails"
       ],
       "evidence_va": "0x00012314",
       "entry_guard_instructions": [
