@@ -1,0 +1,3406 @@
+{
+  "schema": "fujitsu-irmc-s6-2e-f5-selector-contracts-v1",
+  "firmware": "iRMC S6 02.63S",
+  "library": "libipmipdkcmds.so.1.53.20",
+  "sha256": "35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804",
+  "method": "ARM entry-block disassembly and linked ELF VA jump-table mapping; status partial/unknown means no full path proof; direct_calls_in_linear_entry_region is a linear disassembly observation, not proof each call is executed",
+  "shared_outer_contract": {
+    "netfn": "0x2e",
+    "cmd": "0xf5",
+    "request_prefix_hex": "802800",
+    "selector_offset": 3,
+    "minimum_request_length": 4,
+    "minimum_privilege": "Admin (4)",
+    "short_request_code": "0xc7",
+    "bad_iana_code": "0xcc"
+  },
+  "candidate_count": 99,
+  "selectors": {
+    "10": {
+      "target_va": "0x0001d648",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280010",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d648",
+        "entry_instructions": [
+          "0x1d648: cmp\tr6, #7",
+          "0x1d64c: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d650: mov\tr1, #0",
+          "0x1d654: ldrb\tr2, [r5, #5]",
+          "0x1d658: ldrb\tr8, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSELInfo",
+          "isHostOn",
+          "Get_BMCInfo_BMCSharedMem_IsWDTPresent"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "12": {
+      "target_va": "0x0001ce40",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280012",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ce40",
+        "entry_instructions": [
+          "0x1ce40: cmp\tr6, #4",
+          "0x1ce44: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1ce48: add\tr0, sp, #436\t@ 0x1b4",
+          "0x1ce4c: mov\tr2, #704\t@ 0x2c0",
+          "0x1ce50: mov\tr1, #0"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memset"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "18": {
+      "target_va": "0x0001cd9c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280018",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001cd9c",
+        "entry_instructions": [
+          "0x1cd9c: cmp\tr6, #4",
+          "0x1cda0: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1cda4: mov\tr3, #0",
+          "0x1cda8: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1cdac: str\tr3, [sp, #436]\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "isOemSdr",
+          "puts"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "33": {
+      "target_va": "0x0001d134",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280033",
+        "length_check_at_entry": "sub\tr3, r6, #5 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d134",
+        "entry_instructions": [
+          "0x1d134: sub\tr3, r6, #5",
+          "0x1d138: cmp\tr3, #1",
+          "0x1d13c: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d140: bl\tfbc4 <utIsMoreThan256SensorsFeatureEn@plt>",
+          "0x1d144: ldrb\tr8, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utIsMoreThan256SensorsFeatureEn",
+          "GetFanIndex",
+          "GetNextSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "34": {
+      "target_va": "0x0001d104",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280034",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "clears fan-controller stored values",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d104",
+        "entry_instructions": [
+          "0x1d104: cmp\tr6, #5",
+          "0x1d108: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d10c: bl\tfbc4 <utIsMoreThan256SensorsFeatureEn@plt>",
+          "0x1d110: ldrb\tr0, [r5, #4]",
+          "0x1d114: bl\t104d0 <GetFanIndex@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utIsMoreThan256SensorsFeatureEn",
+          "GetFanIndex",
+          "fcClearStoredValues"
+        ]
+      },
+      "notes": "Clear stored fan-controller values for selected fan"
+    },
+    "35": {
+      "target_va": "0x0001d0c4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280035",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d0c4",
+        "entry_instructions": [
+          "0x1d0c4: cmp\tr6, #6",
+          "0x1d0c8: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d0cc: ldrb\tr0, [r5, #6]",
+          "0x1d0d0: cmp\tr0, #15",
+          "0x1d0d4: bhi\t1b838 <OEM_FTS_BmcCmds@@Base+0x9b8>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utSetHostSystemStatus"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "40": {
+      "target_va": "0x0001c44c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280040",
+        "length_check_at_entry": "sub\tr3, r6, #6 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c44c",
+        "entry_instructions": [
+          "0x1c44c: sub\tr3, r6, #6",
+          "0x1c450: cmp\tr3, #1",
+          "0x1c454: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c458: mov\tr2, #0",
+          "0x1c45c: ldrb\tr3, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSDRRec",
+          "isIndexPresentForStaticConfig"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "41": {
+      "target_va": "0x0001c380",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280041",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c380",
+        "entry_instructions": [
+          "0x1c380: cmp\tr6, #7",
+          "0x1c384: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c388: mov\tr3, #0",
+          "0x1c38c: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1c390: str\tr3, [sp, #436]\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "utIsMoreThan256SensorsFeatureEn"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "42": {
+      "target_va": "0x0001c2d8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280042",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c2d8",
+        "entry_instructions": [
+          "0x1c2d8: cmp\tr6, #6",
+          "0x1c2dc: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c2e0: mov\tr3, #0",
+          "0x1c2e4: add\tr9, sp, #440\t@ 0x1b8",
+          "0x1c2e8: mov\tfp, r9"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetComponentStatusSignalRead",
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "43": {
+      "target_va": "0x0001c148",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280043",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c148",
+        "entry_instructions": [
+          "0x1c148: cmp\tr6, #7",
+          "0x1c14c: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c150: add\tr8, sp, #88\t@ 0x58",
+          "0x1c154: mov\tr6, #0",
+          "0x1c158: mov\tfp, r8"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSelRecordFromId",
+          "istDecodeEvent"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "45": {
+      "target_va": "0x0001cc60",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280045",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001cc60",
+        "entry_instructions": [
+          "0x1cc60: mov\tfp, #0",
+          "0x1cc64: add\tr9, sp, #440\t@ 0x1b8",
+          "0x1cc68: str\tfp, [r9], #-4",
+          "0x1cc6c: add\tr8, sp, #88\t@ 0x58",
+          "0x1cc70: cmp\tr6, #5"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSelRecordFromId",
+          "istDecodeEvent"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "46": {
+      "target_va": "0x0001c830",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280046",
+        "length_check_at_entry": "cmp\tr6, #10",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c830",
+        "entry_instructions": [
+          "0x1c830: mov\tr8, #0",
+          "0x1c834: mov\tr3, #21",
+          "0x1c838: add\tr0, sp, #440\t@ 0x1b8",
+          "0x1c83c: cmp\tr6, #10",
+          "0x1c840: str\tr8, [r0], #-4"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "48": {
+      "target_va": "0x0001c7a8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280048",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c7a8",
+        "entry_instructions": [
+          "0x1c7a8: cmp\tr6, #4",
+          "0x1c7ac: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c7b0: cmp\tr6, #5",
+          "0x1c7b4: ldrb\tr1, [r5, #4]",
+          "0x1c7b8: beq\t1f8e8 <OEM_FTS_BmcCmds@@Base+0x4a68>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetMemoryPermdatSem",
+          "asUpdateSensorStatus",
+          "PutMemoryPermdatSem"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "49": {
+      "target_va": "0x0001c7a8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280049",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c7a8",
+        "entry_instructions": [
+          "0x1c7a8: cmp\tr6, #4",
+          "0x1c7ac: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c7b0: cmp\tr6, #5",
+          "0x1c7b4: ldrb\tr1, [r5, #4]",
+          "0x1c7b8: beq\t1f8e8 <OEM_FTS_BmcCmds@@Base+0x4a68>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetMemoryPermdatSem",
+          "asUpdateSensorStatus",
+          "PutMemoryPermdatSem"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "50": {
+      "target_va": "0x0001db8c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280050",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001db8c",
+        "entry_instructions": [
+          "0x1db8c: ldr\tr3, [pc, #832]\t@ 1ded4 <OEM_FTS_BmcCmds@@Base+0x3054>",
+          "0x1db90: mov\tr6, #7",
+          "0x1db94: ldrb\tr2, [r3]",
+          "0x1db98: cmp\tr2, #1",
+          "0x1db9c: movne\tr3, #0"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "51": {
+      "target_va": "0x0001dc00",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280051",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001dc00",
+        "entry_instructions": [
+          "0x1dc00: sub\tr3, r6, #6",
+          "0x1dc04: cmp\tr3, #1",
+          "0x1dc08: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1dc0c: cmp\tr6, #6",
+          "0x1dc10: moveq\tr3, #0"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "52": {
+      "target_va": "0x0001da4c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280052",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001da4c",
+        "entry_instructions": [
+          "0x1da4c: cmp\tr6, #5",
+          "0x1da50: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1da54: ldr\tr9, [pc, #1144]\t@ 1ded4 <OEM_FTS_BmcCmds@@Base+0x3054>",
+          "0x1da58: ldrb\tr3, [r5, #4]",
+          "0x1da5c: ldrb\tr2, [r9, #3]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "53": {
+      "target_va": "0x0001dd54",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280053",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001dd54",
+        "entry_instructions": [
+          "0x1dd54: cmp\tr6, #7",
+          "0x1dd58: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1dd5c: mov\tr3, #0",
+          "0x1dd60: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1dd64: str\tr3, [sp, #436]\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "utIsMoreThan256SensorsFeatureEn"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "54": {
+      "target_va": "0x0001daa0",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280054",
+        "length_check_at_entry": "sub\tr3, r6, #7 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001daa0",
+        "entry_instructions": [
+          "0x1daa0: sub\tr3, r6, #7",
+          "0x1daa4: cmp\tr3, #1",
+          "0x1daa8: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1daac: mov\tr3, #0",
+          "0x1dab0: add\tfp, sp, #436\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "utIsMoreThan256SensorsFeatureEn"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "55": {
+      "target_va": "0x0001dd2c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280055",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "exactly one selector byte at offset 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte written by SNTCI_On_Off_Stat on backend success"
+      },
+      "effect": "none; reads SNTCI on/off status",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "helper return used directly as completion code",
+        "0xc7 unless total request length is exactly 5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001dd2c",
+        "entry_instructions": [
+          "0x1dd2c: cmp\tr6, #5",
+          "0x1dd30: bne\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1dd34: mov\tr2, r7",
+          "0x1dd38: add\tr1, r4, #4",
+          "0x1dd3c: ldrb\tr0, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "SNTCI_On_Off_Stat"
+        ]
+      },
+      "notes": "0x1dd2c-0x1dd50 proves request length and helper output/return flow; selector values and backend codes unresolved."
+    },
+    "60": {
+      "target_va": "0x0001d780",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280060",
+        "length_check_at_entry": "cmp\tr6, #8",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "allocates SSO session",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d780",
+        "entry_instructions": [
+          "0x1d780: cmp\tr6, #8",
+          "0x1d784: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d788: str\tr7, [sp]",
+          "0x1d78c: sub\tr1, r6, #4",
+          "0x1d790: add\tr3, sp, #84\t@ 0x54"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "reserveSessionForSSO"
+        ]
+      },
+      "notes": "Reserve an SSO session"
+    },
+    "61": {
+      "target_va": "0x0001d758",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "80280061",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "exactly one byte 0x01 at offset 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "two bytes: echoed 0x01, boolean MMB override-active state"
+      },
+      "effect": "none; reads MMB override flag",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 success",
+        "0xcc if payload != 0x01",
+        "0xc7 unless total request length is exactly 5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d758",
+        "entry_instructions": [
+          "0x1d758: cmp\tr6, #5",
+          "0x1d75c: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d760: ldrb\tr3, [r5, #4]",
+          "0x1d764: cmp\tr3, #1",
+          "0x1d768: bne\t1b4b8 <OEM_FTS_BmcCmds@@Base+0x638>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "isMMBOverrideActive"
+        ]
+      },
+      "notes": "0x1d758-0x1d77c proves exact request, echo, helper result, response length."
+    },
+    "70": {
+      "target_va": "0x0001caf0",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280070",
+        "length_check_at_entry": "cmp\tr6, #9",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001caf0",
+        "entry_instructions": [
+          "0x1caf0: cmp\tr6, #9",
+          "0x1caf4: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1caf8: ldrb\tr1, [r5, #6]",
+          "0x1cafc: ldr\tr3, [pc, #-3212]\t@ 1be78 <OEM_FTS_BmcCmds@@Base+0xff8>",
+          "0x1cb00: sub\tr6, r1, #2"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSelRecordFromId"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "71": {
+      "target_va": "0x0001ca64",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280071",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ca64",
+        "entry_instructions": [
+          "0x1ca64: cmp\tr6, #4",
+          "0x1ca68: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1ca6c: mov\tr7, #0",
+          "0x1ca70: mvn\tr9, #0",
+          "0x1ca74: ldrb\tr8, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "istTextCacheRead",
+          "istTextCacheDelete"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "72": {
+      "target_va": "0x0001c9a4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280072",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c9a4",
+        "entry_instructions": [
+          "0x1c9a4: cmp\tr6, #6",
+          "0x1c9a8: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c9ac: ldr\tr3, [pc, #-2876]\t@ 1be78 <OEM_FTS_BmcCmds@@Base+0xff8>",
+          "0x1c9b0: ldrb\tr8, [r5, #4]",
+          "0x1c9b4: ldr\tr2, [r3, #112]\t@ 0x70"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetSelRecordFromId"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "73": {
+      "target_va": "0x0001c878",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280073",
+        "length_check_at_entry": "cmp\tr6, #13",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c878",
+        "entry_instructions": [
+          "0x1c878: cmp\tr6, #13",
+          "0x1c87c: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c880: ldrb\tlr, [r5, #10]",
+          "0x1c884: mov\tr2, #0",
+          "0x1c888: sub\tr0, lr, #2"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "74": {
+      "target_va": "0x0001de40",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280074",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001de40",
+        "entry_instructions": [
+          "0x1de40: mov\tr2, #3",
+          "0x1de44: ldr\tr3, [pc, #140]\t@ 1ded8 <OEM_FTS_BmcCmds@@Base+0x3058>",
+          "0x1de48: strb\tr2, [r4, #4]",
+          "0x1de4c: ldr\tr2, [r3]",
+          "0x1de50: ldr\tr0, [r3, #8]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "75": {
+      "target_va": "0x0001bf24",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280075",
+        "length_check_at_entry": "cmp\tr6, #21",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bf24",
+        "entry_instructions": [
+          "0x1bf24: mov\tr8, #0",
+          "0x1bf28: cmp\tr6, #21",
+          "0x1bf2c: str\tr8, [sp, #104]\t@ 0x68",
+          "0x1bf30: str\tr8, [sp, #168]\t@ 0xa8",
+          "0x1bf34: strh\tr8, [sp, #80]\t@ 0x50"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "80": {
+      "target_va": "0x0001be1c",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "80280080",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "at least 2 bytes: TPM status flag inputs at offsets 4 and 5; additional bytes ignored by this branch"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "sets TPM status flags via SetTPMstatusFlags",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 after helper return (helper result ignored)",
+        "0xc7 when total request length <=5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001be1c",
+        "entry_instructions": [
+          "0x1be1c: cmp\tr6, #5",
+          "0x1be20: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1be24: ldrb\tr1, [r5, #5]",
+          "0x1be28: ldrb\tr0, [r5, #4]",
+          "0x1be2c: bl\t10338 <SetTPMstatusFlags@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "SetTPMstatusFlags"
+        ]
+      },
+      "notes": "0x1be1c-0x1be34 proves input offsets and no helper-return check; semantics of individual flag bits remain in imported helper."
+    },
+    "81": {
+      "target_va": "0x0001bde0",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280081",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bde0",
+        "entry_instructions": [
+          "0x1bde0: cmp\tr6, #4",
+          "0x1bde4: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bde8: ldr\tr3, [pc, #132]\t@ 1be74 <OEM_FTS_BmcCmds@@Base+0xff4>",
+          "0x1bdec: ldrb\tr1, [r5, #4]",
+          "0x1bdf0: ldr\tr3, [r3]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "82": {
+      "target_va": "0x0001bdbc",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280082",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bdbc",
+        "entry_instructions": [
+          "0x1bdbc: mov\tr1, #21",
+          "0x1bdc0: add\tr0, r4, #4",
+          "0x1bdc4: bl\tf45c <iELgetInfo@plt>",
+          "0x1bdc8: cmp\tr0, #0",
+          "0x1bdcc: ldreq\tr6, [sp, #84]\t@ 0x54"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "iELgetInfo"
+        ]
+      },
+      "notes": "Read iEL information"
+    },
+    "84": {
+      "target_va": "0x0001bd28",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280084",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bd28",
+        "entry_instructions": [
+          "0x1bd28: cmp\tr6, #7",
+          "0x1bd2c: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bd30: mov\tr3, #0",
+          "0x1bd34: add\tr2, sp, #104\t@ 0x68",
+          "0x1bd38: mov\tip, r2"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memset",
+          "iELgetEntryData"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "85": {
+      "target_va": "0x0001bc60",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280085",
+        "length_check_at_entry": "cmp\tr6, #11",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "adds iEL event",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bc60",
+        "entry_instructions": [
+          "0x1bc60: cmp\tr6, #11",
+          "0x1bc64: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bc68: ldrb\tr3, [r5, #7]",
+          "0x1bc6c: ldrb\tr2, [r5, #9]",
+          "0x1bc70: ldrb\tr8, [r5, #6]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memset",
+          "memcpy",
+          "iELAddEntry"
+        ]
+      },
+      "notes": "Add iEL entry"
+    },
+    "86": {
+      "target_va": "0x0001d074",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280086",
+        "length_check_at_entry": "cmp\tr6, #17",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "adds iEL event from SEL",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d074",
+        "entry_instructions": [
+          "0x1d074: cmp\tr6, #17",
+          "0x1d078: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d07c: mov\tr2, #0",
+          "0x1d080: mov\tip, #1",
+          "0x1d084: add\tr3, sp, #440\t@ 0x1b8"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy",
+          "iELAddEntryFromSelData"
+        ]
+      },
+      "notes": "Add iEL entry from SEL data"
+    },
+    "87": {
+      "target_va": "0x0001d038",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280087",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d038",
+        "entry_instructions": [
+          "0x1d038: cmp\tr6, #4",
+          "0x1d03c: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d040: ldrb\tr3, [r5, #4]",
+          "0x1d044: cmp\tr6, #6",
+          "0x1d048: cmpls\tr3, #0"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utLogUserInfoiEL"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "89": {
+      "target_va": "0x0001cf48",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280089",
+        "length_check_at_entry": "cmp\tr6, #11",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001cf48",
+        "entry_instructions": [
+          "0x1cf48: cmp\tr6, #11",
+          "0x1cf4c: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1cf50: ldrb\tr0, [r5, #6]",
+          "0x1cf54: ldrb\tr1, [r5, #5]",
+          "0x1cf58: ldrb\tr8, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "90": {
+      "target_va": "0x0001bb1c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280090",
+        "length_check_at_entry": "sub\tr1, r6, #4 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bb1c",
+        "entry_instructions": [
+          "0x1bb1c: sub\tr1, r6, #4",
+          "0x1bb20: and\tr1, r1, #255\t@ 0xff",
+          "0x1bb24: mov\tr3, r7",
+          "0x1bb28: mov\tr2, r4",
+          "0x1bb2c: add\tr0, r5, #4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "OEM_FTS_BootFlags"
+        ]
+      },
+      "notes": "Delegate to OEM boot-flags handler"
+    },
+    "00": {
+      "target_va": "0x0001d51c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280000",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d51c",
+        "entry_instructions": [
+          "0x1d51c: and\tr3, r6, #253\t@ 0xfd",
+          "0x1d520: cmp\tr3, #9",
+          "0x1d524: bne\t1b848 <OEM_FTS_BmcCmds@@Base+0x9c8>",
+          "0x1d528: ldrb\tr8, [r5, #8]",
+          "0x1d52c: cmp\tr8, #64\t@ 0x40"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "07": {
+      "target_va": "0x0001d5e4",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "80280007",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d5e4",
+        "entry_instructions": [
+          "0x1d5e4: ldr\tr3, [pc, #2268]\t@ 1dec8 <OEM_FTS_BmcCmds@@Base+0x3048>",
+          "0x1d5e8: ldr\tr3, [r3]",
+          "0x1d5ec: cmp\tr3, #1",
+          "0x1d5f0: bne\t1b990 <OEM_FTS_BmcCmds@@Base+0xb10>",
+          "0x1d5f4: cmp\tr6, #4"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "08": {
+      "target_va": "0x0001d3e8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280008",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d3e8",
+        "entry_instructions": [
+          "0x1d3e8: mov\tr3, #0",
+          "0x1d3ec: mov\tr0, r3",
+          "0x1d3f0: str\tr3, [sp, #436]\t@ 0x1b4",
+          "0x1d3f4: strb\tr3, [sp, #104]\t@ 0x68",
+          "0x1d3f8: bl\tf69c <GetVirtualIOAddressPointer@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetVirtualIOAddressPointer"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "09": {
+      "target_va": "0x0001d594",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "80280009",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege",
+        "UDS session check"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d594",
+        "entry_instructions": [
+          "0x1d594: mov\tr0, r7",
+          "0x1d598: bl\tf4f8 <isUDS_Session@plt>",
+          "0x1d59c: cmp\tr0, #0",
+          "0x1d5a0: beq\t1efa0 <OEM_FTS_BmcCmds@@Base+0x4120>",
+          "0x1d5a4: ldrb\tr3, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "isUDS_Session"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "0b": {
+      "target_va": "0x0001d54c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028000b",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d54c",
+        "entry_instructions": [
+          "0x1d54c: ldr\tr3, [pc, #2420]\t@ 1dec8 <OEM_FTS_BmcCmds@@Base+0x3048>",
+          "0x1d550: ldr\tr3, [r3]",
+          "0x1d554: cmp\tr3, #1",
+          "0x1d558: bne\t1b990 <OEM_FTS_BmcCmds@@Base+0xb10>",
+          "0x1d55c: mov\tr1, #0"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "0c": {
+      "target_va": "0x0001d62c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028000c",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d62c",
+        "entry_instructions": [
+          "0x1d62c: ldrb\tr3, [r5, #4]",
+          "0x1d630: cmp\tr3, r6",
+          "0x1d634: bcc\t1e76c <OEM_FTS_BmcCmds@@Base+0x38ec>",
+          "0x1d638: mov\tr0, #0",
+          "0x1d63c: bl\tf5f4 <fflush@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "fflush"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "0d": {
+      "target_va": "0x0001c734",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028000d",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c734",
+        "entry_instructions": [
+          "0x1c734: mov\tr2, #3",
+          "0x1c738: ldr\tr3, [sl]",
+          "0x1c73c: str\tr2, [sp, #84]\t@ 0x54",
+          "0x1c740: cmp\tr3, #0",
+          "0x1c744: bne\t1ef84 <OEM_FTS_BmcCmds@@Base+0x4104>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "IDBG_LINUXAPP_DbgOut"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "0e": {
+      "target_va": "0x0001d8c4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028000e",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d8c4",
+        "entry_instructions": [
+          "0x1d8c4: mov\tr2, #0",
+          "0x1d8c8: ldr\tr3, [sl]",
+          "0x1d8cc: str\tr2, [sp, #84]\t@ 0x54",
+          "0x1d8d0: cmp\tr3, r2",
+          "0x1d8d4: bne\t1ee58 <OEM_FTS_BmcCmds@@Base+0x3fd8>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "IDBG_LINUXAPP_DbgOut"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "1c": {
+      "target_va": "0x0001d9b4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028001c",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d9b4",
+        "entry_instructions": [
+          "0x1d9b4: mov\tr3, #0",
+          "0x1d9b8: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1d9bc: str\tr3, [sp, #436]\t@ 0x1b4",
+          "0x1d9c0: mov\tr1, r7",
+          "0x1d9c4: mov\tr0, fp"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "isOemSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "2c": {
+      "target_va": "0x0001d2d0",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028002c",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "clears force overrides",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d2d0",
+        "entry_instructions": [
+          "0x1d2d0: cmp\tr6, #5",
+          "0x1d2d4: bhi\t1e70c <OEM_FTS_BmcCmds@@Base+0x388c>",
+          "0x1d2d8: bl\tf7a4 <ClearAllSensorForces@plt>",
+          "0x1d2dc: bl\tff84 <clearAllPowerHistoryForce@plt>",
+          "0x1d2e0: ldr\tr6, [sp, #84]\t@ 0x54"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "ClearAllSensorForces",
+          "clearAllPowerHistoryForce"
+        ]
+      },
+      "notes": "Clear all forced sensor readings and forced power-history values"
+    },
+    "2d": {
+      "target_va": "0x0001d898",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028002d",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d898",
+        "entry_instructions": [
+          "0x1d898: cmp\tr6, #5",
+          "0x1d89c: bhi\t1e78c <OEM_FTS_BmcCmds@@Base+0x390c>",
+          "0x1d8a0: mov\tr3, #0",
+          "0x1d8a4: ldr\tr1, [pc, #1632]\t@ 1df0c <OEM_FTS_BmcCmds@@Base+0x308c>",
+          "0x1d8a8: ldrb\tr2, [r1, r3]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "2e": {
+      "target_va": "0x0001c0cc",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028002e",
+        "length_check_at_entry": "cmp\tr6, #8",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c0cc",
+        "entry_instructions": [
+          "0x1c0cc: cmp\tr6, #8",
+          "0x1c0d0: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c0d4: add\tr9, sp, #440\t@ 0x1b8",
+          "0x1c0d8: mov\tr2, #2",
+          "0x1c0dc: add\tr1, r5, #6"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy",
+          "getMaxBufSizeForChannel",
+          "bmcTestCmdMain"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "2f": {
+      "target_va": "0x0001d274",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028002f",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none; exact total length 4 (other lengths branch to alternate path)"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "up to 40 bytes of log information; actual length is helper return value"
+      },
+      "effect": "none; reads log information via utGetLogInfo",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 on exact-length helper path",
+        "other-length path not decoded"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d274",
+        "entry_instructions": [
+          "0x1d274: cmp\tr6, #4",
+          "0x1d278: add\tr0, r4, #4",
+          "0x1d27c: bne\t1e754 <OEM_FTS_BmcCmds@@Base+0x38d4>",
+          "0x1d280: mov\tr1, #40\t@ 0x28",
+          "0x1d284: bl\t104ac <utGetLogInfo@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utGetLogInfo"
+        ]
+      },
+      "notes": "0x1d274-0x1d28c passes output pointer and max length 40 to utGetLogInfo; helper return sets total response length."
+    },
+    "4a": {
+      "target_va": "0x0001c788",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "8028004a",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none; exact total length 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "two bytes: memory-module policy, memory-module count"
+      },
+      "effect": "none; reads memory-module policy/count",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 success",
+        "0xc7 unless total request length is exactly 4"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c788",
+        "entry_instructions": [
+          "0x1c788: cmp\tr6, #4",
+          "0x1c78c: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1c790: bl\tf6c0 <mcGetMemoryModulePolicy@plt>",
+          "0x1c794: strb\tr0, [r4, #4]",
+          "0x1c798: bl\tf510 <mcGetMemoryModuleCount@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "mcGetMemoryModulePolicy",
+          "mcGetMemoryModuleCount"
+        ]
+      },
+      "notes": "0x1c788-0x1c7a4 proves exact length, two getters, two-byte response."
+    },
+    "4b": {
+      "target_va": "0x0001c078",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028004b",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c078",
+        "entry_instructions": [
+          "0x1c078: mov\tr9, #0",
+          "0x1c07c: cmp\tr6, #4",
+          "0x1c080: str\tr9, [sp, #84]\t@ 0x54",
+          "0x1c084: ldrb\tr8, [r5, #4]",
+          "0x1c088: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "4c": {
+      "target_va": "0x0001c020",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028004c",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c020",
+        "entry_instructions": [
+          "0x1c020: mov\tr9, #0",
+          "0x1c024: ldrb\tr3, [r5, #4]",
+          "0x1c028: cmp\tr6, #4",
+          "0x1c02c: str\tr9, [sp, #84]\t@ 0x54",
+          "0x1c030: mov\tr8, r3"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "4d": {
+      "target_va": "0x0001c010",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "8028004d",
+        "length_check_at_entry": "not established at entry",
+        "payload": "none"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: 00"
+      },
+      "effect": "none; returns constant zero byte",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 on successful branch",
+        "0xc7 via shared length rejection"
+      ],
+      "evidence": {
+        "entry_va": "0x0001c010",
+        "entry_instructions": [
+          "0x1c010: mov\tr3, #0",
+          "0x1c014: mov\tr6, #5",
+          "0x1c018: strb\tr3, [r4, #4]",
+          "0x1c01c: b\t1b370 <OEM_FTS_BmcCmds@@Base+0x4f0>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Disassembly 0x1c010-0x1c01c proves constant one-byte response; only shared outer minimum length applies."
+    },
+    "4e": {
+      "target_va": "0x0001bf98",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028004e",
+        "length_check_at_entry": "cmp\tr6, #11",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bf98",
+        "entry_instructions": [
+          "0x1bf98: cmp\tr6, #11",
+          "0x1bf9c: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bfa0: ldrb\tr2, [r5, #5]",
+          "0x1bfa4: ldrb\tr3, [r5, #4]",
+          "0x1bfa8: orr\tr3, r3, r2, lsl #8"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "4f": {
+      "target_va": "0x0001dbc0",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "8028004f",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001dbc0",
+        "entry_instructions": [
+          "0x1dbc0: cmp\tr6, #6",
+          "0x1dbc4: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1dbc8: mov\tr3, #1",
+          "0x1dbcc: mov\tr6, #0",
+          "0x1dbd0: strb\tr3, [r4, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "5a": {
+      "target_va": "0x0001d290",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028005a",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d290",
+        "entry_instructions": [
+          "0x1d290: cmp\tr6, #7",
+          "0x1d294: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d298: ldrb\tr8, [r5, #6]",
+          "0x1d29c: add\tr3, r4, #4",
+          "0x1d2a0: str\tr3, [sp, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "peciMWR"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "5c": {
+      "target_va": "0x0001d83c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028005c",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d83c",
+        "entry_instructions": [
+          "0x1d83c: cmp\tr6, #6",
+          "0x1d840: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d844: mov\tr3, #0",
+          "0x1d848: mov\tr2, #3",
+          "0x1d84c: add\tr1, r5, #4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "5f": {
+      "target_va": "0x0001d7a8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028005f",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d7a8",
+        "entry_instructions": [
+          "0x1d7a8: mov\tr9, #0",
+          "0x1d7ac: mvn\tr3, #0",
+          "0x1d7b0: add\tfp, sp, #440\t@ 0x1b8",
+          "0x1d7b4: add\tr8, sp, #88\t@ 0x58",
+          "0x1d7b8: str\tr9, [fp], #-4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "isPowerHistorySupported"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "7e": {
+      "target_va": "0x0001be80",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028007e",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001be80",
+        "entry_instructions": [
+          "0x1be80: cmp\tr6, #5",
+          "0x1be84: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1be88: ldrb\tr3, [r5, #9]",
+          "0x1be8c: cmp\tr3, #0",
+          "0x1be90: bne\t1e5c8 <OEM_FTS_BmcCmds@@Base+0x3748>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "bootCounterRead",
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8a": {
+      "target_va": "0x0001ceac",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008a",
+        "length_check_at_entry": "cmp\tr6, #8",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ceac",
+        "entry_instructions": [
+          "0x1ceac: cmp\tr6, #8",
+          "0x1ceb0: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1ceb4: mov\tr1, #0",
+          "0x1ceb8: sub\tr3, r6, #5",
+          "0x1cebc: lsl\tr3, r3, #16"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "strlen",
+          "iELwriteSocketEvent"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8b": {
+      "target_va": "0x0001da70",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008b",
+        "length_check_at_entry": "sub\tr1, r6, #4 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001da70",
+        "entry_instructions": [
+          "0x1da70: ldr\tr3, [sl]",
+          "0x1da74: cmp\tr3, #0",
+          "0x1da78: bne\t1e95c <OEM_FTS_BmcCmds@@Base+0x3adc>",
+          "0x1da7c: sub\tr1, r6, #4",
+          "0x1da80: and\tr1, r1, #255\t@ 0xff"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "getSystemInfo"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8c": {
+      "target_va": "0x0001d2ec",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008c",
+        "length_check_at_entry": "cmp\tr6, #8",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d2ec",
+        "entry_instructions": [
+          "0x1d2ec: cmp\tr6, #8",
+          "0x1d2f0: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1d2f4: ldrb\tr3, [r5, #4]",
+          "0x1d2f8: cmp\tr3, #1",
+          "0x1d2fc: bne\t1b430 <OEM_FTS_BmcCmds@@Base+0x5b0>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "Get_BMCInfo_IPMIConfig_PrimaryIPMBBusNumber",
+          "Get_BMCInfo_IPMIConfig_SecondaryIPMBBusNumber"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8d": {
+      "target_va": "0x0001d900",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008d",
+        "length_check_at_entry": "sub\tr2, r6, #8 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001d900",
+        "entry_instructions": [
+          "0x1d900: mov\tr3, #0",
+          "0x1d904: sub\tr2, r6, #8",
+          "0x1d908: cmp\tr2, #1",
+          "0x1d90c: str\tr3, [sp, #84]\t@ 0x54",
+          "0x1d910: bhi\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "getNvmeData",
+          "memcpy"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8e": {
+      "target_va": "0x0001bbe8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008e",
+        "length_check_at_entry": "cmp\tr6, #10",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bbe8",
+        "entry_instructions": [
+          "0x1bbe8: mov\tr8, #0",
+          "0x1bbec: cmp\tr6, #10",
+          "0x1bbf0: str\tr8, [sp, #84]\t@ 0x54",
+          "0x1bbf4: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bbf8: add\tfp, sp, #436\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memset"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "8f": {
+      "target_va": "0x0001bb6c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "8028008f",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bb6c",
+        "entry_instructions": [
+          "0x1bb6c: mov\tr8, #0",
+          "0x1bb70: cmp\tr6, #5",
+          "0x1bb74: str\tr8, [sp, #84]\t@ 0x54",
+          "0x1bb78: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1bb7c: add\tfp, sp, #436\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memset"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "a2": {
+      "target_va": "0x0001bb40",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800a2",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "one byte; only bit 0 is stored"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "writes bit 0 at BMC shared-state offset 0x76d",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 on successful branch",
+        "0xc7 on non-five-byte request"
+      ],
+      "evidence": {
+        "entry_va": "0x0001bb40",
+        "entry_instructions": [
+          "0x1bb40: cmp\tr6, #5",
+          "0x1bb44: mov\tr2, #0",
+          "0x1bb48: bne\t1b84c <OEM_FTS_BmcCmds@@Base+0x9cc>",
+          "0x1bb4c: ldr\tr1, [pc, #800]\t@ 1be74 <OEM_FTS_BmcCmds@@Base+0xff4>",
+          "0x1bb50: ldrb\tr3, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Disassembly 0x1bb40-0x1bb68 proves exact length, bit mask, shared-state write, and zero completion."
+    },
+    "a3": {
+      "target_va": "0x0001b9a0",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800a3",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: bit 0 of BMC shared-state offset 0x76d"
+      },
+      "effect": "none; reads shared-state bit",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 on successful branch",
+        "0xc7 on non-four-byte request"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b9a0",
+        "entry_instructions": [
+          "0x1b9a0: cmp\tr6, #4",
+          "0x1b9a4: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b9a8: ldr\tr3, [pc, #1220]\t@ 1be74 <OEM_FTS_BmcCmds@@Base+0xff4>",
+          "0x1b9ac: mov\tr6, #5",
+          "0x1b9b0: ldr\tr3, [r3]"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Disassembly 0x1b9a0-0x1b9c0 proves exact length, bit mask, one-byte response, and shared success path."
+    },
+    "a4": {
+      "target_va": "0x0001ba60",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800a4",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ba60",
+        "entry_instructions": [
+          "0x1ba60: cmp\tr6, #4",
+          "0x1ba64: beq\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1ba68: ldrb\tr3, [r5, #4]",
+          "0x1ba6c: sub\tr3, r3, #1",
+          "0x1ba70: cmp\tr3, #39\t@ 0x27"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "a5": {
+      "target_va": "0x0001ba3c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800a5",
+        "length_check_at_entry": "cmp\tr6, #12",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ba3c",
+        "entry_instructions": [
+          "0x1ba3c: cmp\tr6, #12",
+          "0x1ba40: bls\t1b848 <OEM_FTS_BmcCmds@@Base+0x9c8>",
+          "0x1ba44: ldrb\tr3, [r5, #4]",
+          "0x1ba48: cmp\tr3, #82\t@ 0x52",
+          "0x1ba4c: beq\t1faa0 <OEM_FTS_BmcCmds@@Base+0x4c20>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "a8": {
+      "target_va": "0x0001b65c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800a8",
+        "length_check_at_entry": "sub\tr1, r6, #4 (followed by comparison; inspect entry)",
+        "payload": "variable-length licensing key parameter payload (delegated unchanged to lkeySetKeyParameters)"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "backend-generated length and bytes"
+      },
+      "effect": "sets licensing key parameters",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "backend return used directly as completion code; backend-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b65c",
+        "entry_instructions": [
+          "0x1b65c: sub\tr1, r6, #4",
+          "0x1b660: and\tr1, r1, #255\t@ 0xff",
+          "0x1b664: str\tr7, [sp]",
+          "0x1b668: add\tr3, sp, #84\t@ 0x54",
+          "0x1b66c: add\tr2, r4, #4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "lkeySetKeyParameters"
+        ]
+      },
+      "notes": "0x1b65c-0x1b67c passes payload pointer/length and output pointer/length to lkeySetKeyParameters; backend contract remains unresolved."
+    },
+    "a9": {
+      "target_va": "0x0001b638",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800a9",
+        "length_check_at_entry": "sub\tr1, r6, #4 (followed by comparison; inspect entry)",
+        "payload": "variable-length licensing application query payload (delegated unchanged to lkeyGetAppEnable)"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "backend-generated length and bytes"
+      },
+      "effect": "none; queries licensing application enable state",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "backend return used directly as completion code; backend-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b638",
+        "entry_instructions": [
+          "0x1b638: sub\tr1, r6, #4",
+          "0x1b63c: and\tr1, r1, #255\t@ 0xff",
+          "0x1b640: str\tr7, [sp]",
+          "0x1b644: add\tr3, sp, #84\t@ 0x54",
+          "0x1b648: add\tr2, r4, #4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "lkeyGetAppEnable"
+        ]
+      },
+      "notes": "0x1b638-0x1b658 passes payload pointer/length and output pointer/length to lkeyGetAppEnable; backend contract remains unresolved."
+    },
+    "aa": {
+      "target_va": "0x0001b840",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800aa",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b840",
+        "entry_instructions": [
+          "0x1b840: cmp\tr6, #6",
+          "0x1b844: beq\t1ef30 <OEM_FTS_BmcCmds@@Base+0x40b0>",
+          "0x1b848: mov\tr2, #0",
+          "0x1b84c: mvn\tr3, #56\t@ 0x38",
+          "0x1b850: str\tr2, [sp, #84]\t@ 0x54"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "ab": {
+      "target_va": "0x0001b7f4",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800ab",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b7f4",
+        "entry_instructions": [
+          "0x1b7f4: cmp\tr6, #6",
+          "0x1b7f8: bls\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1b7fc: ldrb\tr7, [r5, #6]",
+          "0x1b800: mov\tr3, #0",
+          "0x1b804: add\tr2, r7, #7"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "b0": {
+      "target_va": "0x0001b7d8",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800b0",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "exactly 1 byte: identification LED setting at offset 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "sets identification LED via haSetIdentLed",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 helper returns zero",
+        "0xc9 helper returns nonzero",
+        "0xc7 unless total request length is exactly 5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b7d8",
+        "entry_instructions": [
+          "0x1b7d8: cmp\tr6, #5",
+          "0x1b7dc: bne\t1b5e4 <OEM_FTS_BmcCmds@@Base+0x764>",
+          "0x1b7e0: ldrb\tr0, [r5, #4]",
+          "0x1b7e4: bl\tfef4 <haSetIdentLed@plt>",
+          "0x1b7e8: subs\tr8, r0, #0"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "haSetIdentLed"
+        ]
+      },
+      "notes": "0x1b7d8-0x1b7f0 proves length, helper argument, completion mapping."
+    },
+    "b1": {
+      "target_va": "0x0001b7c0",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800b1",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none; exact total length 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: current identification LED value"
+      },
+      "effect": "none; reads identification LED",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 success",
+        "0xc7 unless total request length is exactly 4"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b7c0",
+        "entry_instructions": [
+          "0x1b7c0: cmp\tr6, #4",
+          "0x1b7c4: bne\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1b7c8: bl\tea30 <haGetIdentLed@plt>",
+          "0x1b7cc: mov\tr6, #5",
+          "0x1b7d0: strb\tr0, [r4, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "haGetIdentLed"
+        ]
+      },
+      "notes": "0x1b7c0-0x1b7d4 proves exact length and one-byte helper result."
+    },
+    "b2": {
+      "target_va": "0x0001b5dc",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800b2",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "exactly 1 byte: message LED mode at offset 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "sets message LED mode via haSetMsgLedMode",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 helper returns zero",
+        "0xc9 helper returns nonzero",
+        "0xc7 unless total request length is exactly 5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b5dc",
+        "entry_instructions": [
+          "0x1b5dc: cmp\tr6, #5",
+          "0x1b5e0: beq\t1f808 <OEM_FTS_BmcCmds@@Base+0x4988>",
+          "0x1b5e4: mov\tr8, #199\t@ 0xc7",
+          "0x1b5e8: b\t1b518 <OEM_FTS_BmcCmds@@Base+0x698>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "0x1b5dc-0x1b5e8 and 0x1f808-0x1f818 prove exact length, helper argument and completion mapping."
+    },
+    "b3": {
+      "target_va": "0x0001b5c4",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800b3",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none; exact total length 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: current message LED mode"
+      },
+      "effect": "none; reads message LED mode",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 success",
+        "0xc7 unless total request length is exactly 4"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b5c4",
+        "entry_instructions": [
+          "0x1b5c4: cmp\tr6, #4",
+          "0x1b5c8: bne\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1b5cc: bl\t10614 <haGetMsgLedMode@plt>",
+          "0x1b5d0: mov\tr6, #5",
+          "0x1b5d4: strb\tr0, [r4, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "haGetMsgLedMode"
+        ]
+      },
+      "notes": "0x1b5c4-0x1b5d8 proves exact length and one-byte helper result."
+    },
+    "b4": {
+      "target_va": "0x0001b860",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800b4",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "none; exact total length 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: power LED status"
+      },
+      "effect": "none; reads power LED status",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 success",
+        "0xc7 unless total request length is exactly 4"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b860",
+        "entry_instructions": [
+          "0x1b860: cmp\tr6, #4",
+          "0x1b864: bne\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1b868: mov\tr0, r7",
+          "0x1b86c: bl\tf7b0 <haGetPowerLedStatus@plt>",
+          "0x1b870: mov\tr6, #5"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "haGetPowerLedStatus"
+        ]
+      },
+      "notes": "0x1b860-0x1b878 proves exact length and one-byte helper result."
+    },
+    "b5": {
+      "target_va": "0x0001b5ac",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800b5",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b5ac",
+        "entry_instructions": [
+          "0x1b5ac: cmp\tr6, #4",
+          "0x1b5b0: beq\t1f7b4 <OEM_FTS_BmcCmds@@Base+0x4934>",
+          "0x1b5b4: mov\tr3, #0",
+          "0x1b5b8: mov\tr8, #199\t@ 0xc7",
+          "0x1b5bc: str\tr3, [sp, #84]\t@ 0x54"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "b6": {
+      "target_va": "0x0001ba1c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800b6",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "sets CSS test mode",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001ba1c",
+        "entry_instructions": [
+          "0x1ba1c: cmp\tr6, #5",
+          "0x1ba20: bne\t1b848 <OEM_FTS_BmcCmds@@Base+0x9c8>",
+          "0x1ba24: ldrb\tr0, [r5, #4]",
+          "0x1ba28: bl\tfa14 <SetCssTest@plt>",
+          "0x1ba2c: mov\tr3, #0"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "SetCssTest"
+        ]
+      },
+      "notes": "Set CSS test mode"
+    },
+    "de": {
+      "target_va": "0x0001b9c4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800de",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b9c4",
+        "entry_instructions": [
+          "0x1b9c4: cmp\tr6, #7",
+          "0x1b9c8: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b9cc: ldrb\tr3, [r5, #4]",
+          "0x1b9d0: cmp\tr3, #67\t@ 0x43",
+          "0x1b9d4: bne\t1b4b8 <OEM_FTS_BmcCmds@@Base+0x638>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "ConfigurationSpaceStatus"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "df": {
+      "target_va": "0x0001b77c",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800df",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "exactly four magic bytes 43 4c 52 aa ('CLR' + 0xaa) at offsets 4-7; extra bytes accepted"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "none in this wrapper branch; validates magic and returns success",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 with valid magic",
+        "0xcc with invalid magic",
+        "0xc7 if total request length <=7"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b77c",
+        "entry_instructions": [
+          "0x1b77c: cmp\tr6, #7",
+          "0x1b780: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b784: ldrb\tr3, [r5, #4]",
+          "0x1b788: cmp\tr3, #67\t@ 0x43",
+          "0x1b78c: bne\t1b4b8 <OEM_FTS_BmcCmds@@Base+0x638>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "0x1b77c-0x1b7bc proves magic comparison and no backend call."
+    },
+    "e0": {
+      "target_va": "0x0001b6d4",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800e0",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b6d4",
+        "entry_instructions": [
+          "0x1b6d4: cmp\tr6, #7",
+          "0x1b6d8: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b6dc: ldrb\tr3, [r5, #4]",
+          "0x1b6e0: cmp\tr3, #67\t@ 0x43",
+          "0x1b6e4: bne\t1b4b8 <OEM_FTS_BmcCmds@@Base+0x638>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "ConfigurationSpaceStatus"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "e1": {
+      "target_va": "0x0001b8f8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800e1",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "exactly 3 bytes: fan selector at offset 4; little-endian 16-bit configuration-space offset at 5-6"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "success: one length byte followed by configuration data (backend fills up to 0x100-byte buffer); exact maximum wire size unresolved"
+      },
+      "effect": "reads extended configuration space through ReadConfigurationSpaceExt",
+      "guards": [
+        "shared outer Admin (4) privilege",
+        "UDS-session flag passed to backend",
+        "fan index mapping via GetFanIndex"
+      ],
+      "completion_codes": [
+        "0x00 on backend success",
+        "0x13 on backend failure",
+        "0xc7 unless total request length is exactly 7"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b8f8",
+        "entry_instructions": [
+          "0x1b8f8: cmp\tr6, #7",
+          "0x1b8fc: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b900: mov\tr9, #0",
+          "0x1b904: add\tr6, sp, #440\t@ 0x1b8",
+          "0x1b908: strh\tr9, [r6, #-4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utIsMoreThan256SensorsFeatureEn",
+          "GetFanIndex",
+          "memcpy",
+          "isUDS_Session",
+          "ReadConfigurationSpaceExt"
+        ]
+      },
+      "notes": "0x1b8f8-0x1b978 and 0x1fff0-0x20004 prove offsets, backend call, status mapping and length-prefixed return; backend data-length bounds need confirmation."
+    },
+    "e2": {
+      "target_va": "0x0001b87c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800e2",
+        "length_check_at_entry": "cmp\tr6, #7",
+        "payload": "fan selector offset 4; little-endian 16-bit configuration-space offset at 5-6; byte count at 7; count data bytes at 8; total length must equal 8+count"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "writes configuration space via WriteConfigurationSpace",
+      "guards": [
+        "shared outer Admin (4) privilege",
+        "fan index mapping via GetFanIndex"
+      ],
+      "completion_codes": [
+        "0x00 on backend success",
+        "0x02 on backend nonzero return",
+        "0xc7 unless total request length equals 8+count"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b87c",
+        "entry_instructions": [
+          "0x1b87c: cmp\tr6, #7",
+          "0x1b880: bls\t1b848 <OEM_FTS_BmcCmds@@Base+0x9c8>",
+          "0x1b884: bl\tfbc4 <utIsMoreThan256SensorsFeatureEn@plt>",
+          "0x1b888: ldrb\tr0, [r5, #4]",
+          "0x1b88c: bl\t104d0 <GetFanIndex@plt>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "utIsMoreThan256SensorsFeatureEn",
+          "GetFanIndex",
+          "memcpy",
+          "WriteConfigurationSpace"
+        ]
+      },
+      "notes": "0x1b87c-0x1b8f4 proves count/length relation, fan-index and offset arguments, backend call and status. Backend offset/data semantics remain external."
+    },
+    "e3": {
+      "target_va": "0x0001b97c",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800e3",
+        "length_check_at_entry": "cmp\tr6, #13",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b97c",
+        "entry_instructions": [
+          "0x1b97c: cmp\tr6, #13",
+          "0x1b980: bne\t1b5b4 <OEM_FTS_BmcCmds@@Base+0x734>",
+          "0x1b984: ldrb\tr3, [r5, #4]",
+          "0x1b988: cmp\tr3, #1",
+          "0x1b98c: beq\t206b0 <OEM_FTS_BmcCmds@@Base+0x5830>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "ef": {
+      "target_va": "0x0001b5ec",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800ef",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b5ec",
+        "entry_instructions": [
+          "0x1b5ec: mov\tr6, #0",
+          "0x1b5f0: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1b5f4: str\tr6, [sp, #436]\t@ 0x1b4",
+          "0x1b5f8: mov\tr1, r7",
+          "0x1b5fc: mov\tr0, fp"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "isOemSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "f0": {
+      "target_va": "0x0001b680",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800f0",
+        "length_check_at_entry": "cmp\tr6, #12",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b680",
+        "entry_instructions": [
+          "0x1b680: cmp\tr6, #12",
+          "0x1b684: bls\t1c868 <OEM_FTS_BmcCmds@@Base+0x19e8>",
+          "0x1b688: mov\tr8, #0",
+          "0x1b68c: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1b690: str\tr8, [sp, #436]\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "isOemSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "f1": {
+      "target_va": "0x0001b558",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800f1",
+        "length_check_at_entry": "cmp\tr6, #4",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b558",
+        "entry_instructions": [
+          "0x1b558: cmp\tr6, #4",
+          "0x1b55c: beq\t1e5e8 <OEM_FTS_BmcCmds@@Base+0x3768>",
+          "0x1b560: mov\tr6, #0",
+          "0x1b564: add\tfp, sp, #436\t@ 0x1b4",
+          "0x1b568: str\tr6, [sp, #436]\t@ 0x1b4"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "GetNextSdr",
+          "isOemSdr"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "f2": {
+      "target_va": "0x0001b524",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800f2",
+        "length_check_at_entry": "not established at entry",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b524",
+        "entry_instructions": [
+          "0x1b524: mov\tr0, r7",
+          "0x1b528: bl\tf2c4 <Get_BMCInfo_IPMIConfig_SDRAllocationSize@plt>",
+          "0x1b52c: mov\tr3, #0",
+          "0x1b530: lsl\tr0, r0, #26",
+          "0x1b534: lsr\tr6, r0, #16"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "Get_BMCInfo_IPMIConfig_SDRAllocationSize",
+          "byte_allocate"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "f6": {
+      "target_va": "0x0001b4e8",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800f6",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "exactly 2 bytes: account/user selector at offset 4, shell value at offset 5"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "none"
+      },
+      "effect": "writes BMC account user-shell setting through salCsBMCAcctUserShell_write",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 backend success",
+        "0xcc backend return 1",
+        "0x30 backend return -1",
+        "0xc7 unless total request length is exactly 6"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b4e8",
+        "entry_instructions": [
+          "0x1b4e8: cmp\tr6, #6",
+          "0x1b4ec: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b4f0: mov\tr2, r7",
+          "0x1b4f4: ldrb\tr1, [r5, #5]",
+          "0x1b4f8: ldrb\tr0, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "salCsBMCAcctUserShell_write"
+        ]
+      },
+      "notes": "0x1b4e8-0x1b520 proves exact length, arguments, backend return mapping, and empty success body."
+    },
+    "f7": {
+      "target_va": "0x0001b4c0",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800f7",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "exactly 1 byte: account/user selector at offset 4"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: shell value from salCsBMCAcctUserShell_read"
+      },
+      "effect": "none; reads account shell setting",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 backend success",
+        "0xcc backend nonzero",
+        "0xc7 unless total request length is exactly 5"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b4c0",
+        "entry_instructions": [
+          "0x1b4c0: cmp\tr6, #5",
+          "0x1b4c4: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b4c8: mov\tr2, r7",
+          "0x1b4cc: add\tr1, r4, #4",
+          "0x1b4d0: ldrb\tr0, [r5, #4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "salCsBMCAcctUserShell_read"
+        ]
+      },
+      "notes": "0x1b4c0-0x1b4e4 proves exact length, output pointer, response length, and backend error mapping."
+    },
+    "f8": {
+      "target_va": "0x0001b4a4",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800f8",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b4a4",
+        "entry_instructions": [
+          "0x1b4a4: cmp\tr6, #5",
+          "0x1b4a8: bne\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b4ac: ldrb\tr0, [r5, #4]",
+          "0x1b4b0: cmp\tr0, #0",
+          "0x1b4b4: bne\t20328 <OEM_FTS_BmcCmds@@Base+0x54a8>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "f9": {
+      "target_va": "0x0001b470",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800f9",
+        "length_check_at_entry": "sub\tr1, r6, #4 (followed by comparison; inspect entry)",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b470",
+        "entry_instructions": [
+          "0x1b470: mov\tip, #0",
+          "0x1b474: sub\tr1, r6, #4",
+          "0x1b478: add\tr3, sp, #436\t@ 0x1b4",
+          "0x1b47c: and\tr1, r1, #255\t@ 0xff",
+          "0x1b480: str\tr7, [sp]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "fts_NM_GetPerfCtrlState"
+        ]
+      },
+      "notes": "Read NM performance-control state"
+    },
+    "fa": {
+      "target_va": "0x0001b460",
+      "status": "unknown",
+      "request": {
+        "prefix_hex": "802800fa",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b460",
+        "entry_instructions": [
+          "0x1b460: cmp\tr6, #6",
+          "0x1b464: beq\t1e99c <OEM_FTS_BmcCmds@@Base+0x3b1c>",
+          "0x1b468: mov\tr8, #199\t@ 0xc7",
+          "0x1b46c: b\t1b434 <OEM_FTS_BmcCmds@@Base+0x5b4>"
+        ],
+        "direct_calls_in_linear_entry_region": []
+      },
+      "notes": "Entry target confirmed; downstream contract unresolved."
+    },
+    "fc": {
+      "target_va": "0x0001b41c",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800fc",
+        "length_check_at_entry": "cmp\tr6, #5",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "undetermined from entry block",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b41c",
+        "entry_instructions": [
+          "0x1b41c: cmp\tr6, #5",
+          "0x1b420: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b424: ldrb\tr3, [r5, #4]",
+          "0x1b428: cmp\tr3, #1",
+          "0x1b42c: beq\t1f7d8 <OEM_FTS_BmcCmds@@Base+0x4958>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "fts_debugout_oemcmds"
+        ]
+      },
+      "notes": "Entry-block observation only; follow branch targets before constructing a runnable codec."
+    },
+    "fd": {
+      "target_va": "0x0001b3b8",
+      "status": "partial",
+      "request": {
+        "prefix_hex": "802800fd",
+        "length_check_at_entry": "cmp\tr6, #6",
+        "payload": "selector-specific; not fully resolved"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "not fully resolved"
+      },
+      "effect": "manufacturing-command side effects depend on inner request",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0xc7 via shared length rejection; selector-specific codes unresolved"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b3b8",
+        "entry_instructions": [
+          "0x1b3b8: cmp\tr6, #6",
+          "0x1b3bc: bls\t1b468 <OEM_FTS_BmcCmds@@Base+0x5e8>",
+          "0x1b3c0: ldrb\tr2, [r5, #4]",
+          "0x1b3c4: cmp\tr2, #1",
+          "0x1b3c8: beq\t1fc68 <OEM_FTS_BmcCmds@@Base+0x4de8>"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "ProcMfgCmd"
+        ]
+      },
+      "notes": "Delegate manufacturing command"
+    },
+    "fe": {
+      "target_va": "0x0001b364",
+      "status": "decoded",
+      "request": {
+        "prefix_hex": "802800fe",
+        "length_check_at_entry": "not established at entry",
+        "payload": "none; minimum total length 4 from shared outer gate"
+      },
+      "response": {
+        "layout": "completion code, Fujitsu IANA 80 28 00, selector-specific body",
+        "body": "one byte: 01"
+      },
+      "effect": "none; returns fixed one-byte value 01",
+      "guards": [
+        "shared outer Admin (4) privilege"
+      ],
+      "completion_codes": [
+        "0x00 on successful branch",
+        "0xc7 via shared length rejection"
+      ],
+      "evidence": {
+        "entry_va": "0x0001b364",
+        "entry_instructions": [
+          "0x1b364: mov\tr3, #1",
+          "0x1b368: mov\tr6, #5",
+          "0x1b36c: strb\tr3, [r4, #4]",
+          "0x1b370: mov\tr3, #0",
+          "0x1b374: strb\tr3, [r4]"
+        ],
+        "direct_calls_in_linear_entry_region": [
+          "memcpy",
+          "fts_debugoutarr_oemcmds"
+        ]
+      },
+      "notes": "0x1b364-0x1b388 proves constant response and shared success wrapper; no selector-specific request body is read."
+    }
+  }
+}

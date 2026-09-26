@@ -126,17 +126,29 @@ depends on work owned by a later shared platform catalog.
 
 ## Fujitsu iRMC S6 02.63S OEM IPMI completion plan
 
-- [ ] Pin the exact RX2540 M7 firmware, dispatch libraries, table artifact, and runtime image.
-- [ ] Reconcile all active table records with duplicate callbacks, standard-command overrides, rack/blade activation, and every selector multiplexer; label unproved leaves explicitly.
-- [ ] Record per-operation wire layout, privilege, side effect, completion behavior, and static/live evidence in a firmware-bound HTML reference.
-- [ ] Add every supported identity to zipmi, with fixed codecs only where proved, exact raw execution otherwise, and fail-closed safety gating.
-- [ ] Validate generated tables, command lookup, documentation links, tests, and strictly safe live probes against the restored iRMC guest.
+- [x] Pin the exact RX2540 M7 firmware, dispatch libraries, table artifact, and runtime image.
+- [x] Reconcile all active table records with duplicate callbacks, standard-command overrides, rack/blade activation, and every selector multiplexer; label unproved leaves explicitly.
+- [x] Record per-operation wire layout, privilege, side effect, completion behavior, and static/live evidence in a firmware-bound HTML reference.
+- [x] Add every supported identity to zipmi, with fixed codecs only where proved, exact raw execution otherwise, and fail-closed safety gating.
+- [x] Validate generated tables, command lookup, documentation links, tests, and strictly safe live probes against the restored iRMC guest.
 - [ ] Commit and push only the Fujitsu changes in zBMC and zipmi; preserve unrelated worktree changes.
 
 ### Review
 
-Pending. Completion requires a closed selector denominator or a specifically documented evidence boundary,
-not merely the existing 148 active top-level records.
+The pinned table has 148 active rows, 135 NetFn/Cmd pairs, and 138 LUN-aware identities;
+ten `2e` handlers add 228 selector candidates (F1 93, F5 99, other SCCI 36).
+The firmware HTML reference records every recovered registration and candidate, plus 104
+C0/D0 handler audits and 24 standard/group override audits. F1/F5 target maps are closed,
+but many leaf payload/response contracts remain partial or unknown; names are not a claim of
+complete structured support. zipmi 0.6.0 exposes 367 named entries, 22 exact four-byte
+read requests without `--unsafe`, and guarded raw execution for the other LAN-runnable names.
+Three LUN-3 FRU routes and two group-52 host-interface leaves are cataloged but not
+LAN-runnable. A fresh six-service-ready Debby run
+`20260926T200725Z-7ecec0c7-f88e-4945-b3b2-2fe97bcb9e3a` returned CC00 on 21 of 22
+statically reviewed safe reads; 2e/e0 selector 00 returned CC01. All completed transport.
+No state-changing Fujitsu OEM probe was sent. zipmi's 2,358 tests passed and its 0.6.0
+wheel contains both pinned Fujitsu data artifacts. The outstanding work is full leaf
+wire-contract decoding and live applicability proof, not a missing dispatch denominator.
 
 # OEM IPMI reference and fleet coverage audit
 

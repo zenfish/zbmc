@@ -1,0 +1,2929 @@
+{
+  "schema": "fujitsu-irmc-s6-f1-selector-contracts-v1",
+  "firmware": "iRMC S6 02.63S",
+  "library": "libipmipdkcmds.so.1.53.20",
+  "sha256": "35839f7ab40993898666425d50e18654d68791c7dfe3bb5a3c3496e4daa23804",
+  "command": {
+    "netfn": "0x2e",
+    "cmd": "0xf1",
+    "handler_va": "0x000109f8",
+    "required_iana": "80 28 00",
+    "table_minimum_privilege": 4
+  },
+  "method": "Jump-table target for each selector plus bounded ARM basic-block traversal. Candidate calls can be shared-path or conditional and do not by themselves prove a wire contract. Decoded records are individually cross-checked against named helper calls, length checks, and shared response epilogue. Partial/unknown records must not be represented as zipmi operational support.",
+  "dispatch_candidates": 93,
+  "selector_contracts": {
+    "06": {
+      "status": "partial",
+      "name": "Set BIOS slot/state byte",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 5,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": null
+      },
+      "effect": "mutating",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011440",
+      "entry_guard_instructions": [
+        "00011440 cmp r6, #5",
+        "00011444 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "07": {
+      "status": "partial",
+      "name": "Get BIOS slot/state bytes",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": 6,
+        "payload": null
+      },
+      "effect": "read",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001185c",
+      "entry_guard_instructions": [
+        "0001185c cmp r6, #4",
+        "00011860 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "08": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000117fc",
+      "entry_guard_instructions": [
+        "000117fc cmp r6, #5",
+        "00011800 beq #0x13228"
+      ],
+      "candidate_called_symbols": [
+        "0x000102cc",
+        "imp.MatchPciDevInfo2PCISlot",
+        "imp.MatchPciDevInfo2PCISlotForAll",
+        "imp.MatchPciDevInfo2PCISlotForRX1330M6",
+        "imp.UpdateHWChangeTime",
+        "imp.bootCounterIncrement",
+        "imp.fts_NM_NotifyPOSTstateChange",
+        "imp.lvp_notify",
+        "imp.memset",
+        "imp.setCpuDefaultValue",
+        "imp.utCheckCDISupport",
+        "imp.utCheckMemoryApproved",
+        "imp.utNotifyEventFilterPostStateChg",
+        "imp.utNotifySmbusPOSTstateChange",
+        "imp.utResetBiosRestrictedFeatureInfo",
+        "imp.utSetBiosFeatureInfo",
+        "imp.utSetIgnoreSharedLanVeto",
+        "imp.utSetSharedPhyAlive",
+        "imp.utSetSystemState",
+        "imp.viomApplyBiosSupport",
+        "imp.viomBiosPostStartIndicator"
+      ],
+      "candidate_call_trace_truncated": true
+    },
+    "09": {
+      "status": "partial",
+      "name": "Get BIOS state byte at object+0x766",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": null
+      },
+      "effect": "read",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001181c",
+      "entry_guard_instructions": [
+        "0001181c cmp r6, #4",
+        "00011820 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "0a": {
+      "status": "partial",
+      "name": "Set BIOS state byte at object+0x767 and notify",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 5,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": null
+      },
+      "effect": "mutating",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000116f4",
+      "entry_guard_instructions": [
+        "000116f4 cmp r6, #5",
+        "000116f8 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.bootCounterIncrement",
+        "imp.lvp_notify",
+        "imp.utNotifyEventFilterPostCodeChg"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "0b": {
+      "status": "partial",
+      "name": "Get BIOS state byte at object+0x767",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": null
+      },
+      "effect": "read",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001183c",
+      "entry_guard_instructions": [
+        "0001183c cmp r6, #4",
+        "00011840 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "0f": {
+      "status": "partial",
+      "name": "Set flash lock",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001174c",
+      "entry_guard_instructions": [
+        "0001174c ldr r3, [r7]",
+        "00011750 cmp r3, #0",
+        "00011754 bne #0x13ca4"
+      ],
+      "candidate_called_symbols": [
+        "imp.tflashSetLock"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "10": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000117a0",
+      "entry_guard_instructions": [
+        "000117a0 sub r3, r6, #0x10",
+        "000117a4 cmp r3, #0xe",
+        "000117a8 ldrls pc, [pc, r3, lsl #2]"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "11": {
+      "status": "partial",
+      "name": "Write system GUID to configuration space",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000110e0",
+      "entry_guard_instructions": [
+        "000110e0 cmp r6, #0x14",
+        "000110e4 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.Set_BMCInfo_BMCSharedMem_SystemGUID",
+        "imp.WriteConfigurationSpace"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "13": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000115ec",
+      "entry_guard_instructions": [
+        "000115ec sub r2, r6, #5",
+        "000115f0 and r3, r2, #0xff",
+        "000115f4 cmp r3, #0x30",
+        "000115f8 bhi #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.memset",
+        "imp.snprintf"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "14": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001113c",
+      "entry_guard_instructions": [
+        "0001113c mov r3, #0",
+        "00011140 cmp r6, #5",
+        "00011144 str r3, [sp, #0x48]",
+        "00011148 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "15": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011474",
+      "entry_guard_instructions": [
+        "00011474 cmp r6, #5",
+        "00011478 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "16": {
+      "status": "partial",
+      "name": "Graphics-controller control/query",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011328",
+      "entry_guard_instructions": [
+        "00011328 cmp r6, #4",
+        "0001132c beq #0x14394"
+      ],
+      "candidate_called_symbols": [
+        "imp.printf",
+        "imp.utCtrlGraphicsController",
+        "imp.utGetGraphicsController"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "17": {
+      "status": "partial",
+      "name": "Uncorrectable-memory active state",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011634",
+      "entry_guard_instructions": [
+        "00011634 cmp r6, #7",
+        "00011638 bls #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "0x0000fc84",
+        "0x00010470",
+        "imp.mcGetUncorrMemActive",
+        "imp.mcSetUncorrMemActive"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "18": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001137c",
+      "entry_guard_instructions": [
+        "0001137c cmp r6, #4",
+        "00011380 beq #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "19": {
+      "status": "partial",
+      "name": "Append PCI slot information",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011408",
+      "entry_guard_instructions": [
+        "00011408 mov sl, #0",
+        "0001140c add r3, sp, #0xda00",
+        "00011410 add fp, sp, #0x2d800",
+        "00011414 add r3, r3, #0x50"
+      ],
+      "candidate_called_symbols": [
+        "imp.PciInfoAppend",
+        "imp.PciInfoFind",
+        "imp.allocatePciSlotMemory"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "1a": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010ff4",
+      "entry_guard_instructions": [
+        "00010ff4 cmp r6, #5",
+        "00010ff8 bhi #0x13b8c"
+      ],
+      "candidate_called_symbols": [
+        "imp.PciInfoFind"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "1b": {
+      "status": "partial",
+      "name": "BIOS feature info get/set",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011004",
+      "entry_guard_instructions": [
+        "00011004 cmp r6, #4",
+        "00011008 beq #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.utGetBiosFeatureInfo",
+        "imp.utSetBiosFeatureInfo"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "1c": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011048",
+      "entry_guard_instructions": [
+        "00011048 mov r3, #0",
+        "0001104c cmp r6, #5",
+        "00011050 str r3, [sp, #0x48]",
+        "00011054 bls #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "1d": {
+      "status": "partial",
+      "name": "Extended FRU device read/write/lock",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011080",
+      "entry_guard_instructions": [
+        "00011080 mov sb, #0",
+        "00011084 add sl, sp, #0xda00",
+        "00011088 add fp, sp, #0x2d800",
+        "0001108c add sl, sl, #0x50"
+      ],
+      "candidate_called_symbols": [
+        "imp.extFruDeviceBufferReq",
+        "imp.extFruDeviceInfoGet",
+        "imp.extFruDeviceLockUnlock",
+        "imp.extFruDeviceWriteRead"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "1e": {
+      "status": "partial",
+      "name": "BSPBR boot status get/set",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010fc4",
+      "entry_guard_instructions": [
+        "00010fc4 cmp r6, #4",
+        "00010fc8 beq #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBSPBRBootStatus",
+        "imp.setBSPBRBootStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "20": {
+      "status": "decoded",
+      "name": "Set BMC Interrupt Enable (bank 0)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": "none"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f20",
+      "entry_guard_instructions": [
+        "00010f20 cmp r6, #8",
+        "00010f24 bne #0x10eb4"
+      ],
+      "candidate_called_symbols": [
+        "imp.setBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "21": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Enable (bank 0)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f4c",
+      "entry_guard_instructions": [
+        "00010f4c cmp r6, #4",
+        "00010f50 beq #0x12ca8"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "22": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Status (bank 0)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f98",
+      "entry_guard_instructions": [
+        "00010f98 cmp r6, #4",
+        "00010f9c bne #0x10f54"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "23": {
+      "status": "decoded",
+      "name": "Reset BMC Interrupt Status (bank 0)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": "none"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010eac",
+      "entry_guard_instructions": [
+        "00010eac cmp r6, #8",
+        "00010eb0 beq #0x12cc0"
+      ],
+      "candidate_called_symbols": [
+        "imp.resetBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "24": {
+      "status": "decoded",
+      "name": "Set BMC Interrupt Enable (bank 1)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f14",
+      "entry_guard_instructions": [
+        "00010f14 ldr r3, [sp, #0x48]",
+        "00010f18 add r3, r3, #1",
+        "00010f1c str r3, [sp, #0x48]"
+      ],
+      "candidate_called_symbols": [
+        "imp.setBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "25": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Enable (bank 1)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f40",
+      "entry_guard_instructions": [
+        "00010f40 ldr r3, [sp, #0x48]",
+        "00010f44 add r3, r3, #1",
+        "00010f48 str r3, [sp, #0x48]"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "26": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Status (bank 1)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010f8c",
+      "entry_guard_instructions": [
+        "00010f8c ldr r3, [sp, #0x48]",
+        "00010f90 add r3, r3, #1",
+        "00010f94 str r3, [sp, #0x48]"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "27": {
+      "status": "decoded",
+      "name": "Reset BMC Interrupt Status (bank 1)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00010ea0",
+      "entry_guard_instructions": [
+        "00010ea0 ldr r3, [sp, #0x48]",
+        "00010ea4 add r3, r3, #1",
+        "00010ea8 str r3, [sp, #0x48]"
+      ],
+      "candidate_called_symbols": [
+        "imp.resetBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "28": {
+      "status": "decoded",
+      "name": "Set BMC Interrupt Enable (bank 2)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 6,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001188c",
+      "entry_guard_instructions": [
+        "0001188c ldr r3, [sp, #0x48]",
+        "00011890 add r3, r3, #1",
+        "00011894 b #0x10f18"
+      ],
+      "candidate_called_symbols": [
+        "imp.setBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "29": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Enable (bank 2)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011898",
+      "entry_guard_instructions": [
+        "00011898 ldr r3, [sp, #0x48]",
+        "0001189c add r3, r3, #1",
+        "000118a0 b #0x10f44"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2a": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Status (bank 2)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118a4",
+      "entry_guard_instructions": [
+        "000118a4 ldr r3, [sp, #0x48]",
+        "000118a8 add r3, r3, #1",
+        "000118ac b #0x10f90"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2b": {
+      "status": "decoded",
+      "name": "Reset BMC Interrupt Status (bank 2)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 6,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118b0",
+      "entry_guard_instructions": [
+        "000118b0 ldr r3, [sp, #0x48]",
+        "000118b4 add r3, r3, #1",
+        "000118b8 b #0x10ea4"
+      ],
+      "candidate_called_symbols": [
+        "imp.resetBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2c": {
+      "status": "decoded",
+      "name": "Set BMC Interrupt Enable (bank 3)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 7,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118bc",
+      "entry_guard_instructions": [
+        "000118bc ldr r3, [sp, #0x48]",
+        "000118c0 add r3, r3, #1",
+        "000118c4 b #0x11890"
+      ],
+      "candidate_called_symbols": [
+        "imp.setBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2d": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Enable (bank 3)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118c8",
+      "entry_guard_instructions": [
+        "000118c8 ldr r3, [sp, #0x48]",
+        "000118cc add r3, r3, #1",
+        "000118d0 b #0x1189c"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2e": {
+      "status": "decoded",
+      "name": "Get BMC Interrupt Status (bank 3)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "4-byte helper output"
+      },
+      "effect": "read",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118d4",
+      "entry_guard_instructions": [
+        "000118d4 ldr r3, [sp, #0x48]",
+        "000118d8 add r3, r3, #1",
+        "000118dc b #0x118a8"
+      ],
+      "candidate_called_symbols": [
+        "imp.getBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "2f": {
+      "status": "decoded",
+      "name": "Reset BMC Interrupt Status (bank 3)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "opaque 4-byte helper input"
+      },
+      "response": {
+        "success_total_bytes": 7,
+        "payload": "no helper output seen; shared epilogue returns bank-index extra bytes"
+      },
+      "effect": "mutating",
+      "guard": "exact request length checked; nonzero helper status maps to C7",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118e0",
+      "entry_guard_instructions": [
+        "000118e0 ldr r3, [sp, #0x48]",
+        "000118e4 add r3, r3, #1",
+        "000118e8 b #0x118b4"
+      ],
+      "candidate_called_symbols": [
+        "imp.resetBmcInterruptStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "30": {
+      "status": "partial",
+      "name": "Update hardware-change state",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000118ec",
+      "entry_guard_instructions": [
+        "000118ec ldrb sl, [r5, #4]",
+        "000118f0 cmp sl, #0x82",
+        "000118f4 movhi sb, #0xc9",
+        "000118f8 bhi #0x10eb8"
+      ],
+      "candidate_called_symbols": [
+        "imp.UpdateHWChangeTime",
+        "imp.mpGetBiosStartSendSPD",
+        "imp.mpSetBiosStartSendSPD"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "31": {
+      "status": "partial",
+      "name": "Nested PCI-slot/subselector command",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "mixed/unknown",
+      "guard": "request[4] limited to 0x00..0x82 at 0x11950; lower range checks exact total length 7; inner jump paths unresolved",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011950",
+      "entry_guard_instructions": [
+        "00011950 ldrb r2, [r5, #4]",
+        "00011954 cmp r2, #0x82",
+        "00011958 bhi #0x11ce0"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "32": {
+      "status": "decoded",
+      "name": "Return constant BIOS value 0x32",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 6,
+        "payload": "two bytes ignored by this branch"
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": "constant byte 0x32"
+      },
+      "effect": "read/compute",
+      "guard": "exact length 6, constant response and status branch at 0x1197c-0x11998",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001197c",
+      "entry_guard_instructions": [
+        "0001197c mov r2, #0x32",
+        "00011980 mov r3, #1",
+        "00011984 cmp r6, #6",
+        "00011988 moveq sb, #0"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "39": {
+      "status": "partial",
+      "name": "Interface-control dispatch",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011a28",
+      "entry_guard_instructions": [
+        "00011a28 mov r8, #0",
+        "00011a2c cmp r6, #5",
+        "00011a30 str r8, [sp, #0x48]",
+        "00011a34 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.InterfaceControl",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "3a": {
+      "status": "partial",
+      "name": "SPD manufacturer information",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011aa4",
+      "entry_guard_instructions": [
+        "00011aa4 cmp r6, #4",
+        "00011aa8 beq #0x12e10"
+      ],
+      "candidate_called_symbols": [
+        "imp.memset",
+        "imp.printf",
+        "imp.spdUtilGetModuleManufacturerIdentifier"
+      ],
+      "candidate_call_trace_truncated": true
+    },
+    "3b": {
+      "status": "partial",
+      "name": "Read BIOS-side file data",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011bb4",
+      "entry_guard_instructions": [
+        "00011bb4 mov r3, #0x12",
+        "00011bb8 cmp r6, #4",
+        "00011bbc str r3, [sp, #0x48]",
+        "00011bc0 beq #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.access",
+        "imp.fclose",
+        "imp.fopen",
+        "imp.fread",
+        "imp.memset",
+        "imp.printf",
+        "imp.sprintf"
+      ],
+      "candidate_call_trace_truncated": true
+    },
+    "3c": {
+      "status": "partial",
+      "name": "Remove BIOS-side file",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011c34",
+      "entry_guard_instructions": [
+        "00011c34 cmp r6, #4",
+        "00011c38 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.memset",
+        "imp.sprintf",
+        "imp.unlink"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "40": {
+      "status": "partial",
+      "name": "Write configuration space",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011e38",
+      "entry_guard_instructions": [
+        "00011e38 cmp r6, #0x14",
+        "00011e3c bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.WriteConfigurationSpace"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "43": {
+      "status": "partial",
+      "name": "Read configuration space",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011cc0",
+      "entry_guard_instructions": [
+        "00011cc0 mov r3, #1",
+        "00011cc4 cmp r6, #6",
+        "00011cc8 strb r3, [r4, #4]",
+        "00011ccc str r3, [sp, #0x48]"
+      ],
+      "candidate_called_symbols": [
+        "imp.ReadConfigurationSpace"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "44": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011ce8",
+      "entry_guard_instructions": [
+        "00011ce8 sub r3, r6, #5",
+        "00011cec cmp r3, #7",
+        "00011cf0 bhi #0x10ffc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "45": {
+      "status": "partial",
+      "name": "Read PCIe AIC metadata and status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011d20",
+      "entry_guard_instructions": [
+        "00011d20 cmp r6, #6",
+        "00011d24 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pcieAss_getAICbifurcation",
+        "imp.pcieAss_getAICformfactor",
+        "imp.pcieAss_getAICshortName",
+        "imp.pcieAss_getConnectivity",
+        "imp.pcieAss_getStatus",
+        "imp.strlen"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "4a": {
+      "status": "partial",
+      "name": "Read configuration space",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011df4",
+      "entry_guard_instructions": [
+        "00011df4 mov ip, #0",
+        "00011df8 add r3, sp, #0xa50",
+        "00011dfc add lr, sp, #0xa50",
+        "00011e00 str r3, [sp]"
+      ],
+      "candidate_called_symbols": [
+        "imp.ReadConfigurationSpace"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "50": {
+      "status": "decoded",
+      "name": "Get PMB Object Counts and System Power Instance",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 4,
+        "payload": "none"
+      },
+      "response": {
+        "success_total_bytes": 8,
+        "payload": "type 1, count(type 0), count(type 1), system-power instance"
+      },
+      "effect": "read",
+      "guard": "exact length 4 at 0x11ef0; response writes 0x11f00-0x11f20",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011eec",
+      "entry_guard_instructions": [
+        "00011eec mov r0, #0",
+        "00011ef0 cmp r6, #4",
+        "00011ef4 str r0, [sp, #0x48]",
+        "00011ef8 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbGetObjectCount",
+        "imp.pmbSystemPowerObjectInstance"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "51": {
+      "status": "partial",
+      "name": "Get PMB object event status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011fb0",
+      "entry_guard_instructions": [
+        "00011fb0 mov ip, #0",
+        "00011fb4 cmp r6, #6",
+        "00011fb8 str ip, [sp, #0x48]",
+        "00011fbc bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbGetObjectEventStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "52": {
+      "status": "decoded",
+      "name": "Set PMB Object Event Enable",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "object type, instance, 16-bit event-enable flags"
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": "none"
+      },
+      "effect": "mutating",
+      "guard": "exact length 8 at 0x11f2c; helper pmbSetObjectEventEnable at 0x11f4c",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011f28",
+      "entry_guard_instructions": [
+        "00011f28 mov r3, #0",
+        "00011f2c cmp r6, #8",
+        "00011f30 str r3, [sp, #0x48]",
+        "00011f34 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbSetObjectEventEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "53": {
+      "status": "decoded",
+      "name": "Get PMB Object Event Enable",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 6,
+        "payload": "object type, instance"
+      },
+      "response": {
+        "success_total_bytes": 6,
+        "payload": "16-bit event-enable flags"
+      },
+      "effect": "read",
+      "guard": "exact length 6 at 0x11f60; helper at 0x11f84; response writes 0x11f98-0x11fa8",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011f5c",
+      "entry_guard_instructions": [
+        "00011f5c mov r3, #0",
+        "00011f60 cmp r6, #6",
+        "00011f64 str r3, [sp, #0x48]",
+        "00011f68 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbGetObjectEventEnable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "54": {
+      "status": "decoded",
+      "name": "Clear PMB Object Event Status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 8,
+        "payload": "object type, instance, 16-bit status clear mask"
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": "none"
+      },
+      "effect": "mutating",
+      "guard": "exact length 8 at 0x11c88; helper at 0x11ca8; success epilogue at 0x11cb4",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011c84",
+      "entry_guard_instructions": [
+        "00011c84 mov r3, #0",
+        "00011c88 cmp r6, #8",
+        "00011c8c str r3, [sp, #0x48]",
+        "00011c90 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbClearObjectEventStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "55": {
+      "status": "decoded",
+      "name": "Get PSU Object Status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 5,
+        "payload": "PSU object instance byte"
+      },
+      "response": {
+        "success_total_bytes": 5,
+        "payload": "one status byte"
+      },
+      "effect": "read",
+      "guard": "exact length 5 at 0x125c4; helper at 0x125d8; output length at 0x125e4",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000125c0",
+      "entry_guard_instructions": [
+        "000125c0 mov r3, #0",
+        "000125c4 cmp r6, #5",
+        "000125c8 str r3, [sp, #0x48]",
+        "000125cc bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbGetPsuObjectStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "56": {
+      "status": "decoded",
+      "name": "Get Power-Meter Capability",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 5,
+        "payload": "power-meter object instance byte"
+      },
+      "response": {
+        "success_total_bytes": 36,
+        "payload": "32 opaque capability bytes from helper"
+      },
+      "effect": "read",
+      "guard": "exact length 5 at 0x12594; helper at 0x125ac; output length 0x24 at 0x125b8",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012590",
+      "entry_guard_instructions": [
+        "00012590 mov r3, #0",
+        "00012594 cmp r6, #5",
+        "00012598 str r3, [sp, #0x48]",
+        "0001259c bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbGetPowerMeterCapability"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "57": {
+      "status": "decoded",
+      "name": "Get Power-Meter Reading and Parameters",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": 5,
+        "payload": "power-meter object instance byte"
+      },
+      "response": {
+        "success_total_bytes": 24,
+        "payload": "20-byte composite reading/parameter payload, individual fields unresolved"
+      },
+      "effect": "read",
+      "guard": "exact length 5 at 0x12784; reading + four parameter helpers at 0x127bc-0x1282c; output length 0x18 at 0x12838",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012780",
+      "entry_guard_instructions": [
+        "00012780 mov r3, #0",
+        "00012784 cmp r6, #5",
+        "00012788 str r3, [sp, #0x48]",
+        "0001278c bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.memset",
+        "imp.pmbGetPmParam",
+        "imp.pmbGetPmReading"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "58": {
+      "status": "partial",
+      "name": "Set Power-Meter Parameter",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": "at least 7 checked, but request offsets through 9 are read",
+        "payload": "object instance, parameter ID, four-byte value (requires at least 10 bytes to contain all fields)"
+      },
+      "response": {
+        "success_total_bytes": 4,
+        "payload": "none on helper success"
+      },
+      "effect": "mutating",
+      "guard": "length >6 at 0x121d8, then unconditional reads at +7,+8,+9 before pmbSetPmParam at 0x1220c; static short-request out-of-bounds-read concern",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000121d4",
+      "entry_guard_instructions": [
+        "000121d4 mov r3, #0",
+        "000121d8 cmp r6, #6",
+        "000121dc str r3, [sp, #0x48]",
+        "000121e0 bls #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.pmbSetPmParam"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "60": {
+      "status": "partial",
+      "name": "Network/LAN configuration operation",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000122a0",
+      "entry_guard_instructions": [
+        "000122a0 mov sb, #0",
+        "000122a4 cmp r6, #4",
+        "000122a8 add r6, sp, #0x2d800",
+        "000122ac add r6, r6, #0x250"
+      ],
+      "candidate_called_symbols": [
+        "imp.GetCurrentLANIndex",
+        "imp.IDBG_LINUXAPP_DbgOut",
+        "imp.IsIPpresent",
+        "imp.NwRestartPending",
+        "imp.__errno_location",
+        "imp.close",
+        "imp.free",
+        "imp.ioctl",
+        "imp.malloc",
+        "imp.open",
+        "imp.pthread_create_detached",
+        "imp.sprintf",
+        "imp.strerror"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "61": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012228",
+      "entry_guard_instructions": [
+        "00012228 ldr r3, [sp, #0x48]",
+        "0001222c cmp r6, #0xd",
+        "00012230 add r3, r3, #5",
+        "00012234 bhi #0x13028"
+      ],
+      "candidate_called_symbols": [
+        "imp.fclose",
+        "imp.fseek",
+        "imp.memset",
+        "imp.read_or_create_file"
+      ],
+      "candidate_call_trace_truncated": true
+    },
+    "62": {
+      "status": "partial",
+      "name": null,
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012268",
+      "entry_guard_instructions": [
+        "00012268 ldr r3, [sp, #0x48]",
+        "0001226c cmp r6, #0xe",
+        "00012270 add r3, r3, #5",
+        "00012274 beq #0x13530"
+      ],
+      "candidate_called_symbols": [
+        "imp.fclose",
+        "imp.files_convert_to_json_object",
+        "imp.fread",
+        "imp.fseek",
+        "imp.read_or_create_file"
+      ],
+      "candidate_call_trace_truncated": true
+    },
+    "63": {
+      "status": "partial",
+      "name": "Read SMBIOS structure data",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012054",
+      "entry_guard_instructions": [
+        "00012054 cmp r6, #8",
+        "00012058 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.smbiosGetStructData"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "64": {
+      "status": "partial",
+      "name": "Start BIOS PFR flash",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000126a8",
+      "entry_guard_instructions": [
+        "000126a8 ldr r3, [r7]",
+        "000126ac cmp r3, #0",
+        "000126b0 bne #0x138b0"
+      ],
+      "candidate_called_symbols": [
+        "imp.WriteSelEntry",
+        "imp.startBiosPfrFlashthd"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "65": {
+      "status": "partial",
+      "name": "Interface-control dispatch",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012080",
+      "entry_guard_instructions": [
+        "00012080 ldr r3, [r7]",
+        "00012084 cmp r3, #0",
+        "00012088 bne #0x135dc"
+      ],
+      "candidate_called_symbols": [
+        "imp.InterfaceControl",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "66": {
+      "status": "partial",
+      "name": "Set default boot order Redfish action",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012138",
+      "entry_guard_instructions": [
+        "00012138 ldr r3, [r7]",
+        "0001213c cmp r3, #0",
+        "00012140 bne #0x1356c"
+      ],
+      "candidate_called_symbols": [
+        "imp.checkSetDefaultBootOrderRfAction"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "67": {
+      "status": "partial",
+      "name": "Interface-control dispatch",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000123b8",
+      "entry_guard_instructions": [
+        "000123b8 mov r3, #0",
+        "000123bc add fp, sp, #0x2d800",
+        "000123c0 add fp, fp, #0x250",
+        "000123c4 cmp r6, #5"
+      ],
+      "candidate_called_symbols": [
+        "imp.InterfaceControl",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "68": {
+      "status": "partial",
+      "name": "Start BIOS PFR flash",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012870",
+      "entry_guard_instructions": [
+        "00012870 cmp r6, #5",
+        "00012874 bne #0x10ffc"
+      ],
+      "candidate_called_symbols": [
+        "imp.puts",
+        "imp.startBiosPfrFlashthd"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "69": {
+      "status": "partial",
+      "name": "Nested selector 0..8 (likely S3M family)",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "mixed/unknown",
+      "guard": "exact total length 5 at 0x123f8; request[4] must be 0..8; inner jump table at 0x12418 unresolved",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000123ec",
+      "entry_guard_instructions": [
+        "000123ec ldr r3, [r7]",
+        "000123f0 cmp r3, #0",
+        "000123f4 bne #0x136bc"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "6a": {
+      "status": "partial",
+      "name": "Set CPU S3M state",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012428",
+      "entry_guard_instructions": [
+        "00012428 ldr r3, [r7]",
+        "0001242c cmp r3, #0",
+        "00012430 bne #0x136dc"
+      ],
+      "candidate_called_symbols": [
+        "imp.IDBG_LINUXAPP_DbgOut",
+        "imp.ftsCpuS3mSet"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "6b": {
+      "status": "partial",
+      "name": "Get CPU S3M state",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012008",
+      "entry_guard_instructions": [
+        "00012008 ldr r3, [r7]",
+        "0001200c cmp r3, #0",
+        "00012010 bne #0x139b0"
+      ],
+      "candidate_called_symbols": [
+        "imp.IDBG_LINUXAPP_DbgOut",
+        "imp.ftsCpuS3mGet"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d0": {
+      "status": "partial",
+      "name": "VIOM table confirmation",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012648",
+      "entry_guard_instructions": [
+        "00012648 mov r0, r8",
+        "0001264c bl #0xed84",
+        "00012650 cmp r0, #0",
+        "00012654 beq #0x12f9c"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomIsTableLocked",
+        "imp.viomTableConfirmation"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d1": {
+      "status": "partial",
+      "name": "Set server boot option",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000125ec",
+      "entry_guard_instructions": [
+        "000125ec ldr r3, [r7]",
+        "000125f0 cmp r3, #0",
+        "000125f4 bne #0x138d0"
+      ],
+      "candidate_called_symbols": [
+        "imp.setServerBootOptionEx",
+        "imp.utIsBiosRequest"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d2": {
+      "status": "partial",
+      "name": "Get server boot option",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001260c",
+      "entry_guard_instructions": [
+        "0001260c ldr r3, [r7]",
+        "00012610 cmp r3, #0",
+        "00012614 bne #0x13994"
+      ],
+      "candidate_called_symbols": [
+        "imp.getServerBootOption"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d3": {
+      "status": "partial",
+      "name": "Write VIOM flag",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012314",
+      "entry_guard_instructions": [
+        "00012314 mov r0, r8",
+        "00012318 bl #0xed84",
+        "0001231c cmp r0, #0",
+        "00012320 beq #0x130b8"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomWriteViomFlag"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d4": {
+      "status": "partial",
+      "name": "Read VIOM flag",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012344",
+      "entry_guard_instructions": [
+        "00012344 mov r0, r8",
+        "00012348 bl #0xed84",
+        "0001234c cmp r0, #0",
+        "00012350 beq #0x12d80"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomReadViomFlag"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d5": {
+      "status": "partial",
+      "name": "Get VIOM inventory table",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012678",
+      "entry_guard_instructions": [
+        "00012678 mov r0, r8",
+        "0001267c bl #0xed84",
+        "00012680 cmp r0, #0",
+        "00012684 beq #0x12f40"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetInventoryTable",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomGetStoredInvTSize",
+        "imp.viomIsTableLocked"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d6": {
+      "status": "partial",
+      "name": "Set VIOM table",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012840",
+      "entry_guard_instructions": [
+        "00012840 mov r0, r8",
+        "00012844 bl #0xed84",
+        "00012848 cmp r0, #0",
+        "0001284c beq #0x12ee4"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomIsTableLocked",
+        "imp.viomSetViomTable"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d7": {
+      "status": "partial",
+      "name": "Get VIOM table chunk",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012190",
+      "entry_guard_instructions": [
+        "00012190 mov r0, r8",
+        "00012194 bl #0xed84",
+        "00012198 cmp r0, #0",
+        "0001219c beq #0x12edc"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomGetViomTableChunk",
+        "imp.viomGetViomTableSize",
+        "imp.viomIsTableLocked"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d8": {
+      "status": "partial",
+      "name": "Lock/unlock VIOM table",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012904",
+      "entry_guard_instructions": [
+        "00012904 ldr r3, [pc, #-0xeec]",
+        "00012908 ldr r3, [r3, #0x10]",
+        "0001290c cmp r3, #0",
+        "00012910 bne #0x12484"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomLockUnlockVIOMTable",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "d9": {
+      "status": "partial",
+      "name": "Get VIOM table element",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000126e4",
+      "entry_guard_instructions": [
+        "000126e4 ldr r3, [pc, #-0xccc]",
+        "000126e8 ldr r3, [r3, #0x10]",
+        "000126ec cmp r3, #0",
+        "000126f0 bne #0x12484"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomGetViomTableElement",
+        "imp.viomIsTableLocked",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "da": {
+      "status": "partial",
+      "name": "Lock/unlock VIOM inventory table",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012740",
+      "entry_guard_instructions": [
+        "00012740 ldr r3, [pc, #-0xd28]",
+        "00012744 ldr r3, [r3, #0x10]",
+        "00012748 cmp r3, #0",
+        "0001274c bne #0x12484"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomLockUnlockVIOMInventoryTable",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "db": {
+      "status": "partial",
+      "name": "Set VIOM inventory element",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00012474",
+      "entry_guard_instructions": [
+        "00012474 ldr r3, [pc, #-0xa5c]",
+        "00012478 ldr r3, [r3, #0x10]",
+        "0001247c cmp r3, #0",
+        "00012480 beq #0x13cc0"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomIsTableLocked",
+        "imp.viomSetInventoryTableElement",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "dc": {
+      "status": "partial",
+      "name": "Clear VIOM inventory table",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001289c",
+      "entry_guard_instructions": [
+        "0001289c ldr r3, [pc, #-0xe84]",
+        "000128a0 ldr r3, [r3, #0x10]",
+        "000128a4 cmp r3, #0",
+        "000128a8 bne #0x12484"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomClearInventoryTable",
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomIsTableLocked",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "de": {
+      "status": "partial",
+      "name": "Set VIOM BIOS status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001249c",
+      "entry_guard_instructions": [
+        "0001249c ldr r3, [pc, #-0xa84]",
+        "000124a0 ldr r3, [r3, #0x10]",
+        "000124a4 cmp r3, #0",
+        "000124a8 bne #0x12484"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomSetBiosStatus",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "df": {
+      "status": "partial",
+      "name": "Get VIOM BIOS status",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000124dc",
+      "entry_guard_instructions": [
+        "000124dc mov r0, r8",
+        "000124e0 bl #0xed84",
+        "000124e4 cmp r0, #0",
+        "000124e8 beq #0x12c18"
+      ],
+      "candidate_called_symbols": [
+        "imp.memset",
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetBiosStatus"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "e0": {
+      "status": "partial",
+      "name": "Interface-control dispatch",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011184",
+      "entry_guard_instructions": [
+        "00011184 ldr r3, [r7]",
+        "00011188 cmp r3, #0",
+        "0001118c bne #0x13860"
+      ],
+      "candidate_called_symbols": [
+        "imp.InterfaceControl",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "e1": {
+      "status": "partial",
+      "name": "Get VIOM table element extended",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011210",
+      "entry_guard_instructions": [
+        "00011210 mov r0, r8",
+        "00011214 bl #0xed84",
+        "00011218 cmp r0, #0",
+        "0001121c beq #0x13200"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomGetViomTableElement_Ex",
+        "imp.viomIsTableLocked"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "e2": {
+      "status": "partial",
+      "name": "Set VIOM inventory element extended",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000116c4",
+      "entry_guard_instructions": [
+        "000116c4 mov r0, r8",
+        "000116c8 bl #0xed84",
+        "000116cc cmp r0, #0",
+        "000116d0 beq #0x12e24"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetIpmiSessionID",
+        "imp.viomIsTableLocked",
+        "imp.viomSetInventoryTableElement_Ex"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "e3": {
+      "status": "partial",
+      "name": "Read BIOS state bytes by subselector",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "read/unknown",
+      "guard": "requires total length >5 at 0x11e90; request[4] accepts 0 or 1; subselector 1 with request[5]=0 returns 8 bytes; other paths unresolved",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x00011e84",
+      "entry_guard_instructions": [
+        "00011e84 ldr r3, [r7]",
+        "00011e88 cmp r3, #0",
+        "00011e8c bne #0x1358c"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    },
+    "f4": {
+      "status": "partial",
+      "name": "Set preferred VIOM inventory inversion",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000112f8",
+      "entry_guard_instructions": [
+        "000112f8 mov r0, r8",
+        "000112fc bl #0xed84",
+        "00011300 cmp r0, #0",
+        "00011304 beq #0x131a4"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomSetPreferredInventoryInversion"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "f5": {
+      "status": "partial",
+      "name": "Get preferred VIOM inventory inversion",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000112d0",
+      "entry_guard_instructions": [
+        "000112d0 ldr r3, [pc, #0x748]",
+        "000112d4 ldr sb, [r3, #0x10]",
+        "000112d8 cmp sb, #0",
+        "000112dc beq #0x13cf0"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetPreferredInventoryInversion",
+        "indirect_call"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "f6": {
+      "status": "partial",
+      "name": "Set/get VIOM communication trap parameter",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "unknown",
+      "guard": "first ARM instructions only; not a complete path proof",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x000112a0",
+      "entry_guard_instructions": [
+        "000112a0 mov r0, r8",
+        "000112a4 bl #0xed84",
+        "000112a8 cmp r0, #0",
+        "000112ac beq #0x12e80"
+      ],
+      "candidate_called_symbols": [
+        "imp.viomFunctionalityEnabled",
+        "imp.viomGetViomCommTrapParam",
+        "imp.viomSetViomCommTrapParam"
+      ],
+      "candidate_call_trace_truncated": false
+    },
+    "ff": {
+      "status": "partial",
+      "name": "Generate patterned response of caller-requested length",
+      "request": {
+        "shared_minimum_total_bytes": 4,
+        "selector_specific_length": null,
+        "payload": null
+      },
+      "response": {
+        "success_total_bytes": null,
+        "payload": null
+      },
+      "effect": "read/compute",
+      "guard": "no selector-specific length guard before request[4] at 0x1125c; response length is 4+request[4] and bytes follow a pattern; static short-request and response-capacity concerns, not exercised live",
+      "completion_codes": [
+        "C7 for request shorter than four bytes",
+        "CC for wrong Fujitsu IANA",
+        "C1 for unsupported selector"
+      ],
+      "evidence_va": "0x0001125c",
+      "entry_guard_instructions": [
+        "0001125c ldrb ip, [r5, #4]",
+        "00011260 cmp ip, #0",
+        "00011264 str ip, [sp, #0x48]",
+        "00011268 add sb, ip, #4"
+      ],
+      "candidate_called_symbols": [],
+      "candidate_call_trace_truncated": false
+    }
+  }
+}
