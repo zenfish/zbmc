@@ -8,10 +8,10 @@ work items, not silently treated as supported.
 ## Target 1 — Advantech ASMB-787
 
 - [x] Establish the firmware-bound denominator: 187 declared remote vendor rows.
-- [ ] Map every handler to available vendor header request/response structures.
-- [ ] Decompile handlers without source contracts and recover their wire behavior.
+- [x] Map every handler to available vendor header request/response structures.
+- [x] Decompile handlers without source contracts and recover their wire behavior.
 - [ ] Resolve selector/subcommand spaces, completion codes, side effects, and channel gates.
-- [ ] Prove plugin runtime registration or mark feature-absent rows with exact evidence.
+- [x] Prove plugin runtime registration or mark feature-absent rows with exact evidence.
 - [ ] Add structured zipmi request/response codecs for every resolved wire contract.
 - [ ] Keep named raw execution only where schemas remain genuinely unresolved, with safety gates.
 - [ ] Add exhaustive source/catalog/codegen/codec tests.
@@ -51,10 +51,12 @@ No inspected target can be certified as both fully documented for its current fi
 completely supported by zipmi. Reanalysis corrected the ASMB-787 denominator to 187 declared remote
 vendor rows (85 core, 95 plugin, seven platform) and confirmed privilege at record offset `+1` and
 request length at `+8`; the older catalog had labeled those fields in reverse. The finished reference
-separates 92 statically registered core/platform rows, 85 feature-enabled or eligible plugin rows
-whose runtime map population was not directly proved, and ten feature-absent plugin rows. zipmi now
-provides a native 187-command named raw dispatch catalog. Full payload schemas, structured codecs,
-plugin runtime-map population, and live exact-image behavior remain explicitly incomplete.
+separates 92 statically registered core/platform rows, 93 plugin rows whose exact feature-token and
+loader/table-merge chain is proved, and two PLDM rows skipped because the exact feature token is
+absent. zipmi provides a native 187-command named raw catalog. Exact handler decompilation currently
+adds 68 selector-level operations across 30 pairs, 46 generated fixed-width codecs, and read-only
+live evidence from a six-service READY exact-image run. Contracts/codecs for the remaining 157
+top-level pairs are still in progress.
 
 Verification: isolated offline imports measured registry names and request/response codec classes.
 The report contains exactly all 11 tracked box descriptors, and every local source link resolves,
