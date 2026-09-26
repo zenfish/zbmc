@@ -1,3 +1,40 @@
+# Goal: complete OEM IPMI documentation and zipmi coverage for the zoo
+
+Work one firmware target at a time. A target is complete only when its command and selector
+denominator, wire contracts, authorization/channel behavior, side effects, activation evidence,
+zipmi implementation, focused tests, and safe live evidence are all accounted for. Unknowns are
+work items, not silently treated as supported.
+
+## Target 1 — Advantech ASMB-787
+
+- [x] Establish the firmware-bound denominator: 187 declared remote vendor rows.
+- [ ] Map every handler to available vendor header request/response structures.
+- [ ] Decompile handlers without source contracts and recover their wire behavior.
+- [ ] Resolve selector/subcommand spaces, completion codes, side effects, and channel gates.
+- [ ] Prove plugin runtime registration or mark feature-absent rows with exact evidence.
+- [ ] Add structured zipmi request/response codecs for every resolved wire contract.
+- [ ] Keep named raw execution only where schemas remain genuinely unresolved, with safety gates.
+- [ ] Add exhaustive source/catalog/codegen/codec tests.
+- [ ] Safely live-verify read-only contracts against the exact ASMB-787 image.
+- [ ] Update and stamp the Tailwind HTML reference and fleet audit.
+- [ ] Run focused and full verification, review the diff, commit, and push.
+
+## Remaining target order
+
+1. Dell iDRAC10
+2. Lenovo XCC
+3. Fujitsu iRMC
+4. Dell iDRAC9
+5. HPE MegaRAC / XD670
+6. Supermicro X14
+7. NVIDIA OpenBMC
+8. Supermicro X10
+9. IEIT
+10. OpenBMC baseline
+
+The order favors bounded firmware inventories first; it may change only when evidence shows a target
+depends on work owned by a later shared platform catalog.
+
 # OEM IPMI reference and fleet coverage audit
 
 - [x] Recover the original request and inventory all 11 registered BMCs.
