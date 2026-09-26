@@ -21,7 +21,7 @@ work items, not silently treated as supported.
 
 ## Target 2 — Dell iDRAC10
 
-- [ ] Pin the exact 1.30.10.50 firmware artifacts, module hashes, and provenance UUIDs.
+- [x] Pin the exact 1.30.10.50 firmware artifacts, module hashes, and provenance UUIDs.
 - [ ] Reconcile the 446 operation catalog, 383 dispatch triples, 346 unique dispatch pairs, and
       445-row historical live sweep into one explicit denominator model.
 - [ ] Resolve or explicitly retire the single operation whose NetFn/Cmd remains undetermined.
@@ -35,6 +35,12 @@ work items, not silently treated as supported.
 - [ ] Update the Tailwind HTML reference, fleet audit, PhD area landing/bibliography/tools, and stamps.
 - [ ] Run source/codegen/codec/CLI tests, full unit and baseline-diff verification, release/version
       proof, zBMC pin/install proof, review, commit, and push.
+
+Progress: Dell YP95X 1.30.10.50-A00 is registered as immutable artifact
+`50be7104-c060-5e24-b3d8-f8db4fdbbb13` (SHA-256
+`372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9`). The exact
+rootfs and dispatch-library hashes are pinned in the command source; Dell bibliography/tools docs
+are stamped in PhD commit `f3258e62341b90f9ddd65d030f7f184a7fe8a27e`.
 
 ## Remaining target order
 
