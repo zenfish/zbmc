@@ -124,6 +124,20 @@ the tested routes. Physical-device applicability and other firmware versions rem
 The order favors bounded firmware inventories first; it may change only when evidence shows a target
 depends on work owned by a later shared platform catalog.
 
+## Fujitsu iRMC S6 02.63S OEM IPMI completion plan
+
+- [ ] Pin the exact RX2540 M7 firmware, dispatch libraries, table artifact, and runtime image.
+- [ ] Reconcile all active table records with duplicate callbacks, standard-command overrides, rack/blade activation, and every selector multiplexer; label unproved leaves explicitly.
+- [ ] Record per-operation wire layout, privilege, side effect, completion behavior, and static/live evidence in a firmware-bound HTML reference.
+- [ ] Add every supported identity to zipmi, with fixed codecs only where proved, exact raw execution otherwise, and fail-closed safety gating.
+- [ ] Validate generated tables, command lookup, documentation links, tests, and strictly safe live probes against the restored iRMC guest.
+- [ ] Commit and push only the Fujitsu changes in zBMC and zipmi; preserve unrelated worktree changes.
+
+### Review
+
+Pending. Completion requires a closed selector denominator or a specifically documented evidence boundary,
+not merely the existing 148 active top-level records.
+
 # OEM IPMI reference and fleet coverage audit
 
 - [x] Recover the original request and inventory all 11 registered BMCs.
