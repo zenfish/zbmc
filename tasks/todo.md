@@ -53,6 +53,8 @@ generates 81 unambiguous fixed-width codecs, and retains exact raw contracts for
 ambiguous formats. The fresh post-reboot run exercised all 32 safely synthesizable read-only codecs:
 26 returned CC00 and six returned expected target completion codes, with no transport failures.
 The zBMC installer now pins release commit `45191509417a14e1f823b188cdb3721e7e4ad13f`.
+The committed installer was streamed to an isolated Debby venv (leaving its dirty Lenovo worktree
+untouched); both `zipmi.__version__` and package metadata reported `0.3.4`.
 Focused Advantech lifecycle, documentation contract, documentation sync, shell syntax, and clean
 zipmi-install/version checks pass. The aggregate shell suite passes before and after the unchanged
 local `ilo5-gxp-umac.sh` boundary; that one baseline test exits 127 because the untracked local

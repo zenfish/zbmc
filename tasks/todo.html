@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=43314fdbeab23f8d5a3e8305432bef009db2d5a0b6864374971ca71b967a91b2 body-sha256=802132f13425438e23645637b2b819a260f24bc4ac83bf5dddb368c194a3cb8e -->
+<!-- zmd2html:auto source-sha256=d7a6f9c09ffa215b4cd32ef33da9ea78441ffb7a0eecae5e8f8433915d023b17 body-sha256=2897bf859af85ed6610eec782a62e74e462f3c097e9fb17ffa3fa1060fc351bd -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -127,7 +127,10 @@ The fresh post-reboot run exercised all 32 safely synthesizable
 read-only codecs: 26 returned CC00 and six returned expected target
 completion codes, with no transport failures. The zBMC installer now
 pins release commit
-<code>45191509417a14e1f823b188cdb3721e7e4ad13f</code>. Focused Advantech
+<code>45191509417a14e1f823b188cdb3721e7e4ad13f</code>. The committed
+installer was streamed to an isolated Debby venv (leaving its dirty
+Lenovo worktree untouched); both <code>zipmi.__version__</code> and
+package metadata reported <code>0.3.4</code>. Focused Advantech
 lifecycle, documentation contract, documentation sync, shell syntax, and
 clean zipmi-install/version checks pass. The aggregate shell suite
 passes before and after the unchanged local
