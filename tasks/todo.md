@@ -709,3 +709,7 @@ The retained Fujitsu acceptance VM remains live at `10.250.0.143`. Authenticated
 - Corrected the stale plugin-availability summary to 93 loaded and two present-but-not-loaded rows.
 - Refreshed the OEM coverage audit to zipmi 0.6.3 terminology and the same canonical reference.
 - Proof: both generated Markdown/HTML pairs pass `tools/sync-docs --check`; whitespace checks pass.
+
+## Review — copyable status credentials (2026-09-27)
+
+The shared IPMI and Redfish status commands now show the configured password or key, with Bash quoting when needed. `tests/zbmc-credential-display.sh` proves the Advantech `admin/superuser` display, key and ipmitool fallback displays, box-specific and generic Redfish paths, and a password containing spaces and an apostrophe. The Advantech console lifecycle test, Bash syntax, and diff checks passed.

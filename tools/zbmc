@@ -242,10 +242,13 @@ _probe_group_unlock(){
 }
 
 _ipmi_invocation(){ # $1 = pw|key ; echoes the copy-paste IPMI command
+  local credential
   if [ "$1" = pw ]; then
-    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P '<password>'${IPMI_OPTS:+ $IPMI_OPTS}"
+    printf -v credential '%q' "${IPMI_PW:-}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -P $credential${IPMI_OPTS:+ $IPMI_OPTS}"
   else
-    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -K '<key>'${IPMI_OPTS:+ $IPMI_OPTS}"
+    printf -v credential '%q' "${IPMI_KEY:-}"
+    echo "zipmi -H $ZBMC_IP -U ${IPMI_USER:-} -K $credential${IPMI_OPTS:+ $IPMI_OPTS}"
   fi; }
 
 _ipmi_run(){ # $1 = pw|key ; returns 0 if authed, 2 if auth-fail, 1 if no-answer
@@ -276,7 +279,12 @@ _probe_ipmi(){ # cred ladder: password first, key fallback; echoes STATE|DISPLAY
   if ! python3 -c "import zipmi" 2>/dev/null && ! PYTHONPATH="$ZIPMI" python3 -c "import zipmi" 2>/dev/null; then
     if command -v ipmitool >/dev/null 2>&1; then
       local r; r=$(timeout -s KILL 4 ipmitool -I lanplus -H "$ZBMC_IP" -p "${IPMI_PORT:-623}" -U "${IPMI_USER:-}" -P "${IPMI_PW:-}" mc info 2>&1)
-      echo "$r" | grep -qiE "Manufacturer" && { echo "ok|ipmitool -I lanplus -H $ZBMC_IP -U ${IPMI_USER:-} mc info|"; return; }
+      if echo "$r" | grep -qiE "Manufacturer"; then
+        local credential
+        printf -v credential '%q' "${IPMI_PW:-}"
+        echo "ok|ipmitool -I lanplus -H $ZBMC_IP -U ${IPMI_USER:-} -P $credential mc info|"
+        return
+      fi
       echo "fail||no answer (warming/down)"; return
     fi
     echo "fail||not checked (need zipmi or ipmitool)"; return
@@ -316,16 +324,18 @@ _probe_ssh(){
     echo "ok|zbmc $ZBMC_IP ssh${ZBMC_SSH_NOTE:+; $ZBMC_SSH_NOTE}|"; else echo "fail||no (refused/booting)"; fi; }
 
 _probe_redfish(){
+  local auth
+  printf -v auth '%q' "${IPMI_USER:-}:${IPMI_PW:-}"
   if declare -F zbmc_redfish_health >/dev/null; then
     local r rc
     r=$(zbmc_redfish_health 2>&1); rc=$?
-    [ "$rc" = 0 ] && { echo "ok|curl -sk -u ${IPMI_USER:-}:'<password>' https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
+    [ "$rc" = 0 ] && { echo "ok|curl -sk -u $auth https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|$r"; return; }
     echo "fail||${r:-box-specific Redfish probe failed}"; return
   fi
   local url="https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/" probe_timeout="${ZBMC_HTTP_PROBE_TIMEOUT:-6}"
   # ponytail: DISPLAY uses $ZBMC_HOST while probe hits $ZBMC_IP — both resolve the same via /etc/hosts, so the pasted command works.
   if timeout -s KILL "$((probe_timeout + 1))" curl -sk --max-time "$probe_timeout" -u "${IPMI_USER:-}:${IPMI_PW:-}" "$url" 2>/dev/null | grep -qi '"RedfishVersion"'; then
-    echo "ok|curl -sk -u ${IPMI_USER:-}:'<password>' https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
+    echo "ok|curl -sk -u $auth https://$ZBMC_IP:${WEB_PORT:-443}/redfish/v1/|"
   else echo "fail||down"; fi; }
 
 _probe_webui(){
