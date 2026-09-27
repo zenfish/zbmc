@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=5510194f9a15e70427b7dac365cb137256c2c070cdff967520ca7aae825bdde4 body-sha256=fd3c0056be092db06dadcbf3f001f3e8bc52fda679cb2789c84d5f4d75adaa2f -->
+<!-- zmd2html:auto source-sha256=5d2165258a2e54f3f91005dc3352bfccb9340a2f2153d0bbddc2706f09429c04 body-sha256=00bf570b76b76aaa076fc9fdfbf3bc3fdf5a1aeeac33af40c67aa925c5d7b435 -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc Advantech ASMB-787</title>
@@ -78,26 +78,21 @@ creates a session, reads administrator dashboard data, and logs out. The
 serial console also executed a marked command as UID 0.</p>
 <h2 id="oem-ipmi-documentation-coverage">OEM IPMI documentation
 coverage</h2>
-<p>The <a
-href="../../../zipmi/docs/advantech_ASMB787-command-reference.html">firmware-bound
-command reference</a> catalogs all 187 declared remote vendor rows with
-opcode, handler, module, privilege, request-length constraint, interface
-mask, activation evidence, and explicit payload unknowns. The
-corresponding zipmi native module exposes all 187 through named raw
-dispatch. Full payload semantics and structured request/response codecs
-remain incomplete where the available binaries do not establish
-them.</p>
+<p>zipmi owns the canonical operator-facing <a
+href="https://github.com/zenfish/zipmi/blob/main/docs/advantech-asmb787-command-reference.html">firmware-bound
+command reference</a>. It catalogs all 187 top-level command addresses
+and 462 recovered operations with wire layouts, request and response
+fields, safety, access, firmware availability, zipmi execution support,
+and evidence. This zBMC page remains the firmware extraction and
+emulation record.</p>
 <p>The 187 rows comprise 85 core commands from
 <code>libipmimsghndlr.so.13.22.0</code>, 95 plugin commands from 37
 <code>libipmiamioem*.so</code> modules, and seven platform commands from
 <code>libipmipdkcmds.so.6.0.0</code>. The 85 core and seven platform
-rows are statically registered. Of the 95 plugin rows, 85 are
-feature-enabled or eligible, but runtime map population was not directly
-observed; ten are feature-absent and remain unproved: Media commands
-<code>0xca</code>, <code>0xcb</code>, <code>0xd7</code>,
-<code>0xd8</code>, <code>0xd9</code>, and <code>0xdc</code>; PLDM
-commands <code>0xd5</code> and <code>0xd6</code>; and Remote KVM
-commands <code>0xc0</code> and <code>0xc1</code>.</p>
+rows are statically registered. Exact loader and configuration analysis
+proves 93 of the 95 plugin rows are loaded in this firmware. Only PLDM
+commands <code>0xd5</code> and <code>0xd6</code> are present but not
+loaded because their required feature token is absent.</p>
 <p>The first 180 rows use NetFn <code>0x32</code>; the platform library
 adds five NetFn <code>0x30</code> commands and two NetFn
 <code>0x3a</code> commands. The message-handler binary has SHA-256

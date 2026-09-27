@@ -702,3 +702,10 @@ The retained Fujitsu acceptance VM remains live at `10.250.0.143`. Authenticated
 ## Review — IEIT SMASH CLP command and address
 
 `smash-clp` is the advertised and dispatched verb; help names IEIT as its supported target. The IEIT builder now embeds the selected guest IP and records it in provenance; startup rejects a mismatched image. A stopped guest produces a direct start instruction. `tests/ieit-runtime.sh`, `tests/address-configuration.sh`, Bash syntax checks, CLI help, down-box, unsupported-box, and pool-selection checks passed locally. A live IEIT boot was not run on this macOS host.
+## Review — zipmi Advantech command-reference handoff (2026-09-26)
+
+- The Advantech box page now names zipmi as the canonical operator-facing command reference and
+  links its stable lowercase GitHub HTML URL; zipmi links back to this firmware/emulation record.
+- Corrected the stale plugin-availability summary to 93 loaded and two present-but-not-loaded rows.
+- Refreshed the OEM coverage audit to zipmi 0.6.3 terminology and the same canonical reference.
+- Proof: both generated Markdown/HTML pairs pass `tools/sync-docs --check`; whitespace checks pass.

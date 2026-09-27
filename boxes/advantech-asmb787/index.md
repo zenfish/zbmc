@@ -34,18 +34,17 @@ dashboard data, and logs out. The serial console also executed a marked command 
 
 ## OEM IPMI documentation coverage
 
-The [firmware-bound command reference](../../../zipmi/docs/advantech_ASMB787-command-reference.html)
-catalogs all 187 declared remote vendor rows with opcode, handler, module, privilege, request-length
-constraint, interface mask, activation evidence, and explicit payload unknowns. The corresponding
-zipmi native module exposes all 187 through named raw dispatch. Full payload semantics and structured
-request/response codecs remain incomplete where the available binaries do not establish them.
+zipmi owns the canonical operator-facing
+[firmware-bound command reference](https://github.com/zenfish/zipmi/blob/main/docs/advantech-asmb787-command-reference.html).
+It catalogs all 187 top-level command addresses and 462 recovered operations with wire layouts,
+request and response fields, safety, access, firmware availability, zipmi execution support, and
+evidence. This zBMC page remains the firmware extraction and emulation record.
 
 The 187 rows comprise 85 core commands from `libipmimsghndlr.so.13.22.0`, 95 plugin commands from 37
 `libipmiamioem*.so` modules, and seven platform commands from `libipmipdkcmds.so.6.0.0`. The 85 core
-and seven platform rows are statically registered. Of the 95 plugin rows, 85 are feature-enabled or
-eligible, but runtime map population was not directly observed; ten are feature-absent and remain
-unproved: Media commands `0xca`, `0xcb`, `0xd7`, `0xd8`, `0xd9`, and `0xdc`; PLDM commands `0xd5` and
-`0xd6`; and Remote KVM commands `0xc0` and `0xc1`.
+and seven platform rows are statically registered. Exact loader and configuration analysis proves
+93 of the 95 plugin rows are loaded in this firmware. Only PLDM commands `0xd5` and `0xd6` are
+present but not loaded because their required feature token is absent.
 
 The first 180 rows use NetFn `0x32`; the platform library adds five NetFn `0x30` commands and two
 NetFn `0x3a` commands. The message-handler binary has SHA-256
