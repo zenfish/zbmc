@@ -1,10 +1,18 @@
-<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=47f688283b75c014f424a50468e1a074124ec265ca5db3d22919ce453e6c9f94 body-sha256=95c4451e02569cad86162f93b5dbe2dbf0f23fd6f5acf1227ad0919c840702a7 -->
+<!-- html2md:auto source=boxes/lenovo-xcc/index.html source-sha256=fc88450258c2fb3ab26525ddafc2abb93ee4fe085473cdcaac0926776070b670 body-sha256=7c66f82735280c90e82825c35dee27bf61813c8f20c33a451a4603cf2d9c729d -->
 
 zbmc / preserved firmware
 
 # Lenovo XClarity Controller
 
 A cold-boot runtime for Lenovo XCC 6.92 on an AST2600 model with an experimental FPGA transport and eMMC GP0 implementation.
+
+## Complete XCC 6.92 OEM IPMI reference
+
+The [firmware-bound OEM reference](lenovo-xcc-oem-reference.md) reconciles all three active dispatch surfaces into 225 exact command identities / 210 NetFn-command pairs. It documents every recovered operation, explicitly bounds opaque variable payloads, and records 107 promoted operation contracts used by zipmi. Unsafe, mixed, and schema-unbounded commands remain fail-closed unless the operator supplies `--unsafe`.
+
+zipmi publishes the operator-facing [command reference](https://github.com/zenfish/zipmi/blob/main/docs/lenovo-xcc-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/lenovo-xcc-command-table.html).
+
+The [authorization audit](lenovo-xcc-oem-authorization.md) demonstrates that a ReadOnly IPMI account can invoke the XCC factory-reset OEM command over LAN on this firmware. It includes static privilege-path proof, User/Admin comparisons, and the isolated impact result.
 
 13 September status: [normal managed warm startup reached six-service READY in 3m37s](#managed-warm-20260913), but subsequent IPMI checks remain intermittent. Debby's private default now selects the matched TAP runtime. [Cold verification failed its one-hour startup window](#13-september-cold-verification-failed). Full reliable recovery is not complete.
 

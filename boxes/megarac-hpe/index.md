@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=8f6afbda6346d75b6a67c246f8c7f3d6aaff7a2d4cad01a412004a11602494b3 body-sha256=5e49a3ab76568a80adc39efe30ed555b1c82229d7086046bec40bda448d8e123 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=0338aefcad85aaa6ac2c54d223756daf7a722105a45d69873de17ed55a204a19 body-sha256=617a6e725eb42b3567f78cfcad4c8e4bdc57e8b5b427a235f1747c8ced8b08f5 -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -31,6 +31,7 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 
 - [Virtual HPE XD670 BMC](README.md)
 - [IPMI stack teardown](IPMI.md)
+- zipmi operator views: [MegaRAC/YAFU command reference](https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-reference.html) · [compact command table](https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-table.html)
 - [Historical emulation status](EMULATION-STATUS.md)
 
 ## Extracting the filesystem

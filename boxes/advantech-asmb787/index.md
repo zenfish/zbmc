@@ -35,7 +35,8 @@ dashboard data, and logs out. The serial console also executed a marked command 
 ## OEM IPMI documentation coverage
 
 zipmi owns the canonical operator-facing
-[firmware-bound command reference](https://github.com/zenfish/zipmi/blob/main/docs/advantech-asmb787-command-reference.html).
+[firmware-bound command reference](https://github.com/zenfish/zipmi/blob/main/docs/advantech-asmb787-command-reference.html)
+and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/advantech-asmb787-command-table.html).
 It catalogs all 187 top-level command addresses and 462 recovered operations with wire layouts,
 request and response fields, safety, access, firmware availability, zipmi execution support, and
 evidence. This zBMC page remains the firmware extraction and emulation record.

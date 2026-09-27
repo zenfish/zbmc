@@ -713,3 +713,14 @@ The retained Fujitsu acceptance VM remains live at `10.250.0.143`. Authenticated
 ## Review — copyable status credentials (2026-09-27)
 
 The shared IPMI and Redfish status commands now show the configured password or key, with Bash quoting when needed. `tests/zbmc-credential-display.sh` proves the Advantech `admin/superuser` display, key and ipmitool fallback displays, box-specific and generic Redfish paths, and a password containing spaces and an apostrophe. The Advantech console lifecycle test, Bash syntax, and diff checks passed.
+
+# Task — Link zBMC firmware analyses to zipmi OEM command views (2026-09-27)
+
+- [x] Link Advantech, Lenovo, Fujitsu, iDRAC9, iDRAC10, and MegaRAC platform pages to zipmi's detailed reference and compact table.
+- [x] Regenerate every paired Markdown/HTML sibling from its authoritative side.
+
+## Review
+
+- zBMC remains the firmware extraction, reverse-engineering, and emulation record; zipmi is explicitly identified as the operator-facing command-documentation owner.
+- Each platform with a completed pair now links both views. No iDRAC6 link was added because its detailed command reference is phase 6 and does not exist yet.
+- `tools/sync-docs --check` passes for all six touched documentation pairs.

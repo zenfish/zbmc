@@ -1,10 +1,12 @@
-<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=f715c3b4e32e987f29018679eb996fb7e15d54576ee601f8f84631e517421eec body-sha256=785a4ebdaae8dfa901aa376e7e28173b991e5b4882c67cc65cb5bc09bbe29882 -->
+<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=efe622fd5771d088ddf5505613dc4d19ce396052046c72ddf934b76c938336f2 body-sha256=085c0561a55312ac167eb28a5002eede6a53c2bda1af24a3ffe60f8a46af130a -->
 
 **Historical investigation record.** The phase roadmap below predates zbmc 0.1.1. Current iDRAC9 cold-boots to accepted ICMP, SSH, IPMI, and vendor Web-UI in 10m31s on the reference host; Redfish remains unavailable. Use the repository README and `./tools/zbmc idrac9 status -v`.
 
 # Virtual iDRAC9 — Dell's BMC firmware under QEMU
 
 *Goal: a working, explorable iDRAC9 in software — boot Dell's own kernel + rootfs on QEMU's Nuvoton `npcm750-evb` machine, climb from a shell up toward a live appliance (racadm / RAKP / web). SoC: Nuvoton **NPCM750** (Poleg, ARMv7 dual Cortex-A9). Firmware: `firmimgFIT.d9` 7.20.30.50, kernel `Linux 5.4.80.idrac`.*
+
+zipmi publishes the operator-facing [iDRAC9 command reference](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-table.html). The former documents recovered operation behavior; the latter retains the complete firmware registration denominator.
 
 **Status — SSH ROOT LOGIN WORKS (2026-06-22).** Three boot modes, all working: `./run.sh` = Phase-1 shell + chroot; `./run-p2.sh` = Phase-2 full systemd boot of the real daemon stack; `./run-p3.sh` + `./ssh-in.sh` = Phase-3 minimal bring-up you can **SSH into as root** (uid=0, real `racadm` binary); `./run-p4.sh` = Phase-4, the daemon mesh up under systemd with **LIVE racadm** (full command pipeline: object-model + instrumentation + auth — §7). The kernel/driver walls (a dm_bufio panic, a phylink NIC crash) were cracked with gdb on the live gdbstub. Remaining: attribute *values* (cfgdb seed) and RAKP/`fullfw` (needs an NPCM hardware shim).
 

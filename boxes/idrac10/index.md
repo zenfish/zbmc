@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=2622e1d23500bf974b02c1eae8de65704e8b9f111a6d0fe24fa2b6cd9aa3bc61 body-sha256=379aa297d0dc1a8207bb2d649521d3d90dee7a2e831b25a334898b80b21a7712 -->
+<!-- html2md:auto source=boxes/idrac10/index.html source-sha256=22d92a36b40356e249ccc7fe5ebcc24f1c5533adade7c26725afb8bd6a41b7ff body-sha256=cff900d8d4e27cdf5d5e5be9f65bdb8c7290e32092ff65004c405fecc4cbc603 -->
 
 # zbmc iDRAC10
 
@@ -21,6 +21,7 @@ NPCM845/AArch64 research box. The supported cold boot reached ICMP, SSH, retaine
 
 - [Warm-start operator runbook](WARM-START.md)
 - [OEM IPMI command reference](idrac10-oem-reference.md) ([standalone copy](idrac10-oem-reference.standalone.html))
+- zipmi operator views: [command reference](https://github.com/zenfish/zipmi/blob/main/docs/idrac10-command-reference.html) · [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/idrac10-command-table.html)
 - [iDRAC9 versus iDRAC10 OEM command diff](idrac9-vs-idrac10-oem-diff.md) ([standalone copy](idrac9-vs-idrac10-oem-diff.standalone.html))
 - [Raw IPMI command table](idrac10-ipmi-commands.md)
 - [Dispatch-table extraction](idrac10-dispatch-tables.md)

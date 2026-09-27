@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=c924dc61a5f879b8df2560dda75acbea7a4af4151c1937a481807d81931ca414 body-sha256=ce43ba219fef9025f79617c733aca83ae5f1c9fe2a1ef4d5115d04f699e568f3 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=8c62052918010d5c54b670bacb861056f1a5d28e34b861e3b5234fcc0e157bb8 body-sha256=664a082f692ff84b327681910b8ae8b3b9211c9a2375b6f5d6e7c9af56b746f4 -->
 
 # Fujitsu iRMC S6
 
@@ -33,6 +33,10 @@ The Linux-SSH cold acceptance run `20260925T054554Z-e12565e1-dd69-45ee-9eb1-09df
 The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and per-command response sources are documented in the [IPMI listener and response-source trace](ipmi-path.md).
 
 The [OEM IPMI and power-control map](oem-power-map.md) inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.
+
+The [firmware-bound OEM command reference](irmc-s6-oem-reference.md) reconciles 148 active registrations into 138 LUN-aware identities / 135 NetFn-command pairs and maps 228 selector dispatch candidates. It distinguishes decoded, partial, and unproved payload contracts; the F1/F5 leaf audit is still in progress.
+
+zipmi publishes the operator-facing [command reference](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-table.html).
 
 ## Redfish internals
 
