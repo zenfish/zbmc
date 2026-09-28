@@ -724,3 +724,40 @@ The shared IPMI and Redfish status commands now show the configured password or 
 - zBMC remains the firmware extraction, reverse-engineering, and emulation record; zipmi is explicitly identified as the operator-facing command-documentation owner.
 - Each platform with a completed pair now links both views. No iDRAC6 link was added because its detailed command reference is phase 6 and does not exist yet.
 - `tools/sync-docs --check` passes for all six touched documentation pairs.
+
+# Task — Bring iDRAC6 into the virtual zBMC zoo (2026-09-27)
+
+- [x] Separate the existing zipmi protocol persona from real iDRAC6 firmware emulation.
+- [x] Inventory the recovered WPCM450 kernel, root filesystem, and Dell `fullfw` userspace.
+- [x] Run Dell's ARM `fullfw` under a generic ARM926 Linux guest and capture the missing WPCM450 kernel contracts.
+- [x] Integrate the smallest viable firmware-backed launcher as `boxes/idrac6`.
+- [x] Verify lifecycle, console evidence, fixed addressing, RMCP presence, and RAKP authentication through `tools/zbmc`.
+- [x] Document fidelity and remaining hardware gaps.
+- [x] Commit the verified zBMC work.
+
+## Review
+
+The new `idrac6` animal cold-boots Dell iDRAC6 1.70 userspace under a Debian 2.6.26
+VersatilePB kernel. It is explicitly labeled firmware-userspace emulation: QEMU has no
+WPCM450 machine, the vendor kernel is not running, and server-side sensors and host hardware are
+not modeled. The builder pins `fullfw` SHA-256
+`67f17aa14eda9e5d96b96825b93536a228db031acda90122eb353fba56dd3465`, the captured
+private-storage SHA-256 `fd349b3672122d5d8e89564ad8be6e03234199e95d8af602de046b36c20798ab`,
+and the Debian kernel/initrd hashes. It copies only the proven Dell userspace subset, compiles a
+SysV-hash/GLIBC-2.0 preload shim that acknowledges the two exact dynamic-IRQ setup ioctls, and
+builds without root.
+
+Managed TAP run `20260928T071658Z-06d6f6d0-d0f8-4655-91b9-b888d212a4f6` reached
+`READY [2/2 - ICMP, Console]` in 31 seconds at the normally resolved, guest-owned `10.0.9.6`.
+The console proves
+`BMC_RDY ASSERTED`, 19 `fullfw` tasks, and a listener on UDP/623. A direct-TAP `root/calvin`
+RMCP+ probe completed RAKP at User privilege. Its application Get Device ID request timed out,
+which is the remaining fidelity boundary: no-op IRQ registration lets `fullfw` initialize, but no
+WPCM450 dynamic-IRQ implementation delivers application commands into the handler path. The box
+does not claim authenticated application IPMI, Web, SSH, or Redfish readiness, and no fake IPMI
+responder was added. The HTML-authoritative box page links zipmi's existing compact iDRAC6 table
+and states that a normalized command reference does not yet exist. The focused runtime contract,
+shell syntax, HTML/Markdown sync, address configuration, QEMU build validation/path/runtime
+tests, warm-capability, status-output, credential-display, and diff checks pass. The aggregate
+suite reaches the pre-existing documentation-contract failure for four missing Lenovo reference
+links; no iDRAC6 link is missing.

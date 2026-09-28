@@ -1,0 +1,58 @@
+#!/bin/sh
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+busybox mkdir -p /proc /sys /tmp /dev /var/log /root
+busybox mount -t proc proc /proc
+busybox mount -t sysfs sysfs /sys
+busybox mount -t tmpfs tmpfs /tmp
+busybox mount -t tmpfs tmpfs /dev
+busybox mknod /dev/null c 1 3
+busybox mknod /dev/console c 5 1
+
+[ -e /dev/aess_i2cdrv ] || busybox touch /dev/aess_i2cdrv
+[ -e /dev/aess_dynairqdrv ] || busybox touch /dev/aess_dynairqdrv
+
+busybox insmod /lib/modules/2.6.26-2-versatile/kernel/drivers/net/smc91x.ko
+busybox ifconfig lo up
+
+zbmc_ip=''
+zbmc_gateway=''
+for arg in $(busybox cat /proc/cmdline); do
+  case "$arg" in
+    zbmc_ip=*) zbmc_ip=${arg#zbmc_ip=} ;;
+    zbmc_gateway=*) zbmc_gateway=${arg#zbmc_gateway=} ;;
+  esac
+done
+
+if [ -n "$zbmc_ip" ]; then
+  busybox ifconfig eth0 "$zbmc_ip" netmask 255.0.0.0 up || exec busybox sh
+  [ -z "$zbmc_gateway" ] || busybox route add default gw "$zbmc_gateway" dev eth0
+  busybox echo "ZBMC_TAP_NETWORK_READY $zbmc_ip"
+fi
+
+busybox echo 'ZBMC_IDRAC6_AIM_START'
+/sbin/aim &
+i=0
+while [ ! -e /tmp/aim_running ] && [ "$i" -lt 20 ]; do
+  busybox sleep 1
+  i=$((i + 1))
+done
+[ -e /tmp/aim_running ] || exec busybox sh
+busybox echo 'ZBMC_IDRAC6_AIM_READY'
+
+busybox echo 'ZBMC_IDRAC6_AGENT_START'
+/bin/ipmiSystemCallAgent &
+busybox sleep 1
+
+busybox echo 'ZBMC_IDRAC6_FULLFW_START'
+cd /flash/data0/BMC_Data || exec busybox sh
+LD_PRELOAD=/lib/libidrac6-ioctl-shim.so /bin/fullfw &
+busybox echo "ZBMC_IDRAC6_FULLFW_PID $!"
+busybox sleep 2
+
+busybox echo 'ZBMC_IDRAC6_GATEWAY_START'
+/bin/ipmi_gateway &
+busybox echo "ZBMC_IDRAC6_GATEWAY_PID $!"
+
+exec busybox sh

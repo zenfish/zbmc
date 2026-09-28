@@ -142,6 +142,12 @@ animal's box material.</p>
 <td>Cold ✅; Warm ❌</td><td>Cold run 2026-09-25 reached <code>READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]</code> in 11m12s. SSH remote commands and a forced PTY reached the UID-0 BusyBox shell; IPMI and protected Redfish passed; the authenticated Web session returned administrator dashboard data; and the serial console executed a marked command as UID 0. No warm checkpoint is published.</td>
 </tr>
 <tr>
+<td><strong><a href="boxes/idrac6/index.html">idrac6</a></strong></td>
+<td>Generic ARM926 · ARMv5TE</td>
+<td>TAP / direct L2</td><td>✅</td><td>❌</td><td>⚠️ RAKP ONLY</td><td>❌</td><td>❌</td><td>✅</td>
+<td>Cold ✅; Warm ❌</td><td>Dell 1.70 userspace reaches BMC-ready and accepts RMCP presence plus <code>root/calvin</code> RAKP authentication. Application commands remain blocked because the WPCM450 dynamic-IRQ delivery path is not modeled. This is not WPCM450 hardware emulation.</td>
+</tr>
+<tr>
 <td><strong><a href="boxes/idrac10/index.html">idrac10</a></strong></td>
 <td>NPCM845 · Cortex-A35 · AArch64</td>
 <td>TAP / direct L2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>✅</td>
@@ -200,7 +206,7 @@ checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10
 checkpoint is downloaded as a hash-pinned matched bundle from
 <code>git.trouble.org</code>; see <a
 href="boxes/idrac10/WARM-START.html">the iDRAC10 warm-start runbook</a>.</p>
-<p>All eleven descriptors now select <strong>TAP / direct L2</strong> for the
+<p>All twelve descriptors now select <strong>TAP / direct L2</strong> for the
 advertised management address, with no host proxy for management traffic.
 Network validation requires three consecutive ICMP replies, ARP from the guest
 MAC, confirmation that the host does not own the guest IP, the corresponding
@@ -296,6 +302,10 @@ and keep custom images separate from pinned vendor inputs.</p>
 <tr>
 <td>Advantech ASMB-787</td>
 <td><a href="boxes/advantech-asmb787/index.html#extracting-the-filesystem">advantech-asmb787 extraction guide</a></td>
+</tr>
+<tr>
+<td>Dell iDRAC6</td>
+<td><a href="boxes/idrac6/index.html#extracting-the-filesystem">idrac6 extraction guide</a></td>
 </tr>
 <tr>
 <td>Dell iDRAC9</td>
@@ -399,7 +409,7 @@ lenovo-xcc (.69)</td>
 <tr>
 <td>10.0.9.x</td>
 <td>Dell iDRAC</td>
-<td>idrac9 (.9), idrac10 (.10)</td>
+<td>idrac6 (.6), idrac9 (.9), idrac10 (.10)</td>
 </tr>
 <tr>
 <td>configured pool <code>.50</code></td>

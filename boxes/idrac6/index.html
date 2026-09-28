@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zBMC Dell iDRAC6</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<main class="max-w-5xl mx-auto bg-white p-8 my-6 shadow-lg rounded-lg">
+<h1 class="text-3xl font-bold mb-3">Dell iDRAC6 1.70</h1>
+<p class="mb-5">This box runs Dell's original ARM <code>fullfw</code>, AIM, IPMI system-call
+agent, IPMI gateway, shared libraries, configuration, and captured persistent state on QEMU's
+ARM926 <code>versatilepb</code> machine. It is firmware-userspace emulation, not an emulation of
+the Winbond WPCM450 SoC or Dell's vendor kernel.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Current fidelity</h2>
+<div class="overflow-x-auto">
+<table class="w-full border-collapse text-sm">
+<thead><tr class="bg-slate-200"><th class="border p-2 text-left">Surface</th><th class="border p-2 text-left">State</th><th class="border p-2 text-left">Evidence</th></tr></thead>
+<tbody>
+<tr><td class="border p-2">Console</td><td class="border p-2">Working</td><td class="border p-2">Dell userspace reaches <code>BMC_RDY ASSERTED</code>; all 19 expected <code>fullfw</code> tasks run.</td></tr>
+<tr><td class="border p-2">RMCP presence</td><td class="border p-2">Working</td><td class="border p-2">UDP/623 returns an IPMI-supported presence reply with Dell IANA 4542.</td></tr>
+<tr><td class="border p-2">RMCP+ authentication</td><td class="border p-2">Partial</td><td class="border p-2"><code>root/calvin</code> completes the RAKP exchange at User privilege.</td></tr>
+<tr><td class="border p-2">Application IPMI commands</td><td class="border p-2">Blocked</td><td class="border p-2">Requests reach the authenticated session but do not return command responses. The WPCM450 dynamic-IRQ device that delivers work into the firmware is not modeled.</td></tr>
+<tr><td class="border p-2">Web, SSH, Redfish, host hardware</td><td class="border p-2">Not included</td><td class="border p-2">These are outside this minimal IPMI-oriented userspace slice.</td></tr>
+</tbody></table>
+</div>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Build and run</h2>
+<p>The proprietary firmware is not committed. Point the builder at the extracted iDRAC6 1.70
+WPCM450 root filesystem. The builder rejects any other <code>fullfw</code> or private-storage image,
+downloads SHA-256-pinned Debian Lenny VersatilePB boot artifacts, compiles the two-command ioctl
+compatibility shim, and packs the minimal proven userspace.</p>
+<pre class="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto mt-3"><code>IDRAC6_ROOTFS=/path/to/WPCM450 ./tools/zbmc idrac6 build
+sudo ./tools/zbmc idrac6 start
+sudo ./tools/zbmc idrac6 status -v
+sudo ./tools/zbmc idrac6 console</code></pre>
+
+<h2 id="extracting-the-filesystem" class="text-xl font-semibold mt-6 mb-2">Extracting the filesystem</h2>
+<p>The source expected by <code>build.sh</code> is an already extracted iDRAC6 1.70 root filesystem
+containing <code>bin/fullfw</code>, <code>sbin/aim</code>, <code>lib/</code>, <code>etc/</code>, and
+<code>flash/</code>. The pinned <code>fullfw</code> SHA-256 is
+<code>67f17aa14eda9e5d96b96825b93536a228db031acda90122eb353fba56dd3465</code>. The original
+WPCM450 firmware image is not redistributed by zBMC.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Why the shim exists</h2>
+<p>Dell's <code>fullfw</code> requires two ioctl calls from <code>aess_dynairqdrv.ko</code> during
+startup: reset the dynamic-IRQ registration list and register an IRQ. QEMU has no WPCM450 interrupt
+controller, so the preload library acknowledges only those exact requests and forwards every other
+ioctl unchanged. This is enough for full initialization and network-session handling, but it does
+not synthesize the missing interrupt-driven application-command delivery.</p>
+
+<h2 class="text-xl font-semibold mt-6 mb-2">Command documentation</h2>
+<p>The compact operator inventory is in zipmi's
+<a class="text-blue-700 underline" href="../../../zipmi/docs/idrac6-command-table.md">iDRAC6 command table</a>.
+A normalized command-reference page has not yet been produced; zBMC does not claim otherwise.</p>
+</main>
+</body>
+</html>

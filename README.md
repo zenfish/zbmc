@@ -29,6 +29,7 @@ Resource sizing is guidance, not an enforced check. Individual BMCs request 128 
 | **[openbmc](boxes/openbmc/index.md)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc openbmc status -v`; no warm checkpoint is published. |
 | **[nvidia-obmc](boxes/nvidia-obmc/)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 passed ICMP, SSH, IPMI, Redfish, Web-UI, and console via `zbmc nvidia-obmc status -v`; no warm checkpoint is published. |
 | **[advantech-asmb787](boxes/advantech-asmb787/)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-25 reached `READY [6/6 - ICMP, SSH, IPMI, Redfish, Web-UI, Console]` in 11m12s. SSH remote commands and a forced PTY reached the UID-0 BusyBox shell; IPMI and protected Redfish passed; the authenticated Web session returned administrator dashboard data; and the serial console executed a marked command as UID 0. No warm checkpoint is published. |
+| **[idrac6](boxes/idrac6/index.md)** | Generic ARM926 · ARMv5TE | TAP / direct L2 | ✅ | ❌ | ⚠️ RAKP ONLY | ❌ | ❌ | ✅ | Cold ✅; Warm ❌ | Dell 1.70 userspace reaches BMC-ready and accepts RMCP presence plus `root/calvin` RAKP authentication. Application commands remain blocked because the WPCM450 dynamic-IRQ delivery path is not modeled. This is not WPCM450 hardware emulation. |
 | **[idrac10](boxes/idrac10/index.md)** | NPCM845 · Cortex-A35 · AArch64 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | Cold ✅; Warm ✅ | The image exposes Redfish but no vendor Web-UI. |
 | **[megarac-hpe](boxes/megarac-hpe/index.md)** | AST2600 · Cortex-A7 · ARMv7 | TAP / direct L2 | ✅ | ❌ | ✅ | ⚠️ FLAKY | ✅ | ✅ | Cold ✅; Warm ❌ | Cold TAP run 2026-09-10 reached READY via `zbmc megarac-hpe status -v`; Redfish failed once during stability and recovered, while Web-UI remained healthy. The saved warm image is incompatible with current QEMU. |
 | **[ieit](boxes/ieit/)** | AST2500 · Cortex-A9 · ARMv7 | TAP / direct L2 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Cold ✅; Warm ❌ | Cold run 2026-09-24 reached READY for all five required network services in 124 seconds, with console available; `sysadmin/admin` provides BusyBox Linux while `admin/admin` retains SMASH/CLP. |
@@ -42,7 +43,7 @@ Service marks apply to the run described in Issues; they do not imply cold or wa
 
 Legend: ✅ passed in the current TAP topology, ❌ did not pass the latest current-topology validation or is unsupported, and ⚠️ FLAKY passed but did not remain stable. “Cold” means a clean boot from installed build artifacts; “Warm” means `start --warm` can restore a verified checkpoint. Cold firmware startup remains load-sensitive. The iDRAC10 checkpoint is downloaded as a hash-pinned matched bundle from `git.trouble.org`; see [the iDRAC10 warm-start runbook](boxes/idrac10/WARM-START.md).
 
-All eleven descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
+All twelve descriptors now select **TAP / direct L2** for the advertised management address, with no host proxy for management traffic. Network validation requires three consecutive ICMP replies, ARP from the guest MAC, confirmation that the host does not own the guest IP, the corresponding zBMC checks, and no management `hostfwd`. Those are validation details, not separate capabilities in the table.
 
 Full per-box boot method, network trick, and gotchas: [docs/zoo-lessons.md](docs/zoo-lessons.md). The project-wide retrospective is [Why Virtualizing BMC Firmware Was Hard](docs/why-bmc-virtualization-is-hard.md).
 
@@ -102,6 +103,7 @@ Uploads to `/tmp` and writable QEMU overlays are disposable and do not survive a
 | OpenBMC | [openbmc extraction guide](boxes/openbmc/index.md#extracting-the-filesystem) |
 | NVIDIA OpenBMC | [nvidia-obmc extraction guide](boxes/nvidia-obmc/index.md#extracting-the-filesystem) |
 | Advantech ASMB-787 | [advantech-asmb787 extraction guide](boxes/advantech-asmb787/index.md#extracting-the-filesystem) |
+| Dell iDRAC6 | [idrac6 extraction guide](boxes/idrac6/index.md#extracting-the-filesystem) |
 | Dell iDRAC9 | [idrac9 extraction guide](boxes/idrac9/index.md#extracting-the-filesystem) |
 | Dell iDRAC10 | [idrac10 extraction guide](boxes/idrac10/index.md#extracting-the-filesystem) |
 | HPE MegaRAC | [megarac-hpe extraction guide](boxes/megarac-hpe/index.md#extracting-the-filesystem) |
@@ -142,7 +144,7 @@ Every advertised address is assigned inside the guest on a Linux TAP/direct-L2 m
 | 10.0.6.x | Vendor firmware | megarac-hpe (.66), IEIT/Inspur (.67), irmc-fujitsu (.68), lenovo-xcc (.69) |
 | 10.0.7.x | OpenBMC | openbmc (.10), nvidia-obmc (.20) |
 | 10.0.8.x | Supermicro | supermicro-x10 (.10), supermicro-x14 (.14) |
-| 10.0.9.x | Dell iDRAC | idrac9 (.9), idrac10 (.10) |
+| 10.0.9.x | Dell iDRAC | idrac6 (.6), idrac9 (.9), idrac10 (.10) |
 | configured pool `.50` | Advantech | advantech-asmb787 |
 
 If your network already uses the default 10.0.{6,7,8,9}.x range, copy `zbmc.conf.example` to `zbmc.conf` (gitignored) and set **one** of:

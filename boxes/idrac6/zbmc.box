@@ -1,0 +1,84 @@
+# Dell iDRAC6 1.70 firmware userspace on a generic ARM926 QEMU machine.
+# Dell's fullfw, AIM, IPMI agent, ipmiextd, codecs, and factory state are real;
+# the WPCM450 SoC, its vendor kernel, host sensors, and physical server are not modeled.
+ZBMC_NAME=idrac6
+ZBMC_NETWORK_MODE=tap
+ZBMC_DESC="Dell iDRAC6 1.70 firmware-userspace emulation - console plus RMCP/RAKP; application IPMI blocked"
+
+PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$PROJ_DIR/../.." && pwd)"
+ZBMC_DIR="${ZBMC_DIR:-$ROOT/work/idrac6}"
+ZBMC_IP=$(_zbmc_resolve_ip idrac6 29 10.0.9.6)
+ZBMC_HOST=idrac6
+
+ZBMC_QEMU="$ROOT/qemu/runtime/qemu-system-arm-debian"
+ZBMC_QEMU_SHA256=94e624f52653ecd1d226a2edd76e847dd46e00dc1ae5f4efed11fac5ef20898a
+ZBMC_QEMU_MAJOR=10
+ZBMC_QEMU_VERSION=10.0.11
+ZBMC_QEMU_MACHINE=versatilepb
+ZBMC_TAP=ztap-idrac6
+ZBMC_MAC=52:54:00:fa:00:29
+ZBMC_CAPTURE_INTERFACES="br-zbmc $ZBMC_TAP"
+ZBMC_REQUIRED_SERVICES="console"
+ZBMC_STABILITY_SECONDS=10
+ZBMC_READY_DEADLINE=90
+ZBMC_EXPECTED_FIRMWARE=15
+ZBMC_EXPECTED_READY=25
+
+IPMI_USER=root
+IPMI_PW=calvin
+IPMI_KEY=00
+IPMI_PORT=623
+IPMI_T=10
+IPMI_OPTS="-C 17 -I lanplus"
+
+PIDF="$ZBMC_DIR/zbmc.pid"
+LOG="$ZBMC_DIR/launcher.log"
+SOCK="$ZBMC_DIR/serial.sock"
+QMP_SOCK="$ZBMC_DIR/qmp.sock"
+CONSOLE_LOG="${ZBMC_CONSOLE_LOG:-$ZBMC_DIR/console.log}"
+
+zbmc_boot() {
+  mkdir -p "$ZBMC_DIR"
+  local qp= n=0
+  : >"$LOG"
+  ZBMC_CONSOLE_LOG="$CONSOLE_LOG" WD="$ZBMC_DIR" ZBMC_QEMU="$ZBMC_QEMU" \
+    IP="$ZBMC_IP" GATEWAY=10.0.0.1 TAP="$ZBMC_TAP" MAC="$ZBMC_MAC" \
+    SOCK="$SOCK" QMP="$QMP_SOCK" LOG="$LOG" bash "$PROJ_DIR/boot.sh" >/dev/null
+  while [ "$n" -lt 40 ]; do
+    qp=$(pgrep -f "versatilepb.*ifname=$ZBMC_TAP" | head -1)
+    [ -n "$qp" ] && break
+    sleep 0.25
+    n=$((n + 1))
+  done
+  [ -n "$qp" ] && printf '%s\n' "$qp" >"$PIDF"
+  printf '%s\n' "$qp"
+}
+zbmc_running() { pgrep -f "versatilepb.*ifname=$ZBMC_TAP" | head -1; }
+zbmc_build() { IDRAC6_ROOTFS="${IDRAC6_ROOTFS:-}" bash "$PROJ_DIR/build.sh" "$ZBMC_DIR"; }
+zbmc_ready() {
+  local file
+  for file in vmlinuz-2.6.26-2-versatile idrac6-initramfs.cpio.gz build-provenance.txt; do
+    [ -f "$ZBMC_DIR/$file" ] || { echo "not built - run: zbmc idrac6 build"; return 1; }
+  done
+  echo "ready (cold boot; Dell firmware userspace on QEMU VersatilePB)"
+}
+zbmc_console() {
+  command -v socat >/dev/null || { echo "need socat" >&2; return 1; }
+  echo "iDRAC6 console -> $SOCK (Ctrl-] to detach)"
+  exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$SOCK"
+}
+zbmc_console_health() {
+  grep -q 'BMC_RDY ASSERTED' "$CONSOLE_LOG" 2>/dev/null
+}
+zbmc_ipmi() {
+  timeout -s KILL "$((IPMI_T + 6))" env PYTHONPATH="$ZIPMI" python3 -m zipmi.cli.zipmi \
+    -H "$ZBMC_IP" -p "$IPMI_PORT" -U "$IPMI_USER" -P "$IPMI_PW" \
+    -C 17 -I lanplus -t "$IPMI_T" "$@" 2>&1
+}
+zbmc_ipmi_health() {
+  echo "RMCP presence and RAKP authentication work; WPCM450 dynamic-IRQ delivery is not modeled" >&2
+  return 1
+}
+
+ZBMC_READY_GREP='BMC_RDY ASSERTED'

@@ -568,7 +568,8 @@ import sys
 
 qemu, machine = sys.argv[1:]
 proc = subprocess.Popen(
-    [qemu, "-M", machine, "-nodefaults", "-display", "none", "-S", "-qmp", "stdio"],
+    [qemu, "-M", machine, "-nodefaults", "-display", "none",
+     "-audio", "none", "-S", "-qmp", "stdio"],
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
 )
 

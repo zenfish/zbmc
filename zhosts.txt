@@ -6,6 +6,7 @@ supermicro-x10       10.0.8.10
 supermicro-x14       10.0.8.14
 idrac9               10.0.9.9
 idrac10              10.0.9.10
+idrac6               10.0.9.6
 megarac-hpe          10.0.6.66
 ieit                 10.0.6.67
 irmc-fujitsu         10.0.6.68
