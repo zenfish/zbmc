@@ -56,6 +56,13 @@ CC00 and two returned target completion codes, with no transport failure. Releas
 streamed to isolated Debby venv `/home/zen/zipmi-0.4.0-proof.3zHo1x/venv`; `zipmi.__version__`,
 package metadata, and `zipmi -V` all reported 0.4.0, and its marker recorded the exact release commit.
 
+The Set User Password notes now include a clearly scoped Supermicro X14 comparison: the shipped
+X14 validator requires 8–20 characters, at least three of lowercase, uppercase, digit, and
+supported ASCII punctuation, no leading or trailing ASCII space, and a password unequal to the
+username or its reverse. A four-class 13-byte password succeeded live through standard command
+`0x06/0x47` in 16-byte mode; a rejected policy candidate returned misleading completion code
+`0xC8`. This is retained as cross-target operator evidence, not as a claim about Dell policy.
+
 ## Target 3 — Lenovo XCC
 
 - [x] Pin the exact XCC 6.92 Newyork-pass1 firmware, filesystem, dispatch-library hashes, and

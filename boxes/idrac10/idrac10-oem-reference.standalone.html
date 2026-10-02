@@ -129,7 +129,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
     <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">iDRAC10 OEM IPMI command reference</h1>
   </div>
 </div>
-<!-- html2md:auto source=boxes/idrac10/idrac10-oem-reference.html source-sha256=5308f65fec175275bb071d7013760e7817abc5ae52b817e3a7cdcae3b5d42320 body-sha256=a49e355971e0d51ab1746bd8843270abfced9bee0a87244d29742386a10b41fb -->
+<!-- html2md:auto source=boxes/idrac10/idrac10-oem-reference.html source-sha256=57a80c1b455323b015ffd498468e25e2ea6ad35a0b50302589fba32b88de0a92 body-sha256=6d30ecbde91a2d72719bbba467ad32ef7942f5cc0090797bbd5677c89be88d11 -->
 <p>Firmware-bound reference for Dell YP95X iDRAC10 1.30.10.50 A00
 (internal 1.30.10.50.11943). DUP SHA-256
 <code>372c49cf8fc167aaff0acc03925a782698937bddba21cbca57146a7c8d722ca9</code>;
@@ -169,6 +169,17 @@ returned CC00; blade slot ID returned CCFF with data <code>00</code>;
 server power consumption returned CCC1. No transport failure occurred.
 Historical sweep observations are retained per record but lack
 equivalent request/run provenance.</p>
+<h2 id="cross-target-set-user-password-note">Cross-target Set User
+Password note</h2>
+<p><strong>Supermicro X14 only; not evidence of Dell policy.</strong>
+X14's shipped validator requires 8–20 characters, at least three of
+lowercase, uppercase, digit, and supported ASCII punctuation, no leading
+or trailing ASCII space, and a value unequal to the username or its
+reverse. A 13-byte four-class password succeeded live through standard
+command <code>0x06/0x47</code> in 16-byte mode; a rejected policy
+candidate returned misleading completion code <code>0xC8</code>. The
+16/20-byte selector controls IPMI field width, not complexity
+policy.</p>
 <p>Filter operations</p>
 <table style="width:100%;">
 <colgroup>

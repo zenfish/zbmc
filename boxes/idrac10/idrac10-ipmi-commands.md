@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac10/idrac10-ipmi-commands.html source-sha256=d121156edfaba92a2ede60fbc404a46952ab4e0717aa1e6245a4194feb738c41 body-sha256=c163a545fad5a511638ddf528d07689674b393ca2fe9401099100060e347332f -->
+<!-- html2md:auto source=boxes/idrac10/idrac10-ipmi-commands.html source-sha256=c494b9e76cf9af656606e061d6004ca1e6986ff2cbd8bce858223a21132c013d body-sha256=f5aaf1930fac258e8e659c4d744bb20861d988675101b9be04d886dfa4331305 -->
 
 # iDRAC10 OEM IPMI command table
 
@@ -23,6 +23,10 @@ Firmware-bound reference for Dell YP95X iDRAC10 1.30.10.50 A00 (internal 1.30.10
 ## Live evidence
 
 zBMC run `20260926T050202Z-c410ded2-1f95-43eb-99ad-6583f942e598`, zipmi commit `f9168fad18545460b40ccb253606c3b0c916b954`, evidence SHA-256 `5fc576d227ddcd053f950b6b9b725319159bd00fa267a803dfc5407fa6a51a6c`. The strict allowlist selected only safe operations whose exact request length equals the auto-prefix length: 13 zero-byte requests. Eleven returned CC00; blade slot ID returned CCFF with data `00`; server power consumption returned CCC1. No transport failure occurred. Historical sweep observations are retained per record but lack equivalent request/run provenance.
+
+## Cross-target Set User Password note
+
+**Supermicro X14 only; not evidence of Dell policy.** X14's shipped validator requires 8–20 characters, at least three of lowercase, uppercase, digit, and supported ASCII punctuation, no leading or trailing ASCII space, and a value unequal to the username or its reverse. A 13-byte four-class password succeeded live through standard command `0x06/0x47` in 16-byte mode; a rejected policy candidate returned misleading completion code `0xC8`. The 16/20-byte selector controls IPMI field width, not complexity policy.
 
 Filter operations
 
