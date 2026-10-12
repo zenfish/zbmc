@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=0ec4402113caeee1ba31c91afb5f48411475b11aa9457f8f9bb72eb87051e34c body-sha256=4986ad277ef1d51568a005bf83362b227bfb37edf5ecc6fcd2de94b390414dd8 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=64e7ee99007bda2ea21509e9a1eedbbecc503f95fc8284dcfe7ef584db386947 body-sha256=9c7bfdebacb82d061387505cfa5e0d70eff7643f78671ed58b71d2277c9adec9 -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -31,10 +31,10 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 
 - [Virtual HPE XD670 BMC](README.md)
 - [IPMI stack teardown](IPMI.md)
-- zipmi XD670 v1.27 operator views: [reviewed command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html) · [complete 143-row registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html)
+- zipmi XD670 v1.27 operator views: [791-operation command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html) · [complete 143-row registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html) · [canonical operation artifact](https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json)
 - [Historical emulation status](EMULATION-STATUS.md)
 
-**Exact OEM-IPMI synchronization:** firmware 1.27 has 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. The frozen catalog SHA-256 is `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc`. See [the target-specific dispatch and live evidence](IPMI.md).
+**Exact OEM-IPMI synchronization:** firmware 1.27 has 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi maps them through 141 shared implementation contracts and 141 target overlays into 791 expanded operation rows; only four reviewed read-only routes are runnable. The frozen catalog SHA-256 is `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc`. See [the target-specific dispatch and live evidence](IPMI.md).
 
 ## Extracting the filesystem
 

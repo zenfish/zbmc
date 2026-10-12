@@ -37,12 +37,14 @@ CPU lacks the VFP support that a hard-float binary would require. Uploads to <co
 <ul class="list-disc pl-6 space-y-1">
 <li><a class="text-blue-700 underline" href="README.html">Virtual HPE XD670 BMC</a></li>
 <li><a class="text-blue-700 underline" href="IPMI.html">IPMI stack teardown</a></li>
-<li>zipmi XD670 v1.27 operator views: <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html">reviewed command reference</a> · <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html">complete 143-row registration table</a></li>
+<li>zipmi XD670 v1.27 operator views: <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html">791-operation command reference</a> · <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html">complete 143-row registration table</a> · <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json">canonical operation artifact</a></li>
 <li><a class="text-blue-700 underline" href="EMULATION-STATUS.html">Historical emulation status</a></li>
 </ul>
 <div class="mt-4 rounded border border-emerald-300 bg-emerald-50 p-4 text-sm">
 <strong>Exact OEM-IPMI synchronization:</strong> firmware 1.27 has 143 registrations, 142 unique
-NetFn/command addresses, and 141 effective commands. The frozen catalog SHA-256 is
+NetFn/command addresses, and 141 effective commands. zipmi maps them through 141 shared implementation
+contracts and 141 target overlays into 791 expanded operation rows; only four reviewed read-only routes
+are runnable. The frozen catalog SHA-256 is
 <code>c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc</code>.
 See <a class="text-blue-700 underline" href="IPMI.html">the target-specific dispatch and live evidence</a>.
 </div>

@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=dc3ff14d6e5277d51b8758acb54fbeeaa999d8f31fc3551eedeca7cfa0137b47 body-sha256=b1d49e1dd3f633d5783e4800d9309591b51cd13ca91f8c0d72fa0a754ccb585b -->
+<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=003d89fc42b52c478acb46fde55c4e799209ced8fdbf8ee35dd73f32498f579e body-sha256=30ea0f3e5d81201f6e726a94ce9a679c89dbd5b27b1a51ead47d6c330906f9eb -->
 
 zbmc box · verified 2026-09-08
 
@@ -38,7 +38,7 @@ Expected cold READY time is about seven minutes. Authenticated Managers alternat
 
 ## OEM IPMI command surface
 
-The exact v1.27 image contains 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi owns the frozen command catalog and fail-closed named execution; this box owns runtime and live-probe evidence. See the [XD670 dispatch reference](IPMI.md).
+The exact v1.27 image contains 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi owns 141 shared implementation contracts, 141 XD670 target overlays, and 791 expanded operation rows; only four reviewed read-only routes are runnable by name. The remaining semantics stay partial or unknown and fail closed. This box owns runtime and live-probe evidence. See the [XD670 dispatch reference](IPMI.md).
 
 ## Rebuild from the HPM
 

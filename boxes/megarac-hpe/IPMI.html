@@ -13,14 +13,15 @@
 <p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">zBMC runtime evidence · zipmi catalog synchronization</p>
 <h1 class="mt-2 text-4xl font-bold text-white">HPE Cray XD670 v1.27 OEM IPMI dispatch</h1>
 <p class="mt-3 max-w-4xl text-slate-300">Exact-image replacement for the historical symbol-only
-inventory. This page closes what the zBMC guest registers; it does not claim that all effective
-commands have decoded wire contracts or executable zipmi routes.</p>
+inventory. The linked canonical ledger closes the registration and expanded-operation denominators;
+it does not claim that every operation is semantically complete or executable through zipmi.</p>
 </header>
 
-<section class="grid gap-4 md:grid-cols-3">
+<section class="grid gap-4 md:grid-cols-4">
 <div class="rounded-xl border border-cyan-800 bg-slate-900 p-5"><strong class="text-3xl text-cyan-300">143</strong><p>firmware registration rows</p></div>
 <div class="rounded-xl border border-cyan-800 bg-slate-900 p-5"><strong class="text-3xl text-cyan-300">142</strong><p>unique NetFn/command addresses</p></div>
 <div class="rounded-xl border border-emerald-800 bg-slate-900 p-5"><strong class="text-3xl text-emerald-300">141</strong><p>effective commands</p></div>
+<div class="rounded-xl border border-emerald-800 bg-slate-900 p-5"><strong class="text-3xl text-emerald-300">791</strong><p>expanded operation rows</p></div>
 </section>
 
 <section class="rounded-xl bg-slate-900 p-6">
@@ -30,7 +31,8 @@ commands have decoded wire contracts or executable zipmi routes.</p>
 <tr><th class="py-3 pr-4 text-slate-400">Signed HPM SHA-256</th><td><code class="break-all">4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76</code></td></tr>
 <tr><th class="py-3 pr-4 text-slate-400">Pristine SquashFS SHA-256</th><td><code class="break-all">dd1d664f34ec5a2883fdcb1a10616154b266982a0997e59b3ce385f5f511afe5</code></td></tr>
 <tr><th class="py-3 pr-4 text-slate-400">Frozen catalog SHA-256</th><td><code class="break-all">c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc</code></td></tr>
-<tr><th class="py-3 pr-4 text-slate-400">zipmi synchronization commit</th><td><code>ef4dcbe44d9b981eaaaac46f1ff999db74f754c0</code></td></tr>
+<tr><th class="py-3 pr-4 text-slate-400">Operation-contract artifact SHA-256</th><td><code class="break-all">cbb6574c4008787e158ecceec052f9506dd1eeba44307110cd7a99515062b516</code></td></tr>
+<tr><th class="py-3 pr-4 text-slate-400">zipmi synchronization commit</th><td><code>b6940ef5527c98513a5e3349c9e108917305491f</code></td></tr>
 </tbody></table></div>
 <p class="mt-4 text-sm text-slate-400"><strong class="text-slate-200">Verified:</strong> the 42 relevant ELFs are byte-identical between the pristine vendor root filesystem and the accepted zBMC input root filesystem. The runtime harness is modified; the analyzed userspace is not.</p>
 </section>
@@ -71,19 +73,20 @@ commands have decoded wire contracts or executable zipmi routes.</p>
 </section>
 
 <section class="rounded-xl bg-slate-900 p-6">
-<h2 class="text-2xl font-semibold text-white">Canonical inventory and partial command documentation</h2>
+<h2 class="text-2xl font-semibold text-white">Canonical operation ledger and partial semantics</h2>
 <p class="mt-3">Use the firmware-bound zipmi pages, not the generic MegaRAC catalog:</p>
 <ul class="mt-3 list-disc space-y-2 pl-6">
-<li><a class="text-cyan-400 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html">XD670 reviewed command reference</a></li>
+<li><a class="text-cyan-400 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html">XD670 791-operation command reference</a></li>
 <li><a class="text-cyan-400 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html">XD670 complete registration table</a></li>
+<li><a class="text-cyan-400 underline" href="https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json">Canonical machine-readable operation contracts</a></li>
 <li><a class="text-cyan-400 underline" href="oem-ipmi-sync.json">Machine-readable zBMC/zipmi synchronization manifest</a></li>
 </ul>
-<p class="mt-4 text-sm text-slate-400"><strong class="text-amber-300">Deep dive reopened:</strong> zipmi exposes only four reviewed read-only routes by name. The remaining 137 effective commands are inventory rows, not reviewed operation contracts. Unreviewed, variable, inactive, and shadowed handlers fail closed rather than accepting guessed payloads.</p>
+<p class="mt-4 text-sm text-slate-400"><strong class="text-amber-300">Operation inventory complete; semantic decode incomplete:</strong> zipmi now holds 141 shared implementation contracts, 141 XD670 target overlays, and 791 expanded operation rows. Only four reviewed read-only routes are runnable by name; the other 787 operations have no distinct route and fail closed rather than accepting guessed payloads.</p>
 </section>
 
 <section class="rounded-xl border border-amber-800 bg-amber-950/20 p-6">
 <h2 class="text-xl font-semibold text-amber-300">Remaining evidence limits</h2>
-<p class="mt-3 text-sm">Exact interface-mask bit-to-transport labels are unresolved. Built-in YAFU per-handler runtime policy is not fully decompiled. Most BIOS, PECI, RAID, update, and service-control leaf schemas remain unreviewed. The registration denominator stays closed, but the operation-level deep dive remains open until every applicable command has a wire contract, access/effect/activation evidence, zipmi behavior, and explicit unknowns.</p>
+<p class="mt-3 text-sm">The ledger accounts for every effective command and recovered selector, but it is not a fully decoded protocol specification. Only 11 request layouts are complete; 780 are partial. Response layouts are 754 partial and 37 unknown. Exact interface-mask bit-to-transport labels, indirect authorization checks, and many BIOS, PECI, RAID, update, and service-control field meanings remain unresolved. These unknowns are preserved in the canonical contracts instead of being filled from another MegaRAC target.</p>
 </section>
 
 <footer class="border-t border-slate-700 pt-5 text-sm text-slate-500">Updated 12 October 2026 from exact-image static analysis and safe zBMC validation.</footer>

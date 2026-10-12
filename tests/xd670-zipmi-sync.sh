@@ -22,6 +22,12 @@ expected = {
     "registrationCount": 143,
     "uniqueAddressCount": 142,
     "effectiveCommandCount": 141,
+    "operationContractsPath": "zipmi/data/sources/hpe-xd670-operation-contracts.json",
+    "operationContractsSha256": "cbb6574c4008787e158ecceec052f9506dd1eeba44307110cd7a99515062b516",
+    "sharedImplementationContractCount": 141,
+    "targetOverlayCount": 141,
+    "expandedOperationCount": 791,
+    "reviewedRunnableRoutes": 4,
     "shadowedAddress": "0x32/0x2c",
     "winningHandler": "AMIYAFUStateless",
     "shadowedHandler": "AMIOemSetRedisDB",
@@ -39,7 +45,10 @@ combined = "\n".join(path.read_text() for path in documents)
 for value in (
     manifest["firmwareSha256"], manifest["pristineRootfsSha256"],
     manifest["catalogSha256"], "143 registrations", "142 unique",
-    "141 effective", manifest["shadowedAddress"], manifest["winningHandler"],
+    "141 effective", "141 shared implementation contracts", "141 target overlays",
+    "791 expanded operation", "only four reviewed read-only routes",
+    "hpe-xd670-operation-contracts.json",
+    manifest["shadowedAddress"], manifest["winningHandler"],
     manifest["shadowedHandler"], manifest["disabledFeature"],
 ):
     assert str(value) in combined, value
@@ -59,6 +68,14 @@ if zipmi_arg:
     assert len(addresses) == manifest["uniqueAddressCount"]
     inactive = [row for row in rows if row["active_if_enabled"].startswith("no;")]
     assert len(addresses) - sum("feature gate absent" in row["active_if_enabled"] for row in inactive) == manifest["effectiveCommandCount"]
+    operations_path = zipmi / manifest["operationContractsPath"]
+    assert hashlib.sha256(operations_path.read_bytes()).hexdigest() == manifest["operationContractsSha256"]
+    operations = json.loads(operations_path.read_text())
+    counts = operations["counts"]
+    assert counts["shared_handler_contracts"] == manifest["sharedImplementationContractCount"]
+    assert counts["effective_target_command_overlays"] == manifest["targetOverlayCount"]
+    assert counts["expanded_operations"] == manifest["expandedOperationCount"]
+    assert counts["reviewed_live_contracts"] == manifest["reviewedRunnableRoutes"]
 
 print("XD670 zBMC/zipmi synchronization: PASS")
 PY
