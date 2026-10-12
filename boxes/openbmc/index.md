@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=da236f0d5a12a500f94084987f3a060d3b2e69e37900d42bfb4b80092dcffb44 body-sha256=a1600d1ae43c503e4efd965639b41cc29c292dd4f57f9185ad9344ad55eca1e9 -->
+<!-- html2md:auto source=boxes/openbmc/index.html source-sha256=d195e1ffe324295a63aeddc32e529e41e845e72b5feeb3a6c54ea915a111e95c body-sha256=c7cb1cf647b1f1cd03010b088e4508b91057941b3f7b32c473fafd27382be693 -->
 
 # zbmc OpenBMC
 
@@ -14,6 +14,10 @@ Vanilla AST2600 OpenBMC control image. The accepted cold run reached ICMP, SSH, 
 
 - [Build information](BUILD-INFO.md)
 - [IPMI and Redfish inventory](IPMI-REDFISH-INVENTORY.md)
+
+## OEM IPMI command surface
+
+The pinned vanilla image has a closed zero-OEM result: five providers contain 81 standard/DCMI registrations and no vendor OEM registration. zipmi's canonical [baseline reference](https://github.com/zenfish/zipmi/blob/main/docs/openbmc-vanilla-command-reference.html) records the static census and 4,864 live Invalid Command replies. Other OpenBMC machine/provider combinations remain separate targets.
 
 ## Extracting the filesystem
 

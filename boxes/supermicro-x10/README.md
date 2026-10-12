@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/supermicro-x10/README.html source-sha256=0b61875a4abdda0100c9d196efd4a3e7d665acc975990b8a189781dbeb5250b2 body-sha256=5e4ea4b3a9bbfef14ab518eabd94a16272889927401cf284f3f4ea9589d866bc -->
+<!-- html2md:auto source=boxes/supermicro-x10/README.html source-sha256=b11e08abf44cc3bc98279cd7b9313e216a4deb5e072dc85d0c90c551acd0edf5 body-sha256=86c46d5d9e7288658e1e7b42f41ed9e026771ba3ee0a1a829e86db5510cf6b1d -->
 
 # Virtual Supermicro X10 BMC
 
@@ -7,6 +7,8 @@ ASPEED **AST2400** (ARMv5TEJ), FW 3.93, emulated with `qemu-system-arm -M super
 Firmware: `BMC_X10AST2400-32M_20210528_03.93_STD.bin` · zoo box `zbmc supermicro-x10` · 2026-08-23
 
 **Historical bring-up record.** The macOS/Docker attempts below explain discarded approaches. The supported 0.1.1 path is x86_64 Linux using `./build.sh supermicro-x10` and `sudo ./tools/zbmc supermicro-x10 start`.
+
+**OEM IPMI inventory complete for this image.** The canonical zipmi [command reference](https://github.com/zenfish/zipmi/blob/main/docs/supermicro-x10-command-reference.html) and [compact table](https://github.com/zenfish/zipmi/blob/main/docs/supermicro-x10-command-table.html) account for 91 registrations, 90 addresses, and 286 direct or nested operations. This exact X10 result does not complete the separate X11-derived family catalog.
 
 ## Copying files
 

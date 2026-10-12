@@ -117,19 +117,27 @@ The full HTML report and three JSON evidence files live under `boxes/lenovo-xcc/
 The earlier 224-unknown count describes catalog metadata before this targeted live audit, not
 the tested routes. Physical-device applicability and other firmware versions remain untested.
 
-## Remaining target order
+## OEM deep-dive status after the cross-repository audit
 
-1. Fujitsu iRMC
-2. Dell iDRAC9
-3. HPE MegaRAC / XD670
-4. Supermicro X14
-5. NVIDIA OpenBMC
-6. Supermicro X10
-7. IEIT
-8. OpenBMC baseline
+“Inventory complete” closes registrations and operation identities. “Deep-dive complete” additionally
+accounts for every applicable operation's wire contract, access policy, side effects, activation,
+evidence, zipmi behavior, and explicit unknowns.
 
-The order favors bounded firmware inventories first; it may change only when evidence shows a target
-depends on work owned by a later shared platform catalog.
+1. **HPE MegaRAC / XD670 — reopened:** 141 effective commands, but only four reviewed operation
+   contracts. Finish the other 137; reuse shared AMI/YAFU semantics only where exact target evidence
+   proves equivalence.
+2. **Dell iDRAC9 — open:** 276 operation contracts do not close the 293-registration / 271-identity
+   dispatcher, and no route has a proved exact payload codec or length bound.
+3. **Fujitsu iRMC — open:** the registration and outer selector inventory is closed, but partial leaf,
+   delegated backend, nested selector, effect, and rack-activation contracts remain.
+4. **Dell iDRAC6 — open:** the compact inventory is not a normalized exact-image operation reference.
+5. **Supermicro X11 — open shared-family target:** the legacy family catalog is X11-derived, but no
+   pinned X11 image has a closed target-specific denominator and contract ledger.
+
+Advantech ASMB-787, iDRAC10, Lenovo XCC, IEIT NF5468M6, NVIDIA GB200, vanilla OpenBMC,
+Supermicro X10, and Supermicro X14 have operation-level references with bounded unknowns. Their
+inventory-complete labels do not mean every partial field is decoded or every unsafe operation was
+live-executed.
 
 ## Review — HPE Cray XD670 v1.27 OEM-IPMI synchronization
 

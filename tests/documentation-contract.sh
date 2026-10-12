@@ -71,6 +71,20 @@ grep -Fq 'git.trouble.org' "$repo/GETTING-STARTED.md" "$repo/boxes/idrac10/WARM-
 grep -Fq 'boxes/idrac10/WARM-START.md' "$repo/README.md" "$repo/GETTING-STARTED.md"
 grep -Fq 'Docker packages exact QEMU builds' "$repo/SECURITY.md"
 
+# OEM status must distinguish a closed inventory from operation-level completion.
+grep -Fq 'Inventory complete' "$repo/docs/oem-ipmi-coverage-audit.md"
+grep -Fq 'Registration inventory complete; deep dive open' "$repo/docs/oem-ipmi-coverage-audit.md"
+grep -Fq 'Supermicro X11 remains open' "$repo/docs/oem-ipmi-coverage-audit.md"
+grep -Fq 'Deep dive reopened' "$repo/boxes/megarac-hpe/IPMI.md"
+grep -Fq 'OEM deep dive open' "$repo/boxes/idrac9/index.md"
+grep -Fq 'OEM deep dive open' "$repo/boxes/idrac6/index.md"
+grep -Fq 'The registration inventory is closed; the deep dive remains open.' "$repo/boxes/irmc-fujitsu/index.md"
+grep -Fq 'ieit-nf5468m6-command-reference.html' "$repo/boxes/ieit/index.md"
+grep -Fq 'nvidia-gb200-command-reference.html' "$repo/boxes/nvidia-obmc/index.md"
+grep -Fq 'openbmc-vanilla-command-reference.html' "$repo/boxes/openbmc/index.md"
+grep -Fq 'supermicro-x10-command-reference.html' "$repo/boxes/supermicro-x10/README.md"
+grep -Fq 'supermicro-x14-command-reference.html' "$repo/boxes/supermicro-x14/index.md"
+
 # Pandoc omits content outside <main>; preserve Lenovo's recovery evidence.
 grep -Fxq '## 13 September: native services recovered on TAP' "$repo/boxes/lenovo-xcc/index.md"
 grep -Fxq '## 13 September: isolated TAP warm recovery verified' "$repo/boxes/lenovo-xcc/index.md"

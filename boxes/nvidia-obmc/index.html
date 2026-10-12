@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=116325628c4b0ca1caec4f6b2572696550d7486a73bad34945678e04b27b68e7 body-sha256=d84620107efa2cb198b58997d1db53531bb9cf4a102d24b7466ec4656ab76105 -->
+<!-- zmd2html:auto source-sha256=7a67f07450725e6c388d86419a20b7e35e8da32f790960ffe3c9595a44a4e2fe body-sha256=319cc0aca255e9a573848534d43dd4737fc6caffd4ed1047577786345b6c04ff -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc NVIDIA OpenBMC</title>
@@ -45,6 +45,16 @@
   </div>
 </div>
 
+<h2 id="oem-ipmi-command-surface">OEM IPMI command surface</h2>
+<p>The pinned GB200 image contains one NVIDIA OEM provider with eight
+operations. zipmi's canonical <a
+href="https://github.com/zenfish/zipmi/blob/main/docs/nvidia-gb200-command-reference.html">command
+reference</a> and <a
+href="https://github.com/zenfish/zipmi/blob/main/docs/nvidia-gb200-command-table.html">compact
+table</a> account for their privilege, request/response layouts,
+effects, activation, and named execution. Only one operation has
+retained live evidence; physical host-interface dependencies remain a
+runtime boundary rather than an inventory gap.</p>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
 <p>The build artifact is a complete flash image. Extract embedded
 filesystems into <code>work/nvidia-obmc/fs</code>:</p>

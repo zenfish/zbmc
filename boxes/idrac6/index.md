@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac6/index.html source-sha256=93683dfafc1bb9aba0b56aabaa3795a0f676b8ca2bdd8d9399235aeae66d3779 body-sha256=a95ce0cf95f69ef997f2550738f0fe50d87c593c24b5166d66e7579257c177b4 -->
+<!-- html2md:auto source=boxes/idrac6/index.html source-sha256=1b12abd8a8c1004f276ac76f267c07887ecedd3eacca02ed0eceb3f151e7f2e1 body-sha256=b924045591941b6ab93fb41749df4676a62ebdcc35c07b42f60fcf5536b34c86 -->
 
 # Dell iDRAC6 1.70
 
@@ -34,3 +34,5 @@ Dell's `fullfw` requires two ioctl calls from `aess_dynairqdrv.ko` during startu
 ## Command documentation
 
 The compact operator inventory is in zipmi's [iDRAC6 command table](../../../zipmi/docs/idrac6-command-table.md). A normalized command-reference page has not yet been produced; zBMC does not claim otherwise.
+
+**OEM deep dive open:** the compact inventory does not close the exact 1.70 selector denominator or provide per-operation wire, authorization/channel, effect, activation, evidence, and executable-support contracts.

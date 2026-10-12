@@ -1,8 +1,12 @@
-<!-- html2md:auto source=boxes/ieit/index.html source-sha256=f9fab7e6523672914967fd27b16aa59d1bf5dc9878bb421d8a7d423e2cf5f208 body-sha256=b83a49f79767167c1f98d747925b27dea6ab18fd2a924106db655fa1821d567d -->
+<!-- html2md:auto source=boxes/ieit/index.html source-sha256=4aeeb998a009a8c0c71e9477d00f398075340e4c6fcddbf6ae2c19a23e0d34d3 body-sha256=4e07b21dd33b2e8e4c7b456fdd1f20864f2d5d5dfb76a49419db8e724ddbf7e2 -->
 
 # IEIT / Inspur
 
 The AST2500 runtime exposes Linux SSH, the vendor SMASH/CLP console, IPMI, Redfish, and the vendor Web UI. The build keeps the original OpenSSH daemon and separates its two roles: `sysadmin/admin` enters BusyBox Linux, while `admin/admin` retains the vendor SMASH/CLP management interface.
+
+## OEM IPMI command surface
+
+The exact NF5468M6 image closes 324 registrations into 323 addresses and 950 documented direct and selector operations. zipmi owns the canonical [command reference](https://github.com/zenfish/zipmi/blob/main/docs/ieit-nf5468m6-command-reference.html) and [compact table](https://github.com/zenfish/zipmi/blob/main/docs/ieit-nf5468m6-command-table.html). Partial and unknown contracts, runtime BIOS-table replacement, and the `0x30/0xe2` provider collision remain explicit; inventory closure is not a claim that those boundaries are decoded.
 
 ## SSH and SMASH/CLP
 
@@ -10,9 +14,7 @@ The AST2500 runtime exposes Linux SSH, the vendor SMASH/CLP console, IPMI, Redfi
     sudo ./tools/zbmc ieit ssh 'id; uname -a'
     sudo ./tools/zbmc ieit smash-clp
 
-The selected address follows `zbmc`'s normal priority: per-box override, pool, then `zhosts.txt`.
-The IEIT build embeds that address in the guest image. After changing address configuration, run
-`zbmc ieit build` before starting the box; startup reports a mismatched image address.
+The selected address follows `zbmc`'s normal priority: per-box override, pool, then `zhosts.txt`. The IEIT build embeds that address in the guest image. After changing address configuration, run `zbmc ieit build` before starting the box; startup reports a mismatched image address.
 
 These commands use the same preserved port-22 OpenSSH service but different accounts. The firmware synthesizes `admin` through its IPMI NSS/PAM modules and launches `/usr/local/bin/smashclp`. The local UID-0 `sysadmin` account originally used `/usr/local/bin/defshell` and was explicitly blocked by `DenyUsers sysadmin`. The rebuilt lab image changes only that local account to `/bin/sh`, assigns the standard lab password, and removes its deny rule. It does not replace sshd, PAM, NSS, or SMASH.
 

@@ -1,5 +1,14 @@
 # zbmc NVIDIA OpenBMC
 
+## OEM IPMI command surface
+
+The pinned GB200 image contains one NVIDIA OEM provider with eight operations. zipmi's canonical
+[command reference](https://github.com/zenfish/zipmi/blob/main/docs/nvidia-gb200-command-reference.html)
+and [compact table](https://github.com/zenfish/zipmi/blob/main/docs/nvidia-gb200-command-table.html)
+account for their privilege, request/response layouts, effects, activation, and named execution.
+Only one operation has retained live evidence; physical host-interface dependencies remain a runtime
+boundary rather than an inventory gap.
+
 ## Extracting the filesystem
 
 The build artifact is a complete flash image. Extract embedded filesystems into `work/nvidia-obmc/fs`:

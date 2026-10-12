@@ -20,6 +20,8 @@ sudo ./tools/zbmc openbmc start
 <li><a class="text-blue-700 underline" href="BUILD-INFO.html">Build information</a></li>
 <li><a class="text-blue-700 underline" href="IPMI-REDFISH-INVENTORY.html">IPMI and Redfish inventory</a></li>
 </ul>
+<h2 class="text-xl font-semibold mt-6 mb-2">OEM IPMI command surface</h2>
+<p>The pinned vanilla image has a closed zero-OEM result: five providers contain 81 standard/DCMI registrations and no vendor OEM registration. zipmi's canonical <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/openbmc-vanilla-command-reference.html">baseline reference</a> records the static census and 4,864 live Invalid Command replies. Other OpenBMC machine/provider combinations remain separate targets.</p>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
 <p>The flash contains the read-only SquashFS root and a writable JFFS2 region. Extract both into <code>work/openbmc/fs</code>:</p>
 <pre><code>mkdir -p work/openbmc/fs/rootfs work/openbmc/fs/rwfs

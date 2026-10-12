@@ -1,10 +1,10 @@
-<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=0d03b5bfc0305f5a78256859ac70418218f1b012719aacbb36bb543e02fa30ba body-sha256=b4145592ef4ef67f417e92be0ce5fc345421a0ba7265f0fb0c6a017cf4dbbdf5 -->
+<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=4d84a8ae6971f58b1e5e16df32f43e95281bcfb9799f89c7d7c6c6948baea1d6 body-sha256=2887af15bb9de096c37b22343e0fb31f677bc752bb8a9b437e941616bd4aa17a -->
 
 zBMC runtime evidence · zipmi catalog synchronization
 
 # HPE Cray XD670 v1.27 OEM IPMI dispatch
 
-Exact-image replacement for the historical symbol-only inventory. This page describes what the zBMC guest runs; zipmi owns the complete executable catalog and command reference.
+Exact-image replacement for the historical symbol-only inventory. This page closes what the zBMC guest registers; it does not claim that all effective commands have decoded wire contracts or executable zipmi routes.
 
 **143**
 
@@ -58,7 +58,7 @@ Run `20261012T203124Z-77b23da6-aa05-4c9d-850d-36ad62509d34` reached READY 4/4 be
 
 The guest stayed on the same QEMU process through the probes and was stopped cleanly afterward.
 
-## Canonical command documentation
+## Canonical inventory and partial command documentation
 
 Use the firmware-bound zipmi pages, not the generic MegaRAC catalog:
 
@@ -66,10 +66,10 @@ Use the firmware-bound zipmi pages, not the generic MegaRAC catalog:
 - [XD670 complete registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html)
 - [Machine-readable zBMC/zipmi synchronization manifest](oem-ipmi-sync.json)
 
-zipmi exposes only four reviewed read-only routes by name. Unreviewed, variable, inactive, and shadowed handlers fail closed rather than accepting guessed payloads.
+**Deep dive reopened:** zipmi exposes only four reviewed read-only routes by name. The remaining 137 effective commands are inventory rows, not reviewed operation contracts. Unreviewed, variable, inactive, and shadowed handlers fail closed rather than accepting guessed payloads.
 
 ## Remaining evidence limits
 
-Exact interface-mask bit-to-transport labels are unresolved. Built-in YAFU per-handler runtime policy is not fully decompiled. Most BIOS, PECI, RAID, update, and service-control leaf schemas remain unreviewed. Those are bounded follow-up tasks; they do not reopen the top-level registration denominator.
+Exact interface-mask bit-to-transport labels are unresolved. Built-in YAFU per-handler runtime policy is not fully decompiled. Most BIOS, PECI, RAID, update, and service-control leaf schemas remain unreviewed. The registration denominator stays closed, but the operation-level deep dive remains open until every applicable command has a wire contract, access/effect/activation evidence, zipmi behavior, and explicit unknowns.
 
 Updated 12 October 2026 from exact-image static analysis and safe zBMC validation.

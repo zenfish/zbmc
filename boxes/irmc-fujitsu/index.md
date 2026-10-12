@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=8c62052918010d5c54b670bacb861056f1a5d28e34b861e3b5234fcc0e157bb8 body-sha256=664a082f692ff84b327681910b8ae8b3b9211c9a2375b6f5d6e7c9af56b746f4 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=2ec9ef97f8956256ff1028f8c3bdb6961822ceb70984e539751bc580b534b9cc body-sha256=ebfcfdbccb09c96fea202af40cd9b774f617da9125c6d022cd2fb71eeaea066e -->
 
 # Fujitsu iRMC S6
 
@@ -34,7 +34,7 @@ The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and p
 
 The [OEM IPMI and power-control map](oem-power-map.md) inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.
 
-The [firmware-bound OEM command reference](irmc-s6-oem-reference.md) reconciles 148 active registrations into 138 LUN-aware identities / 135 NetFn-command pairs and maps 228 selector dispatch candidates. It distinguishes decoded, partial, and unproved payload contracts; the F1/F5 leaf audit is still in progress.
+The [firmware-bound OEM command reference](irmc-s6-oem-reference.md) reconciles 148 active registrations into 138 LUN-aware identities / 135 NetFn-command pairs and 355 operation rows. **The registration inventory is closed; the deep dive remains open.** F1/F5, delegated backend, nested-selector, effect, and rack-activation contracts remain partial or unknown.
 
 zipmi publishes the operator-facing [command reference](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-table.html).
 

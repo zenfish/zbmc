@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=7b7474402b30b330dc10fd7b9baf50df603939719103c73d9d9548b257143e06 body-sha256=2105e579879293e97b9171d86273727c369f0f263199a31db99da6b5e4768b9c -->
+<!-- zmd2html:auto source-sha256=7b5abc0c6eff1a888a70b430eacc83c1465e994a35bcb8459b2fd7bfa9be4278 body-sha256=d5951db7ca47444bd8c0cbd50d7b7924312da1f2131d5f1c27b90886276ad15c -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>zbmc Supermicro X14</title>
@@ -45,6 +45,16 @@
   </div>
 </div>
 
+<h2 id="oem-ipmi-command-surface">OEM IPMI command surface</h2>
+<p>The 01.01.06.07 baseline and audited 01.07.00.06 additions close 248
+documented operations over 67 addresses. zipmi's canonical <a
+href="https://github.com/zenfish/zipmi/blob/main/docs/supermicro-x14-command-reference.html">command
+reference</a> and <a
+href="https://github.com/zenfish/zipmi/blob/main/docs/supermicro-x14-command-table.html">compact
+table</a> retain the 58 partial request layouts, 63 partial response
+layouts, seven operations without distinct named routes, and
+system-interface-only boundaries. Inventory closure is not full field
+decoding.</p>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
 <p>The root filesystem is SquashFS at the start of eMMC partition 9
 (offset <code>0x500000</code>). Extract it directly, then use

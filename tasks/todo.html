@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=77bf1af33c71e2b6282d8b4fc25a003d758c5de626dfeac1afd27fd117dc6cc7 body-sha256=2caf958c7d7eede0f35ca3f63c9a9b917ceddd05bbeb2cd44e99835517464c44 -->
+<!-- zmd2html:auto source-sha256=920b40153e3159dac93b7028f201328344719790d3b66428f3fb1b1d0c3494f8 body-sha256=5ce2222b420d9ed89408470118add2e0c7f33cdc3eab0026c51ac12fa5624a8a -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -138,6 +138,15 @@ installer pin. The pushed installer was streamed to isolated Debby venv
 <code>zipmi.__version__</code>, package metadata, and
 <code>zipmi -V</code> all reported 0.4.0, and its marker recorded the
 exact release commit.</p>
+<p>The Set User Password notes now include a clearly scoped Supermicro
+X14 comparison: the shipped X14 validator requires 8–20 characters, at
+least three of lowercase, uppercase, digit, and supported ASCII
+punctuation, no leading or trailing ASCII space, and a password unequal
+to the username or its reverse. A four-class 13-byte password succeeded
+live through standard command <code>0x06/0x47</code> in 16-byte mode; a
+rejected policy candidate returned misleading completion code
+<code>0xC8</code>. This is retained as cross-target operator evidence,
+not as a claim about Dell policy.</p>
 <h2 id="target-3--lenovo-xcc">Target 3 — Lenovo XCC</h2>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="" />Pin the exact XCC 6.92
@@ -216,20 +225,48 @@ files live under <code>boxes/lenovo-xcc/</code>. The earlier 224-unknown
 count describes catalog metadata before this targeted live audit, not
 the tested routes. Physical-device applicability and other firmware
 versions remain untested.</p>
-<h2 id="remaining-target-order">Remaining target order</h2>
+<h2 id="oem-deep-dive-status-after-the-cross-repository-audit">OEM
+deep-dive status after the cross-repository audit</h2>
+<p>“Inventory complete” closes registrations and operation identities.
+“Deep-dive complete” additionally accounts for every applicable
+operation's wire contract, access policy, side effects, activation,
+evidence, zipmi behavior, and explicit unknowns.</p>
 <ol type="1">
-<li>Fujitsu iRMC</li>
-<li>Dell iDRAC9</li>
-<li>HPE MegaRAC / XD670</li>
-<li>Supermicro X14</li>
-<li>NVIDIA OpenBMC</li>
-<li>Supermicro X10</li>
-<li>IEIT</li>
-<li>OpenBMC baseline</li>
+<li><strong>HPE MegaRAC / XD670 — reopened:</strong> 141 effective
+commands, but only four reviewed operation contracts. Finish the other
+137; reuse shared AMI/YAFU semantics only where exact target evidence
+proves equivalence.</li>
+<li><strong>Dell iDRAC9 — open:</strong> 276 operation contracts do not
+close the 293-registration / 271-identity dispatcher, and no route has a
+proved exact payload codec or length bound.</li>
+<li><strong>Fujitsu iRMC — open:</strong> the registration and outer
+selector inventory is closed, but partial leaf, delegated backend,
+nested selector, effect, and rack-activation contracts remain.</li>
+<li><strong>Dell iDRAC6 — open:</strong> the compact inventory is not a
+normalized exact-image operation reference.</li>
+<li><strong>Supermicro X11 — open shared-family target:</strong> the
+legacy family catalog is X11-derived, but no pinned X11 image has a
+closed target-specific denominator and contract ledger.</li>
 </ol>
-<p>The order favors bounded firmware inventories first; it may change
-only when evidence shows a target depends on work owned by a later
-shared platform catalog.</p>
+<p>Advantech ASMB-787, iDRAC10, Lenovo XCC, IEIT NF5468M6, NVIDIA GB200,
+vanilla OpenBMC, Supermicro X10, and Supermicro X14 have operation-level
+references with bounded unknowns. Their inventory-complete labels do not
+mean every partial field is decoded or every unsafe operation was
+live-executed.</p>
+<h2 id="review--hpe-cray-xd670-v127-oem-ipmi-synchronization">Review —
+HPE Cray XD670 v1.27 OEM-IPMI synchronization</h2>
+<p>The exact-image analysis closes 143 firmware registration rows into
+142 unique NetFn/command addresses and 141 effective commands after
+duplicate precedence and feature activation. zBMC now pins zipmi commit
+<code>ef4dcbe44d9b981eaaaac46f1ff999db74f754c0</code> and frozen catalog
+SHA-256
+<code>c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc</code>
+in a machine-readable manifest. The synchronization test checks the zBMC
+pages against that manifest and, when given a zipmi checkout, proves the
+pinned commit ancestry, catalog bytes, row count, unique-address count,
+and effective-command count. Four safe live routes were attempted; two
+returned successful data and two returned target completion codes. No
+mutating route was sent.</p>
 <h2 id="fujitsu-irmc-s6-0263s-oem-ipmi-completion-plan">Fujitsu iRMC S6
 02.63S OEM IPMI completion plan</h2>
 <ul class="task-list">
@@ -1503,6 +1540,106 @@ mismatched image. A stopped guest produces a direct start instruction.
 <code>tests/address-configuration.sh</code>, Bash syntax checks, CLI
 help, down-box, unsupported-box, and pool-selection checks passed
 locally. A live IEIT boot was not run on this macOS host.</p>
+<h2
+id="review--zipmi-advantech-command-reference-handoff-2026-09-26">Review
+— zipmi Advantech command-reference handoff (2026-09-26)</h2>
+<ul>
+<li>The Advantech box page now names zipmi as the canonical
+operator-facing command reference and links its stable lowercase GitHub
+HTML URL; zipmi links back to this firmware/emulation record.</li>
+<li>Corrected the stale plugin-availability summary to 93 loaded and two
+present-but-not-loaded rows.</li>
+<li>Refreshed the OEM coverage audit to zipmi 0.6.3 terminology and the
+same canonical reference.</li>
+<li>Proof: both generated Markdown/HTML pairs pass
+<code>tools/sync-docs --check</code>; whitespace checks pass.</li>
+</ul>
+<h2 id="review--copyable-status-credentials-2026-09-27">Review —
+copyable status credentials (2026-09-27)</h2>
+<p>The shared IPMI and Redfish status commands now show the configured
+password or key, with Bash quoting when needed.
+<code>tests/zbmc-credential-display.sh</code> proves the Advantech
+<code>admin/superuser</code> display, key and ipmitool fallback
+displays, box-specific and generic Redfish paths, and a password
+containing spaces and an apostrophe. The Advantech console lifecycle
+test, Bash syntax, and diff checks passed.</p>
+<h1
+id="task--link-zbmc-firmware-analyses-to-zipmi-oem-command-views-2026-09-27">Task
+— Link zBMC firmware analyses to zipmi OEM command views
+(2026-09-27)</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Link Advantech, Lenovo,
+Fujitsu, iDRAC9, iDRAC10, and MegaRAC platform pages to zipmi's detailed
+reference and compact table.</label></li>
+<li><label><input type="checkbox" checked="" />Regenerate every paired
+Markdown/HTML sibling from its authoritative side.</label></li>
+</ul>
+<h2 id="review-28">Review</h2>
+<ul>
+<li>zBMC remains the firmware extraction, reverse-engineering, and
+emulation record; zipmi is explicitly identified as the operator-facing
+command-documentation owner.</li>
+<li>Each platform with a completed pair now links both views. No iDRAC6
+link was added because its detailed command reference is phase 6 and
+does not exist yet.</li>
+<li><code>tools/sync-docs --check</code> passes for all six touched
+documentation pairs.</li>
+</ul>
+<h1 id="task--bring-idrac6-into-the-virtual-zbmc-zoo-2026-09-27">Task —
+Bring iDRAC6 into the virtual zBMC zoo (2026-09-27)</h1>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Separate the existing
+zipmi protocol persona from real iDRAC6 firmware emulation.</label></li>
+<li><label><input type="checkbox" checked="" />Inventory the recovered
+WPCM450 kernel, root filesystem, and Dell <code>fullfw</code>
+userspace.</label></li>
+<li><label><input type="checkbox" checked="" />Run Dell's ARM
+<code>fullfw</code> under a generic ARM926 Linux guest and capture the
+missing WPCM450 kernel contracts.</label></li>
+<li><label><input type="checkbox" checked="" />Integrate the smallest
+viable firmware-backed launcher as
+<code>boxes/idrac6</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Verify lifecycle, console
+evidence, fixed addressing, RMCP presence, and RAKP authentication
+through <code>tools/zbmc</code>.</label></li>
+<li><label><input type="checkbox" checked="" />Document fidelity and
+remaining hardware gaps.</label></li>
+<li><label><input type="checkbox" checked="" />Commit the verified zBMC
+work.</label></li>
+</ul>
+<h2 id="review-29">Review</h2>
+<p>The new <code>idrac6</code> animal cold-boots Dell iDRAC6 1.70
+userspace under a Debian 2.6.26 VersatilePB kernel. It is explicitly
+labeled firmware-userspace emulation: QEMU has no WPCM450 machine, the
+vendor kernel is not running, and server-side sensors and host hardware
+are not modeled. The builder pins <code>fullfw</code> SHA-256
+<code>67f17aa14eda9e5d96b96825b93536a228db031acda90122eb353fba56dd3465</code>,
+the captured private-storage SHA-256
+<code>fd349b3672122d5d8e89564ad8be6e03234199e95d8af602de046b36c20798ab</code>,
+and the Debian kernel/initrd hashes. It copies only the proven Dell
+userspace subset, compiles a SysV-hash/GLIBC-2.0 preload shim that
+acknowledges the two exact dynamic-IRQ setup ioctls, and builds without
+root.</p>
+<p>Managed TAP run
+<code>20260928T071658Z-06d6f6d0-d0f8-4655-91b9-b888d212a4f6</code>
+reached <code>READY [2/2 - ICMP, Console]</code> in 31 seconds at the
+normally resolved, guest-owned <code>10.0.9.6</code>. The console proves
+<code>BMC_RDY ASSERTED</code>, 19 <code>fullfw</code> tasks, and a
+listener on UDP/623. A direct-TAP <code>root/calvin</code> RMCP+ probe
+completed RAKP at User privilege. Its application Get Device ID request
+timed out, which is the remaining fidelity boundary: no-op IRQ
+registration lets <code>fullfw</code> initialize, but no WPCM450
+dynamic-IRQ implementation delivers application commands into the
+handler path. The box does not claim authenticated application IPMI,
+Web, SSH, or Redfish readiness, and no fake IPMI responder was added.
+The HTML-authoritative box page links zipmi's existing compact iDRAC6
+table and states that a normalized command reference does not yet exist.
+The focused runtime contract, shell syntax, HTML/Markdown sync, address
+configuration, QEMU build validation/path/runtime tests,
+warm-capability, status-output, credential-display, and diff checks
+pass. The aggregate suite reaches the pre-existing
+documentation-contract failure for four missing Lenovo reference links;
+no iDRAC6 link is missing.</p>
 </div>
 </body>
 </html>
