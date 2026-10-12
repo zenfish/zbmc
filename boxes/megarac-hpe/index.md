@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=0338aefcad85aaa6ac2c54d223756daf7a722105a45d69873de17ed55a204a19 body-sha256=617a6e725eb42b3567f78cfcad4c8e4bdc57e8b5b427a235f1747c8ced8b08f5 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=0ec4402113caeee1ba31c91afb5f48411475b11aa9457f8f9bb72eb87051e34c body-sha256=4986ad277ef1d51568a005bf83362b227bfb37edf5ecc6fcd2de94b390414dd8 -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -31,8 +31,10 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 
 - [Virtual HPE XD670 BMC](README.md)
 - [IPMI stack teardown](IPMI.md)
-- zipmi operator views: [MegaRAC/YAFU command reference](https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-reference.html) · [compact command table](https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-table.html)
+- zipmi XD670 v1.27 operator views: [reviewed command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html) · [complete 143-row registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html)
 - [Historical emulation status](EMULATION-STATUS.md)
+
+**Exact OEM-IPMI synchronization:** firmware 1.27 has 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. The frozen catalog SHA-256 is `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc`. See [the target-specific dispatch and live evidence](IPMI.md).
 
 ## Extracting the filesystem
 

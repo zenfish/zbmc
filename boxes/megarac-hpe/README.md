@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=4f8501a27f5254386d73d83b4e1c6b34a2b463222f98ea2269f93cc5cd877f5a body-sha256=eb74f109c5e62bd350d9a6adbf5c1595d05818313fd63a1693a4d8acac455784 -->
+<!-- html2md:auto source=boxes/megarac-hpe/README.html source-sha256=dc3ff14d6e5277d51b8758acb54fbeeaa999d8f31fc3551eedeca7cfa0137b47 body-sha256=b1d49e1dd3f633d5783e4800d9309591b51cd13ca91f8c0d72fa0a754ccb585b -->
 
 zbmc box · verified 2026-09-08
 
@@ -35,6 +35,10 @@ Expected cold READY time is about seven minutes. Authenticated Managers alternat
 2.  Fixed partitions encoded in the DTB. The QEMU image uses explicit uboot, conf, bkupconf, extlog, www, and root ranges instead of vendor `ami,spx-fmh` discovery.
 3.  The accepted rootfs behavior restored. KCS1–3 remain enabled; the premature `rc-init-complete` marker, SIGSEGV preload tracer, and timing-gate heartbeat are absent. IPMIMain diagnostics remain visible.
 4.  Readiness made functional. IPMI, authenticated Redfish Managers, and the Web UI's own session/dashboard APIs are all required continuously for 60 seconds.
+
+## OEM IPMI command surface
+
+The exact v1.27 image contains 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi owns the frozen command catalog and fail-closed named execution; this box owns runtime and live-probe evidence. See the [XD670 dispatch reference](IPMI.md).
 
 ## Rebuild from the HPM
 

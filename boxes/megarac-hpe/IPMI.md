@@ -1,60 +1,75 @@
-<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=e45de85348942a554cc63310948d9a97838683dd101c613840d9a1c54fbab2c9 body-sha256=622b724b1d7f372b76d1122941aef7b93fff40b6d7ce87e329d34388d38f38eb -->
+<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=0d03b5bfc0305f5a78256859ac70418218f1b012719aacbb36bb543e02fa30ba body-sha256=b4145592ef4ef67f417e92be0ce5fc345421a0ba7265f0fb0c6a017cf4dbbdf5 -->
 
-# IPMI stack teardown — Cray XD670 (MegaRAC SP-X)
+zBMC runtime evidence · zipmi catalog synchronization
 
-What handles IPMI, the supported command set, and the OEM commands — enumerated live off the running box (IPMI firmware-firewall) and extracted from the handler `.so`s (ELF symbols). AMI MegaRAC SP-X 13.x LTS / AST2600.
+# HPE Cray XD670 v1.27 OEM IPMI dispatch
 
-## What handles IPMI
+Exact-image replacement for the historical symbol-only inventory. This page describes what the zBMC guest runs; zipmi owns the complete executable catalog and command reference.
 
-`IPMIMain` is the dispatcher. Requests arrive on per-channel **interface libs** — `libipmilan` (RMCP+/LAN), `libipmikcs` (KCS), `libipmibt` (BT), `libipmiserial`/`libipmisol`, `libipmissif`, `libipmiusb`, `libipmiipmb`, and `libipmilocal` (the UDS `/var/UDSocket1` path that Redfish/racadm use). IPMIMain routes each `(NetFn, Cmd)` via its tables (`CoreNetfntbl` → `ExtNetFnMap` → `AMIOEMTable`) to a handler. Standard commands live in `libipmi.so`; **~45 AMI OEM handler `.so`s** in `/usr/local/lib/ipmi/` are dlopen'd and register their OEM commands. Group-extension NetFns are served by `libipmidcmi` (DCMI), `libipmihpm` (HPM/PICMG), `libipminmsupport` (Intel Node Manager). Redfish auth reaches the same IPMI user table through `pam_ipmi.so`.
+**143**
 
-## Active NetFns (live-confirmed)
+firmware registration rows
 
-Enumerated on the running box with the IPMI firmware-firewall command `raw 0x06 0x0a 0x0e <netfn> 0x00`:
+**142**
 
-| NetFn | Group |
+unique NetFn/command addresses
+
+**141**
+
+effective commands
+
+## Pinned evidence
+
+|  |  |
 |----|----|
-| `0x00` | Chassis |
-| `0x02` | Bridge |
-| `0x04` | Sensor / Event |
-| `0x06` | App (device/BMC/session/firmware-firewall) |
-| `0x0A` | Storage (SDR / SEL / FRU) |
-| `0x0C` | Transport (LAN / SOL config) |
-| `0x30` | **OEM — AMI MegaRAC primary range** (where the OEM handlers below register) |
-| `0x3E` | **OEM — secondary AMI range** |
+| Signed HPM SHA-256 | `4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76` |
+| Pristine SquashFS SHA-256 | `dd1d664f34ec5a2883fdcb1a10616154b266982a0997e59b3ce385f5f511afe5` |
+| Frozen catalog SHA-256 | `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc` |
+| zipmi synchronization commit | `ef4dcbe44d9b981eaaaac46f1ff999db74f754c0` |
 
-**Not present on this SKU:** the OCP/WCS ranges `0x32/0x36/0x38` (the `g_coreWcsNetFn*` tables exist in the binary but aren't active here), the group-extension OEM/IANA NetFn `0x2E`, and Node-Manager (`libipminmsupport`, disabled with `NM_IPMB_BUS=0xFF` under emulation). The firmware-firewall returns near-full bitmasks for the OEM NetFns (it doesn't granularly firewall OEM), so exact per-command bytes come from the handler tables below, not the live mask.
+**Verified:** the 42 relevant ELFs are byte-identical between the pristine vendor root filesystem and the accepted zBMC input root filesystem. The runtime harness is modified; the analyzed userspace is not.
 
-## OEM commands — 210 handlers across 45 modules (NetFn 0x30/0x3E)
+## Dispatch closure
 
-Each `/usr/local/lib/ipmi/libipmiamioem<x>.so` exports its command handlers by name (extracted from `.dynsym`). The names are the OEM command semantics. Security-relevant groups highlighted.
+The dispatcher contains 39 built-in YAFU/file registrations and 104 extension registrations. Feature activation and duplicate precedence are separate filters:
 
-**pwdenc** — `AMISetPwdEncryptionKey` (sets the UserConfig password-encryption AES key)
+- `0x32`: 134 registrations and 133 effective addresses. All 95 canonical AMI plugin commands use this NetFn on XD670.
+- `0x30`: four active Node Manager/platform registrations.
+- `0x3e`: five HPM registrations, of which four are active. `IncreasePayloadSize` is inactive because `SUPPORT_HPM_IFC` is absent.
+- `0x32/0x2c`: built-in `AMIYAFUStateless` wins because the core table is searched before extensions. The later `AMIOemSetRedisDB` registration is shadowed and is not an effective command at that address.
 
-**backuprestore** — `AMIManageBMCConfig`, `AMIGet/SetBackupFlag` (export/import the whole BMC config)
+**Correction to the historical page:** exported handler symbols were not registrations. The old “210 handlers across 45 modules, primarily NetFn 0x30” description was not an opcode map and must not be used as one.
 
-**restiface** — `AMIRESTinterface`, `AMIGeneratePassword`, `GenerateRandomAlpNumPasswd`, `DeleteUserSession`, `StoreDataInRedisDB` (host-interface / REST bridge — the CVE-2024-54085 neighbourhood)
+## Security-relevant boundaries
 
-**fwupdateprctl / dualimg** — `AMIStartTFTPFwUpdate`, `AMIGetTftpProgressStatus`, `AMISet/GetFWProtocol/Cfg`, `AMIDualImageSupport` (firmware update + dual-image control)
+- `0x32/0x2a` reaches the Redis command bridge with callback privilege metadata. Static analysis shows a 250-byte local buffer and a request-length-derived copy without a local 250-byte bound. Exploitability remains **inferred** until the maximum deliverable callback length is proved.
+- `0x32/0x2c` does not reach the Redis setter on this image because the built-in YAFU command shadows it.
+- `0x32/0x5c` is the administrator REST bridge; `0x32/0x5d` mutates account/session state.
+- `0x32/0x43` controls remote-debug service/certificate state and is not a safe probe.
 
-**biosremotecontrol / bioscode** — `AMISendToBios`, `AMIGet/SetBiosResponse`, `AMIGetBiosCommand`, `AMIGetBiosCode` (BMC↔BIOS message channel)
+## Safe live validation
 
-**peci** — `AMIPECIWriteRead` (raw PECI passthrough to the host CPU)
+Run `20261012T203124Z-77b23da6-aa05-4c9d-850d-36ad62509d34` reached READY 4/4 before and after four no-mutation requests:
 
-**Remotedebug** — `control_remote_debug_server`, `upload_tls_cert`, `get_server_info` (remote debug server)
+- `0x32/0xa6` succeeded with `55 54 43` (“UTC”).
+- `0x32/0x44 0x00` succeeded with `01 01 04 07 00 00`.
+- `0x30/0xe0` returned completion code `0xc7`.
+- `0x32/0x9d` returned completion code `0xff`; this was an error, not one byte of successful response data.
 
-**acd** — `run_acd`, `control_acd`, `get/set_data_area` (Intel Autonomous Crashdump)
+The guest stayed on the same QEMU process through the probes and was stopped cleanly afterward.
 
-**sessionmgmt / extpriv / hostlock** — `AMIActiveSessionClose`, `AMIGetAllActiveSessions`, `AMIGet/SetExtendedPrivilege`, `AMISet/GetHostLockFeatureStatus`
+## Canonical command documentation
 
-**ctldbg / ubootmemtest** — `AMIControlDebugMsg`, `AMISetUBootMemtest` (low-level debug hooks)
+Use the firmware-bound zipmi pages, not the generic MegaRAC catalog:
 
-**media / remotekvm / ris / autovideorcd** — virtual media + KVM redirection (~24 handlers). **raidinfo** — 55 handlers (full RAID/SAS/enclosure management). **Config/services** — ldap, radius, snmp, ntp, timezone, firewall (IPMI firewall), serviceconf, prsvconf, singleport, ad, pamreorder, accessredis. **Protocol** — pldm/pldmcmds, extendedsel, sensorthresholdacrossresets, sd, pwrcons.
+- [XD670 reviewed command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html)
+- [XD670 complete registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html)
+- [Machine-readable zBMC/zipmi synchronization manifest](oem-ipmi-sync.json)
 
-Full 210-handler list: `oem-handlers.txt` (workdir). Every handler is `AMI*` — all stock AMI MegaRAC. Exact NetFn/Cmd bytes are in each `.so`'s registration table (reachable via `GetLibMetaInfo` / the `.data` handler-pointer table) — a mechanical per-`.so` parse if a specific opcode is needed.
+zipmi exposes only four reviewed read-only routes by name. Unreviewed, variable, inactive, and shadowed handlers fail closed rather than accepting guessed payloads.
 
-## HP / HPE / Cray in the IPMI stack?
+## Remaining evidence limits
 
-**None.** Every OEM handler is prefixed `AMI*`; the OEM tables are AMI (NetFn 0x30/0x3E) with dormant OCP/WCS support. No HPE/Cray IANA branch, no iLO handler. The IPMI Manufacturer ID reported by `mc info` is **15370 = GIGA-BYTE**. Consistent with the rest of the firmware: stock AMI MegaRAC on a Gigabyte board; HPE/Cray is packaging + a SKU tag, not BMC code.
+Exact interface-mask bit-to-transport labels are unresolved. Built-in YAFU per-handler runtime policy is not fully decompiled. Most BIOS, PECI, RAID, update, and service-control leaf schemas remain unreviewed. Those are bounded follow-up tasks; they do not reopen the top-level registration denominator.
 
-Enumerated 2026-07-28 via IPMI firmware-firewall (live) + pyelftools `.dynsym` extraction (static). Byte-level opcode dump per `.so` available on request.
+Updated 12 October 2026 from exact-image static analysis and safe zBMC validation.

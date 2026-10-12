@@ -26,6 +26,11 @@ sudo -E ./tools/zbmc megarac-hpe stop</code></pre>
 <li><span class="font-semibold text-white">The accepted rootfs behavior restored.</span> KCS1–3 remain enabled; the premature <code>rc-init-complete</code> marker, SIGSEGV preload tracer, and timing-gate heartbeat are absent. IPMIMain diagnostics remain visible.</li>
 <li><span class="font-semibold text-white">Readiness made functional.</span> IPMI, authenticated Redfish Managers, and the Web UI's own session/dashboard APIs are all required continuously for 60 seconds.</li>
 </ol></section>
+<section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">OEM IPMI command surface</h2>
+<p class="mt-3 text-slate-300">The exact v1.27 image contains 143 registrations, 142 unique
+NetFn/command addresses, and 141 effective commands. zipmi owns the frozen command catalog and
+fail-closed named execution; this box owns runtime and live-probe evidence. See the
+<a class="text-cyan-400 underline" href="IPMI.html">XD670 dispatch reference</a>.</p></section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">Rebuild from the HPM</h2>
 <pre class="mt-4 overflow-x-auto rounded-lg bg-black p-4 text-sm text-cyan-300"><code>boxes/megarac-hpe/build-from-hpm.sh work/megarac-hpe-build</code></pre>
 <p class="mt-3 text-sm text-slate-300">The builder verifies HPM SHA-256 <code class="break-all">4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76</code>, fixes the SquashFS creation time, and normalizes patched files to the firmware build epoch. Two independent builds compared byte-for-byte equal. The accepted bundle is published without replacing historical files under <code>megarac-hpe/cold-20260908/</code>.</p>

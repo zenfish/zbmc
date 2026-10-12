@@ -37,9 +37,15 @@ CPU lacks the VFP support that a hard-float binary would require. Uploads to <co
 <ul class="list-disc pl-6 space-y-1">
 <li><a class="text-blue-700 underline" href="README.html">Virtual HPE XD670 BMC</a></li>
 <li><a class="text-blue-700 underline" href="IPMI.html">IPMI stack teardown</a></li>
-<li>zipmi operator views: <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-reference.html">MegaRAC/YAFU command reference</a> · <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/megarac-command-table.html">compact command table</a></li>
+<li>zipmi XD670 v1.27 operator views: <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html">reviewed command reference</a> · <a class="text-blue-700 underline" href="https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html">complete 143-row registration table</a></li>
 <li><a class="text-blue-700 underline" href="EMULATION-STATUS.html">Historical emulation status</a></li>
 </ul>
+<div class="mt-4 rounded border border-emerald-300 bg-emerald-50 p-4 text-sm">
+<strong>Exact OEM-IPMI synchronization:</strong> firmware 1.27 has 143 registrations, 142 unique
+NetFn/command addresses, and 141 effective commands. The frozen catalog SHA-256 is
+<code>c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc</code>.
+See <a class="text-blue-700 underline" href="IPMI.html">the target-specific dispatch and live evidence</a>.
+</div>
 <h2 id="extracting-the-filesystem">Extracting the filesystem</h2>
 <p>Extract the packed root SquashFS and both 2 MiB JFFS2 configuration copies into <code>work/megarac-hpe/fs</code>:</p>
 <pre><code>mkdir -p work/megarac-hpe/fs/rootfs work/megarac-hpe/fs/conf1 work/megarac-hpe/fs/conf2

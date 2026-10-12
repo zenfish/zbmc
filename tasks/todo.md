@@ -131,6 +131,17 @@ the tested routes. Physical-device applicability and other firmware versions rem
 The order favors bounded firmware inventories first; it may change only when evidence shows a target
 depends on work owned by a later shared platform catalog.
 
+## Review — HPE Cray XD670 v1.27 OEM-IPMI synchronization
+
+The exact-image analysis closes 143 firmware registration rows into 142 unique NetFn/command
+addresses and 141 effective commands after duplicate precedence and feature activation. zBMC now
+pins zipmi commit `ef4dcbe44d9b981eaaaac46f1ff999db74f754c0` and frozen catalog SHA-256
+`c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc` in a machine-readable
+manifest. The synchronization test checks the zBMC pages against that manifest and, when given a
+zipmi checkout, proves the pinned commit ancestry, catalog bytes, row count, unique-address count,
+and effective-command count. Four safe live routes were attempted; two returned successful data and
+two returned target completion codes. No mutating route was sent.
+
 ## Fujitsu iRMC S6 02.63S OEM IPMI completion plan
 
 - [x] Pin the exact RX2540 M7 firmware, dispatch libraries, table artifact, and runtime image.

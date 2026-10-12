@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "target": "hpe-xd670",
+  "firmwareVersion": "1.27",
+  "firmwareSha256": "4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76",
+  "pristineRootfsSha256": "dd1d664f34ec5a2883fdcb1a10616154b266982a0997e59b3ce385f5f511afe5",
+  "zipmiCommit": "ef4dcbe44d9b981eaaaac46f1ff999db74f754c0",
+  "catalogPath": "zipmi/data/sources/hpe-xd670-oem-registrations.csv",
+  "catalogSha256": "c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc",
+  "registrationCount": 143,
+  "uniqueAddressCount": 142,
+  "effectiveCommandCount": 141,
+  "shadowedAddress": "0x32/0x2c",
+  "winningHandler": "AMIYAFUStateless",
+  "shadowedHandler": "AMIOemSetRedisDB",
+  "disabledFeature": "SUPPORT_HPM_IFC",
+  "reviewedRunnableRoutes": 4,
+  "liveRun": "20261012T203124Z-77b23da6-aa05-4c9d-850d-36ad62509d34"
+}
