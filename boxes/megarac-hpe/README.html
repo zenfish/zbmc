@@ -28,9 +28,10 @@ sudo -E ./tools/zbmc megarac-hpe stop</code></pre>
 </ol></section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">OEM IPMI command surface</h2>
 <p class="mt-3 text-slate-300">The exact v1.27 image contains 143 registrations, 142 unique
-NetFn/command addresses, and 141 effective commands. zipmi owns 141 shared implementation contracts,
-141 XD670 target overlays, and 791 expanded operation rows; only four reviewed read-only routes are
-runnable by name. The remaining semantics stay partial or unknown and fail closed. This box owns runtime
+NetFn/command addresses, and 141 effective commands. zipmi owns 141 exact implementation contracts and
+141 XD670 target overlays. It closes 55 core request paths and proves 25 normalized YAFU wire layouts;
+30 selector analyses remain nine known, three conditional, and 18 unresolved. No global semantic-operation
+count is claimed, and only four reviewed read-only routes are runnable by name. This box owns runtime
 and live-probe evidence. See the
 <a class="text-cyan-400 underline" href="IPMI.html">XD670 dispatch reference</a>.</p></section>
 <section class="rounded-xl bg-slate-900 p-6"><h2 class="text-xl font-semibold text-white">Rebuild from the HPM</h2>

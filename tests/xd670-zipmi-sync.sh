@@ -23,10 +23,17 @@ expected = {
     "uniqueAddressCount": 142,
     "effectiveCommandCount": 141,
     "operationContractsPath": "zipmi/data/sources/hpe-xd670-operation-contracts.json",
-    "operationContractsSha256": "cbb6574c4008787e158ecceec052f9506dd1eeba44307110cd7a99515062b516",
-    "sharedImplementationContractCount": 141,
+    "operationContractsSha256": "70571d8cf5c249ad9ac2a1c2788efc8c07817dfa4a70a04160d9fea0d7cbd15e",
+    "selectorAcceptanceSha256": "62f98e37961e560581322a32ec53269bc5c8d63bce4c61e7bf0dd5be7c3b3859",
+    "implementationContractCount": 141,
     "targetOverlayCount": 141,
-    "expandedOperationCount": 791,
+    "closedCoreRequestPathCount": 55,
+    "provenNormalizedWireContractCount": 25,
+    "selectorAnalysisCount": 30,
+    "selectorDomainsKnown": 9,
+    "selectorDomainsConditional": 3,
+    "selectorDomainsUnresolved": 18,
+    "globalSemanticOperationCount": None,
     "reviewedRunnableRoutes": 4,
     "shadowedAddress": "0x32/0x2c",
     "winningHandler": "AMIYAFUStateless",
@@ -45,8 +52,9 @@ combined = "\n".join(path.read_text() for path in documents)
 for value in (
     manifest["firmwareSha256"], manifest["pristineRootfsSha256"],
     manifest["catalogSha256"], "143 registrations", "142 unique",
-    "141 effective", "141 shared implementation contracts", "141 target overlays",
-    "791 expanded operation", "only four reviewed read-only routes",
+    "141 effective", "141 exact implementation contracts", "141 target overlays",
+    "55 core request paths", "25 normalized YAFU", "nine known, three conditional, and 18 unresolved",
+    "no global semantic-operation count", "only four reviewed read-only routes",
     "hpe-xd670-operation-contracts.json",
     manifest["shadowedAddress"], manifest["winningHandler"],
     manifest["shadowedHandler"], manifest["disabledFeature"],
@@ -71,11 +79,26 @@ if zipmi_arg:
     operations_path = zipmi / manifest["operationContractsPath"]
     assert hashlib.sha256(operations_path.read_bytes()).hexdigest() == manifest["operationContractsSha256"]
     operations = json.loads(operations_path.read_text())
+    assert operations["schema"] == "zipmi.hpe-xd670.contract-evidence.v2"
     counts = operations["counts"]
-    assert counts["shared_handler_contracts"] == manifest["sharedImplementationContractCount"]
+    assert counts["implementation_contracts"] == manifest["implementationContractCount"]
     assert counts["effective_target_command_overlays"] == manifest["targetOverlayCount"]
-    assert counts["expanded_operations"] == manifest["expandedOperationCount"]
+    assert counts["closed_core_request_paths"] == manifest["closedCoreRequestPathCount"]
+    assert counts["proven_normalized_wire_contracts"] == manifest["provenNormalizedWireContractCount"]
+    assert counts["selector_analyses"] == manifest["selectorAnalysisCount"]
+    assert counts["selector_domains_known"] == manifest["selectorDomainsKnown"]
+    assert counts["selector_domains_conditional"] == manifest["selectorDomainsConditional"]
+    assert counts["selector_domains_unresolved"] == manifest["selectorDomainsUnresolved"]
     assert counts["reviewed_live_contracts"] == manifest["reviewedRunnableRoutes"]
+    assert operations["denominator_policy"]["global_semantic_operation_count"] == manifest["globalSemanticOperationCount"]
+    assert "operations" not in operations
+    acceptance = operations["inputs"]["xd670-selector-acceptance.json"]
+    assert acceptance["sha256"] == manifest["selectorAcceptanceSha256"]
+    assert len(operations["implementation_contracts"]) == manifest["implementationContractCount"]
+    assert len(operations["target_command_overlays"]) == manifest["targetOverlayCount"]
+    assert len(operations["closed_core_request_paths"]) == manifest["closedCoreRequestPathCount"]
+    assert len(operations["normalized_wire_contracts"]) == manifest["provenNormalizedWireContractCount"]
+    assert len(operations["selector_analyses"]) == manifest["selectorAnalysisCount"]
 
 print("XD670 zBMC/zipmi synchronization: PASS")
 PY

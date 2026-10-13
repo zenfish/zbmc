@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=64e7ee99007bda2ea21509e9a1eedbbecc503f95fc8284dcfe7ef584db386947 body-sha256=9c7bfdebacb82d061387505cfa5e0d70eff7643f78671ed58b71d2277c9adec9 -->
+<!-- html2md:auto source=boxes/megarac-hpe/index.html source-sha256=13959847f5275a5ff0404731c5e16f88808e789bf342757507a872e63fc48585 body-sha256=a76c594069ed3dcb0964f002d4cac9036cbc0edc963f1d927965f4a79c03e688 -->
 
 # zbmc HPE XD670 MegaRAC
 
@@ -31,10 +31,10 @@ After matching checksums, use `chmod 755 /tmp/my-tool` and execute it through th
 
 - [Virtual HPE XD670 BMC](README.md)
 - [IPMI stack teardown](IPMI.md)
-- zipmi XD670 v1.27 operator views: [791-operation command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html) · [complete 143-row registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html) · [canonical operation artifact](https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json)
+- zipmi XD670 v1.27 operator views: [command and path-evidence reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html) · [complete 143-row registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html) · [canonical contract-evidence artifact](https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json)
 - [Historical emulation status](EMULATION-STATUS.md)
 
-**Exact OEM-IPMI synchronization:** firmware 1.27 has 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi maps them through 141 shared implementation contracts and 141 target overlays into 791 expanded operation rows; only four reviewed read-only routes are runnable. The frozen catalog SHA-256 is `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc`. See [the target-specific dispatch and live evidence](IPMI.md).
+**Exact OEM-IPMI synchronization:** firmware 1.27 has 143 registrations, 142 unique NetFn/command addresses, and 141 effective commands. zipmi maps them through 141 exact implementation contracts and 141 target overlays, with 55 closed core request paths, 25 proven normalized YAFU layouts, and 30 selector analyses: nine known, three conditional, and 18 unresolved. There is no global semantic-operation count, and only four reviewed read-only routes are runnable. The frozen catalog SHA-256 is `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc`. See [the target-specific dispatch and live evidence](IPMI.md).
 
 ## Extracting the filesystem
 

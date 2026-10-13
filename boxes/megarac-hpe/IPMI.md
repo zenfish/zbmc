@@ -1,10 +1,10 @@
-<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=d7868e0e3798d41eb22aaac180956fa8f2fe97ed58fbace8e1feacb683a523cc body-sha256=cb34d25f980a626623c2f0318f38de2496c02a85d81519d5703602292d6c3c80 -->
+<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=2f910f06a1719c471c8361587d1e5ac9163fbfe98c8e6e549f6b383ca03eaafc body-sha256=f892bce6e255a7a15c8ef824101eb8edf9d64e45cea04314af7b5fabca31d428 -->
 
 zBMC runtime evidence · zipmi catalog synchronization
 
 # HPE Cray XD670 v1.27 OEM IPMI dispatch
 
-Exact-image replacement for the historical symbol-only inventory. The linked canonical ledger closes the registration and expanded-operation denominators; it does not claim that every operation is semantically complete or executable through zipmi.
+Exact-image replacement for the historical symbol-only inventory. The linked canonical ledger closes all 141 effective address overlays and separates proven request paths from unresolved selector topology; it intentionally defines no global semantic-operation count.
 
 **143**
 
@@ -18,10 +18,6 @@ unique NetFn/command addresses
 
 effective commands
 
-**791**
-
-expanded operation rows
-
 ## Pinned evidence
 
 |  |  |
@@ -29,8 +25,9 @@ expanded operation rows
 | Signed HPM SHA-256 | `4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76` |
 | Pristine SquashFS SHA-256 | `dd1d664f34ec5a2883fdcb1a10616154b266982a0997e59b3ce385f5f511afe5` |
 | Frozen catalog SHA-256 | `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc` |
-| Operation-contract artifact SHA-256 | `cbb6574c4008787e158ecceec052f9506dd1eeba44307110cd7a99515062b516` |
-| zipmi synchronization commit | `b6940ef5527c98513a5e3349c9e108917305491f` |
+| Contract-evidence v2 SHA-256 | `70571d8cf5c249ad9ac2a1c2788efc8c07817dfa4a70a04160d9fea0d7cbd15e` |
+| Selector-acceptance evidence SHA-256 | `62f98e37961e560581322a32ec53269bc5c8d63bce4c61e7bf0dd5be7c3b3859` |
+| zipmi synchronization commit | `53778d3497a5dde090244d4cff5f5c12e2a21ecb` |
 
 **Verified:** the 42 relevant ELFs are byte-identical between the pristine vendor root filesystem and the accepted zBMC input root filesystem. The runtime harness is modified; the analyzed userspace is not.
 
@@ -63,19 +60,19 @@ Run `20261012T203124Z-77b23da6-aa05-4c9d-850d-36ad62509d34` reached READY 4/4 be
 
 The guest stayed on the same QEMU process through the probes and was stopped cleanly afterward.
 
-## Canonical operation ledger and partial semantics
+## Canonical contract evidence and partial semantics
 
 Use the firmware-bound zipmi pages, not the generic MegaRAC catalog:
 
-- [XD670 791-operation command reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html)
+- [XD670 command and path-evidence reference](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-reference.html)
 - [XD670 complete registration table](https://github.com/zenfish/zipmi/blob/main/docs/hpe-xd670-command-table.html)
 - [Canonical machine-readable operation contracts](https://github.com/zenfish/zipmi/blob/main/zipmi/data/sources/hpe-xd670-operation-contracts.json)
 - [Machine-readable zBMC/zipmi synchronization manifest](oem-ipmi-sync.json)
 
-**Operation inventory complete; semantic decode incomplete:** zipmi now holds 141 shared implementation contracts, 141 XD670 target overlays, and 791 expanded operation rows. Only four reviewed read-only routes are runnable by name; the other 787 operations have no distinct route and fail closed rather than accepting guessed payloads.
+**Address contracts complete; semantic denominator open:** zipmi holds 141 exact implementation contracts and 141 XD670 target overlays. Exact analysis closes 55 core request paths and proves 25 normalized YAFU wire layouts. Thirty selector analyses divide into nine known, three conditional, and 18 unresolved domains. Only four reviewed read-only routes are runnable by name.
 
 ## Remaining evidence limits
 
-The ledger accounts for every effective command and recovered selector, but it is not a fully decoded protocol specification. Only 11 request layouts are complete; 780 are partial. Response layouts are 754 partial and 37 unknown. Exact interface-mask bit-to-transport labels, indirect authorization checks, and many BIOS, PECI, RAID, update, and service-control field meanings remain unresolved. These unknowns are preserved in the canonical contracts instead of being filled from another MegaRAC target.
+The artifact accounts for every effective address, but it is not a fully decoded protocol specification and has no global semantic-operation count. Switch cases are control-flow evidence, not automatically distinct wire operations; repeated, nested, runtime-conditional, and unresolved paths are retained without summing them. Exact interface-mask labels, indirect authorization checks, and many BIOS, PECI, RAID, update, and service-control field meanings remain unresolved.
 
 Updated 12 October 2026 from exact-image static analysis and safe zBMC validation.
