@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=2f910f06a1719c471c8361587d1e5ac9163fbfe98c8e6e549f6b383ca03eaafc body-sha256=f892bce6e255a7a15c8ef824101eb8edf9d64e45cea04314af7b5fabca31d428 -->
+<!-- html2md:auto source=boxes/megarac-hpe/IPMI.html source-sha256=d07287c83e61bab5fad1876e0f616f304e84e7eb962550461edebd32ad120e30 body-sha256=90b977d2556da6616d7b40d07fa69dcfbe5c26c9a26e7254f7cee503c1b40749 -->
 
 zBMC runtime evidence · zipmi catalog synchronization
 
@@ -25,9 +25,9 @@ effective commands
 | Signed HPM SHA-256 | `4e85590c2d5f18caf670b916522555347173ac277b098713c889303a7630cb76` |
 | Pristine SquashFS SHA-256 | `dd1d664f34ec5a2883fdcb1a10616154b266982a0997e59b3ce385f5f511afe5` |
 | Frozen catalog SHA-256 | `c2ed76b6595617ef64370de3295ba055b88d280fa9e8ac416b40f65f10c737cc` |
-| Contract-evidence v2 SHA-256 | `70571d8cf5c249ad9ac2a1c2788efc8c07817dfa4a70a04160d9fea0d7cbd15e` |
+| Contract-evidence v2 SHA-256 | `b0993ab8149b7efe5c91bc44b5080121c6755f08a8fda5f4320013c6aa2a4384` |
 | Selector-acceptance evidence SHA-256 | `62f98e37961e560581322a32ec53269bc5c8d63bce4c61e7bf0dd5be7c3b3859` |
-| zipmi synchronization commit | `53778d3497a5dde090244d4cff5f5c12e2a21ecb` |
+| zipmi synchronization commit | `3489108031fde2779d48a588300f8bc40d1180e1` |
 
 **Verified:** the 42 relevant ELFs are byte-identical between the pristine vendor root filesystem and the accepted zBMC input root filesystem. The runtime harness is modified; the analyzed userspace is not.
 

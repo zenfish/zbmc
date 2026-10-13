@@ -23,7 +23,7 @@ expected = {
     "uniqueAddressCount": 142,
     "effectiveCommandCount": 141,
     "operationContractsPath": "zipmi/data/sources/hpe-xd670-operation-contracts.json",
-    "operationContractsSha256": "70571d8cf5c249ad9ac2a1c2788efc8c07817dfa4a70a04160d9fea0d7cbd15e",
+    "operationContractsSha256": "b0993ab8149b7efe5c91bc44b5080121c6755f08a8fda5f4320013c6aa2a4384",
     "selectorAcceptanceSha256": "62f98e37961e560581322a32ec53269bc5c8d63bce4c61e7bf0dd5be7c3b3859",
     "implementationContractCount": 141,
     "targetOverlayCount": 141,
