@@ -1,4 +1,4 @@
-<!-- html2md:auto source=README.html source-sha256=5cda11ec71b4a0f9d18dc715195527d79bf86caa68c02cc7e93fc76b8beb9a2f body-sha256=7ef81ea19efcbcb5a6f13b8b0fcd16a2714416adff1c21a04c6a811f825db23e -->
+<!-- html2md:auto source=README.html source-sha256=a5695ad29017f08c6321f02b94e2de1665afd4d3b4ddda572d572367f05706b1 body-sha256=2695ab97d0f939b57282067f47f2b7ea30c36f1f624b17cdace16155d6733c64 -->
 
 # zbmc — a zoo of virtual BMCs under QEMU
 

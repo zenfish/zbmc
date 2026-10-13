@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=2ec9ef97f8956256ff1028f8c3bdb6961822ceb70984e539751bc580b534b9cc body-sha256=ebfcfdbccb09c96fea202af40cd9b774f617da9125c6d022cd2fb71eeaea066e -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/index.html source-sha256=46cc4ff175a8a80db04b8b22349ec3eab6099e5778d5f25808352093abce9f56 body-sha256=15c4f7905845bbbe449c38096ccdf783638a6421ee87592abe284a5ca5802e5f -->
 
 # Fujitsu iRMC S6
 
@@ -34,9 +34,9 @@ The cold-run timing, UDP/623 owner, RMCP+ dispatch path, named IPC queues, and p
 
 The [OEM IPMI and power-control map](oem-power-map.md) inventories all recovered Fujitsu dispatch tables and traces chassis power, reset, NMI, KCS, DCMI, watchdog, power-limit, Node Manager, PMBus, fan, and raw PECI paths to their current hardware or software boundary.
 
-The [firmware-bound OEM command reference](irmc-s6-oem-reference.md) reconciles 148 active registrations into 138 LUN-aware identities / 135 NetFn-command pairs and 355 operation rows. **The registration inventory is closed; the deep dive remains open.** F1/F5, delegated backend, nested-selector, effect, and rack-activation contracts remain partial or unknown.
+The [firmware-bound OEM command reference](irmc-s6-oem-reference.md) reconciles 148 active registrations into 138 LUN-aware identities / 135 NetFn-command pairs and 355 operator-facing rows. **The registration inventory is closed; the deep dive remains open.** The separate reachable-path ledger expands nested selectors and parameter routes into 688 exact paths: 535 Decoded, 153 Unknown, 329 partial, and 165 configuration-provider boundaries.
 
-zipmi publishes the operator-facing [command reference](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-table.html).
+zipmi publishes the operator-facing [command reference](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-reference.html), [reachable-path deep dive](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-deep-dive.html), and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/fujitsu-irmc-s6-command-table.html). Only dual-image selectors `0x04` and `0x07` share field-proved fragments with XD670; the provider binaries and target overlays remain distinct.
 
 ## Redfish internals
 

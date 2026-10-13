@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- zmd2html:auto source-sha256=920b40153e3159dac93b7028f201328344719790d3b66428f3fb1b1d0c3494f8 body-sha256=5ce2222b420d9ed89408470118add2e0c7f33cdc3eab0026c51ac12fa5624a8a -->
+<!-- zmd2html:auto source-sha256=9269a25a5f7cbd8ae5516069645a75e37a8d11126f33044b36c79735584264b1 body-sha256=7a36cc5a4319735176cdd4f59d6eac5f0009aed96ed926661b4e9dcc83454dfb -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</title>
@@ -44,7 +44,7 @@
     <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">Goal: complete OEM IPMI documentation and zipmi coverage for the zoo</h1>
   </div>
 </div>
-
+<!-- z-artifact: 8b39f3ec-e8e9-4b06-9a75-e643f98c095f -->
 <p>Work one firmware target at a time. A target is complete only when
 its command and selector denominator, wire contracts,
 authorization/channel behavior, side effects, activation evidence, zipmi
@@ -236,17 +236,18 @@ evidence, zipmi behavior, and explicit unknowns.</p>
 commands, but only four reviewed operation contracts. Finish the other
 137; reuse shared AMI/YAFU semantics only where exact target evidence
 proves equivalence.</li>
-<li><strong>Dell iDRAC9 — open:</strong> 276 operation contracts do not
-close the 293-registration / 271-identity dispatcher, and no route has a
-proved exact payload codec or length bound.</li>
-<li><strong>Fujitsu iRMC — open:</strong> the registration and outer
-selector inventory is closed, but partial leaf, delegated backend,
-nested selector, effect, and rack-activation contracts remain.</li>
-<li><strong>Dell iDRAC6 — open:</strong> the compact inventory is not a
-normalized exact-image operation reference.</li>
-<li><strong>Supermicro X11 — open shared-family target:</strong> the
-legacy family catalog is X11-derived, but no pinned X11 image has a
-closed target-specific denominator and contract ledger.</li>
+<li><strong>Dell iDRAC9 — open:</strong> 193 OEM registrations / 192
+addresses are reconciled; 20 of the original 143 detailed-contract gaps
+are closed and 123 remain. Extended Configuration is partial.</li>
+<li><strong>Fujitsu iRMC — open:</strong> 688 exact request paths are
+enumerated; 329 remain partial, including 165 configuration-provider
+boundaries.</li>
+<li><strong>Dell iDRAC6 — open:</strong> the 213-registration /
+189-effective-route denominator is closed, but only 32 routes are
+expanded into 160 paths and 157 routes remain.</li>
+<li><strong>Supermicro X11 — open:</strong> 91 routes / 89 handlers /
+234 top-level paths are closed; the high-risk pass closes 104 paths at
+handlers and 11 at consumers, with five partial.</li>
 </ol>
 <p>Advantech ASMB-787, iDRAC10, Lenovo XCC, IEIT NF5468M6, NVIDIA GB200,
 vanilla OpenBMC, Supermicro X10, and Supermicro X14 have operation-level
@@ -1640,6 +1641,22 @@ warm-capability, status-output, credential-display, and diff checks
 pass. The aggregate suite reaches the pre-existing
 documentation-contract failure for four missing Lenovo reference links;
 no iDRAC6 link is missing.</p>
+<h2 id="review--cross-bmc-deep-dive-publication-2026-10-12">Review —
+cross-BMC deep-dive publication (2026-10-12)</h2>
+<p>Canonical zipmi commit <code>bb1e87b</code> publishes the exact-image
+Fujitsu, iDRAC6, iDRAC9, and Supermicro X11 ledgers and browseable
+reports. zBMC's HTML-authoritative target pages and coverage audit now
+link those reports and preserve the same denominators and open
+boundaries. No target is promoted to deep-dive complete: Fujitsu retains
+329 partial paths, iDRAC6 retains 157 unexpanded routes, iDRAC9 retains
+123 uncovered OEM addresses, and X11 retains five partial high-risk
+paths.</p>
+<p>Cross-target reuse remains deliberately narrow. Only Fujitsu/XD670
+dual-image selectors <code>0x04</code> and <code>0x07</code> are
+field-proved shared fragments; provider binaries, authorization,
+routing, activation, effects, persistence, and completion overlays
+remain target-specific. No live system was contacted by this
+documentation publication.</p>
 </div>
 </body>
 </html>

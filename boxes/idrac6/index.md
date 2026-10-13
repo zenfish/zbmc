@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac6/index.html source-sha256=1b12abd8a8c1004f276ac76f267c07887ecedd3eacca02ed0eceb3f151e7f2e1 body-sha256=b924045591941b6ab93fb41749df4676a62ebdcc35c07b42f60fcf5536b34c86 -->
+<!-- html2md:auto source=boxes/idrac6/index.html source-sha256=1a5b4d0ca03d9f85c9c4daa4a544424baba3ab80b9c177197774c165b58c0e9d body-sha256=2e1ac13f37cbc162185a61e330206469165256280a7ddeb7eb1fdf4e6237a14c -->
 
 # Dell iDRAC6 1.70
 
@@ -33,6 +33,6 @@ Dell's `fullfw` requires two ioctl calls from `aess_dynairqdrv.ko` during startu
 
 ## Command documentation
 
-The compact operator inventory is in zipmi's [iDRAC6 command table](../../../zipmi/docs/idrac6-command-table.md). A normalized command-reference page has not yet been produced; zBMC does not claim otherwise.
+zipmi publishes the exact-image [iDRAC6 denominator and gap ledger](https://github.com/zenfish/zipmi/blob/main/docs/idrac6-command-reference.html) alongside the older [compact command table](https://github.com/zenfish/zipmi/blob/main/docs/idrac6-command-table.md). The ledger reconciles 213 registrations into 192 descriptor addresses, 189 effective routes, and 188 unique handler implementations.
 
-**OEM deep dive open:** the compact inventory does not close the exact 1.70 selector denominator or provide per-operation wire, authorization/channel, effect, activation, evidence, and executable-support contracts.
+**OEM deep dive open:** 32 routes currently expand to 160 reachable paths; 157 effective routes still require semantic expansion. Shared credential, channel-access, and watchdog providers retain distinct per-route wire, privilege, firewall, effect, and completion overlays.

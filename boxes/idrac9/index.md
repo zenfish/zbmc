@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=047ee0791ba3a33151760f13a2227084510d45b1d51888162a47cc1d086c20e4 body-sha256=75f7cd5b34670769e23645768401ecb557849d95c2a4bacc096138f31a2df412 -->
+<!-- html2md:auto source=boxes/idrac9/index.html source-sha256=46bca7aca02072fc978b78750a39d79d377faf94790f892d762c42116d991e8b body-sha256=e6b9730c2fabb54bad5630ad323371eee44b2cfb34bc0a1a1bc0dad3dd0c9aa1 -->
 
 **Historical investigation record.** The phase roadmap below predates zbmc 0.1.1. Current iDRAC9 cold-boots to accepted ICMP, SSH, IPMI, and vendor Web-UI in 10m31s on the reference host; Redfish remains unavailable. Use the repository README and `./tools/zbmc idrac9 status -v`.
 
@@ -6,9 +6,9 @@
 
 *Goal: a working, explorable iDRAC9 in software — boot Dell's own kernel + rootfs on QEMU's Nuvoton `npcm750-evb` machine, climb from a shell up toward a live appliance (racadm / RAKP / web). SoC: Nuvoton **NPCM750** (Poleg, ARMv7 dual Cortex-A9). Firmware: `firmimgFIT.d9` 7.20.30.50, kernel `Linux 5.4.80.idrac`.*
 
-zipmi publishes the operator-facing [iDRAC9 command reference](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-reference.html) and [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-table.html). The former documents recovered operation behavior; the latter retains the complete firmware registration denominator.
+zipmi publishes the operator-facing [iDRAC9 command reference](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-reference.html), [compact firmware table](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-command-table.html), and exact-image [deep-dive gap ledger](https://github.com/zenfish/zipmi/blob/main/docs/idrac9-deep-dive.html). These are different views: 293 all-table registrations / 271 addresses versus 193 OEM-NetFn registrations / 192 OEM addresses.
 
-**OEM deep dive open:** the 276 operation contracts cover only 58 multiplexed addresses and do not reconcile the complete 293-registration / 271-identity dispatcher. Forty-three request and response layouts remain unknown, and no operation has a proved exact payload codec or length bound.
+**OEM deep dive open:** 20 of the original 143 uncovered OEM addresses now have detailed static contracts and 123 remain. Extended Configuration `0x2e/{01,02,03}` has decoded transport framing and license gates but all three addresses remain partial; the KCS stale-tail read is statically decoded with runtime authorization impact still Unknown.
 
 **Status — SSH ROOT LOGIN WORKS (2026-06-22).** Three boot modes, all working: `./run.sh` = Phase-1 shell + chroot; `./run-p2.sh` = Phase-2 full systemd boot of the real daemon stack; `./run-p3.sh` + `./ssh-in.sh` = Phase-3 minimal bring-up you can **SSH into as root** (uid=0, real `racadm` binary); `./run-p4.sh` = Phase-4, the daemon mesh up under systemd with **LIVE racadm** (full command pipeline: object-model + instrumentation + auth — §7). The kernel/driver walls (a dm_bufio panic, a phylink NIC crash) were cracked with gdb on the live gdbstub. Remaining: attribute *values* (cfgdb seed) and RAKP/`fullfw` (needs an NPCM hardware shim).
 

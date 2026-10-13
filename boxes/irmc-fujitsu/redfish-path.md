@@ -1,4 +1,4 @@
-<!-- html2md:auto source=boxes/irmc-fujitsu/redfish-path.html source-sha256=39321b13cf3537b84e21b4f508e200506efda2b0ed9970b13ba0ba6402d46dba body-sha256=5a03a08e59442dc6c3ce6e18e8370a2e1d64954e4361ac581c3eceb8c897a736 -->
+<!-- html2md:auto source=boxes/irmc-fujitsu/redfish-path.html source-sha256=d91546848cdee8a02e20fe8e45b7366c894af76f375aed59c2bd466acb181a86 body-sha256=ad78f22925fd60b3432f90470eafc281e5dbec05e5c77d7a67e662470090d9c9 -->
 
 zBMC · Fujitsu iRMC S6
 
@@ -157,7 +157,7 @@ Entry 161 is the Memory collection, 162 the DIMM instance, 163 the DIMM Metrics 
 | Memory data | Immediate source | Producer / deeper source |
 |----|----|----|
 | Maximum slot index and module-present/status | Local IPMI request on `/var/UDSocket1` in the captured run | `IPMIMain`; final real-hardware inventory input is below that handler and remains to be proved. |
-| DIMM designation and CSS-component flag | Entry-162 `onInit` function calls; OEM local IPMI `0x2e/0xf5` selectors `0x42` and apparently `0x44` | `IPMIMain`; the display name itself is synthesized as `DIMM <index>`. |
+| DIMM designation and CSS-component flag | Entry-162 `onInit` function calls; OEM local IPMI `0x2e/0xf5` selector `0x42`. The earlier inferred `0x44` is rejected by the exact 02.63S F5 jump table (default C1 target). | `IPMIMain`; the display name itself is synthesized as `DIMM <index>`. |
 | SPD and location data | `/var/tmp/redis.sock`, keys such as `DIMM_%d_SpdData` and `DIMM_%d_LocationData` | `FTS_DimmCacheRefresh` populates Redis using local IPMI, persistent SCCI messages, SPD decoding, and BIOS-supplied data. Its Redis read uses a 1.5-second timeout with one attempt and no retry. Although the seven metrics mappings are declared `onDemand`, the runtime builder did resolve them while materializing the initial instances. |
 | AEP/persistent-memory fields | Redis keys `DIMM_%d_AEP_*` | `FTS_DimmCacheRefresh` and `libfts_DimmCache.so.1.0.5`; absent peers/data can leave empty or error results in QEMU. |
 | Resource JSON shape | `MemoryCollection_def.json`, `Memory_def.json`, `MemoryMetrics_def.json` | Static vendor files; the DataModel combines them with the enumeration and property results. |

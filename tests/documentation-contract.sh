@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# z-artifact: b64fbca9-07eb-4bbc-a9ee-761568cb8686
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -74,11 +75,14 @@ grep -Fq 'Docker packages exact QEMU builds' "$repo/SECURITY.md"
 # OEM status must distinguish a closed inventory from operation-level completion.
 grep -Fq 'Inventory complete' "$repo/docs/oem-ipmi-coverage-audit.md"
 grep -Fq 'Registration inventory complete; deep dive open' "$repo/docs/oem-ipmi-coverage-audit.md"
-grep -Fq 'Supermicro X11 remains open' "$repo/docs/oem-ipmi-coverage-audit.md"
-grep -Fq 'Deep dive reopened' "$repo/boxes/megarac-hpe/IPMI.md"
+grep -Fq 'Supermicro X11 remains open after its top-level denominator closed' "$repo/docs/oem-ipmi-coverage-audit.md"
+grep -Fq 'no global semantic-operation count' "$repo/boxes/megarac-hpe/IPMI.md"
 grep -Fq 'OEM deep dive open' "$repo/boxes/idrac9/index.md"
 grep -Fq 'OEM deep dive open' "$repo/boxes/idrac6/index.md"
 grep -Fq 'The registration inventory is closed; the deep dive remains open.' "$repo/boxes/irmc-fujitsu/index.md"
+grep -Fq '123 remain' "$repo/boxes/idrac9/index.md"
+grep -Fq '157 effective routes' "$repo/boxes/idrac6/index.md"
+grep -Fq '688 exact paths' "$repo/boxes/irmc-fujitsu/index.md"
 grep -Fq 'ieit-nf5468m6-command-reference.html' "$repo/boxes/ieit/index.md"
 grep -Fq 'nvidia-gb200-command-reference.html' "$repo/boxes/nvidia-obmc/index.md"
 grep -Fq 'openbmc-vanilla-command-reference.html' "$repo/boxes/openbmc/index.md"

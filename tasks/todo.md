@@ -1,3 +1,4 @@
+<!-- z-artifact: 8b39f3ec-e8e9-4b06-9a75-e643f98c095f -->
 # Goal: complete OEM IPMI documentation and zipmi coverage for the zoo
 
 Work one firmware target at a time. A target is complete only when its command and selector
@@ -126,13 +127,14 @@ evidence, zipmi behavior, and explicit unknowns.
 1. **HPE MegaRAC / XD670 — reopened:** 141 effective commands, but only four reviewed operation
    contracts. Finish the other 137; reuse shared AMI/YAFU semantics only where exact target evidence
    proves equivalence.
-2. **Dell iDRAC9 — open:** 276 operation contracts do not close the 293-registration / 271-identity
-   dispatcher, and no route has a proved exact payload codec or length bound.
-3. **Fujitsu iRMC — open:** the registration and outer selector inventory is closed, but partial leaf,
-   delegated backend, nested selector, effect, and rack-activation contracts remain.
-4. **Dell iDRAC6 — open:** the compact inventory is not a normalized exact-image operation reference.
-5. **Supermicro X11 — open shared-family target:** the legacy family catalog is X11-derived, but no
-   pinned X11 image has a closed target-specific denominator and contract ledger.
+2. **Dell iDRAC9 — open:** 193 OEM registrations / 192 addresses are reconciled; 20 of the original
+   143 detailed-contract gaps are closed and 123 remain. Extended Configuration is partial.
+3. **Fujitsu iRMC — open:** 688 exact request paths are enumerated; 329 remain partial, including
+   165 configuration-provider boundaries.
+4. **Dell iDRAC6 — open:** the 213-registration / 189-effective-route denominator is closed, but only
+   32 routes are expanded into 160 paths and 157 routes remain.
+5. **Supermicro X11 — open:** 91 routes / 89 handlers / 234 top-level paths are closed; the high-risk
+   pass closes 104 paths at handlers and 11 at consumers, with five partial.
 
 Advantech ASMB-787, iDRAC10, Lenovo XCC, IEIT NF5468M6, NVIDIA GB200, vanilla OpenBMC,
 Supermicro X10, and Supermicro X14 have operation-level references with bounded unknowns. Their
@@ -787,3 +789,16 @@ shell syntax, HTML/Markdown sync, address configuration, QEMU build validation/p
 tests, warm-capability, status-output, credential-display, and diff checks pass. The aggregate
 suite reaches the pre-existing documentation-contract failure for four missing Lenovo reference
 links; no iDRAC6 link is missing.
+
+## Review — cross-BMC deep-dive publication (2026-10-12)
+
+Canonical zipmi commit `bb1e87b` publishes the exact-image Fujitsu, iDRAC6, iDRAC9, and
+Supermicro X11 ledgers and browseable reports. zBMC's HTML-authoritative target pages and coverage
+audit now link those reports and preserve the same denominators and open boundaries. No target is
+promoted to deep-dive complete: Fujitsu retains 329 partial paths, iDRAC6 retains 157 unexpanded
+routes, iDRAC9 retains 123 uncovered OEM addresses, and X11 retains five partial high-risk paths.
+
+Cross-target reuse remains deliberately narrow. Only Fujitsu/XD670 dual-image selectors `0x04`
+and `0x07` are field-proved shared fragments; provider binaries, authorization, routing,
+activation, effects, persistence, and completion overlays remain target-specific. No live system
+was contacted by this documentation publication.
